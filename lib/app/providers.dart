@@ -9,6 +9,7 @@ import '../data/app_preferences.dart';
 import '../data/folder_sync_engine.dart';
 import '../domain/life_repository.dart';
 import '../domain/models.dart';
+import '../application/permissions_status_service.dart';
 import '../application/app_lock.dart';
 import '../application/quick_input.dart';
 import '../application/google_integration_service.dart';
@@ -66,6 +67,7 @@ final backupProvider = Provider(
 );
 final attachmentServiceProvider = Provider((ref) => AttachmentService());
 final appLockProvider = Provider((ref) => AppLockService());
+final permissionsProvider = Provider((ref) => PermissionsStatusService());
 final notificationProvider = Provider((ref) => NotificationAdapter());
 final speechProvider = Provider((ref) => SpeechAdapter());
 final quickInputProvider = Provider((ref) => const QuickInputParser());

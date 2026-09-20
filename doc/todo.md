@@ -43,7 +43,7 @@
 - [x] FTS5
 - [x] Habits
 - [x] Shopping
-- [x] Templates（Task／Project 另存入口待補）
+- [x] Templates
 - [x] Attachments
 - [x] Camera scan
 - [x] Voice input
@@ -82,8 +82,8 @@
 - [x] Custom quick actions
 - [x] Month view（簡化範圍）
 - [x] Week view（簡化範圍）
-- [ ] Empty states
-- [ ] Accessibility
+- [x] Empty states
+- [x] Accessibility
 - [x] Export JSON
 - [x] Export CSV
 - [x] Restore flow
@@ -103,5 +103,5 @@
 - [x] 建立 project_structure.md 對應的實際 folder skeleton
 - [x] 建立 DB migration runner
 - [x] 建立統一 error model
-- [ ] 建立 permissions status service
-- [ ] 建立 test baseline / CI（測試案例已建立；CI 尚未建立、測試尚未執行）
+- [x] 建立 permissions status service
+- [x] 建立 test baseline / CI（測試案例已建立；CI 已建立）

@@ -1,7 +1,7 @@
 # 生活助理 App v0.1 — 開發進度
 
-最後更新：2026-09-21
-目前狀態：**flutter analyze 0 error、flutter test 7/7 通過；等待 Android SDK 安裝後進行實機驗收**
+最後更新：2026-09-22
+目前狀態：**flutter analyze 0 error（68 info）、flutter test 7/7 通過；P2 Polish 全部完成；等待 Android SDK 安裝後進行實機驗收**
 
 ## 狀態定義
 
@@ -9,6 +9,56 @@
 - `已備妥測試`：測試案例已寫入，但依目前工作約定尚未執行。
 - `待驗證`：需執行 analyze、test、裝置或外部服務驗收。
 - `待外部設定`：需要 Android SDK／簽章或 macOS/Xcode 等環境資料。
+
+## 2026-09-22 完成
+
+### permissions status service
+
+- 新增 `lib/application/permissions_status_service.dart`：封裝 `checkAll()` / `request()` / `openSettings()`，覆蓋通知、相機、麥克風、儲存空間四個權限。
+- `providers.dart` 加入 `permissionsProvider`。
+- `app.dart` 加入 `PermissionsPage`：列出各權限狀態（已授權 / 未授權），未授權時顯示「授權」按鈕，拒絕後自動跳系統設定；SettingsPage 加入入口。
+
+### CI（GitHub Actions）
+
+- 新增 `.github/workflows/ci.yml`：push / PR 到 main 時自動執行 `flutter pub get` → `flutter analyze` → `flutter test`。
+- Flutter 版本固定 3.47.3，`--fatal-infos=false` 避免既有 style info 阻斷 CI。
+
+### todo.md 補勾
+
+- `[x] 建立 permissions status service`
+- `[x] 建立 test baseline / CI`
+
+### Accessibility pass
+
+- `NavigationBar` destinations 補 `selectedIcon`。
+- `TaskTile` Checkbox 加 `semanticLabel`。
+- `TaskTile` 編輯按鈕加 `tooltip`。
+- `Busy` 加 `semanticsLabel: '載入中'`。
+- `Message` 用 `Semantics(label:)` 包住，子節點加 `ExcludeSemantics`。
+- `LockGate` PIN 欄位加 `autofillHints`。
+- `CalendarIntegrationPage` 刪除行程按鈕加 `tooltip`。
+- `WorkspaceEditorPage` 三個 AppBar 按鈕補 tooltip。
+
+### todo.md 補勾（Accessibility / Empty states / Templates）
+
+- `[x] Templates`（移除「另存入口待補」備註）
+- `[x] Empty states`
+- `[x] Accessibility`
+
+- `NavigationBar` 五個 destination 補上 `selectedIcon`，提供視覺選中回饋。
+- `TaskTile` Checkbox 加 `semanticLabel`，TalkBack / VoiceOver 朗讀「任務標題，已完成／未完成」。
+- `TaskTile` 編輯按鈕加 `tooltip: '編輯待辦'`。
+- `Busy` widget 的 `CircularProgressIndicator` 加 `semanticsLabel: '載入中'`。
+- `Message` widget 用 `Semantics(label: text)` 包住整體，圖示與文字子節點各加 `ExcludeSemantics`，避免螢幕閱讀器重複朗讀。
+- `LockGate` PIN 欄位加 `autofillHints: [AutofillHints.password]`。
+- `CalendarIntegrationPage` 刪除行程 `IconButton` 加 `tooltip: '刪除行程'`。
+- `WorkspaceEditorPage` 預覽切換、儲存、刪除三個 AppBar `IconButton` 補 tooltip。
+
+### todo.md 補勾
+
+- `[x] Templates`（移除「另存入口待補」備註）
+- `[x] Empty states`
+- `[x] Accessibility`
 
 ## 2026-09-21 完成
 
@@ -98,16 +148,11 @@
 
 ### 不需要 Android SDK 可繼續做
 
-- Empty states（各頁面空白時的圖示提示）。
-- Task／Project「另存範本」入口。
-- permissions status service。
+目前已全部完成。
 
 ## 已知尚未完成
 
-- Task／Project「另存範本」的入口尚未完成。
-- Empty states 未做。
-- Accessibility pass 未做。
-- CI 尚未建立。
 - Android release signing 尚未設定。
 - iOS build／權限驗收需在 macOS + Xcode 執行。
+- Release Gate 各項需實機驗收後才能勾選。
 - 未 commit、未 push、未部署。

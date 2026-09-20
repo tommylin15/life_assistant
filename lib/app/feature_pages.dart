@@ -345,7 +345,16 @@ class _CalendarState extends ConsumerState<CalendarIntegrationPage> {
                       ? ListView(
                           children: const [
                             SizedBox(height: 240),
-                            Center(child: Text('這段期間沒有行程')),
+                            Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.calendar_month_outlined, size: 56),
+                                  SizedBox(height: 12),
+                                  Text('這段期間沒有行程'),
+                                ],
+                              ),
+                            ),
                           ],
                         )
                       : ListView(
@@ -381,6 +390,7 @@ class _CalendarState extends ConsumerState<CalendarIntegrationPage> {
                               },
                               trailing: IconButton(
                                 icon: const Icon(Icons.delete_outline),
+                                tooltip: '刪除行程',
                                 onPressed: () => ref
                                     .read(googleIntegrationProvider)
                                     .deleteEvent(e.googleEventId),
@@ -990,7 +1000,7 @@ class _WorkspaceState extends ConsumerState<WorkspacePage> {
             onRefresh: load,
             child: ListView(
               children: files.isEmpty
-                  ? const [ListTile(title: Text('尚無 Markdown 檔案'))]
+                  ? const [ListTile(title: Text('尚無 Markdown 檔案', style: TextStyle(color: Colors.grey)))]
                   : files
                         .map(
                           (path) => ListTile(
@@ -1078,10 +1088,11 @@ class _WorkspaceEditorState extends ConsumerState<WorkspaceEditorPage> {
       actions: [
         IconButton(
           onPressed: () => setState(() => preview = !preview),
+          tooltip: preview ? '切換編輯' : '預覽',
           icon: Icon(preview ? Icons.edit : Icons.visibility),
         ),
-        IconButton(onPressed: save, icon: const Icon(Icons.save)),
-        IconButton(onPressed: remove, icon: const Icon(Icons.delete_outline)),
+        IconButton(onPressed: save, tooltip: '儲存', icon: const Icon(Icons.save)),
+        IconButton(onPressed: remove, tooltip: '刪除檔案', icon: const Icon(Icons.delete_outline)),
       ],
     ),
     body: !ready

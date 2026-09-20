@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -7,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../domain/models.dart';
+import '../application/permissions_status_service.dart';
 import 'providers.dart';
 import 'feature_pages.dart';
 import 'theme/app_theme.dart';
@@ -197,6 +199,7 @@ class _LockGateState extends ConsumerState<LockGate>
                   controller: pin,
                   obscureText: true,
                   keyboardType: TextInputType.number,
+                  autofillHints: const [AutofillHints.password],
                   decoration: InputDecoration(
                     labelText: 'PIN',
                     errorText: error,
@@ -248,16 +251,18 @@ class _HomeShellState extends State<HomeShell> {
       selectedIndex: index,
       onDestinationSelected: (value) => setState(() => index = value),
       destinations: const [
-        NavigationDestination(icon: Icon(Icons.home_outlined), label: '首頁'),
+        NavigationDestination(icon: Icon(Icons.home_outlined), label: '首頁', selectedIcon: Icon(Icons.home)),
         NavigationDestination(
           icon: Icon(Icons.check_circle_outline),
+          selectedIcon: Icon(Icons.check_circle),
           label: '待辦',
         ),
         NavigationDestination(
           icon: Icon(Icons.calendar_month_outlined),
+          selectedIcon: Icon(Icons.calendar_month),
           label: '日曆',
         ),
-        NavigationDestination(icon: Icon(Icons.folder_outlined), label: '專案'),
+        NavigationDestination(icon: Icon(Icons.folder_outlined), selectedIcon: Icon(Icons.folder), label: '專案'),
         NavigationDestination(icon: Icon(Icons.more_horiz), label: '更多'),
       ],
     ),
@@ -382,7 +387,7 @@ class DashboardPage extends ConsumerWidget {
                 Text('優先事項', style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
                 if (open.isEmpty)
-                  const Message('今天目前沒有待處理事項')
+                  const Message('今天目前沒有待處理事項', icon: Icons.check_circle_outline)
                 else
                   ...open.take(5).map((e) => TaskTile(e)),
               ],
@@ -503,7 +508,7 @@ class TasksPage extends ConsumerWidget {
           loading: () => const Busy(),
           error: (e, _) => Message('$e'),
           data: (items) => items.isEmpty
-              ? const Message('還沒有待辦，先記下一件事吧')
+              ? const Message('還沒有待辦，先記下一件事吧', icon: Icons.add_task)
               : ListView(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
                   children: items.map(TaskTile.new).toList(),
@@ -522,6 +527,7 @@ class TaskTile extends ConsumerWidget {
     child: ListTile(
       leading: Checkbox(
         value: task.status == ItemStatus.completed,
+        semanticLabel: task.status == ItemStatus.completed ? '${task.title}，已完成' : '${task.title}，未完成',
         onChanged: (v) => ref
             .read(lifeRepositoryProvider)
             .setTaskStatus(
@@ -547,6 +553,7 @@ class TaskTile extends ConsumerWidget {
       ),
       trailing: IconButton(
         icon: const Icon(Icons.edit_outlined),
+        tooltip: '編輯待辦',
         onPressed: () => editTask(context, ref, task),
       ),
     ),
@@ -561,6 +568,27 @@ class TaskDetailPage extends ConsumerWidget {
     appBar: AppBar(
       title: Text(task.title),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.dashboard_customize_outlined),
+          tooltip: '另存為範本',
+          onPressed: () async {
+            final name = await prompt(context, '另存為範本', '範本名稱');
+            if (name == null) return;
+            await ref.read(lifeRepositoryProvider).saveTemplate(
+              name: name,
+              type: 'task',
+              payloadJson: jsonEncode({
+                'title': task.title,
+                if (task.note?.isNotEmpty == true) 'note': task.note,
+                'priority': task.priority.name,
+              }),
+            );
+            if (context.mounted)
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('已儲存為範本')),
+              );
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.delete_outline),
           onPressed: () async {
@@ -845,7 +873,7 @@ class ProjectsPage extends ConsumerWidget {
           loading: () => const Busy(),
           error: (e, _) => Message('$e'),
           data: (items) => items.isEmpty
-              ? const Message('這個專案區還是空的')
+              ? const Message('這個專案區還是空的', icon: Icons.folder_outlined)
               : ListView(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
                   children: items
@@ -910,6 +938,23 @@ class ProjectDetailPage extends ConsumerWidget {
       appBar: AppBar(
         title: Text(project.name),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.dashboard_customize_outlined),
+            tooltip: '另存為範本',
+            onPressed: () async {
+              final name = await prompt(context, '另存為範本', '範本名稱');
+              if (name == null) return;
+              await ref.read(lifeRepositoryProvider).saveTemplate(
+                name: name,
+                type: 'project',
+                payloadJson: jsonEncode({'name': project.name}),
+              );
+              if (context.mounted)
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('已儲存為範本')),
+                );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: () async {
@@ -1146,7 +1191,7 @@ class NotesPage extends ConsumerWidget {
           loading: () => const Busy(),
           error: (e, _) => Message('$e'),
           data: (items) => items.isEmpty
-              ? const Message('尚未建立任何筆記')
+              ? const Message('尚未建立任何筆記', icon: Icons.note_outlined)
               : ListView(
                   children: items
                       .map(
@@ -1483,7 +1528,7 @@ class HabitsPage extends ConsumerWidget {
           loading: () => const Busy(),
           error: (e, _) => Message('$e'),
           data: (items) => items.isEmpty
-              ? const Message('還沒有習慣')
+              ? const Message('還沒有習慣', icon: Icons.repeat)
               : ListView(
                   children: items
                       .map(
@@ -1637,7 +1682,7 @@ class ShoppingPage extends ConsumerWidget {
           loading: () => const Busy(),
           error: (e, _) => Message('$e'),
           data: (lists) => lists.isEmpty
-              ? const Message('還沒有採買清單')
+              ? const Message('還沒有採買清單', icon: Icons.shopping_basket_outlined)
               : ListView(
                   children: lists
                       .map(
@@ -1780,7 +1825,7 @@ class ActivityPage extends ConsumerWidget {
         loading: () => const Busy(),
         error: (e, _) => Message('$e'),
         data: (items) => items.isEmpty
-            ? const Message('尚無活動紀錄')
+            ? const Message('尚無活動紀錄', icon: Icons.history)
             : ListView(
                 children: items
                     .map(
@@ -1849,6 +1894,7 @@ class SettingsPage extends ConsumerWidget {
         const NotificationPage(),
       ),
       _setting(context, Icons.lock_outline, 'App Lock', const SecurityPage()),
+      _setting(context, Icons.shield_outlined, '權限狀態', const PermissionsPage()),
       _setting(context, Icons.backup_outlined, '備份與匯出', const BackupPage()),
       const ListTile(
         title: Text('隱私'),
@@ -1892,18 +1938,42 @@ Widget _withAdd(BuildContext context, Widget child, VoidCallback add) => Stack(
 class Busy extends StatelessWidget {
   const Busy({super.key});
   @override
-  Widget build(BuildContext context) =>
-      const Center(child: CircularProgressIndicator());
+  Widget build(BuildContext context) => const Center(
+    child: CircularProgressIndicator(semanticsLabel: '載入中'),
+  );
 }
 
 class Message extends StatelessWidget {
-  const Message(this.text, {super.key});
+  const Message(this.text, {super.key, this.icon});
   final String text;
+  final IconData? icon;
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Text(text, textAlign: TextAlign.center),
+  Widget build(BuildContext context) => Semantics(
+    label: text,
+    child: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              ExcludeSemantics(
+                child: Icon(icon, size: 56, color: Theme.of(context).colorScheme.outlineVariant),
+              ),
+              const SizedBox(height: 16),
+            ],
+            ExcludeSemantics(
+              child: Text(
+                text,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }
@@ -1933,4 +2003,65 @@ Future<String?> prompt(BuildContext context, String title, String label) async {
   );
   final value = c.text.trim();
   return ok == true && value.isNotEmpty ? value : null;
+}
+
+class PermissionsPage extends ConsumerStatefulWidget {
+  const PermissionsPage({super.key});
+  @override
+  ConsumerState<PermissionsPage> createState() => _PermissionsPageState();
+}
+
+class _PermissionsPageState extends ConsumerState<PermissionsPage> {
+  List<PermissionStatus>? statuses;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final result = await ref.read(permissionsProvider).checkAll();
+    if (mounted) setState(() => statuses = result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (statuses == null) return const Busy();
+    return ListView(
+      children: [
+        ...statuses!.map(
+          (s) => ListTile(
+            leading: Icon(
+              s.granted ? Icons.check_circle_outline : Icons.cancel_outlined,
+              color: s.granted
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.error,
+            ),
+            title: Text(s.label),
+            subtitle: Text(s.granted ? '已授權' : '未授權'),
+            trailing: s.granted
+                ? null
+                : TextButton(
+                    onPressed: () async {
+                      final ok = await ref
+                          .read(permissionsProvider)
+                          .request(s.key);
+                      if (!ok && mounted) {
+                        await ref.read(permissionsProvider).openSettings();
+                      }
+                      await _load();
+                    },
+                    child: const Text('授權'),
+                  ),
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.open_in_new),
+          title: const Text('開啟系統權限設定'),
+          onTap: () => ref.read(permissionsProvider).openSettings(),
+        ),
+      ],
+    );
+  }
 }

@@ -35,7 +35,7 @@ class _LifeAssistantAppState extends ConsumerState<LifeAssistantApp> {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => MaterialApp.router(
+  Widget build(BuildContext context) => MaterialApp.router(
     title: '生活助理',
     debugShowCheckedModeBanner: false,
     theme: ref.watch(themeModeProvider) == AppThemeChoice.clean

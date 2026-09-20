@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:googleapis/gmail/v1.dart' as gmail;
-import 'package:uuid/uuid.dart';
 
 import '../data/db/app_database.dart';
 import '../domain/life_repository.dart';
@@ -13,7 +12,6 @@ class GoogleIntegrationService {
   final AppDatabase db;
   final GoogleServicesAdapter google;
   final LifeRepository repository;
-  final _uuid = const Uuid();
 
   Stream<List<CalendarSlot>> watchCalendar(DateTime from, DateTime to) => db
       .calendarDao

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -40,7 +39,7 @@ class BackupService {
           .isEmpty)
         throw const FormatException('不是生活助理備份');
     } finally {
-      handle.dispose();
+      handle.close();
     }
     final dir = await getApplicationDocumentsDirectory();
     await backup.copy(p.join(dir.path, 'restore_pending.db'));

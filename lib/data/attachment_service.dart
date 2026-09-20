@@ -13,7 +13,7 @@ class AttachmentService {
   final _uuid = const Uuid();
 
   Future<File?> pickFile() async {
-    final result = await FilePicker.platform.pickFiles();
+    final result = await FilePicker.pickFiles();
     final path = result?.files.single.path;
     return path == null ? null : _store(File(path));
   }

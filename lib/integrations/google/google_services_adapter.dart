@@ -15,14 +15,18 @@ class GoogleServicesAdapter {
   static const gmailScope = 'https://www.googleapis.com/auth/gmail.readonly';
   static const driveScope = 'https://www.googleapis.com/auth/drive.file';
   static const folderSyncScope = 'https://www.googleapis.com/auth/drive';
+  static const _webClientId =
+      '705113310914-c96ndkj4dhk2epk3o2ssqponeu0ub3p0.apps.googleusercontent.com';
 
-  Future<bool> isSignedIn() => GoogleSignIn().isSignedIn();
+  Future<bool> isSignedIn() =>
+      GoogleSignIn(serverClientId: _webClientId).isSignedIn();
   Future<void> disconnect() async {
-    await GoogleSignIn().disconnect();
+    await GoogleSignIn(serverClientId: _webClientId).disconnect();
   }
 
   Future<_BearerClient> _client(List<String> scopes) async {
-    final signIn = GoogleSignIn(scopes: scopes);
+    final signIn =
+        GoogleSignIn(scopes: scopes, serverClientId: _webClientId);
     final account = await signIn.signInSilently() ?? await signIn.signIn();
     if (account == null) throw StateError('GOOGLE_AUTH_REQUIRED');
     final auth = await account.authentication;
@@ -54,8 +58,8 @@ class GoogleServicesAdapter {
     try {
       final api = calendar.CalendarApi(client);
       return eventId == null
-          ? api.events.insert(event, 'primary')
-          : api.events.patch(event, 'primary', eventId);
+          ? await api.events.insert(event, 'primary')
+          : await api.events.patch(event, 'primary', eventId);
     } finally {
       client.close();
     }
@@ -272,7 +276,7 @@ class GoogleDriveFileGateway implements DriveFileGateway {
         fileId,
         downloadOptions: drive.DownloadOptions.fullMedia,
       ) as drive.Media;
-      return media.stream.expand((e) => e).toList();
+      return await media.stream.expand((e) => e).toList();
     } finally {
       client.close();
     }

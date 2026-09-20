@@ -40,10 +40,8 @@ class AppLockService {
     if (!await _auth.isDeviceSupported()) return false;
     return _auth.authenticate(
       localizedReason: '解鎖生活助理',
-      options: const AuthenticationOptions(
-        biometricOnly: true,
-        stickyAuth: true,
-      ),
+      biometricOnly: true,
+      persistAcrossBackgrounding: true,
     );
   }
 

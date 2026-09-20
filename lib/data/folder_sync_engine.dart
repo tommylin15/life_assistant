@@ -174,7 +174,7 @@ class FolderSyncEngine {
             localRootUri: local.path,
             driveFolderId: driveFolderId,
             includeSubfolders: Value(includeSubfolders),
-            allowedTypesJson: jsonEncode(_extensions),
+            allowedTypesJson: jsonEncode(_extensions.toList()),
             createdAt: now,
             updatedAt: now,
           ),
@@ -205,7 +205,7 @@ class FolderSyncEngine {
               e is File &&
               !isExcludedSyncPath(p.relative(e.path, from: local.path)),
         )
-        .isNotEmpty;
+        .any((_) => true);
     if (nonEmpty) throw StateError('LOCAL_FOLDER_NOT_EMPTY');
     final remote = await drive.listFiles(folderId);
     var downloaded = 0, failed = 0;

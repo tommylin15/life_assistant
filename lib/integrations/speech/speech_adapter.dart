@@ -9,8 +9,8 @@ class SpeechAdapter {
 
   Future<void> listen(void Function(String words, bool finalResult) onResult) =>
       _speech.listen(
-        localeId: 'zh_TW',
         listenOptions: SpeechListenOptions(
+          localeId: 'zh_TW',
           partialResults: true,
           cancelOnError: true,
         ),

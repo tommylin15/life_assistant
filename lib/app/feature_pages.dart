@@ -868,7 +868,7 @@ class _SyncState extends ConsumerState<FolderSyncPage> {
         onPressed: busy
             ? null
             : () async {
-                final path = await FilePicker.platform.getDirectoryPath();
+                final path = await FilePicker.getDirectoryPath();
                 if (path == null || driveId.text.trim().isEmpty) return;
                 setState(() => busy = true);
                 try {
@@ -1195,7 +1195,7 @@ class BackupPage extends ConsumerStatefulWidget {
 class _BackupState extends ConsumerState<BackupPage> {
   String status = '';
   Future<void> output(String type) async {
-    final path = await FilePicker.platform.getDirectoryPath();
+    final path = await FilePicker.getDirectoryPath();
     if (path == null) return;
     final service = ref.read(backupProvider);
     final file = switch (type) {
@@ -1225,7 +1225,7 @@ class _BackupState extends ConsumerState<BackupPage> {
       ),
       OutlinedButton(
         onPressed: () async {
-          final picked = await FilePicker.platform.pickFiles(
+          final picked = await FilePicker.pickFiles(
             type: FileType.custom,
             allowedExtensions: ['db'],
           );

@@ -1,0 +1,57 @@
+# 生活助理 App v0.1 — Confirmed Decisions
+
+## 已確認
+
+- Flutter
+- SQLite only for v0.1 primary app data
+- 不使用 GCP backend
+- 不使用 Iceberg
+- Local-first
+- Google 登入
+- Gmail：讀取 + 轉待辦 + 必要時轉 Calendar
+- Google Calendar：完整雙向
+- Google Drive：作為 ChatGPT Bridge
+- ChatGPT Plus，不依賴 OpenAI API
+- Share Bridge + Drive Bridge
+- 未來預留 MCP / Plugin
+- 單人版
+- 有限同步
+- 本機通知 + 每日摘要
+- 規則式智慧排序
+- 可讀格式匯出
+- 基本搜尋
+- 不做 Widget
+- 圖片 + 一般附件
+- 簡化習慣
+- 簡化採買
+- 語音轉文字快速新增
+- 多 Theme / 多模板
+- 簡單標籤
+- 首頁區塊可開關
+- 簡化每日回顧
+- 規則式助理建議
+- 簡單月 / 週日曆
+- 可自訂快捷
+- 簡化生活專案首頁
+- 可自訂範本
+- Checklist
+- 完整型筆記 / 知識庫
+- 掃描文件但不做 OCR
+- 生物辨識 + PIN
+- 不做地點型提醒
+- 簡單長期視圖
+- 預設主風格：Obsidian 的資料感 × 日系溫暖手帳
+- 手機指定資料夾 ↔ Google Drive 手動同步
+- App 內建 Markdown Workspace / Editor
+- Folder Sync 刪除採正常雙向同步，不額外要求確認
+- 首次 Folder Sync 以 Google Drive 為唯一來源
+- 首次同步要求 Local 指定資料夾必須為乾淨空資料夾
+- 同步衝突不靜默覆蓋，雙方均修改時由使用者決定
+- ChatGPT Drive Bridge 使用正式 versioned JSON schema
+- SQLite 為 source of truth，Drive 僅為交換層
+- ChatGPT 只產生 proposed actions，v0.1 全部需使用者確認後執行
+- Bridge 使用 request_id + action_id 防止重複執行
+- Flutter 專案採 Feature-first + Repository + Use Case + Adapter 邊界
+- 所有 SQLite schema 變更必須 migration，不以 drop DB 取代
+- Google 權限採最小權限與延遲授權
+- 開發完成需符合 coding_rules.md 與 release_checklist.md

@@ -1,5 +1,7 @@
 # 生活助理 App v0.1 — Release Checklist
 
+> 尚未進入正式測試／驗收，本清單刻意維持未勾選。當前實作狀態見 [`progress.md`](progress.md)。
+
 ## Functional
 
 - [ ] Dashboard

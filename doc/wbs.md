@@ -1,5 +1,7 @@
 # 生活助理 App v0.1 — WBS
 
+> 2026-09-20 開發暫停點、已實作範圍與下一步驗證順序見 [`progress.md`](progress.md)。WBS 保留完整工作分解，不以程式已存在取代 QA／Release 驗收。
+
 ## 0. 專案初始化
 
 ### 0.1 Flutter 專案

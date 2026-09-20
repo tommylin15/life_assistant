@@ -1,90 +1,92 @@
 # 生活助理 App v0.1 — TODO
 
+> 進度快照與待驗證項目見 [`progress.md`](progress.md)。此清單的 `[x]` 只代表已有實作；Release Gate 必須實測後才能勾選。
+
 ## P0 — 開工前
 
-- [ ] 建立 Flutter repository
-- [ ] 決定 state management
-- [ ] 決定 SQLite 套件
-- [ ] 決定 routing
-- [ ] 建立 Theme Token
-- [ ] 建立 domain folder structure
-- [ ] 建立 migration strategy
+- [x] 建立 Flutter repository
+- [x] 決定 state management
+- [x] 決定 SQLite 套件
+- [x] 決定 routing
+- [x] 建立 Theme Token
+- [x] 建立 domain folder structure
+- [x] 建立 migration strategy
 
 ## P0 — 第一個可用版本
 
-- [ ] SQLite schema
-- [ ] Item CRUD
-- [ ] Project CRUD
-- [ ] Dashboard
-- [ ] Quick input
-- [ ] Local notification
-- [ ] Activity log
-- [ ] Light / Dark / Warm theme
-- [ ] Search
-- [ ] Basic backup
+- [x] SQLite schema
+- [x] Item CRUD
+- [x] Project CRUD
+- [x] Dashboard
+- [x] Quick input
+- [x] Local notification
+- [x] Activity log
+- [x] Light / Dark / Warm theme
+- [x] Search
+- [x] Basic backup
 
 ## P0 — Google
 
-- [ ] Google Sign-In
-- [ ] Calendar read
-- [ ] Calendar create
-- [ ] Calendar update
-- [ ] Calendar delete
-- [ ] Gmail metadata
-- [ ] Gmail → task
-- [ ] Gmail → calendar
-- [ ] Error handling
+- [x] Google Sign-In adapter（待 OAuth 設定／實機驗收）
+- [x] Calendar read
+- [x] Calendar create
+- [x] Calendar update
+- [x] Calendar delete
+- [x] Gmail metadata
+- [x] Gmail → task
+- [x] Gmail → calendar
+- [x] Error handling（功能頁錯誤與本機快取 fallback）
 
 ## P1 — 生活模組
 
-- [ ] Notes
-- [ ] FTS5
-- [ ] Habits
-- [ ] Shopping
-- [ ] Templates
-- [ ] Attachments
-- [ ] Camera scan
-- [ ] Voice input
+- [x] Notes
+- [x] FTS5
+- [x] Habits
+- [x] Shopping
+- [x] Templates（Task／Project 另存入口待補）
+- [x] Attachments
+- [x] Camera scan
+- [x] Voice input
 
 ## P1 — ChatGPT Bridge
 
-- [ ] Bridge JSON schema validator
-- [ ] request_id + action_id idempotency
-- [ ] action_results export
-- [ ] Bridge schema version compatibility
+- [x] Bridge JSON schema validator
+- [x] request_id + action_id idempotency
+- [x] action_results export
+- [x] Bridge schema version compatibility（v1 major）
 
-- [ ] Share Bridge
-- [ ] Drive Bridge folder setup
-- [ ] Manifest
-- [ ] App state export
-- [ ] Proposed actions import
-- [ ] Schema validation
-- [ ] Review UI
-- [ ] Accept / reject
-- [ ] Bridge onboarding
-- [ ] ChatGPT connection tutorial
-- [ ] Bridge ID verification
+- [x] Share Bridge
+- [x] Drive Bridge folder setup
+- [x] Manifest
+- [x] App state export
+- [x] Proposed actions import
+- [x] Schema validation
+- [x] Review UI
+- [x] Accept / reject
+- [x] Bridge onboarding
+- [x] ChatGPT connection tutorial
+- [x] Bridge ID verification
 
 ## P1 — Security
 
-- [ ] Biometric
-- [ ] PIN
-- [ ] Secure token storage
-- [ ] Sensitive log filtering
+- [x] Biometric
+- [x] PIN
+- [x] Secure token storage（平台 Google Sign-In / secure storage）
+- [x] Sensitive log filtering
 
 ## P2 — Polish
 
-- [ ] Daily summary
-- [ ] Daily review
-- [ ] Custom homepage sections
-- [ ] Custom quick actions
-- [ ] Month view
-- [ ] Week view
+- [x] Daily summary
+- [x] Daily review
+- [x] Custom homepage sections
+- [x] Custom quick actions
+- [x] Month view（簡化範圍）
+- [x] Week view（簡化範圍）
 - [ ] Empty states
 - [ ] Accessibility
-- [ ] Export JSON
-- [ ] Export CSV
-- [ ] Restore flow
+- [x] Export JSON
+- [x] Export CSV
+- [x] Restore flow
 
 ## Release Gate
 
@@ -98,8 +100,8 @@
 - [ ] App Lock 正常
 - [ ] Android release build
 - [ ] iOS release build
-- [ ] 建立 project_structure.md 對應的實際 folder skeleton
-- [ ] 建立 DB migration runner
-- [ ] 建立統一 error model
+- [x] 建立 project_structure.md 對應的實際 folder skeleton
+- [x] 建立 DB migration runner
+- [x] 建立統一 error model
 - [ ] 建立 permissions status service
-- [ ] 建立 test baseline / CI
+- [ ] 建立 test baseline / CI（測試案例已建立；CI 尚未建立、測試尚未執行）

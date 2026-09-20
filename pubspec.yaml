@@ -1,0 +1,63 @@
+name: life_assistant
+description: Personal life management assistant app.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+
+  # Routing
+  go_router: ^14.6.3
+
+  # Database
+  drift: ^2.35.0
+  sqlite3_flutter_libs: ^0.5.28
+  path_provider: ^2.1.5
+  path: ^1.9.1
+
+  # Google Auth & APIs
+  google_sign_in: ^6.2.2
+  googleapis: ^13.2.0
+  googleapis_auth: ^1.6.0
+  http: ^1.2.2
+
+  # Secure Storage
+  flutter_secure_storage: ^9.2.4
+
+  # Notifications
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+
+  # Utils
+  uuid: ^4.5.1
+  intl: ^0.20.2
+  equatable: ^2.0.7
+  cupertino_icons: ^1.0.8
+  file_picker: ^11.0.3
+  image_picker: ^1.2.3
+  local_auth: ^3.0.2
+  speech_to_text: ^7.5.0
+  share_plus: ^12.0.2
+  crypto: ^3.0.7
+  permission_handler: ^13.0.2
+  flutter_markdown_plus: ^1.0.12
+  flutter_timezone: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # Code generation
+  drift_dev: ^2.35.0
+  build_runner: ^2.16.1
+
+flutter:
+  uses-material-design: true

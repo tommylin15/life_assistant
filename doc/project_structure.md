@@ -1,19 +1,19 @@
-# 生活助理 App v0.1 — Flutter Project Structure
+# 生活助理 App v0.1 — Project Structure
 
 ## 1. 目標
 
-確保 Flutter 專案在功能增加後仍維持清楚邊界，避免 UI、SQLite、Google API、同步與 Bridge 邏輯混在一起。
+確保 Flutter Web / PWA 與 FastAPI Backend 在功能增加後仍維持清楚邊界，避免 UI、資料庫、Google API、同步與 Bridge 邏輯混在一起。
 
 採用：
 
-- Feature-first
+- Flutter 前端 Feature-first
 - Clean-ish Architecture
 - Repository + Use Case
-- Adapter 隔離外部服務
-- UI 不直接呼叫 SQLite / Google API
-- Domain 不依賴 Flutter framework
+- Adapter / API Client 隔離外部服務
+- UI 不直接呼叫 PostgreSQL / SQLite / Google API
+- Domain 不依賴 Flutter framework 或特定 DB implementation
 
-## 2. 建議目錄
+## 2. Flutter 前端建議目錄
 
 ```text
 lib/
@@ -30,14 +30,11 @@ lib/
 │   ├── utils/
 │   ├── extensions/
 │   ├── widgets/
-│   ├── storage/
+│   ├── api/
 │   └── platform/
 │
 ├── features/
 │   ├── dashboard/
-│   │   ├── domain/
-│   │   ├── application/
-│   │   └── presentation/
 │   ├── tasks/
 │   ├── calendar/
 │   ├── gmail/
@@ -51,31 +48,43 @@ lib/
 │   ├── search/
 │   ├── notifications/
 │   ├── voice_input/
-│   ├── folder_sync/
 │   ├── chatgpt_bridge/
 │   ├── backup/
 │   ├── security/
 │   └── settings/
 │
-├── data/
-│   ├── db/
-│   │   ├── app_database.dart
-│   │   ├── migrations/
-│   │   ├── dao/
-│   │   └── models/
-│   ├── secure_storage/
-│   └── file_storage/
-│
-└── integrations/
-    ├── google_auth/
-    ├── gmail/
-    ├── calendar/
-    ├── drive/
-    ├── speech/
-    └── notifications/
+└── infrastructure/
+    ├── api_client/
+    ├── auth/
+    ├── local_cache/
+    └── secure_storage/
 ```
 
-## 3. Feature 內部結構
+既有 `data/db`、SQLite DAO、migrations 等程式碼在遷移完成前保留，不強制一次重構或刪除。
+
+## 3. Backend 建議目錄
+
+```text
+backend/
+├── app/
+│   ├── main.py
+│   ├── api/
+│   ├── application/
+│   ├── domain/
+│   ├── repositories/
+│   ├── db/
+│   │   ├── models/
+│   │   └── migrations/
+│   ├── integrations/
+│   ├── auth/
+│   ├── logging/
+│   └── settings/
+└── tests/
+```
+
+實際目錄可依現有 repository 狀態調整，但需維持責任邊界。
+
+## 4. Feature 內部結構
 
 ```text
 feature/
@@ -93,25 +102,15 @@ feature/
     └── controllers/
 ```
 
-## 4. Repository 責任
+## 5. Repository 責任
 
 Repository interface 放在 domain。
 
-實作放在 feature 的 infrastructure/data layer 或 integration adapter。
+前端 repository implementation 通常透過 Backend API；Backend repository implementation 負責 PostgreSQL 或外部 integration。
 
-範例：
+UI 不得直接操作 DAO、SQL 或 Google API。
 
-```text
-TaskRepository
-├── getTasks()
-├── createTask()
-├── updateTask()
-└── deleteTask()
-```
-
-UI 不得直接操作 DAO。
-
-## 5. Use Case
+## 6. Use Case
 
 每個可追蹤的重要動作都用 use case 包裝，例如：
 
@@ -119,7 +118,6 @@ UI 不得直接操作 DAO。
 - CompleteTask
 - ConvertGmailToTask
 - CreateCalendarEvent
-- SyncWorkspace
 - ImportBridgeActions
 - RestoreBackup
 
@@ -127,25 +125,12 @@ Use case 負責：
 
 - 驗證
 - repository orchestration
-- activity log
+- activity / execution log
 - error mapping
 
-## 6. Service
+## 7. Adapter / Integration
 
-Service 用於跨 feature 或外部能力：
-
-- RuleEngine
-- ReminderScheduler
-- FolderSyncEngine
-- BridgeCoordinator
-- BackupService
-- SearchService
-
-避免建立過大的 God Service。
-
-## 7. Adapter
-
-外部服務一律經 adapter：
+外部服務一律經 adapter / connector：
 
 ```text
 GoogleCalendarAdapter
@@ -163,10 +148,10 @@ NotificationAdapter
 
 要求：
 
-- State 不直接包含 raw API client
-- 非同步錯誤有統一表示
-- loading / empty / error / data 狀態一致
-- feature state 不互相隨意引用
+- State 不直接包含 raw API client。
+- 非同步錯誤有統一表示。
+- loading / empty / error / data 狀態一致。
+- feature state 不互相隨意引用。
 
 ## 9. Dependency Rule
 
@@ -177,18 +162,19 @@ Application
     ↓
 Domain
 
-Data / Integrations
+Infrastructure / API Client / Integrations
     ↑
 implement Domain interfaces
 ```
 
-Domain 不依賴 Flutter、SQLite、Google SDK。
+Domain 不依賴 Flutter、PostgreSQL、SQLite、Google SDK 或 FastAPI。
 
 ## 10. 禁止事項
 
-- Page 直接寫 SQL
-- Widget 直接呼叫 Google API
-- 全域 mutable singleton 到處使用
-- 同一 model 同時代表 DB row / API response / domain entity
-- sync engine 直接操作 UI state
-- Bridge JSON 直接 deserialize 後執行，未經 validator
+- Page 直接寫 SQL。
+- Widget 直接呼叫 Google API。
+- Flutter Web 直接連 PostgreSQL。
+- 全域 mutable singleton 到處使用。
+- 同一 model 同時代表 DB row / API response / domain entity。
+- sync engine 直接操作 UI state。
+- Bridge JSON 直接 deserialize 後執行，未經 validator。

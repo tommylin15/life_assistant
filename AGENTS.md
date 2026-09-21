@@ -19,18 +19,32 @@
 
 ## 專案架構底線
 
-- Flutter / Dart、local-first、SQLite source of truth。
-- UI 不直接碰 DB、DAO 或 Google API。
-- Presentation → Application → Domain；Data / Integrations 實作 domain interfaces。
-- Google、Drive Bridge、通知、語音等外部能力都經 adapter。
-- schema 變更必須 migration；不得 drop 或清空使用者 DB。
+目前正式目標架構：
+
+```text
+Firebase Hosting
+    ↓
+Flutter Web / PWA
+    ↓
+Cloud Run — FastAPI Backend
+    ↓
+PostgreSQL
+```
+
+- Flutter / Dart 仍為前端主技術，但 Phase 1 以 Web/PWA 為主要交付面。
+- PostgreSQL 是新的 operational source of truth；前端不得直接碰資料庫。
+- 現有 SQLite 屬既有版本資料與遷移來源；若未來保留原生 App，可降為 local/offline cache。
+- UI → Application → Domain；Data / API Client / Integrations 實作 domain interfaces。
+- Google、Drive Bridge、通知、語音與其他外部能力都經 adapter / connector。
+- schema 變更必須 migration；不得 drop 或清空現有使用者資料。
 - Bridge 外部 JSON 必須驗證；未支援 action、錯誤 bridge/schema 或重複 action 不得執行。
-- 重要寫入在適用時記錄 Activity Log；不得記錄 token、PIN、密碼或敏感正文。
-- 先完成 spec 內既有需求，不主動加入 GCP backend、Iceberg、OpenAI API、多人協作或其他 v0.1 未定義功能。
+- 重要寫入在適用時記錄 Activity Log / execution log；不得記錄 token、PIN、密碼或敏感正文。
+- 不把 Firebase Hosting、Cloud Run、PostgreSQL migration、排程、LangGraph 或其他尚未完成能力寫成已實作。
+- 未經使用者明確指示，不主動擴大到 Temporal、Iceberg、多人協作或 production 級複雜基礎設施。
 
 ## Ponytail 實作風格
 
-- 優先重用現有 helper、型別與模式；其次用 Dart/Flutter 原生能力與既有依賴。
+- 優先重用現有 helper、型別與模式；其次用 Dart/Flutter/Python 原生能力與既有依賴。
 - 不建立只有一個實作的抽象、factory、config 或 speculative scaffolding。
 - 修 bug 先追查所有 caller，在共用根因處修一次。
 - 非 trivial 邏輯留下最小可執行驗證；不要為一行程式碼建立測試框架。
@@ -38,9 +52,9 @@
 
 ## 驗證與 Git
 
-- 優先執行與變更相符的測試、lint、`flutter analyze`；若尚未有 Flutter source tree，做文件與可執行本機檢查並明確說明。
-- 未經明確授權，不部署 production、不建立付費 GCP 資源、不 commit 或 push。
-- 任何 commit 或 push 前，必須先執行 `/ponytail-review`。
+- 優先執行與變更相符的測試、lint、`flutter analyze`、backend tests；若某一層尚未建立，做文件與可執行本機檢查並明確說明。
+- 未經明確授權，不部署 production、不建立或擴大付費 GCP 資源。
+- 任何 commit 或 push 前，應先完成專案要求的 `/ponytail-review` 或等價人工 review。
 
 ## 回報格式
 

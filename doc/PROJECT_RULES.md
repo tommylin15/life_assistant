@@ -30,6 +30,49 @@ PostgreSQL
 - 原生 Android / iOS 封裝延後到 Web/PWA 與後端穩定後再處理。
 - 不把尚未完成的 Firebase Hosting、Cloud Run、PostgreSQL migration、排程或 Agent 能力寫成已實作。
 
+## 專案定位與責任邊界
+
+`life_assistant` 的正式定位是：
+
+> **Data + UI + API + Execution + Integration**
+
+本專案負責：
+
+- 生活資料與 operational source of truth。
+- Flutter Web / PWA。
+- FastAPI Backend。
+- 實際 action execution。
+- Google / Gmail / Calendar / Drive integrations。
+- ChatGPT Bridge Backend。
+- MCP Server / Integration API。
+- life_assistant 自己的 Capability Catalog / MCP Tool Catalog。
+- schema validation、idempotency、permission / confirmation policy。
+- Activity / execution log。
+- 不含 AI reasoning 的一般 background jobs。
+
+本專案**不負責**以下能力；這些由獨立 `omniAgent` 專案負責：
+
+- LangGraph Agent。
+- Agent reasoning loop。
+- Global Tool Registry。
+- Workflow Registry。
+- Agent Runtime。
+- Agent Worker。
+- 跨產品 multi-tool orchestration。
+- 通用型 multi-agent platform。
+
+不得把上述 omniAgent 責任重新加入 life_assistant roadmap / WBS，除非使用者明確改變專案邊界。
+
+詳細邊界見 `doc/project_boundary.md`。
+
+## ChatGPT Bridge / MCP 規則
+
+- ChatGPT Bridge Backend 必須保留在 life_assistant。
+- Bridge / MCP 僅提供安全、版本化、可治理的 life_assistant capability；不承擔跨系統 Agent orchestration。
+- 外部 ChatGPT 或 omniAgent 對 life_assistant 的寫入必須經 Backend validation、auth、permission / policy 與 execution log。
+- omniAgent 不得直接繞過 Backend 寫入 PostgreSQL。
+- 舊 Google Drive Bridge 可保留作相容 / fallback；若舊 Bridge 文件與 PostgreSQL 新架構衝突，以本文件、`decisions.md`、`project_boundary.md` 為準。
+
 ## 實作邊界
 
 - UI 不得直接操作 PostgreSQL、SQLite、DAO 或 Google API。
@@ -40,6 +83,19 @@ PostgreSQL
 - 現有 SQLite 使用者資料不得為了遷移方便而清空；SQLite → PostgreSQL 必須有可驗證、可重跑或可回退的 migration 設計。
 - 重要、可追蹤的寫入操作在適用時必須記錄 Activity Log / execution log；log 不得包含 token、PIN、密碼或敏感郵件正文。
 - 不新增 spec、decisions 或專項規格未定義的大功能。
+
+## Background Worker 規則
+
+life_assistant 可有一般 background jobs，例如：
+
+- Calendar / Gmail sync。
+- notification dispatch。
+- migration / export / backup。
+- maintenance。
+
+這些工作不得包含 Agent reasoning loop。
+
+若工作包含 LangGraph state、reason → choose tool → execute → observe → continue / finish 等 Agent runtime 行為，則屬於 omniAgent。
 
 ## 資料安全
 
@@ -58,6 +114,8 @@ PostgreSQL
 4. 未經明確授權，不得部署 production 或建立／擴大付費 GCP 資源。
 
 尚未完成 Backend / Web migration 時，必須明確區分「現有 SQLite / 原生 App 實作」與「新的雲端目標架構」，不得把規劃當成 runtime evidence。
+
+life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案可獨立驗收。
 
 ## GCP / WSL
 

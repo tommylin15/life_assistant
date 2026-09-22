@@ -4,7 +4,15 @@
 
 這是一個以「個人生活執行中樞」為核心的 Flutter 專案。
 
-v0.1 目標不是做一個通用 AI 聊天 App，而是先把日常生活中的：
+核心定位：
+
+> **Data + UI + API + Execution + Integration**
+
+`life_assistant` 負責生活資料、使用介面、Backend API、實際操作執行、外部服務整合，以及對 ChatGPT / Agent 提供安全且版本化的 Bridge / MCP 介面。
+
+`life_assistant` **不是**通用 Agent orchestration 平台；LangGraph、Global Tool Registry、Workflow Registry、Agent Runtime、Agent Worker 與跨系統 multi-tool orchestration 由獨立的 `omniAgent` 專案負責。
+
+v0.1 先把日常生活中的：
 
 - 待辦
 - 行程
@@ -42,8 +50,38 @@ PostgreSQL
 - Gmail 整合
 - Google Calendar 雙向整合
 - Google Drive Bridge / Integration
+- ChatGPT Bridge Backend
+- MCP Server / Capability Catalog
 - 單人使用優先
 - Android / iOS 封裝延後到 Web/PWA 與 Backend 穩定後
+
+## life_assistant 與 omniAgent 邊界
+
+### life_assistant 負責
+
+- Data / operational source of truth
+- UI / Web / PWA
+- FastAPI Backend
+- 實際 action execution
+- Google / Drive / Gmail / Calendar integrations
+- ChatGPT Bridge Backend
+- MCP Server / Integration API
+- life_assistant 自己的 Capability Catalog
+- schema validation、permission / confirmation policy、idempotency
+- Activity / execution log
+- 非 AI reasoning 的一般 background jobs
+
+### omniAgent 負責
+
+- LangGraph / Agent orchestration
+- Agent reasoning loop
+- Global Tool Registry
+- Workflow Registry
+- Agent Runtime / Agent Worker
+- 跨多系統 tool routing 與 multi-step workflow
+- retry / resume / partial-success orchestration
+
+詳細邊界見 [`doc/project_boundary.md`](doc/project_boundary.md)。
 
 ## 現有實作與遷移
 
@@ -53,11 +91,13 @@ PostgreSQL
 - 不清空或 drop 現有 SQLite 資料。
 - 新架構完成後，資料逐步遷移到 PostgreSQL。
 - 若未來原生 App 需要離線能力，SQLite 可保留為 local/offline cache，但不再作為全系統中央主資料來源。
+- 既有 Google Drive ChatGPT Bridge 可保留作相容或 fallback integration，不代表未來仍以 Drive 檔案交換作唯一 Bridge 方式。
 
 ## 文件索引
 
 - `doc/spec.md`：產品與功能規格
 - `doc/architecture.md`：技術架構與模組邊界
+- `doc/project_boundary.md`：life_assistant / omniAgent 責任邊界
 - `doc/data_model.md`：PostgreSQL 目標資料模型與 SQLite 遷移對照
 - `doc/migration_spec.md`：SQLite → PostgreSQL 與 schema migration 規格
 - `doc/project_structure.md`：Flutter Web / Backend 模組邊界
@@ -65,7 +105,7 @@ PostgreSQL
 - `doc/decisions.md`：目前已確認的重要產品與架構決策
 - `doc/progress.md`：既有實作與驗證進度
 - `doc/design_system.md`：UI / UX 與設計系統
-- `doc/integrations.md`：Google / Drive / Bridge 整合
+- `doc/integrations.md`：Google / Drive / Bridge / MCP 整合
 - `doc/security.md`、`doc/permissions.md`：權限、安全與隱私規格
 - `doc/coding_rules.md`：開發規則與 Definition of Done
 
@@ -77,4 +117,6 @@ PostgreSQL
 4. 既有 SQLite 資料有明確 migration 路徑，且不因遷移被破壞。
 5. Google Calendar / Gmail 整合失敗時，有明確錯誤與可追蹤 Log。
 6. 所有重要操作都有 Activity / execution 記錄。
-7. Web/PWA 穩定後，再評估 Android / iOS 原生封裝與 SQLite offline cache。
+7. ChatGPT Bridge Backend / MCP 能在不繞過 life_assistant 權限與 validation 的前提下讀取或提出操作。
+8. life_assistant 可獨立完成，不以 omniAgent 的 LangGraph / Agent Runtime 完成為前置條件。
+9. Web/PWA 穩定後，再評估 Android / iOS 原生封裝與 SQLite offline cache。

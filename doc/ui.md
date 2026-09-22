@@ -1,322 +1,293 @@
-# 生活助理 App v0.1 — UI / UX Spec
+# life_assistant — UI / UX Spec
 
-## 1. 視覺方向
+最後更新：2026-09-22
 
-### 預設主風格
+## 1. UI 定位
 
-**Obsidian 的資料感 × 日系溫暖手帳**
+life_assistant UI 是個人生活執行介面，不是通用 AI Chat 或 Agent Console。
 
-核心原則：
+Phase 1 主要交付為 Flutter Web / PWA，需同時適用手機與桌面瀏覽器。
 
-- 首頁像生活手帳：溫暖、低壓、留白充足。
-- 文件與 Markdown Workspace 像 Obsidian：資料密度較高、層級清楚、適合長時間閱讀與編輯。
-- 不直接仿製 Obsidian UI，而是吸收其「文件優先、資料結構清楚」的設計語言。
-- Dashboard 與生活模組使用柔和卡片；文件頁減少卡片感，讓內容成為主角。
+視覺方向維持：
 
-關鍵字：
+> **Warm Knowledge — Obsidian 的資料感 × 日系溫暖手帳**
 
-- 溫暖
-- 日常
-- 低壓
-- 手帳感
-- 文件感
-- 清楚的資訊層級
-- 現代
-- 不像企業 Dashboard
+## 2. Primary Navigation
 
-避免：
+建議主導覽：
 
-- 過多紅色警示
-- 過密資料表
-- 過度陰影
-- 高飽和配色
-- 大量 KPI 圖表
+1. Dashboard
+2. Tasks
+3. Calendar
+4. Projects
+5. More
 
-## 2. Theme
+More 可包含：
 
-### Template A — Warm Knowledge / 預設
+- Notes
+- Habits
+- Shopping
+- Activity / Execution Log
+- Integrations
+- ChatGPT Bridge / MCP
+- Settings
 
-預設主題。融合 Obsidian 的資料感與日系溫暖手帳。
+桌面版可使用 NavigationRail / sidebar；手機版使用 Bottom Navigation。
 
-- 奶油紙張背景
-- 暖灰主要文字
-- 鼠尾草綠為主要 Accent
-- 杏橘作為提醒與行動 Accent
-- 卡片大圓角、低陰影
-- Markdown / 文件頁使用較平坦版面與細分隔線
-- 強調長時間閱讀舒適度
+## 3. Dashboard
 
-### Template B — 極簡清爽
-
-- 白 / 淺灰
-- 冷灰字
-- 藍綠點綴
-- 高留白
-- 降低裝飾性
-
-### Template C — 深色夜間
-
-- 深灰黑背景
-- 柔和高對比
-- 降低純白亮度
-- 保留鼠尾草綠 / 杏橘語意色
-
-所有模板使用同一套 Theme Token 與元件，不為不同模板重做頁面。
-
-完整 Token、字體、間距、圓角、卡片與 Markdown 規格見 `design_system.md`。
-
-## 3. Bottom Navigation
-
-建議 5 個主入口：
-
-1. 首頁
-2. 待辦
-3. 日曆
-4. 專案
-5. 更多
-
-「更多」包含：
-
-- 筆記
-- 習慣
-- 採買
-- Log
-- 設定
-
-## 4. 首頁
-
-由上到下：
-
-1. 日期 / 問候
-2. 智慧摘要卡
-3. 可自訂快捷
-4. 待辦區塊
-5. 行程區塊
-6. 提醒區塊
-7. 等待中區塊
-8. 可選延伸區塊
-
-每區只顯示前幾筆，提供「查看全部」。
-
-## 5. 待辦頁
-
-支援：
-
-- 今日
-- 即將到期
-- 等待中
-- 全部
-- 已完成
-
-卡片顯示：
-
-- 標題
-- due
-- priority
-- project
-- checklist progress
-- tags
-
-## 6. Item Detail
-
-區塊：
-
-- 標題
-- 狀態
-- 優先度
-- 日期 / 提醒
-- Checklist
-- 備註
-- 專案
-- 標籤
-- 附件
-- 來源
-- Activity
-
-## 7. Calendar
-
-提供：
-
-- 月視圖
-- 週視圖
-- 日期詳情列表
-
-不做複雜拖曳。
-
-## 8. Project Home
-
-- 專案摘要
-- 待辦
-- 行程
-- 筆記
-- 附件
-- 最近活動
-
-## 9. Notes / Markdown Workspace
-
-### 9.1 Workspace
-
-App 可指定手機端資料夾作為 Markdown Workspace。
-
-支援：
-
-- 資料夾瀏覽
-- Markdown 檔案列表
-- 新增 / 開啟 / 編輯 / 重新命名 / 刪除 `.md`
-- 搜尋
-- 標籤
-- 相關筆記
-- 轉待辦 / 行程
-- 附件連結
-
-### 9.2 Markdown Editor
-
-提供：
-
-- 編輯模式
-- 預覽模式
-- 可選分頁切換 Edit / Preview
-- Markdown 常用工具列
-- 自動儲存到本機
-- 顯示「尚未同步」狀態
-
-支援基本語法：
-
-- Heading
-- Bold / Italic
-- Bullet / Numbered List
-- Checklist
-- Quote
-- Code / Inline Code
-- Link
-- Image reference
-- Horizontal rule
-
-第一版不做：
-
-- Canvas
-- Graph View
-- 複雜 Plugin System
-- Obsidian 完整語法相容保證
-
-### 9.3 文件視覺
-
-- 文件背景接近紙張感，但不使用擬真材質
-- 正文區減少 Card 邊框與陰影
-- 標題、列表、引用需有明確層級
-- 程式碼區使用獨立 Surface
-- 行寬以手機長時間閱讀舒適為優先
-
-## 10. Settings
-
-包含：
-
-- Google 帳號
-- Gmail
-- Calendar
-- Drive Bridge
-- Markdown Workspace
-- 本機資料夾 ↔ Google Drive 同步
-- 通知
-- App Lock
-- Theme
-- 首頁區塊
-- 快捷設定
-- 備份 / 匯出
-- About / Version
-
-### 10.1 Folder Sync 設定
-
-可指定：
-
-- 手機端來源資料夾
-- Google Drive 目標資料夾
-- 同步檔案類型
-- 是否包含子資料夾
-
-提供：
-
-- 立即同步
-- 最後同步時間
-- 待同步檔案數
-- 同步結果
-- 衝突列表
-
-v0.1 採**使用者手動觸發同步**，不依賴背景常駐同步。
-
-### 10.2 同步衝突
-
-若本機與 Drive 同一檔案都在上次同步後被修改，不可靜默覆蓋。
+### 3.1 Summary
 
 顯示：
 
-- 本機修改時間
-- Drive 修改時間
-- 查看差異（文字檔可支援）
-- 保留本機
-- 保留 Drive
-- 兩份都保留
+- overdue count
+- due today
+- next calendar event
+- waiting items
 
-第一版不要求自動 merge。
+摘要第一階段以規則生成，不依賴 AI。
 
-## 11. 空狀態
+### 3.2 Sections
 
-使用溫暖文案，不做錯誤感。
+可顯示／隱藏：
 
-例如：
+- Tasks
+- Calendar
+- Reminders
+- Waiting
+- Shopping
+- Habits
+- Projects
+- Important dates
 
-- 今天目前沒有待處理事項
-- 這個專案還沒有待辦
-- 尚未建立任何筆記
+### 3.3 Quick Actions
 
-## 12. 錯誤狀態
+- Create task
+- Create event
+- Create note
+- Add shopping item
+- Create project
 
-Google 服務失敗：
+## 4. Tasks
 
-- 清楚顯示哪個服務失敗
-- 本機資料照常可用
-- 提供重試
-- 不阻塞整個 App
+列表支援：
 
-## 13. Accessibility
+- status
+- priority
+- due/reminder
+- project
+- tag
+- checklist progress
 
-- 字體支援系統縮放
-- 點擊區域足夠
-- 不只靠顏色表達狀態
-- 深色模式具足夠對比
+編輯頁需適用 phone / desktop responsive layout。
 
+所有 mutation 透過 Backend API，不在 UI 直接操作 DB。
 
-## 14. 同步狀態 UI
+## 5. Calendar
 
-所有 Workspace 文件應能呈現簡單同步狀態：
+支援：
 
-- 已同步
-- 本機有變更
-- Drive 有更新
-- 同步中
-- 衝突
-- 同步失敗
+- agenda / simplified week / month
+- create/edit/delete
+- conflict/error state
+- source / sync status
 
-狀態需搭配 icon / 文字，不只靠顏色。
+Google integration failure 要顯示可理解的錯誤，不將遠端失敗偽裝成成功。
 
-Toolbar 或 Workspace 首頁提供明確的 **「立即同步」** 操作。
+## 6. Projects
 
-同步不應阻塞本機編輯。
+專案頁聚合：
 
-## 15. UI 參考策略
+- summary
+- open tasks
+- calendar items
+- notes
+- Gmail refs
+- attachments
+- recent activity
 
-網路模板僅作為：
+## 7. Notes
 
-- Layout 參考
-- Markdown editor 互動參考
-- Navigation 參考
-- Design token / Component system 參考
+- Markdown edit / preview
+- search
+- tags
+- project relation
+- links
+- attachments
 
-不直接整套套用第三方模板。
+Web desktop 可有較寬 editor；手機保持單欄，不強制 split view。
 
-原則：
+既有 Local Markdown Workspace / Folder Sync UI 可保留為 legacy / optional capability，但新的中央模型以 Backend / PostgreSQL 為準。
 
-1. 先建立自己的 `design_system.md`
-2. 共用 Flutter 元件
-3. Theme 可替換
-4. 避免被單一模板綁死
+## 8. Habits / Shopping
+
+Habits：週期與完成操作優先，避免過度統計化。
+
+Shopping：快速新增與勾選優先。
+
+## 9. Activity / Execution Log
+
+至少呈現：
+
+- time
+- source/actor
+- action
+- status
+- affected entity
+
+狀態需區分：
+
+- success
+- partial success
+- failed
+- pending / awaiting confirmation（適用時）
+
+## 10. Integrations / Connections
+
+集中顯示：
+
+- Google account
+- Gmail
+- Calendar
+- Drive
+- ChatGPT Bridge
+- MCP / Integration API status
+
+每個 integration 顯示：
+
+- Connected / Not connected / Error
+- permission summary
+- last sync / last check（適用時）
+- reconnect / disconnect / test action
+
+## 11. ChatGPT Bridge / MCP UI
+
+此頁屬於 life_assistant，需保留。
+
+### 11.1 Bridge Status
+
+顯示：
+
+- Backend Bridge status
+- schema / contract version
+- Drive Bridge legacy/fallback status
+- last proposed action import / request
+- last execution result
+
+### 11.2 Proposed Action Review
+
+每個 action 顯示：
+
+- action type
+- reason（若有）
+- source
+- affected data
+- risk / confirmation requirement
+- proposed payload summary
+
+操作：
+
+- Accept
+- Edit then accept（若 action type 支援）
+- Reject
+
+破壞性 action 不得預設選取。
+
+### 11.3 MCP Capability Status
+
+可顯示 life_assistant 自己的 Capability Catalog：
+
+- capability name
+- version
+- enabled/disabled
+- permission requirement
+- risk level
+
+此頁**不顯示 omniAgent 的 Global Tool Registry / Workflow Registry**。
+
+## 12. Background Job UI
+
+只顯示與 life_assistant 自身有關的 job：
+
+- sync
+- backup/export
+- migration
+- notifications
+- maintenance
+
+不要建立 LangGraph / Agent Worker 管理 console。
+
+## 13. Loading / Empty / Error / Data
+
+所有主要頁面需要一致四態：
+
+- loading
+- empty
+- error
+- data
+
+mutation 另需：
+
+- submitting
+- success
+- partial success
+- failed
+
+## 14. Responsive Rules
+
+### Phone
+- 單欄
+- Bottom Navigation
+- dialog 視內容使用 full-screen / bottom sheet
+
+### Tablet
+- 可採 NavigationRail
+- master/detail 視功能需要
+
+### Desktop
+- sidebar / NavigationRail
+- 內容最大寬度控制
+- 可同時顯示列表與 detail，但不強制所有頁面 split view
+
+## 15. Settings
+
+至少包含：
+
+- Google account
+- Gmail / Calendar / Drive
+- ChatGPT Bridge / MCP
+- notification
+- theme
+- homepage sections / quick actions
+- backup / export
+- security / session
+- About / Version
+
+原生 App 專用 App Lock / biometric 等設定可保留為後續 platform-specific UI，不作為 Web Phase 1 核心完成條件。
+
+## 16. Accessibility
+
+- touch target ≥ 44×44
+- keyboard navigation on Web
+- semantic labels
+- focus states
+- system text scaling
+- 不只用顏色表示狀態
+- error message 可被 screen reader 理解
+
+## 17. 不屬於 life_assistant UI
+
+以下 UI 不在本專案實作：
+
+- LangGraph graph editor
+- Global Tool Registry 管理頁
+- Workflow Registry editor
+- Agent Runtime console
+- Agent Worker monitor
+- multi-agent orchestration dashboard
+
+這些屬於 omniAgent。
+
+## 18. 視覺規範
+
+顏色、字級、spacing、radius、card、button、motion 等視覺規範以 `design_system.md` 為準。

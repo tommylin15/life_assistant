@@ -46,25 +46,69 @@
 - 建立
 - 修改
 - 刪除
-- 本機快取
-- 手動 / 啟動時同步
+- 本機 / Backend 快取策略依目前架構實作
 - Gmail / Item 轉行程
 
 ### 衝突策略
 
-- 遠端修改與本機修改同時存在時，應提示使用者確認
+- 遠端修改與本機／Backend 修改同時存在時，應提示或依明確 policy 處理
 - 不應靜默覆蓋
-- 刪除動作需確認
+- 刪除動作需確認或符合明確 policy
 
 ---
 
-## 4. Google Drive Bridge
+## 4. ChatGPT Bridge Backend
 
-### 4.1 目的
+ChatGPT Bridge Backend 屬於 life_assistant，目的在於讓 ChatGPT 或其他授權 client 安全地讀取 life_assistant context、提出 proposed actions，並由 life_assistant Backend 執行。
 
-讓 App 與 ChatGPT 在沒有 OpenAI API 的前提下交換結構化資料。
+核心責任：
 
-### 4.2 預設路徑
+- context read / export
+- proposed action contract
+- schema validation
+- request / action idempotency
+- permission / confirmation policy
+- action execution
+- action result
+- Activity / execution log
+
+ChatGPT Bridge Backend 不等於 LangGraph Agent，也不負責跨系統 reasoning orchestration。
+
+---
+
+## 5. MCP / Integration API
+
+life_assistant 可提供 MCP Server 或等價 Integration API，對外暴露自己的能力，例如：
+
+- task.list / create / update / complete
+- calendar.list / create / update
+- note.search / create
+- project.get
+- activity.list
+
+life_assistant 只維護自己的 Capability Catalog / MCP Tool Catalog，包括：
+
+- tool name
+- version
+- input / output schema
+- required permission
+- risk / confirmation requirement
+- idempotency contract
+- error contract
+
+跨產品的 Global Tool Registry、Workflow Registry、Agent Runtime 與 Agent Worker 不在本專案，由 `omniAgent` 負責。
+
+---
+
+## 6. Google Drive Bridge（Legacy / Fallback）
+
+### 6.1 目的
+
+既有 Google Drive Bridge 保留作為相容 / fallback integration，讓 App 與 ChatGPT 在沒有直接 MCP / Backend integration 時交換結構化資料。
+
+Drive Bridge 不再是新架構的中央資料來源，也不是唯一 ChatGPT integration 方法。
+
+### 6.2 預設路徑
 
 ```text
 生活助理/
@@ -78,7 +122,7 @@
     └── history/
 ```
 
-### 4.3 bridge_manifest.json
+### 6.3 bridge_manifest.json
 
 至少包含：
 
@@ -87,9 +131,9 @@
 - app_version
 - exported_at
 
-### 4.4 App → Drive
+### 6.4 life_assistant → Drive
 
-輸出：
+輸出可包含：
 
 - 今日狀態
 - 近期待辦
@@ -98,66 +142,45 @@
 - 進行中專案
 - 使用者指定上下文
 
-### 4.5 ChatGPT → Drive
+### 6.5 ChatGPT → Drive
 
-寫入：
+可寫入：
 
 - proposed_actions
 - summaries
 - recommendations
 
-### 4.6 App 匯入
+### 6.6 匯入規則
 
 所有 proposed actions 必須：
 
 1. schema 驗證
-2. 顯示預覽
-3. 使用者確認
-4. 寫入 SQLite
-5. 寫入 Activity Log
+2. permission / policy 驗證
+3. 顯示預覽或依 policy 決定是否需要確認
+4. 由 life_assistant 執行
+5. 寫入 Activity / execution log
+6. 產生 execution result
 
-不得直接無條件執行。
+不得讓 ChatGPT 或 omniAgent 直接繞過 life_assistant Backend / policy 寫入 PostgreSQL。
 
 ---
 
-## 5. ChatGPT Onboarding
+## 7. ChatGPT Onboarding
 
-App 需提供「ChatGPT Bridge 設定」頁。
+App 可提供「ChatGPT Bridge / MCP 設定」入口。
 
-狀態：
+可能狀態：
 
-- App Google Drive：Connected / Not connected
+- Backend / MCP：Available / Unavailable
+- Google Drive fallback：Connected / Not connected
 - Bridge Folder：Ready / Missing
-- ChatGPT：Not verified / Verified
+- ChatGPT integration：Not verified / Verified
 
-### 測試流程
-
-App 產生測試指令，要求 ChatGPT：
-
-1. 讀取指定 Google Drive Bridge manifest
-2. 回報 bridge_id
-3. 回報 schema_version
-
-使用者將回覆填回 App 或手動確認。
-
-### ChatGPT 未連 Google Drive 時
-
-顯示教學：
-
-1. 打開 ChatGPT
-2. 進入 Settings
-3. 進入 Plugins / Apps / Connectors
-4. 連接 Google Drive
-5. 使用可存取 Bridge 資料夾的 Google 帳號
-6. 回到 ChatGPT 對話
-7. 貼上 App 產生的測試指令
-8. 驗證 Bridge ID
-
-App 內教學文字需避免依賴固定 UI 名稱，因 ChatGPT UI 可能變動；可保留可更新教學版本。
+舊 Google Drive Bridge 的測試流程可以保留，但應明確標示為 fallback / compatibility path。
 
 ---
 
-## 6. Share Bridge
+## 8. Share Bridge
 
 提供：
 
@@ -167,33 +190,42 @@ App 內教學文字需避免依賴固定 UI 名稱，因 ChatGPT UI 可能變動
 
 用途：
 
+- MCP / Backend integration 尚未設定時
 - Google Drive Bridge 未設定時
 - 緊急 fallback
 - 使用者只想分享單一事項時
 
 ---
 
-## 7. Local Folder ↔ Google Drive Folder Sync
+## 9. Local Folder ↔ Google Drive Folder Sync
 
-v0.1 支援手動觸發的雙向 Folder Sync。
+既有同步能力可保留；其是否繼續作為 Phase 1 主功能，需依 Web / Backend 架構與實際需求驗證。
 
-核心規則：
+核心規則仍應遵守：
 
-- 首次同步以 Google Drive 為主
-- Local 必須是乾淨空資料夾
-- 首次同步完成後才啟用雙向同步
-- 刪除正常雙向同步
-- 雙方同時修改時進入 Conflict，不靜默覆蓋
-- SQLite 與 `ChatGPT_Bridge/` 排除一般 Folder Sync
+- 不靜默覆蓋衝突
+- destructive sync 需可追蹤
+- PostgreSQL 主資料與 Bridge / sync 檔案角色不得混淆
 
-完整規格見 `sync_spec.md`。
+完整舊規格見 `sync_spec.md`。
 
 ---
 
-## 8. ChatGPT Bridge JSON Contract
+## 10. ChatGPT Bridge JSON Contract
 
-ChatGPT ↔ Drive ↔ App 的正式 JSON schema、action registry、版本相容與驗證規則，見：
+既有 Drive Bridge JSON schema、action registry、版本相容與驗證規則見：
 
 `bridge_schema.md`
+
+該文件保留作既有 Drive Bridge contract；若其中出現「SQLite 是主資料來源」等舊架構描述，屬 legacy context。
+
+目前正式 source of truth 與 integration 邊界以：
+
+- `PROJECT_RULES.md`
+- `decisions.md`
+- `architecture.md`
+- `project_boundary.md`
+
+為準。
 
 實作時不得以 README prose 取代 schema 驗證。

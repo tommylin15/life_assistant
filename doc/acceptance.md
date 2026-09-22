@@ -58,24 +58,43 @@
 - [ ] 一般文件。
 - [ ] 附件 storage reference 不依賴單一手機本機絕對路徑作為中央模型。
 
-## ChatGPT Bridge / Integration
+## ChatGPT Bridge / MCP Integration
 
-- [ ] Bridge / Integration 資料格式有 schema 驗證。
-- [ ] proposed actions 有適當確認或 policy 控制。
-- [ ] 重複 action 有防重機制。
-- [ ] Bridge / Integration 失敗不破壞 PostgreSQL 主資料。
+- [ ] ChatGPT Bridge Backend 有明確且版本化的 schema / API contract。
+- [ ] Bridge / MCP 可讀取允許分享的 life_assistant context。
+- [ ] proposed actions 有 schema 驗證。
+- [ ] proposed actions 有適當 confirmation / policy 控制。
+- [ ] 重複 request / action 有 idempotency 防重機制。
+- [ ] 實際 action 由 life_assistant Backend 執行，不由 ChatGPT / omniAgent 直接寫 PostgreSQL。
+- [ ] action result 可回傳並寫入 Activity / execution log。
+- [ ] Bridge / MCP Integration 失敗不破壞 PostgreSQL 主資料。
+- [ ] 舊 Google Drive Bridge 若保留，需明確標示為相容 / fallback integration。
+- [ ] life_assistant 可提供自己的 Capability Catalog / MCP Tool Catalog。
+
+## Project Boundary
+
+- [ ] life_assistant 可在沒有 omniAgent 的情況下獨立完成主要產品流程。
+- [ ] LangGraph 不作為 life_assistant 完成條件。
+- [ ] Global Tool Registry 不作為 life_assistant 完成條件。
+- [ ] Workflow Registry 不作為 life_assistant 完成條件。
+- [ ] Agent Runtime / Agent Worker 不作為 life_assistant 完成條件。
+- [ ] life_assistant background jobs 不包含 Agent reasoning loop。
+- [ ] omniAgent 若呼叫 life_assistant，只透過版本化 MCP / API contract，不依賴內部 DB table 或 private implementation。
 
 ## 安全
 
 - [ ] token / secret 不存一般資料表或一般 log。
 - [ ] 敏感資訊不進一般 log。
 - [ ] Backend authentication / authorization 有明確驗證。
+- [ ] destructive / sensitive action 經 life_assistant 最終 permission / policy gate。
 
 ## Log / Observability
 
 - [ ] 重要寫入有 Activity / execution log。
 - [ ] 外部 API 失敗可追蹤。
 - [ ] migration 成功 / 部分成功 / 失敗可區分。
+- [ ] AI / Bridge proposed action 與實際 execution result 可區分。
+- [ ] partial success 不會被記錄成 full success。
 
 ## 原生 App 後續階段
 

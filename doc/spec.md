@@ -1,444 +1,263 @@
-# 生活助理 App v0.1 — Product Spec
+# life_assistant — Product Spec
 
-## 1. 產品目標
+最後更新：2026-09-22
 
-建立一個溫暖、低壓、可長期使用的個人生活助理 App。
+## 1. 產品定位
+
+`life_assistant` 是個人生活資料與實際執行系統：
+
+> **Data + UI + API + Execution + Integration**
 
 核心流程：
 
-> 資訊進來 → 分類 → 形成事項 → 排程／提醒 → 執行 → 留下紀錄 → 必要時交給 ChatGPT 判斷
+> 資訊進來 → 分類 → 形成事項 → 排程／提醒 → 執行 → 留下紀錄 → 必要時提供給 ChatGPT / omniAgent 分析與提出建議
 
-v0.1 優先驗證實用性，不追求雲端完整性或複雜 AI 自動化。
+life_assistant 本身不負責通用 Agent reasoning 或跨產品 orchestration；相關能力由獨立 `omniAgent` 專案負責。
 
----
+## 2. Phase 1 正式架構
 
-## 2. 首頁 Dashboard
+```text
+Firebase Hosting
+        ↓
+Flutter Web / PWA
+        ↓
+Cloud Run — FastAPI Backend
+        ↓
+PostgreSQL
+```
 
-首頁採「混合型」設計。
+原則：
 
-### 2.1 最上方
+- Flutter Web / PWA 為 Phase 1 主要交付面。
+- FastAPI 為主要 Backend 入口。
+- PostgreSQL 為 operational source of truth。
+- 前端不得直接連 PostgreSQL。
+- 既有 SQLite 保留為 migration source；未來原生 App 如需 offline cache 可再使用。
+- Android / iOS 原生封裝延後。
 
-智慧摘要卡，以規則生成，不使用 AI。
+## 3. Dashboard
 
-範例：
+首頁採混合型設計，顯示：
 
-- 今天有 3 件待處理，1 件明天到期，下午 2:00 有行程。
-- 今天沒有緊急事項，下一個行程是 14:30。
-
-### 2.2 中段分區
-
-依類型分區顯示：
-
-- 待辦
-- 行程
+- 今日待辦
+- 今日行程
 - 提醒
 - 等待中
-
-可選擇顯示／隱藏的延伸區塊：
-
 - 採買
 - 習慣
 - 近期專案
 - 近期重要日期
 
-### 2.3 智慧排序
+首頁摘要 Phase 1 可先由規則產生，不依賴 AI。
 
-規則式優先：
+排序原則：逾期 → 今天到期 → 高優先 → 即將到期 → 一般事項。
 
-1. 逾期
-2. 今天到期
-3. 高優先
-4. 即將到期
-5. 一般事項
+## 4. Tasks / Items
 
-若有行程衝突或重疊，需額外提示。
+支援：
 
-### 2.4 首頁快捷
-
-使用者可自訂：
-
-- 新增待辦
-- 新增行程
-- 新增採買
-- 語音輸入
-- 新增筆記
-- 新增專案
-
-可開關與調整順序。
-
----
-
-## 3. Item / 待辦
-
-### 3.1 基本欄位
-
-- 標題
-- 備註
-- 優先度：高 / 中 / 低
+- CRUD
+- 優先度
 - 狀態
 - 到期日期
-- 提醒時間
+- 提醒
 - 標籤
-- 所屬專案
+- 專案
 - Checklist
 - 附件
-- 建立時間
-- 更新時間
-- 完成時間
+- 建立／更新／完成時間
 
-### 3.2 狀態
+快速輸入可使用規則解析；解析失敗仍需保留原始輸入並允許後補欄位。
 
-細節由實作統一處理，建議：
+## 5. Google Calendar
 
-- 待處理
-- 等待中
-- 已排程
-- 已完成
-- 已取消
+支援完整雙向整合：
 
-### 3.3 快速輸入
-
-支援自然語句的規則解析，不依賴 AI。
-
-範例：
-
-- 明天下午繳電費
-- 9/25 前繳信用卡
-- 今晚 8 點提醒倒垃圾
-- 週六買濾芯
-
-解析失敗時仍建立普通待辦，日期可後補。
-
-### 3.4 Checklist
-
-- 單層
-- 可勾選
-- 顯示完成數，例如 3/5
-- 不做多層巢狀與依賴關係
-
----
-
-## 4. Google Calendar
-
-v0.1 為完整雙向整合。
-
-支援：
-
-- 讀取行程
-- 新增行程
-- 修改行程
-- 取消／刪除行程
+- 讀取
+- 新增
+- 修改
+- 刪除
 - 待辦轉 Calendar
-- Gmail 內容轉 Calendar
-- 月曆 / 週曆簡化視圖
+- Gmail 轉 Calendar
+- 簡化月／週視圖
 
-不實作：
+整合失敗不得破壞 life_assistant 主資料。
 
-- 複雜拖曳時間軸
-- Google Calendar 完整替代介面
-
----
-
-## 5. Gmail
+## 6. Gmail
 
 支援：
 
-- 讀取必要郵件資訊
-- 顯示重要郵件摘要
+- 必要 metadata / snippet
+- 重要郵件摘要
 - 郵件轉待辦
 - 郵件轉 Calendar
-- 郵件掛到生活專案
+- 郵件掛到專案
 
-重要性判定 v0.1 先以規則與使用者操作為主，不假設內建 AI。
+不把 life_assistant 做成完整 Mail Client。
 
-不在 App 內直接回信。
+## 7. Projects
 
----
-
-## 6. 生活專案
-
-採簡化專案首頁。
-
-每個專案可包含：
+每個生活專案可聚合：
 
 - 摘要
-- 待辦
-- 行程
-- 附件
-- 備註
+- Tasks
+- Calendar refs
+- Notes
+- Attachments
+- Gmail refs
 - 最近活動
-- 相關筆記
-- 相關 Gmail 項目
 
-不做：
+Phase 1 不做完整專案管理平台、甘特圖或複雜依賴。
 
-- 甘特圖
-- 里程碑
-- 依賴關係
-- 正式專案管理統計
-
----
-
-## 7. 習慣 / 例行事項
+## 8. Notes / Knowledge
 
 支援：
 
-- 每天
-- 每週
-- 指定星期
-- 提醒
-- 完成紀錄
-
-不做：
-
-- streak
-- 完成率分析
-- 健康統計圖表
-
----
-
-## 8. 採買清單
-
-支援：
-
-- 快速新增
-- 勾選完成
-- 簡單分類
-- 掛到生活專案
-
-不做：
-
-- 價格比較
-- 商店比較
-- 預算管理
-- 歷史價格
-
----
-
-## 9. 筆記 / 知識庫
-
-v0.1 支援：
-
-- 獨立筆記
-- 分類
+- Markdown
 - 標籤
-- 全文搜尋
-- 筆記互相連結
-- 掛到生活專案
-- 轉成待辦
-- 轉成行程
+- 搜尋
+- 雙向連結
+- 專案關聯
 - 附件
+- 轉待辦／行程
 
-不做圖譜視覺化。
+## 9. Habits / Shopping / Templates
 
----
+Habits：週期、提醒、完成紀錄。
 
-## 10. 附件
+Shopping：快速新增、分類、勾選、專案關聯。
 
-支援：
+Templates：內建與自訂範本，可套用到待辦與生活專案。
 
-- 圖片
-- PDF
-- 一般文件
-- 相機拍照／掃描存檔
+## 10. Attachments
 
-不做 OCR。
+支援圖片、PDF、一般文件。
 
-附件 v0.1 存本機。
+新的中央資料模型不得依賴單一手機的絕對本機路徑；實際 storage 方案需可由 Backend 管理或以安全 reference 表示。
 
----
+## 11. Search
 
-## 11. 搜尋
+至少搜尋：
 
-基本搜尋：
+- Tasks
+- Projects
+- Notes
+- Calendar cached refs
 
-- 待辦標題
-- 待辦備註
-- 專案
-- 專案備註
-- 已同步行程標題
-- 筆記全文
+Gmail 遠端全文搜尋非 Phase 1 必要條件。
 
-不做 Gmail 遠端全文搜尋。
+## 12. Notification / Background Jobs
 
----
+life_assistant 可有一般 background jobs，例如：
 
-## 12. 通知
+- Calendar / Gmail sync
+- reminders / notification dispatch
+- migration
+- export / backup
+- maintenance
 
-支援：
+這些 worker 不包含 Agent reasoning loop。
 
-- 本機通知
-- 到期提醒
-- 即將到期提醒
-- 例行事項提醒
-- 每日摘要
-- 每日收尾
+## 13. Activity / Execution Log
 
-每日摘要內容：
-
-- 今日待辦
-- 今日行程
-- 即將到期
-- 等待中需要追蹤
-
-每日收尾：
-
-- 今天完成事項
-- 未完成事項
-- 一鍵延到明天 / 改日期
-- 明天第一個行程
-
----
-
-## 13. 語音快速新增
-
-- 使用手機系統語音辨識
-- 語音轉文字
-- 送入快速輸入解析
-- 不做持續語音對話
-- 不做 AI Voice Assistant
-
----
-
-## 14. UI Theme
-
-支援：
-
-- 跟隨系統
-- 淺色
-- 深色
-- 多模板
-
-首版至少三套：
-
-1. 溫暖手帳
-2. 極簡清爽
-3. 深色夜間
-
-使用同一套元件與 Theme Token，不重做頁面。
-
----
-
-## 15. 標籤
-
-預設：
-
-- 家庭
-- 帳單
-- 居家
-- 健康
-- 採買
-- 行政
-
-可新增自訂標籤。
-
-不做階層式標籤。
-
----
-
-## 16. 範本
-
-支援：
-
-- 內建範本
-- 自訂範本
-- 待辦另存範本
-- 生活專案另存範本
-
-可包含：
-
-- 標籤
-- Checklist
-- 提醒規則
-- 預設欄位
-
----
-
-## 17. Activity Log
-
-使用者可見簡化 Log：
+所有重要操作應可記錄：
 
 - 時間
-- 動作
-- 成功 / 失敗
-- 是否建立新待辦 / 提醒 / 行程
+- actor / source
+- action
+- 成功／失敗／部分成功
+- entity reference
+- error reference
 
-底層可另存 debug log，但不放一般 UI。
+不得把 token、PIN、secret 或不必要的敏感正文寫入一般 log。
 
----
+## 14. ChatGPT Bridge Backend
 
-## 18. 安全
+ChatGPT Bridge Backend 是 life_assistant 的正式能力，**不得移除**。
 
-- Google 登入
-- App Lock 可選開啟
-- 生物辨識
-- App PIN fallback
-- PIN 不得明文存 SQLite
-- Google token 使用安全儲存
+用途：
 
----
+1. 對 ChatGPT 或其他授權 client 提供允許讀取的生活狀態。
+2. 接收 proposed actions。
+3. 驗證 schema、版本、權限、idempotency 與 policy。
+4. 必要時要求使用者確認。
+5. 由 life_assistant Backend 執行實際 action。
+6. 回傳 action result 並寫入 Activity / execution log。
 
-## 19. 備份與匯出
+### 14.1 Google Drive Bridge
 
-支援：
+既有 Google Drive Bridge 保留作 legacy / fallback integration。
 
-- SQLite 完整備份
-- JSON
-- CSV
+舊版 `bridge_schema.md` 可繼續定義 Drive 檔案交換格式，但其中 SQLite 為主資料來源的歷史描述不再代表現行架構；現行主資料來源為 PostgreSQL。
 
-目標：
+### 14.2 MCP / Integration API
 
-- 可還原
-- 可搬遷
-- 不被 SQLite 綁死
+新的 Backend 應可逐步提供版本化 MCP / Integration API，例如：
 
----
+- `task.list`
+- `task.create`
+- `task.update`
+- `task.complete`
+- `calendar.list`
+- `calendar.create`
+- `calendar.update`
+- `note.search`
+- `note.create`
+- `project.get`
+- `activity.list`
 
-## 20. ChatGPT Bridge
+life_assistant 維護自己的 Capability Catalog，包括 tool schema、version、permission、risk 與 confirmation policy。
 
-v0.1 支援兩條路：
+## 15. 與 omniAgent 的邊界
 
-### 20.1 Share Bridge
+以下 **不屬於 life_assistant**：
 
-將目前 App 狀態整理成文字 / JSON，讓使用者分享或複製到 ChatGPT。
+- LangGraph Agent
+- Global Tool Registry
+- Workflow Registry
+- Agent Runtime
+- Agent Worker
+- 跨系統 multi-tool orchestration
+- 通用 Agent reasoning / planning / retry-resume loop
 
-### 20.2 Google Drive Bridge
+這些由獨立 `omniAgent` 專案負責。
 
-App 與 ChatGPT 透過指定 Google Drive Bridge 資料夾交換資料。
+omniAgent 若需操作生活資料，應透過 life_assistant 的 MCP / Integration API，不得繞過 Backend 直接寫 PostgreSQL。
 
-原則：
+完整邊界見 `project_boundary.md`。
 
-- SQLite 是主資料
-- Drive 是交換層
-- ChatGPT 不直接修改 SQLite
-- ChatGPT 可輸出 proposed actions
-- App 讀回後由使用者確認
-- 完成後寫 Activity Log
+## 16. Security
 
-Bridge onboarding 必須包含：
+- Google / external token 使用安全儲存或適當 secret mechanism。
+- token / secret 不進一般 DB 欄位、export、Bridge payload 或一般 log。
+- destructive / sensitive action 必須經 Backend policy。
+- proposed action 不等於已執行。
+- partial success 不得呈現成 full success。
 
-1. App Google Drive 授權
-2. 建立指定 Bridge 路徑
-3. 產生 ChatGPT 測試指令
-4. 使用者確認 ChatGPT 端已連 Google Drive
-5. 讀取 Bridge ID / schema version 完成驗證
+## 17. Backup / Migration
 
-若 ChatGPT 尚未連 Google Drive，要顯示教學。
+- 既有 SQLite 資料不得清空或 drop。
+- SQLite → PostgreSQL 必須可驗證。
+- migration 應可安全重跑或具 idempotency。
+- 支援 JSON / CSV 等可搬遷匯出。
+- restore / migration 失敗不得破壞原始資料。
 
----
+## 18. UI / UX
 
-## 21. 第一版不做
+UI 需求以 `ui.md` 為頁面與流程規格，以 `design_system.md` 為視覺與元件規範。
 
-- 自建 GCP backend
-- Iceberg
-- Firestore / Cloud SQL
-- OpenAI API
-- App 內建 AI Chat
+Phase 1 必須支援手機與桌面瀏覽器，並優先確保 responsive layout、loading / empty / error / data 狀態一致。
+
+## 19. Phase 1 不做
+
+- LangGraph / Agent orchestration
+- Global Tool Registry / Workflow Registry
+- Agent Runtime / Agent Worker
 - 多人協作
-- 完整多裝置同步
-- 地點型提醒
-- Widget
+- 完整 offline-first 雙向同步
+- Android / iOS 正式上架
 - OCR
 - 完整人生 KPI
-- 完整專案管理
-- 完整語音助理
+- 完整專案管理套件
+- 完整語音 AI Assistant
+- Temporal / Iceberg 等非必要高複雜基礎設施

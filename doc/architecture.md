@@ -14,6 +14,12 @@ PostgreSQL
 
 Phase 1 先以 Web/PWA 為主要交付方式，Android / iOS 原生安裝包延後。
 
+`life_assistant` 的核心定位是：
+
+> **Data + UI + API + Execution + Integration**
+
+它不是通用 Agent orchestration 平台。
+
 ## 2. 架構原則
 
 - Flutter / Dart 繼續作為前端主技術。
@@ -23,7 +29,8 @@ Phase 1 先以 Web/PWA 為主要交付方式，Android / iOS 原生安裝包延�
 - 前端不得直接連 PostgreSQL。
 - Google、Drive、通知、語音與其他外部服務透過 adapter / connector 隔離。
 - 現有 SQLite 保留為既有版本 migration source；未來若保留原生 App，可作 local/offline cache。
-- 不把規劃中的 Scheduler、Worker、LangGraph、Tool Registry 寫成已完成。
+- ChatGPT Bridge Backend 與 life_assistant MCP / Integration API 屬於本專案。
+- LangGraph、Global Tool Registry、Workflow Registry、Agent Runtime、Agent Worker 與跨系統 Agent orchestration 不屬於本專案，由獨立 `omniAgent` 負責。
 
 ## 3. 建議模組
 
@@ -70,6 +77,10 @@ Cloud Run — FastAPI
 ├── Repositories
 ├── PostgreSQL Data Access
 ├── Google / External Integrations
+├── ChatGPT Bridge Backend
+├── MCP / Integration API
+├── Capability Catalog
+├── Background Jobs（non-agent）
 └── Logging / Execution Records
 ```
 
@@ -114,16 +125,66 @@ Flutter Web / PWA
 
 SQLite 不再是新架構的中央 source of truth，但在 migration 完成前仍是既有資料的有效來源。
 
-## 7. 未來可擴充點
+## 7. ChatGPT Bridge 與 MCP
 
-穩定後可逐步加入：
+ChatGPT Bridge Backend 留在 life_assistant，負責：
 
-- Cloud Scheduler / Dispatcher
-- Worker / Agent Runtime
-- Tool Registry / Workflow Registry
-- LangGraph
-- Android / iOS packaging
-- SQLite local/offline cache
-- MCP / external tool adapters
+- context export / read model。
+- proposed action schema。
+- schema validation。
+- idempotency。
+- permission / confirmation policy。
+- action execution。
+- action result / audit log。
+
+life_assistant 可提供 MCP Server 或等價 Integration API，讓 ChatGPT 或 omniAgent 使用 life_assistant 能力。
+
+life_assistant 只維護自己的 Capability Catalog；不維護跨產品 Global Tool Registry。
+
+## 8. Background Worker 邊界
+
+life_assistant 可有不含 AI reasoning 的一般 background jobs，例如：
+
+- Calendar / Gmail sync。
+- notification dispatch。
+- migration / export / backup。
+- maintenance。
+
+Agent Worker、LangGraph state machine、reason → choose tool → execute → observe loop 屬於 omniAgent。
+
+## 9. 與 omniAgent 的責任邊界
+
+```text
+omniAgent / LangGraph
+        ↓ Global Tool Registry
+life_assistant MCP / Integration API
+        ↓
+life_assistant FastAPI
+        ↓ validation / permission / policy
+PostgreSQL / Google integrations
+```
+
+omniAgent 不應直接寫入 life_assistant PostgreSQL。
+
+詳細規則見 `project_boundary.md`。
+
+## 10. 後續可擴充點
+
+life_assistant 後續可擴充：
+
+- MCP capability coverage。
+- Bridge Backend 能力。
+- 一般 background jobs。
+- Android / iOS packaging。
+- SQLite local/offline cache。
+
+以下不再列為 life_assistant roadmap：
+
+- LangGraph。
+- Global Tool Registry。
+- Workflow Registry。
+- Agent Runtime。
+- Agent Worker。
+- 通用型 multi-agent orchestration。
 
 除非有具體 workload 證明需求，暫不優先導入 Temporal、Iceberg 或其他高複雜基礎設施。

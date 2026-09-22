@@ -1,7 +1,7 @@
 # 生活助理 App v0.1 — 開發進度
 
-最後更新：2026-09-22
-目前狀態：**flutter analyze 0 error（68 info）、flutter test 7/7 通過；P2 Polish 全部完成；等待 Android SDK 安裝後進行實機驗收**
+最後更新：2026-09-21
+目前狀態：**原生 Flutter + SQLite 版本凍結；flutter analyze 0 error（68 info）、flutter test 7/7 通過；目前唯一主線為 Flutter Web/PWA + Cloud Run + PostgreSQL**
 
 ## 狀態定義
 
@@ -135,20 +135,15 @@
 | `test/folder_sync_test.dart` | ✅ 1/1 通過 |
 | `test/widget_test.dart` | ✅ 1/1 通過 |
 
-## 下一步
+## 下一步：Web/PWA 雲端主線
 
-### 需要 Android Studio（優先）
+1. 建立 Flutter Web / PWA build 與瀏覽器驗證。
+2. 建立 FastAPI Backend 與核心 API。
+3. 建立 PostgreSQL schema / migration。
+4. 實作 SQLite → PostgreSQL 可重跑、可驗證的資料遷移。
+5. 以 Firebase Hosting + Cloud Run dev/test 驗收核心流程。
 
-1. 安裝 Android Studio → 自動安裝 Android SDK。
-2. `flutter doctor` 確認 Android toolchain OK。
-3. 接上實機或啟動模擬器，執行 `flutter run`。
-4. 驗收 Google Sign-In → Calendar → Gmail → Drive Bridge → Folder Sync。
-5. 驗收 App Lock、backup/restore、通知、離線行為。
-6. 勾選 `release_checklist.md` 對應項目。
-
-### 不需要 Android SDK 可繼續做
-
-目前已全部完成。
+Android / iOS SDK、實機驗收、release signing 與上架暫停，不列入目前交付範圍。
 
 ## 已知尚未完成
 

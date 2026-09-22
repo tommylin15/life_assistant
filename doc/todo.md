@@ -88,7 +88,9 @@
 - [x] Export CSV
 - [x] Restore flow
 
-## Release Gate
+## Release Gate（原生版凍結；暫不列入目前交付）
+
+> 原生 Android / iOS 保留既有程式結構但凍結開發。當前唯一主要交付目標是 Web/PWA 雲端版本；以下原生驗收項目延後。
 
 - [ ] 核心功能離線可用
 - [ ] Google 服務失敗不破壞本機資料

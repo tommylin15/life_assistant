@@ -4,6 +4,7 @@
 
 - Flutter / Dart 繼續作為主要前端技術。
 - Phase 1 優先 Flutter Web / PWA，不以 Android / iOS 安裝包為主要交付方式。
+- Android / iOS 原生版保留既有程式結構，但凍結開發；Web/PWA 是目前唯一主要交付目標。
 - Flutter Web / PWA 由 Firebase Hosting 發布。
 - Backend 採 Python FastAPI，部署於 Cloud Run。
 - PostgreSQL 作為新的 operational source of truth。

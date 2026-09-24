@@ -1,6 +1,8 @@
+import os
 import unittest
+from unittest.mock import patch
 
-from app.config import _parse_bundle
+from app.config import _load_bundle, _parse_bundle
 
 
 class BundleParsingTests(unittest.TestCase):
@@ -45,6 +47,26 @@ class BundleParsingTests(unittest.TestCase):
 
         self.assertEqual(values, {})
         self.assertEqual(bundle_format, "unknown")
+
+    def test_opaque_secret_can_be_explicitly_wired_as_database_password(self):
+        env = {
+            "LIFE_ASSISTANT_BUNDLE": "p@ss word/with:specials",
+            "LIFE_ASSISTANT_OPAQUE_SECRET_KIND": "database-password",
+            "DATABASE_HOST": "10.42.0.5",
+            "DATABASE_PORT": "5432",
+            "DATABASE_NAME": "life_assistant",
+            "DATABASE_USER": "life_assistant_user",
+            "DATABASE_SSLMODE": "require",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            os.environ.pop("DATABASE_URL", None)
+            bundle_format = _load_bundle()
+            database_url = os.environ["DATABASE_URL"]
+
+        self.assertEqual(bundle_format, "opaque-database-password")
+        self.assertTrue(database_url.startswith("postgresql+asyncpg://life_assistant_user:"))
+        self.assertIn("@10.42.0.5:5432/life_assistant?sslmode=require", database_url)
+        self.assertNotIn("p@ss word/with:specials", database_url)
 
 
 if __name__ == "__main__":

@@ -57,5 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check GCP WIF bootstrap syntax
-        run: bash -n scripts/bootstrap_gcp_wif.sh
+      - name: Check GCP scripts syntax
+        run: |
+          bash -n scripts/bootstrap_gcp_wif.sh
+          bash -n scripts/inspect_postgres_dev.sh

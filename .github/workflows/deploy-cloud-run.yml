@@ -45,6 +45,51 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Classify life-assistant bundle shape
+        shell: bash
+        run: |
+          gcloud secrets versions access latest \
+            --project "$GCP_PROJECT_ID" \
+            --secret life-assistant-bundle \
+          | python3 -c '
+          import json
+          import re
+          import sys
+
+          raw = sys.stdin.read().strip()
+          if not raw:
+              print("bundle_format=empty")
+              raise SystemExit(0)
+
+          try:
+              value = json.loads(raw)
+          except json.JSONDecodeError:
+              value = None
+
+          if isinstance(value, dict):
+              print("bundle_format=json-object")
+              print("bundle_keys=" + ",".join(sorted(str(key) for key in value)))
+              raise SystemExit(0)
+
+          lines = [line.strip() for line in raw.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+          dotenv_keys = []
+          dotenv = bool(lines)
+          for line in lines:
+              match = re.match(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=", line)
+              if not match:
+                  dotenv = False
+                  break
+              dotenv_keys.append(match.group(1))
+          if dotenv:
+              print("bundle_format=dotenv")
+              print("bundle_keys=" + ",".join(sorted(set(dotenv_keys))))
+          elif raw.startswith(("postgresql://", "postgresql+asyncpg://")):
+              print("bundle_format=raw-database-url")
+              print("bundle_keys=DATABASE_URL")
+          else:
+              print("bundle_format=unknown")
+          '
+
       - name: Deploy backend to Cloud Run
         run: |
           gcloud run deploy "$CLOUD_RUN_SERVICE" \

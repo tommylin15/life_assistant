@@ -3,11 +3,22 @@ import os
 from io import StringIO
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
+import yaml
 from dotenv import dotenv_values
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 DEFAULT_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/life_assistant"
+DATABASE_PASSWORD_KEYS = {
+    "database_password",
+    "postgres_password",
+    "postgresql_password",
+    "db_password",
+}
+
+
+def _normalize_key(value: str) -> str:
+    return value.strip().lower().replace("-", "_").replace(".", "_")
 
 
 def _normalize_database_url(value: str) -> str:
@@ -36,6 +47,28 @@ def _normalize_database_url(value: str) -> str:
     return value
 
 
+def _flatten_mapping(value: dict, prefix: str = "") -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for key, item in value.items():
+        if not isinstance(key, str) or item is None:
+            continue
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(item, dict):
+            parsed.update(_flatten_mapping(item, path))
+        elif isinstance(item, (str, int, float, bool)):
+            parsed[path] = str(item)
+    return parsed
+
+
+def _normalize_parsed_values(values: dict[str, str]) -> dict[str, str]:
+    parsed = dict(values)
+    for key, value in list(parsed.items()):
+        normalized_key = _normalize_key(key)
+        if normalized_key == "database_url":
+            parsed[key] = _normalize_database_url(value)
+    return parsed
+
+
 def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
     raw = raw.strip()
     if not raw:
@@ -43,20 +76,18 @@ def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
 
     try:
         value = json.loads(raw)
+        if isinstance(value, str):
+            try:
+                nested = json.loads(value)
+            except json.JSONDecodeError:
+                nested = None
+            if isinstance(nested, dict):
+                value = nested
     except json.JSONDecodeError:
         value = None
 
     if isinstance(value, dict):
-        parsed: dict[str, str] = {}
-        for key, item in value.items():
-            if not isinstance(key, str) or item is None or isinstance(item, (dict, list)):
-                return {}, "unknown"
-            parsed[key] = str(item)
-        if "DATABASE_URL" in parsed:
-            parsed["DATABASE_URL"] = _normalize_database_url(parsed["DATABASE_URL"])
-        if "database_url" in parsed:
-            parsed["database_url"] = _normalize_database_url(parsed["database_url"])
-        return parsed, "json-object"
+        return _normalize_parsed_values(_flatten_mapping(value)), "json-object"
 
     if raw.startswith(("postgresql://", "postgresql+asyncpg://")):
         return {"DATABASE_URL": _normalize_database_url(raw)}, "raw-database-url"
@@ -70,11 +101,14 @@ def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
         values = dotenv_values(stream=StringIO(raw))
         if values and all(value is not None for value in values.values()):
             parsed = {str(key): str(value) for key, value in values.items()}
-            if "DATABASE_URL" in parsed:
-                parsed["DATABASE_URL"] = _normalize_database_url(parsed["DATABASE_URL"])
-            if "database_url" in parsed:
-                parsed["database_url"] = _normalize_database_url(parsed["database_url"])
-            return parsed, "dotenv"
+            return _normalize_parsed_values(parsed), "dotenv"
+
+    try:
+        value = yaml.safe_load(raw)
+    except yaml.YAMLError:
+        value = None
+    if isinstance(value, dict):
+        return _normalize_parsed_values(_flatten_mapping(value)), "yaml-object"
 
     return {}, "unknown"
 
@@ -104,23 +138,35 @@ def _database_url_from_password(password: str) -> str | None:
     )
 
 
+def _extract_database_url(values: dict[str, str]) -> str | None:
+    for key, value in values.items():
+        if _normalize_key(key) == "database_url":
+            return _normalize_database_url(value)
+    return None
+
+
+def _extract_database_password(values: dict[str, str]) -> str | None:
+    for key, value in values.items():
+        if _normalize_key(key) in DATABASE_PASSWORD_KEYS and value:
+            return value
+    return None
+
+
 def _load_bundle() -> str:
     raw = os.environ.get("LIFE_ASSISTANT_BUNDLE", "")
     values, bundle_format = _parse_bundle(raw)
 
-    if (
-        bundle_format == "unknown"
-        and raw.strip()
-        and "\n" not in raw.strip()
-        and os.environ.get("LIFE_ASSISTANT_OPAQUE_SECRET_KIND") == "database-password"
-    ):
-        database_url = _database_url_from_password(raw.strip())
-        if database_url:
-            values = {"DATABASE_URL": database_url}
-            bundle_format = "opaque-database-password"
+    database_url = _extract_database_url(values)
+    if not database_url:
+        password = _extract_database_password(values)
+        if password:
+            database_url = _database_url_from_password(password)
+    if database_url:
+        values["DATABASE_URL"] = database_url
 
     for key, value in values.items():
-        os.environ[key] = value
+        if "." not in key:
+            os.environ[key] = value
     return bundle_format
 
 

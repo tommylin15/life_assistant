@@ -121,6 +121,16 @@ gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --condition=None \
   --quiet
 
+# Keep the Cloud Run service private, but allow the deployment identity to make
+# authenticated requests for post-deploy runtime health verification.
+gcloud run services add-iam-policy-binding "${CLOUD_RUN_SERVICE}" \
+  --project="${PROJECT_ID}" \
+  --region="${REGION}" \
+  --member="serviceAccount:${DEPLOY_SA}" \
+  --role="roles/run.invoker" \
+  --condition=None \
+  --quiet
+
 # Reuse the service identity already attached to Cloud Run. Fall back to the
 # Compute Engine default service account only if the service has no explicit SA.
 RUNTIME_SA="$(gcloud run services describe "${CLOUD_RUN_SERVICE}" \

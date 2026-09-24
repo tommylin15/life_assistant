@@ -1,7 +1,7 @@
 import json
 import os
 from io import StringIO
-from urllib.parse import quote
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 from dotenv import dotenv_values
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -13,7 +13,26 @@ DEFAULT_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/li
 def _normalize_database_url(value: str) -> str:
     value = value.strip()
     if value.startswith("postgresql://"):
-        return "postgresql+asyncpg://" + value[len("postgresql://") :]
+        value = "postgresql+asyncpg://" + value[len("postgresql://") :]
+
+    if value.startswith("postgresql+asyncpg://"):
+        parsed = urlsplit(value)
+        query = parse_qsl(parsed.query, keep_blank_values=True)
+        has_ssl = any(key == "ssl" for key, _ in query)
+        normalized_query = [
+            ("ssl" if key == "sslmode" and not has_ssl else key, item)
+            for key, item in query
+            if not (key == "sslmode" and has_ssl)
+        ]
+        value = urlunsplit(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                urlencode(normalized_query),
+                parsed.fragment,
+            )
+        )
     return value
 
 
@@ -80,7 +99,7 @@ def _database_url_from_password(password: str) -> str | None:
         + port
         + "/"
         + quote(database, safe="")
-        + "?sslmode="
+        + "?ssl="
         + quote(sslmode, safe="")
     )
 

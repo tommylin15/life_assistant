@@ -33,7 +33,6 @@ jobs:
       DATABASE_NAME: life_assistant
       DATABASE_USER: life_assistant_user
       DATABASE_SSLMODE: require
-      LIFE_ASSISTANT_OPAQUE_SECRET_KIND: database-password
 
     steps:
       - name: Checkout release commit
@@ -60,7 +59,7 @@ jobs:
             --network "$GCP_NETWORK" \
             --subnet "$GCP_SUBNET" \
             --vpc-egress private-ranges-only \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,LIFE_ASSISTANT_OPAQUE_SECRET_KIND=$LIFE_ASSISTANT_OPAQUE_SECRET_KIND" \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --quiet
 

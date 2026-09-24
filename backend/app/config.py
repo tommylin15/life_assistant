@@ -117,6 +117,42 @@ def _parse_colon_comma_bundle(raw: str) -> dict[str, str] | None:
     return parsed
 
 
+def _extract_embedded_database_url(raw: str) -> str | None:
+    """Extract only the PostgreSQL URL from an otherwise unknown bundle framing.
+
+    This is intentionally narrow: it ignores all other secret values and only
+    activates when a literal PostgreSQL URL is present. That lets us consume
+    legacy wrappers/escaping without guessing arbitrary key-value formats.
+    """
+    url_match = re.search(r"postgresql(?:\+asyncpg)?://", raw, re.IGNORECASE)
+    if url_match is None:
+        return None
+
+    start = url_match.start()
+    tail = raw[start:]
+    next_key = re.search(
+        r"(?i)(?:,|;|\|)\s*(?:\\?[\"'])*"
+        r"(?:GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET)"
+        r"(?:\\?[\"'])*\s*[:=]",
+        tail,
+    )
+    end = start + next_key.start() if next_key is not None else len(raw)
+    candidate = raw[start:end].strip()
+
+    candidate = re.sub(r"[\s,;|]+$", "", candidate)
+    candidate = re.sub(r"(?:\\?[\"'])+$", "", candidate)
+    candidate = re.sub(r"[\s}\])]+$", "", candidate)
+    candidate = candidate.strip()
+    if not candidate:
+        return None
+
+    normalized = _normalize_database_url(candidate)
+    parsed = urlsplit(normalized)
+    if parsed.scheme != "postgresql+asyncpg" or not parsed.hostname or not parsed.path:
+        return None
+    return normalized
+
+
 def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
     raw = raw.strip()
     if not raw:
@@ -161,6 +197,10 @@ def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
         value = None
     if isinstance(value, dict):
         return _normalize_parsed_values(_flatten_mapping(value)), "yaml-object"
+
+    embedded_database_url = _extract_embedded_database_url(raw)
+    if embedded_database_url:
+        return {"DATABASE_URL": embedded_database_url}, "embedded-database-url"
 
     return {}, "unknown"
 

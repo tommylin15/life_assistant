@@ -22,6 +22,11 @@ DATABASE_PASSWORD_KEYS = {
     "db_pass",
     "pg_pass",
 }
+COLON_COMMA_BUNDLE_KEYS = (
+    "DATABASE_URL",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+)
 
 
 def _normalize_key(value: str) -> str:
@@ -76,6 +81,30 @@ def _normalize_parsed_values(values: dict[str, str]) -> dict[str, str]:
     return parsed
 
 
+def _parse_colon_comma_bundle(raw: str) -> dict[str, str] | None:
+    key_pattern = "|".join(re.escape(key) for key in COLON_COMMA_BUNDLE_KEYS)
+    pattern = re.compile(rf"(?:^|,)\s*({key_pattern})\s*:", re.IGNORECASE)
+    matches = list(pattern.finditer(raw))
+    if not matches or matches[0].start() != 0:
+        return None
+
+    parsed: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        key = match.group(1).upper()
+        if key in parsed:
+            return None
+        value_start = match.end()
+        value_end = matches[index + 1].start() if index + 1 < len(matches) else len(raw)
+        value = raw[value_start:value_end].strip()
+        if not value:
+            return None
+        parsed[key] = value
+
+    if set(parsed) != set(COLON_COMMA_BUNDLE_KEYS):
+        return None
+    return parsed
+
+
 def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
     raw = raw.strip()
     if not raw:
@@ -98,6 +127,10 @@ def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
 
     if raw.startswith(("postgresql://", "postgresql+asyncpg://")):
         return {"DATABASE_URL": _normalize_database_url(raw)}, "raw-database-url"
+
+    colon_comma = _parse_colon_comma_bundle(raw)
+    if colon_comma is not None:
+        return _normalize_parsed_values(colon_comma), "colon-comma"
 
     lines = [
         line.strip()

@@ -1,6 +1,6 @@
 # life_assistant — UI / UX Spec
 
-最後更新：2026-09-22
+最後更新：2026-09-24
 
 ## 1. UI 定位
 
@@ -13,6 +13,8 @@ Phase 1 主要交付為 Flutter Web / PWA，需同時適用手機與桌面瀏覽
 > **Warm Knowledge — Obsidian 的資料感 × 日系溫暖手帳**
 
 ## 2. Primary Navigation
+
+### Phase 1
 
 建議主導覽：
 
@@ -33,6 +35,20 @@ More 可包含：
 - Settings
 
 桌面版可使用 NavigationRail / sidebar；手機版使用 Bottom Navigation。
+
+### Phase 2 候選方向
+
+Phase 1 上線並經 Phase 1.5 真實使用驗證後，可評估逐步改為生活情境導向：
+
+1. Today
+2. Focus
+3. Plan
+4. Review
+5. Projects
+
+Tasks / Calendar / Notes / Habits 等 domain 功能不移除，而是作為底層資料功能或 secondary navigation。
+
+此導航重構不屬於 Phase 1 Release Gate。
 
 ## 3. Dashboard
 
@@ -67,6 +83,19 @@ More 可包含：
 - Create note
 - Add shopping item
 - Create project
+
+### 3.4 Future Today Cockpit
+
+Phase 2 可把 Dashboard 演進成 Today Cockpit，聚合：
+
+- 今日待辦與逾期事項
+- 下一個重要行程
+- 今日習慣 / routine
+- waiting / blocked items
+- Gmail / Calendar 需要注意的訊號
+- Daily Questions / check-in
+
+Today 的設計目標是降低注意力負擔，不是把所有資料塞進首頁。
 
 ## 4. Tasks
 
@@ -275,7 +304,23 @@ mutation 另需：
 - 不只用顏色表示狀態
 - error message 可被 screen reader 理解
 
-## 17. 不屬於 life_assistant UI
+## 17. Phase 2 Product UX Candidates
+
+詳細規格見 `future_product_enhancements.md`。
+
+候選功能：
+
+- Today Cockpit
+- Attention Model / Focus
+- Routine Library
+- Global Capture
+- Plan
+- Review
+- Contextual AI entry points
+
+這些功能可以在 Phase 1 期間先完成 UX flow / mockup / data requirement，但不得自動變成 Phase 1 implementation blocker。
+
+## 18. 不屬於 life_assistant UI
 
 以下 UI 不在本專案實作：
 
@@ -288,6 +333,6 @@ mutation 另需：
 
 這些屬於 omniAgent。
 
-## 18. 視覺規範
+## 19. 視覺規範
 
 顏色、字級、spacing、radius、card、button、motion 等視覺規範以 `design_system.md` 為準。

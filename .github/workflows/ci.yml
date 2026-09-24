@@ -48,3 +48,11 @@ jobs:
 
       - name: Check import
         run: python -c "from app.main import app; print('OK')"
+
+  deployment-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check GCP WIF bootstrap syntax
+        run: bash -n scripts/bootstrap_gcp_wif.sh

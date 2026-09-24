@@ -98,21 +98,27 @@ fi
 
 WIF_MEMBER="principalSet://iam.googleapis.com/${POOL_NAME}/attribute.repository_id/${GITHUB_REPO_ID}"
 
+# Be explicit that these bootstrap bindings are unconditional. This is required
+# by gcloud in non-interactive mode when an existing IAM policy already contains
+# conditional bindings; it preserves those existing conditional bindings.
 gcloud iam service-accounts add-iam-policy-binding "${DEPLOY_SA}" \
   --project="${PROJECT_ID}" \
   --role="roles/iam.workloadIdentityUser" \
   --member="${WIF_MEMBER}" \
+  --condition=None \
   --quiet
 
 # Minimum deployer roles for `gcloud run deploy --source`.
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${DEPLOY_SA}" \
   --role="roles/run.sourceDeveloper" \
+  --condition=None \
   --quiet
 
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${DEPLOY_SA}" \
   --role="roles/serviceusage.serviceUsageConsumer" \
+  --condition=None \
   --quiet
 
 # Reuse the service identity already attached to Cloud Run. Fall back to the
@@ -132,6 +138,7 @@ gcloud iam service-accounts add-iam-policy-binding "${RUNTIME_SA}" \
   --project="${PROJECT_ID}" \
   --member="serviceAccount:${DEPLOY_SA}" \
   --role="roles/iam.serviceAccountUser" \
+  --condition=None \
   --quiet
 
 # Cloud Run source deploy uses a Cloud Build service account. Prefer the
@@ -147,6 +154,7 @@ echo "Cloud Build service account: ${BUILD_SA}"
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${BUILD_SA}" \
   --role="roles/run.builder" \
+  --condition=None \
   --quiet
 
 # Cloud Run validates that its runtime identity can access referenced secrets.
@@ -155,6 +163,7 @@ if gcloud secrets describe "${SECRET_NAME}" --project="${PROJECT_ID}" >/dev/null
     --project="${PROJECT_ID}" \
     --member="serviceAccount:${RUNTIME_SA}" \
     --role="roles/secretmanager.secretAccessor" \
+    --condition=None \
     --quiet
 else
   echo "WARNING: Secret ${SECRET_NAME} was not found; secretAccessor was not changed." >&2

@@ -77,6 +77,21 @@ class BundleParsingTests(unittest.TestCase):
         self.assertEqual(values["GOOGLE_CLIENT_ID"], "client-id")
         self.assertEqual(values["GOOGLE_CLIENT_SECRET"], "client:secret")
 
+    def test_quoted_colon_comma_bundle_is_supported(self):
+        values, bundle_format = _parse_bundle(
+            '"DATABASE_URL":"postgresql://life_assistant_user:secret@10.42.0.5:5432/life_assistant?sslmode=require",'
+            '"GOOGLE_CLIENT_ID":"client-id",'
+            '"GOOGLE_CLIENT_SECRET":"client:secret"'
+        )
+
+        self.assertEqual(bundle_format, "colon-comma")
+        self.assertEqual(
+            values["DATABASE_URL"],
+            "postgresql+asyncpg://life_assistant_user:secret@10.42.0.5:5432/life_assistant?ssl=require",
+        )
+        self.assertEqual(values["GOOGLE_CLIENT_ID"], "client-id")
+        self.assertEqual(values["GOOGLE_CLIENT_SECRET"], "client:secret")
+
     def test_json_password_field_builds_database_url(self):
         env = {
             **self.db_env,

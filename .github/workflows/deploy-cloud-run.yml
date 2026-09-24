@@ -1,0 +1,63 @@
+name: Deploy Cloud Run
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-cloud-run-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      CLOUD_RUN_SERVICE: life-assistant-api
+
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy backend to Cloud Run
+        run: |
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --source backend \
+            --set-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --quiet
+
+      - name: Verify Cloud Run health
+        run: |
+          SERVICE_URL="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(status.url)')"
+          test -n "$SERVICE_URL"
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            "$SERVICE_URL/health"

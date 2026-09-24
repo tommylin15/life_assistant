@@ -51,6 +51,7 @@ async def ready():
                     "bundle_format": app_config.BUNDLE_FORMAT,
                     "bundle_shape": app_config.BUNDLE_SHAPE,
                     "bundle_password_key_hints": app_config.BUNDLE_PASSWORD_KEY_HINTS,
+                    "bundle_key_hints": app_config.BUNDLE_KEY_HINTS,
                 },
             },
         )

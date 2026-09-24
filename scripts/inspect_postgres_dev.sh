@@ -75,9 +75,10 @@ else:
     parsed = urlparse(value)
     host = (parsed.hostname or "").lower()
     target = "local" if host in {"", "localhost", "127.0.0.1", "::1"} else "remote"
-    print(f"  database_url={target}")
-    print(f"  database_name={parsed.path.lstrip("/") or "missing"}")
-    print(f"  database_user_present={bool(parsed.username)}")
+    database_name = parsed.path.lstrip("/") or "missing"
+    print("  database_url=" + target)
+    print("  database_name=" + database_name)
+    print("  database_user_present=" + str(bool(parsed.username)))
 '
 
 echo "postgres_catalog:"

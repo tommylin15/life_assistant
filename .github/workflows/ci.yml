@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  analyze-and-test:
+  flutter:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,3 +26,25 @@ jobs:
 
       - name: Test
         run: flutter test --no-pub
+
+      - name: Build Web
+        run: flutter build web --target=lib/main_web.dart --no-pub
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check import
+        run: python -c "from app.main import app; print('OK')"

@@ -6,22 +6,33 @@
 >
 > **Phase 1 採 scope freeze：先完成並上線目前 Web / Cloud 主線；Life OS 類新功能先做設計，不阻塞 Phase 1。**
 
+## GCP 資源現況
+
+| 資源 | Project | 狀態 |
+|------|---------|------|
+| Cloud Run `life-assistant-api` | `gen-lang-client-0593591102` | ✅ 運行中 |
+| PostgreSQL | `gen-lang-client-0593591102` / `janus-postgres-dev` VM | ✅ 運行中 |
+| Secret Manager `life-assistant-bundle` | `gen-lang-client-0593591102` | ✅ 統一密碼存放 |
+| `life-assistant-509213` 專案 | — | 🗑️ 已刪除 |
+
+Cloud Run URL：`https://life-assistant-api-131494961796.us-central1.run.app`
+
 ## P0 — Cloud Foundation
 
-- [ ] Flutter Web 可正常 build
-- [ ] 建立 Web / PWA 基本設定
+- [x] Flutter Web 可正常 build
+- [x] 建立 Web / PWA 基本設定
 - [ ] Firebase Hosting dev / test 發布
-- [ ] 建立 FastAPI Backend skeleton
-- [ ] Cloud Run dev / test 部署
-- [ ] 建立 PostgreSQL dev / test schema
+- [x] 建立 FastAPI Backend skeleton
+- [x] Cloud Run dev / test 部署
+- [x] 建立 PostgreSQL dev / test schema
 - [ ] 建立 Backend auth / permission baseline
 - [ ] 建立統一 Backend error response
 - [ ] 建立 Backend execution / activity log baseline
-- [ ] 修正目前 GitHub Actions CI failure
+- [x] 修正目前 GitHub Actions CI failure
 
 ## P0 — Core API
 
-- [ ] Task CRUD API
+- [x] Task CRUD API
 - [ ] Project CRUD API
 - [ ] Note CRUD / search API
 - [ ] Habit API

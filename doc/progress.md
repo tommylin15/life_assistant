@@ -22,6 +22,14 @@
 
 > 本段只代表文件與產品決策已更新，不代表 Phase 1 平台實作或 Phase 2 功能已完成。
 
+## 2026-09-22 Cloud Foundation
+
+- Flutter Web/PWA 基礎已建立，`flutter build web --target=lib/main_web.dart` 通過。
+- FastAPI Backend 與 Task CRUD API 已建立並部署至 Cloud Run；文件記錄 Task CRUD 端對端測試已寫入 PostgreSQL。
+- PostgreSQL dev/test schema 已建立於 GCP VM，Cloud Run 到資料庫連線已驗證。
+- Flutter Web 有 API client 與待辦頁，但 `API_BASE_URL` 尚未設定，前端串接仍待驗證。
+- Backend auth / permission、統一錯誤回應、操作紀錄、Firebase Hosting 與 SQLite→PostgreSQL migration 尚未完成。
+
 ## 2026-09-22 完成
 
 ### permissions status service
@@ -132,20 +140,21 @@
 | `test/folder_sync_test.dart` | ✅ 1/1 通過 |
 | `test/widget_test.dart` | ✅ 1/1 通過 |
 
-## 下一步：Web/PWA 雲端主線
+## 下一步：完成 Phase 1 Cloud 主線
 
-1. 建立 Flutter Web / PWA build 與瀏覽器驗證。
-2. 建立 FastAPI Backend 與核心 API。
-3. 建立 PostgreSQL schema / migration。
+1. 設定並驗證 Flutter Web 到 Cloud Run Task API 的連線。
+2. 建立 Backend auth / permission、錯誤回應與 execution log baseline。
+3. 發布 Firebase Hosting dev/test，並完成手機與桌面瀏覽器驗證。
 4. 實作 SQLite → PostgreSQL 可重跑、可驗證的資料遷移。
-5. 以 Firebase Hosting + Cloud Run dev/test 驗收核心流程。
-6. 通過 Phase 1 Release Gate 後才進入 Phase 1.5 / Phase 2。
+5. 擴充核心 API 與 Google / Bridge / MCP 整合，通過 Phase 1 Release Gate。
 
 Android / iOS SDK、實機驗收、release signing 與上架暫停，不列入目前交付範圍。
 
 ## 已知尚未完成
 
-- Flutter Web / FastAPI / PostgreSQL 新主線尚未完成實作與部署驗證。
+- Web / Cloud 主線已有基礎 build、Cloud Run、PostgreSQL 與 Task API 驗證；Phase 1 整體仍未完成。
+- Flutter Web 尚未完成 Cloud Run API 串接與瀏覽器驗收；Firebase Hosting 尚未設定。
+- Backend auth / permission、統一錯誤回應與 execution log baseline 尚未完成。
 - SQLite → PostgreSQL migration 尚未有 runtime evidence。
 - Phase 1 Release Gate 尚未通過。
 - Today / Focus / Routine Library 等 Phase 2 強化功能僅為規劃，尚未實作。

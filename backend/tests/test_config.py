@@ -6,6 +6,15 @@ from app.config import _load_bundle, _parse_bundle
 
 
 class BundleParsingTests(unittest.TestCase):
+    def setUp(self):
+        self.db_env = {
+            "DATABASE_HOST": "10.42.0.5",
+            "DATABASE_PORT": "5432",
+            "DATABASE_NAME": "life_assistant",
+            "DATABASE_USER": "life_assistant_user",
+            "DATABASE_SSLMODE": "require",
+        }
+
     def test_json_object_bundle(self):
         values, bundle_format = _parse_bundle(
             '{"DATABASE_URL":"postgresql://user:pass@10.42.0.5:5432/life_assistant","FRONTEND_URL":"https://example.test"}'
@@ -53,31 +62,63 @@ class BundleParsingTests(unittest.TestCase):
             "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant?ssl=require",
         )
 
-    def test_unknown_bundle_fails_closed(self):
-        values, bundle_format = _parse_bundle("not a supported bundle payload")
-
-        self.assertEqual(values, {})
-        self.assertEqual(bundle_format, "unknown")
-
-    def test_opaque_secret_can_be_explicitly_wired_as_database_password(self):
+    def test_json_password_field_builds_database_url(self):
         env = {
-            "LIFE_ASSISTANT_BUNDLE": "p@ss word/with:specials",
-            "LIFE_ASSISTANT_OPAQUE_SECRET_KIND": "database-password",
-            "DATABASE_HOST": "10.42.0.5",
-            "DATABASE_PORT": "5432",
-            "DATABASE_NAME": "life_assistant",
-            "DATABASE_USER": "life_assistant_user",
-            "DATABASE_SSLMODE": "require",
+            **self.db_env,
+            "LIFE_ASSISTANT_BUNDLE": '{"DATABASE_PASSWORD":"p@ss word/with:specials","GOOGLE_CLIENT_ID":"client"}',
         }
         with patch.dict(os.environ, env, clear=False):
             os.environ.pop("DATABASE_URL", None)
             bundle_format = _load_bundle()
             database_url = os.environ["DATABASE_URL"]
 
-        self.assertEqual(bundle_format, "opaque-database-password")
+        self.assertEqual(bundle_format, "json-object")
         self.assertTrue(database_url.startswith("postgresql+asyncpg://life_assistant_user:"))
         self.assertIn("@10.42.0.5:5432/life_assistant?ssl=require", database_url)
         self.assertNotIn("p@ss word/with:specials", database_url)
+
+    def test_dotenv_password_field_builds_database_url(self):
+        env = {
+            **self.db_env,
+            "LIFE_ASSISTANT_BUNDLE": "DB_PASSWORD=p@ss-word\nGOOGLE_CLIENT_ID=client\n",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            os.environ.pop("DATABASE_URL", None)
+            bundle_format = _load_bundle()
+            database_url = os.environ["DATABASE_URL"]
+
+        self.assertEqual(bundle_format, "dotenv")
+        self.assertIn("@10.42.0.5:5432/life_assistant?ssl=require", database_url)
+
+    def test_yaml_nested_password_field_builds_database_url(self):
+        env = {
+            **self.db_env,
+            "LIFE_ASSISTANT_BUNDLE": "database:\n  password: p@ss-word\ngoogle_client_id: client\n",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            os.environ.pop("DATABASE_URL", None)
+            bundle_format = _load_bundle()
+            database_url = os.environ["DATABASE_URL"]
+
+        self.assertEqual(bundle_format, "yaml-object")
+        self.assertIn("@10.42.0.5:5432/life_assistant?ssl=require", database_url)
+
+    def test_double_encoded_json_bundle_is_supported(self):
+        values, bundle_format = _parse_bundle(
+            '"{\\"DATABASE_PASSWORD\\":\\"secret\\"}"'
+        )
+
+        self.assertEqual(bundle_format, "json-object")
+        self.assertEqual(values["DATABASE_PASSWORD"], "secret")
+
+    def test_unknown_bundle_fails_closed(self):
+        env = {**self.db_env, "LIFE_ASSISTANT_BUNDLE": "not a supported bundle payload"}
+        with patch.dict(os.environ, env, clear=False):
+            os.environ.pop("DATABASE_URL", None)
+            bundle_format = _load_bundle()
+
+        self.assertEqual(bundle_format, "unknown")
+        self.assertNotIn("DATABASE_URL", os.environ)
 
 
 if __name__ == "__main__":

@@ -26,6 +26,8 @@ jobs:
       GCP_PROJECT_ID: gen-lang-client-0593591102
       GCP_REGION: us-central1
       CLOUD_RUN_SERVICE: life-assistant-api
+      GCP_NETWORK: janusai-lake-poc
+      GCP_SUBNET: janusai-lake-poc-uscentral1
 
     steps:
       - name: Checkout release commit
@@ -49,6 +51,9 @@ jobs:
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --source backend \
+            --network "$GCP_NETWORK" \
+            --subnet "$GCP_SUBNET" \
+            --vpc-egress private-ranges-only \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --quiet
 

@@ -38,10 +38,17 @@ async def health():
 async def ready():
     try:
         await asyncio.wait_for(db_session.check_database(), timeout=5)
-    except Exception:
+    except Exception as exc:
         return JSONResponse(
             status_code=503,
-            content={"status": "unavailable", "database": "unavailable"},
+            content={
+                "status": "unavailable",
+                "database": "unavailable",
+                "diagnostic": {
+                    "target": db_session.database_target_kind(),
+                    "error": db_session.database_error_kind(exc),
+                },
+            },
         )
     return {"status": "ok", "database": "ok"}
 

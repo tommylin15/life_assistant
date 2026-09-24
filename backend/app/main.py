@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app import config as app_config
 from app.api.auth import router as auth_router
 from app.api.tasks import router as tasks_router
 from app.db import session as db_session
@@ -47,6 +48,7 @@ async def ready():
                 "diagnostic": {
                     "target": db_session.database_target_kind(),
                     "error": db_session.database_error_kind(exc),
+                    "bundle_format": app_config.BUNDLE_FORMAT,
                 },
             },
         )

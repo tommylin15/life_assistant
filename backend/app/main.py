@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -35,7 +37,7 @@ async def health():
 @app.get("/ready")
 async def ready():
     try:
-        await db_session.check_database()
+        await asyncio.wait_for(db_session.check_database(), timeout=5)
     except Exception:
         return JSONResponse(
             status_code=503,

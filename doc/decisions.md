@@ -24,6 +24,37 @@
 - Google 權限採最小權限與延遲授權。
 - 開發完成需符合 coding_rules.md 與 release_checklist.md。
 
+## Phase 1 Scope Freeze / Release Strategy
+
+- 目前 Phase 1 先完成 Web / Cloud 平台換軌並通過 Release Gate，再加入 Life OS 類產品強化功能。
+- Phase 1 期間可持續做產品研究、UX、資料模型與 API contract proposal，但這些候選功能不得自動變成 Phase 1 implementation blocker。
+- 不採「把所有新功能一起做完再第一次上線」的策略。
+- Phase 1 上線後先進入 Phase 1.5 real-use validation，以真實使用資料與 friction 決定 Phase 2 實作順序。
+- 若新需求只需要未來可擴充性，優先保留 extension point，而不是提前實作完整功能。
+- 若需打破 scope freeze，必須記錄明確原因，且限於不可逆架構風險、資料安全、migration correctness 或其他會讓 Phase 1 上線後難以修正的問題。
+
+## Phase 1.5 / Phase 2 方向
+
+Phase 1.5 先觀察：
+
+- 首頁真正需要顯示的資訊。
+- 被忽略、重複或干擾的提醒。
+- Gmail / Calendar / Task 常見轉換流程。
+- routine 使用頻率。
+- 仍需手動跨頁完成的高摩擦流程。
+
+Phase 2 優先候選：
+
+1. Today Cockpit。
+2. Attention Model / Focus。
+3. Routine Library。
+4. Global Capture。
+5. Plan。
+6. Review。
+7. Contextual AI entry points。
+
+詳細候選規格見 `future_product_enhancements.md`。
+
 ## life_assistant 核心定位
 
 `life_assistant` 定位為：
@@ -70,6 +101,9 @@ life_assistant 可有一般 background worker，但不得把 Agent reasoning wor
 
 - MCP / Integration API capability 擴充。
 - 一般 background jobs / scheduler（不含 Agent reasoning）。
+- Today / Focus / Plan / Review 等 situation-oriented UX。
+- Routine Library / Global Capture。
+- Contextual AI entry points。
 - Android / iOS 正式封裝。
 - SQLite local/offline cache 同步機制。
 - Temporal / Iceberg 等 infrastructure 僅在具體 workload 證明需要時再評估。

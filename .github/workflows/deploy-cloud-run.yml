@@ -52,13 +52,31 @@ jobs:
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --quiet
 
-      - name: Verify Cloud Run health
+      - name: Resolve Cloud Run service URL
+        id: service_url
         run: |
           SERVICE_URL="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --format='value(status.url)')"
           test -n "$SERVICE_URL"
+          echo "url=$SERVICE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Mint Cloud Run health ID token
+        id: health_auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: ${{ steps.service_url.outputs.url }}
+          create_credentials_file: false
+          export_environment_variables: false
+
+      - name: Verify Cloud Run health
+        run: |
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
-            "$SERVICE_URL/health"
+            --header "Authorization: Bearer ${{ steps.health_auth.outputs.id_token }}" \
+            "${{ steps.service_url.outputs.url }}/health"

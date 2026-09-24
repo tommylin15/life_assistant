@@ -42,6 +42,17 @@ class BundleParsingTests(unittest.TestCase):
             "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant",
         )
 
+    def test_asyncpg_sslmode_query_is_normalized_to_ssl(self):
+        values, bundle_format = _parse_bundle(
+            "postgresql://user:pass@10.42.0.5:5432/life_assistant?sslmode=require"
+        )
+
+        self.assertEqual(bundle_format, "raw-database-url")
+        self.assertEqual(
+            values["DATABASE_URL"],
+            "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant?ssl=require",
+        )
+
     def test_unknown_bundle_fails_closed(self):
         values, bundle_format = _parse_bundle("not a supported bundle payload")
 
@@ -65,7 +76,7 @@ class BundleParsingTests(unittest.TestCase):
 
         self.assertEqual(bundle_format, "opaque-database-password")
         self.assertTrue(database_url.startswith("postgresql+asyncpg://life_assistant_user:"))
-        self.assertIn("@10.42.0.5:5432/life_assistant?sslmode=require", database_url)
+        self.assertIn("@10.42.0.5:5432/life_assistant?ssl=require", database_url)
         self.assertNotIn("p@ss word/with:specials", database_url)
 
 

@@ -31,6 +31,7 @@ class HealthEndpointTests(unittest.TestCase):
             ),
             patch("app.main.db_session.database_target_kind", return_value="remote"),
             patch("app.main.db_session.database_error_kind", return_value="database_error"),
+            patch("app.main.app_config.BUNDLE_FORMAT", "opaque-database-password"),
         ):
             response = client.get("/ready")
 
@@ -40,7 +41,11 @@ class HealthEndpointTests(unittest.TestCase):
             {
                 "status": "unavailable",
                 "database": "unavailable",
-                "diagnostic": {"target": "remote", "error": "database_error"},
+                "diagnostic": {
+                    "target": "remote",
+                    "error": "database_error",
+                    "bundle_format": "opaque-database-password",
+                },
             },
         )
         self.assertNotIn("sensitive", response.text)

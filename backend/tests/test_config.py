@@ -112,14 +112,16 @@ class BundleParsingTests(unittest.TestCase):
         self.assertEqual(values["DATABASE_PASSWORD"], "secret")
 
     def test_bundle_structure_hints_do_not_expose_values(self):
-        shape, hints = _bundle_structure_hints(
-            "DB_PASSWORD:super-secret-value|GOOGLE_CLIENT_SECRET:other-secret"
+        shape, password_hints, key_hints = _bundle_structure_hints(
+            "DB_PASS:super-secret-value,GOOGLE_CLIENT_SECRET:other-secret"
         )
 
         self.assertIn("colon", shape)
-        self.assertIn("pipe", shape)
-        self.assertIn("DB_PASSWORD", hints)
-        rendered = repr((shape, hints))
+        self.assertIn("comma", shape)
+        self.assertIn("DB_PASS", password_hints)
+        self.assertIn("DB_PASS", key_hints)
+        self.assertIn("GOOGLE_CLIENT_SECRET", key_hints)
+        rendered = repr((shape, password_hints, key_hints))
         self.assertNotIn("super-secret-value", rendered)
         self.assertNotIn("other-secret", rendered)
 

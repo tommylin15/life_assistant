@@ -83,7 +83,7 @@ jobs:
 
       - name: Verify Cloud Run database readiness
         run: |
-          curl --fail --silent --show-error \
+          curl --fail-with-body --silent --show-error \
             --retry 2 --retry-delay 3 --retry-all-errors \
             --header "Authorization: Bearer ${{ steps.health_auth.outputs.id_token }}" \
             "${{ steps.service_url.outputs.url }}/ready"

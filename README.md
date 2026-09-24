@@ -55,6 +55,42 @@ PostgreSQL
 - 單人使用優先
 - Android / iOS 封裝延後到 Web/PWA 與 Backend 穩定後
 
+## Release Strategy
+
+目前採以下順序：
+
+### Phase 1 — Platform Release
+
+先完成並上線目前 Web / Cloud 主線：
+
+- Flutter Web / PWA
+- FastAPI / Cloud Run
+- PostgreSQL
+- SQLite → PostgreSQL migration
+- Google integrations
+- ChatGPT Bridge Backend / MCP baseline
+- security / logging / observability
+
+Phase 1 採 **scope freeze**。可持續做未來功能的研究、UX、schema proposal 與 API contract proposal，但不因新的 Life OS 構想持續擴張第一次上線範圍。
+
+### Phase 1.5 — Real-use Validation
+
+上線後以真實使用觀察首頁、提醒、routine、Gmail / Calendar / Task 轉換與跨頁摩擦；先修正 bug、資料一致性與高摩擦流程，再確認下一階段優先順序。
+
+### Phase 2 — Product Enhancement
+
+候選方向依序為：
+
+1. Today Cockpit
+2. Attention Model / Focus
+3. Routine Library
+4. Global Capture
+5. Plan
+6. Review
+7. Contextual AI entry points
+
+詳細方向見 [`doc/future_product_enhancements.md`](doc/future_product_enhancements.md)。
+
 ## life_assistant 與 omniAgent 邊界
 
 ### life_assistant 負責
@@ -104,6 +140,9 @@ PostgreSQL
 - `doc/acceptance.md`：目前 Phase 1 驗收條件
 - `doc/decisions.md`：目前已確認的重要產品與架構決策
 - `doc/progress.md`：既有實作與驗證進度
+- `doc/todo.md`：目前工作優先順序
+- `doc/wbs.md`：Phase 1 → 1.5 → 2 工作分解
+- `doc/future_product_enhancements.md`：上線後 Life OS / Compass 研究吸收方向
 - `doc/design_system.md`：UI / UX 與設計系統
 - `doc/integrations.md`：Google / Drive / Bridge / MCP 整合
 - `doc/security.md`、`doc/permissions.md`：權限、安全與隱私規格
@@ -120,3 +159,4 @@ PostgreSQL
 7. ChatGPT Bridge Backend / MCP 能在不繞過 life_assistant 權限與 validation 的前提下讀取或提出操作。
 8. life_assistant 可獨立完成，不以 omniAgent 的 LangGraph / Agent Runtime 完成為前置條件。
 9. Web/PWA 穩定後，再評估 Android / iOS 原生封裝與 SQLite offline cache。
+10. Today / Focus / Routine Library 等 Phase 2 強化功能**不作為 Phase 1 上線條件**。

@@ -49,6 +49,8 @@ async def ready():
                     "target": db_session.database_target_kind(),
                     "error": db_session.database_error_kind(exc),
                     "bundle_format": app_config.BUNDLE_FORMAT,
+                    "bundle_shape": app_config.BUNDLE_SHAPE,
+                    "bundle_password_key_hints": app_config.BUNDLE_PASSWORD_KEY_HINTS,
                 },
             },
         )

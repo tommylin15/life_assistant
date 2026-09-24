@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -14,3 +15,9 @@ class Base(DeclarativeBase):
 async def get_db() -> AsyncSession:
     async with SessionLocal() as session:
         yield session
+
+
+async def check_database() -> None:
+    """Verify that the configured database accepts a simple query."""
+    async with engine.connect() as connection:
+        await connection.execute(text("SELECT 1"))

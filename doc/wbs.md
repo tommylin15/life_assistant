@@ -1,285 +1,289 @@
 # 生活助理 App v0.1 — WBS
 
-> 2026-09-20 開發暫停點、已實作範圍與下一步驗證順序見 [`progress.md`](progress.md)。WBS 保留完整工作分解，不以程式已存在取代 QA／Release 驗收。
+最後更新：2026-09-24
 
-## 0. 專案初始化
+> 本 WBS 以目前正式 Web / Cloud 主線為準。舊 Flutter + SQLite 功能保留為 migration source 與既有資產，但不再作為目前主要交付路線。
+>
+> 執行策略：**Phase 1 先完成並上線；Phase 1.5 用真實使用驗證；Phase 2 再導入 Life OS 類強化功能。**
 
-### 0.1 Flutter 專案
-- 建立專案
-- 套件結構
-- Lint
-- 環境設定
-- Build flavors（如需要）
+## 0. 專案治理與邊界
 
-### 0.2 基礎架構
-- Routing
-- State management
-- Repository pattern
-- Error handling
-- Logging
-- Theme tokens
+- 維護 `PROJECT_RULES.md`
+- 維護 `project_boundary.md`
+- 維護 `decisions.md`
+- Phase 1 scope freeze
+- 變更需記錄理由與影響
+- life_assistant / omniAgent 邊界持續驗證
 
 ---
 
-## 1. SQLite 與 Domain
+## 1. Web / PWA Foundation
 
-### 1.1 Database
-- migration
-- repository
-- seed data
-- backup / restore
+### 1.1 Flutter Web
+- Web build
+- Responsive layout
+- Router / state management
+- API client boundary
+- Browser storage / session handling
+- Loading / empty / error / data states
 
-### 1.2 Domain
-- Item
+### 1.2 Hosting
+- Firebase Hosting dev/test
+- PWA baseline
+- Mobile / desktop browser verification
+
+---
+
+## 2. Backend Foundation
+
+### 2.1 FastAPI
+- Backend skeleton
+- Route structure
+- Auth baseline
+- Permission baseline
+- Error response contract
+- Logging / observability
+
+### 2.2 Cloud Run
+- dev/test deployment
+- environment configuration
+- secret handling
+- runtime verification
+
+---
+
+## 3. PostgreSQL / Data Layer
+
+### 3.1 Core schema
+- Task
 - Project
 - Note
 - Habit
-- Shopping
-- Attachment
+- ShoppingItem
 - Template
 - ActivityLog
-- Preference
+- CalendarEventRef
+- Attachment reference
+
+### 3.2 Repository / Service boundary
+- Repository pattern
+- transaction boundary
+- idempotency support
+- migration/versioning baseline
 
 ---
 
-## 2. UI Foundation
+## 4. SQLite → PostgreSQL Migration
 
-### 2.1 Theme
-- 溫暖手帳
-- 極簡清爽
-- 深色夜間
-
-### 2.2 Common Components
-- Cards
-- Empty state
-- Error state
-- Section header
-- Tag chips
-- Priority indicator
-- Date selector
-- Attachment picker
+- inventory current SQLite schema
+- mapping specification
+- export
+- import
+- repeatable migration
+- duplicate prevention
+- row-count verification
+- relation verification
+- failure handling
+- partial-success reporting
+- preserve original SQLite data
 
 ---
 
-## 3. Dashboard
+## 5. Core APIs
 
-- 智慧摘要
-- 快捷列
-- 待辦區
-- 行程區
-- 提醒區
-- 等待中
-- 區塊開關
-- 規則式排序
-- 規則式建議
-
----
-
-## 4. Tasks
-
-- CRUD
-- Priority
-- Status
-- Due date
-- Reminder
-- Checklist
-- Tags
-- Project linking
-- Attachments
-- Quick input parser
-- Search
-
----
-
-## 5. Calendar
-
-- Google Sign-In
-- Calendar OAuth
-- Read
-- Create
-- Update
-- Delete
-- Cache
-- Month view
-- Week view
-- Conflict handling
-
----
-
-## 6. Gmail
-
-- Gmail OAuth
-- Metadata retrieval
-- Summary list
-- Convert to task
-- Convert to calendar
-- Link to project
-- Error / revoke handling
-
----
-
-## 7. Projects
-
+- Task CRUD
 - Project CRUD
-- Project Home
-- Linked tasks
-- Linked events
-- Linked notes
-- Attachments
-- Recent Activity
+- Note CRUD / search
+- Habit
+- Shopping
+- Template
+- Activity / execution log
+- attachment reference
+- API contract/versioning
 
 ---
 
-## 8. Notes / Knowledge Base
+## 6. Core UI
 
-- Notes CRUD
-- FTS5
-- Tags
-- Links
-- Convert to task
-- Convert to calendar
-- Project linking
-- Attachments
+- Dashboard
+- Tasks
+- Calendar
+- Projects
+- Notes
+- Habits
+- Shopping
+- Activity / Execution Log
+- Integrations / Connections
+- Settings
 
----
-
-## 9. Habits
-
-- Recurrence
-- Reminder
-- Complete action
-- History
+Phase 1 UI 以現有 domain 能力完成可用版本，不在此階段加入 Today / Focus / Plan / Review 等新的主導航重構。
 
 ---
 
-## 10. Shopping
+## 7. Google Integrations
 
-- Lists
-- Items
-- Categories
-- Project linking
-- Complete action
+### 7.1 Google Sign-In
+- Web sign-in
+- Backend token flow
+- revoke / reconnect handling
 
----
+### 7.2 Calendar
+- read
+- create
+- update
+- delete
+- error tracking
 
-## 11. Notifications
+### 7.3 Gmail
+- metadata / snippet
+- Gmail → Task
+- Gmail → Calendar
+- Gmail → Project
+- error / revoke handling
 
-- Local notification engine
-- Due reminder
-- Daily summary
-- Daily review
-- Habit reminder
-
----
-
-## 12. Voice
-
-- Speech-to-text
-- Quick input handoff
-- Permission handling
-
----
-
-## 13. Files / Attachments
-
-- Photo picker
-- Camera scan
-- PDF / file picker
-- Private file storage
-- Delete / cleanup
+### 7.4 Drive
+- integration baseline
+- legacy Drive Bridge compatibility / fallback
 
 ---
 
-## 14. Templates
+## 8. ChatGPT Bridge Backend
 
-- Built-in templates
-- Custom templates
-- Save task as template
-- Save project as template
-
----
-
-## 15. Activity Log
-
-- Domain event logging
-- User-visible log page
-- Error log separation
-
----
-
-## 16. Backup / Export
-
-- SQLite backup
-- Restore
-- JSON export
-- CSV export
+- context access / read model
+- proposed action contract
+- schema validation
+- versioned capability schema
+- request_id + action_id idempotency
+- permission / risk / confirmation policy
+- proposed action review
+- action execution
+- action result
+- execution log
+- partial success handling
+- legacy Drive Bridge compatibility
 
 ---
 
-## 17. Security
+## 9. MCP / Capability Catalog
 
-- Biometric
-- PIN
-- Secure storage
-- OAuth token protection
+- Backend MCP / Integration API entrypoint
+- `task.list`
+- `task.create`
+- `task.update`
+- `task.complete`
+- `calendar.list`
+- `calendar.create`
+- `calendar.update`
+- `note.search`
+- `note.create`
+- `project.get`
+- `activity.list`
+- version metadata
+- permission / risk metadata
+- confirmation metadata
+
+Global Tool Registry / Workflow Registry 不屬於本專案。
+
+---
+
+## 10. Attachments / Storage
+
+- define central storage/reference strategy
+- image
+- PDF
+- general files
+- avoid single-device absolute path as central model
+
+---
+
+## 11. Security / Governance
+
+- authentication
+- authorization
+- minimum permission
+- secret/token storage
+- sensitive log filtering
 - destructive action confirmation
+- audit trail
+- idempotency
+- partial success semantics
 
 ---
 
-## 18. ChatGPT Share Bridge
+## 12. QA / Verification
 
-- Generate text context
-- Generate JSON context
-- Copy
-- Share
-
----
-
-## 19. Google Drive Bridge
-
-- Bridge Schema Validation
-- Action Registry
-- Idempotency / Duplicate Protection
-
-- Drive OAuth
-- Bridge folder setup
-- Manifest
-- Export current state
-- Import proposed actions
-- Schema validation
-- Review / accept / reject
-- Bridge verification
-- Onboarding tutorial
-- Activity log
-
----
-
-## 20. QA
-
-- Unit tests
-- Repository tests
-- Parser tests
+- unit tests
+- repository/service tests
+- API tests
+- migration tests
 - Calendar integration tests
 - Gmail integration tests
-- Drive Bridge tests
-- Migration tests
-- Offline tests
-- Backup restore tests
-- Security tests
+- Bridge / MCP tests
+- security tests
+- browser tests
+- mobile/desktop responsive verification
+- runtime/deployment evidence
 
 ---
 
-## 21. Release
+## 13. Release
 
-- Android build
-- iOS build
-- permission review
-- privacy text
-- onboarding
-- versioning
+### 13.1 Phase 1 Release Gate
+- Web/PWA available
+- FastAPI on Cloud Run
+- PostgreSQL operational
+- migration verified
+- Google integrations verified
+- Bridge / MCP baseline verified
+- logs / observability verified
+- security / permission baseline verified
+- acceptance criteria passed
 
+### 13.2 Explicitly deferred
+- Android / iOS release packaging
+- app-store release
+- full offline-first sync
+- SQLite as live central source of truth
 
-## 22. Engineering Guardrails
+---
+
+## 14. Phase 1.5 — Real-use Validation
+
+- observe homepage usage
+- identify duplicate / noisy reminders
+- observe Gmail / Calendar / Task conversion flows
+- record frequently used routines
+- identify cross-page friction
+- fix bugs and consistency issues first
+- use evidence to confirm Phase 2 priority
+
+---
+
+## 15. Phase 2 — Product Enhancement
+
+詳細規格：`future_product_enhancements.md`
+
+### 15.1 First batch
+- Today Cockpit
+- Attention Model / Focus
+- Routine Library
+- Global Capture
+
+### 15.2 Second batch
+- Plan
+- Review
+- Contextual AI entry points
+
+### 15.3 Later candidates
+- People / relationship context
+- portable Markdown views / export
+- advanced visual summaries
+
+Phase 2 不改變 PostgreSQL operational source of truth，也不得繞過 Backend permission / execution boundary。
+
+---
+
+## 16. Engineering Guardrails
 
 - Project Structure
 - Migration Framework
@@ -288,3 +292,4 @@
 - Testing Strategy
 - Release Checklist
 - Coding Rules / Definition of Done
+- Scope Freeze / Change Control

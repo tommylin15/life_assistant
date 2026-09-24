@@ -1,5 +1,9 @@
 # 生活助理 App v0.1 — Acceptance Criteria
 
+最後更新：2026-09-24
+
+> 本文件定義 **Phase 1 Platform Release** 的完成條件。Phase 2 的 Today / Focus / Routine Library / Global Capture 等強化功能不屬於目前 Release Gate。
+
 ## Phase 1 Web / Cloud 核心
 
 - [ ] Flutter Web 可正常 build。
@@ -20,6 +24,8 @@
 - [ ] migration 重跑不造成重複資料。
 - [ ] 主表筆數與關鍵關聯可驗證。
 - [ ] migration 失敗時 SQLite 原資料保持完整。
+- [ ] migration result 可區分 success / partial success / failure。
+- [ ] 有可重跑的驗證 evidence，而不是只確認 migration script 存在。
 
 ## Core Features
 
@@ -27,6 +33,7 @@
 - [ ] 待辦可設定日期、優先度、提醒、標籤、專案。
 - [ ] Checklist 可使用。
 - [ ] 首頁能顯示今日摘要。
+- [ ] Phase 1 不需先完成 Today Cockpit / Focus / Plan / Review 主導航重構。
 
 ## Calendar
 
@@ -36,6 +43,7 @@
 - [ ] 可修改。
 - [ ] 可刪除。
 - [ ] Calendar 整合失敗有明確錯誤，且不破壞主資料。
+- [ ] 外部失敗不呈現為 full success。
 
 ## Gmail
 
@@ -43,6 +51,7 @@
 - [ ] 可轉待辦。
 - [ ] 可轉行程。
 - [ ] 可掛到專案。
+- [ ] Gmail integration error 可追蹤。
 
 ## 專案 / 筆記 / 習慣 / 採買
 
@@ -95,12 +104,37 @@
 - [ ] migration 成功 / 部分成功 / 失敗可區分。
 - [ ] AI / Bridge proposed action 與實際 execution result 可區分。
 - [ ] partial success 不會被記錄成 full success。
+- [ ] runtime / deployment evidence 可追溯到版本或 commit。
 
-## 原生 App 後續階段
+## Release Evidence
 
-以下不作為目前 Phase 1 完成條件：
+Phase 1 不可只因文件或程式碼存在就判定完成，至少需有：
+
+- [ ] Flutter Web build evidence。
+- [ ] Firebase Hosting dev/test deployment evidence。
+- [ ] Cloud Run dev/test deployment evidence。
+- [ ] PostgreSQL runtime connectivity / persistence evidence。
+- [ ] migration runtime validation evidence。
+- [ ] Google integration success/failure evidence。
+- [ ] Bridge / MCP validation evidence。
+- [ ] tests / CI evidence。
+
+## Phase 1 明確不作為完成條件
+
+以下項目延後，不阻塞目前 Phase 1：
 
 - Android / iOS 正式打包與上架。
 - 完整 offline-first 寫入。
 - SQLite 作 local cache 的雙向同步。
 - 原生本機通知完整驗收。
+- Today Cockpit。
+- Attention Model / Focus。
+- Routine Library。
+- Global Capture 完整版。
+- Plan / Review。
+- Contextual AI entry points。
+- People / relationship context。
+
+## Phase 1.5 / Phase 2 Gate
+
+Phase 1 Release Gate 通過後，才進入 Phase 1.5 real-use validation；Phase 2 的實作優先順序應以真實使用 evidence 為依據，而不是直接照參考專案功能表搬運。

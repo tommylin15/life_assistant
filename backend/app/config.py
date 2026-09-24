@@ -16,6 +16,11 @@ DATABASE_PASSWORD_KEYS = {
     "postgres_password",
     "postgresql_password",
     "db_password",
+    "database_pass",
+    "postgres_pass",
+    "postgresql_pass",
+    "db_pass",
+    "pg_pass",
 }
 
 
@@ -167,10 +172,10 @@ def _decoded_base64_text(raw: str) -> str | None:
     return decoded
 
 
-def _bundle_structure_hints(raw: str) -> tuple[list[str], list[str]]:
+def _bundle_structure_hints(raw: str) -> tuple[list[str], list[str], list[str]]:
     raw = raw.strip()
     if not raw:
-        return ["empty"], []
+        return ["empty"], [], []
 
     shape: list[str] = []
     if "\n" in raw:
@@ -189,22 +194,29 @@ def _bundle_structure_hints(raw: str) -> tuple[list[str], list[str]]:
         shape.append("base64-text")
         texts.append(decoded)
 
-    hints: set[str] = set()
+    all_keys: set[str] = set()
+    password_hints: set[str] = set()
     assignment_pattern = re.compile(
         r"(?im)(?:^|[\s{,;|])['\"]?([A-Za-z][A-Za-z0-9_.-]{0,63})['\"]?\s*[:=]"
     )
     password_word_pattern = re.compile(
-        r"(?i)\b([A-Za-z][A-Za-z0-9_.-]*(?:password|passwd|pwd|pgpass)[A-Za-z0-9_.-]*)\b"
+        r"(?i)\b([A-Za-z][A-Za-z0-9_.-]*(?:password|passwd|pwd|pgpass|_pass|-pass)[A-Za-z0-9_.-]*)\b"
     )
     for text in texts:
         candidates = [match.group(1) for match in assignment_pattern.finditer(text)]
-        candidates.extend(match.group(1) for match in password_word_pattern.finditer(text))
-        for candidate in candidates:
+        all_keys.update(candidates)
+        password_candidates = list(candidates)
+        password_candidates.extend(match.group(1) for match in password_word_pattern.finditer(text))
+        for candidate in password_candidates:
             normalized = _normalize_key(candidate)
-            if any(token in normalized for token in ("password", "passwd", "pwd", "pgpass")):
-                hints.add(candidate)
+            if (
+                normalized in DATABASE_PASSWORD_KEYS
+                or any(token in normalized for token in ("password", "passwd", "pwd", "pgpass"))
+                or normalized.endswith("_pass")
+            ):
+                password_hints.add(candidate)
 
-    return shape or ["opaque"], sorted(hints)[:8]
+    return shape or ["opaque"], sorted(password_hints)[:8], sorted(all_keys)[:16]
 
 
 def _load_bundle() -> str:
@@ -226,7 +238,7 @@ def _load_bundle() -> str:
 
 
 _RAW_BUNDLE = os.environ.get("LIFE_ASSISTANT_BUNDLE", "")
-BUNDLE_SHAPE, BUNDLE_PASSWORD_KEY_HINTS = _bundle_structure_hints(_RAW_BUNDLE)
+BUNDLE_SHAPE, BUNDLE_PASSWORD_KEY_HINTS, BUNDLE_KEY_HINTS = _bundle_structure_hints(_RAW_BUNDLE)
 BUNDLE_FORMAT = _load_bundle()
 
 

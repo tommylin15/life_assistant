@@ -1,5 +1,7 @@
+import base64
 import json
 import os
+import re
 from io import StringIO
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
@@ -152,6 +154,59 @@ def _extract_database_password(values: dict[str, str]) -> str | None:
     return None
 
 
+def _decoded_base64_text(raw: str) -> str | None:
+    compact = "".join(raw.split())
+    if not compact or len(compact) % 4 != 0:
+        return None
+    try:
+        decoded = base64.b64decode(compact, validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if not decoded or any(ord(ch) < 9 for ch in decoded):
+        return None
+    return decoded
+
+
+def _bundle_structure_hints(raw: str) -> tuple[list[str], list[str]]:
+    raw = raw.strip()
+    if not raw:
+        return ["empty"], []
+
+    shape: list[str] = []
+    if "\n" in raw:
+        shape.append("multiline")
+    for token, name in (("=", "equals"), (":", "colon"), (";", "semicolon"), ("|", "pipe"), (",", "comma")):
+        if token in raw:
+            shape.append(name)
+    if raw.startswith("{"):
+        shape.append("brace-prefix")
+    if raw.startswith("["):
+        shape.append("bracket-prefix")
+
+    texts = [raw]
+    decoded = _decoded_base64_text(raw)
+    if decoded is not None:
+        shape.append("base64-text")
+        texts.append(decoded)
+
+    hints: set[str] = set()
+    assignment_pattern = re.compile(
+        r"(?im)(?:^|[\s{,;|])['\"]?([A-Za-z][A-Za-z0-9_.-]{0,63})['\"]?\s*[:=]"
+    )
+    password_word_pattern = re.compile(
+        r"(?i)\b([A-Za-z][A-Za-z0-9_.-]*(?:password|passwd|pwd|pgpass)[A-Za-z0-9_.-]*)\b"
+    )
+    for text in texts:
+        candidates = [match.group(1) for match in assignment_pattern.finditer(text)]
+        candidates.extend(match.group(1) for match in password_word_pattern.finditer(text))
+        for candidate in candidates:
+            normalized = _normalize_key(candidate)
+            if any(token in normalized for token in ("password", "passwd", "pwd", "pgpass")):
+                hints.add(candidate)
+
+    return shape or ["opaque"], sorted(hints)[:8]
+
+
 def _load_bundle() -> str:
     raw = os.environ.get("LIFE_ASSISTANT_BUNDLE", "")
     values, bundle_format = _parse_bundle(raw)
@@ -170,6 +225,8 @@ def _load_bundle() -> str:
     return bundle_format
 
 
+_RAW_BUNDLE = os.environ.get("LIFE_ASSISTANT_BUNDLE", "")
+BUNDLE_SHAPE, BUNDLE_PASSWORD_KEY_HINTS = _bundle_structure_hints(_RAW_BUNDLE)
 BUNDLE_FORMAT = _load_bundle()
 
 

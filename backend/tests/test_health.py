@@ -24,16 +24,24 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertEqual(response.json(), {"status": "ok", "database": "ok"})
 
     def test_ready_reports_database_unavailable_without_leaking_error_details(self):
-        with patch(
-            "app.main.db_session.check_database",
-            new=AsyncMock(side_effect=SQLAlchemyError("sensitive connection failure")),
+        with (
+            patch(
+                "app.main.db_session.check_database",
+                new=AsyncMock(side_effect=SQLAlchemyError("sensitive connection failure")),
+            ),
+            patch("app.main.db_session.database_target_kind", return_value="remote"),
+            patch("app.main.db_session.database_error_kind", return_value="database_error"),
         ):
             response = client.get("/ready")
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(
             response.json(),
-            {"status": "unavailable", "database": "unavailable"},
+            {
+                "status": "unavailable",
+                "database": "unavailable",
+                "diagnostic": {"target": "remote", "error": "database_error"},
+            },
         )
         self.assertNotIn("sensitive", response.text)
 

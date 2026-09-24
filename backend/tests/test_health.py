@@ -31,7 +31,9 @@ class HealthEndpointTests(unittest.TestCase):
             ),
             patch("app.main.db_session.database_target_kind", return_value="remote"),
             patch("app.main.db_session.database_error_kind", return_value="database_error"),
-            patch("app.main.app_config.BUNDLE_FORMAT", "opaque-database-password"),
+            patch("app.main.app_config.BUNDLE_FORMAT", "unknown"),
+            patch("app.main.app_config.BUNDLE_SHAPE", ["colon", "pipe"]),
+            patch("app.main.app_config.BUNDLE_PASSWORD_KEY_HINTS", ["DB_PASSWORD"]),
         ):
             response = client.get("/ready")
 
@@ -44,7 +46,9 @@ class HealthEndpointTests(unittest.TestCase):
                 "diagnostic": {
                     "target": "remote",
                     "error": "database_error",
-                    "bundle_format": "opaque-database-password",
+                    "bundle_format": "unknown",
+                    "bundle_shape": ["colon", "pipe"],
+                    "bundle_password_key_hints": ["DB_PASSWORD"],
                 },
             },
         )

@@ -32,8 +32,9 @@ class HealthEndpointTests(unittest.TestCase):
             patch("app.main.db_session.database_target_kind", return_value="remote"),
             patch("app.main.db_session.database_error_kind", return_value="database_error"),
             patch("app.main.app_config.BUNDLE_FORMAT", "unknown"),
-            patch("app.main.app_config.BUNDLE_SHAPE", ["colon", "pipe"]),
-            patch("app.main.app_config.BUNDLE_PASSWORD_KEY_HINTS", ["DB_PASSWORD"]),
+            patch("app.main.app_config.BUNDLE_SHAPE", ["colon", "comma"]),
+            patch("app.main.app_config.BUNDLE_PASSWORD_KEY_HINTS", ["DB_PASS"]),
+            patch("app.main.app_config.BUNDLE_KEY_HINTS", ["DB_PASS", "GOOGLE_CLIENT_SECRET"]),
         ):
             response = client.get("/ready")
 
@@ -47,8 +48,9 @@ class HealthEndpointTests(unittest.TestCase):
                     "target": "remote",
                     "error": "database_error",
                     "bundle_format": "unknown",
-                    "bundle_shape": ["colon", "pipe"],
-                    "bundle_password_key_hints": ["DB_PASSWORD"],
+                    "bundle_shape": ["colon", "comma"],
+                    "bundle_password_key_hints": ["DB_PASS"],
+                    "bundle_key_hints": ["DB_PASS", "GOOGLE_CLIENT_SECRET"],
                 },
             },
         )

@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from app.config import _load_bundle, _parse_bundle
+from app.config import _bundle_structure_hints, _load_bundle, _parse_bundle
 
 
 class BundleParsingTests(unittest.TestCase):
@@ -110,6 +110,18 @@ class BundleParsingTests(unittest.TestCase):
 
         self.assertEqual(bundle_format, "json-object")
         self.assertEqual(values["DATABASE_PASSWORD"], "secret")
+
+    def test_bundle_structure_hints_do_not_expose_values(self):
+        shape, hints = _bundle_structure_hints(
+            "DB_PASSWORD:super-secret-value|GOOGLE_CLIENT_SECRET:other-secret"
+        )
+
+        self.assertIn("colon", shape)
+        self.assertIn("pipe", shape)
+        self.assertIn("DB_PASSWORD", hints)
+        rendered = repr((shape, hints))
+        self.assertNotIn("super-secret-value", rendered)
+        self.assertNotIn("other-secret", rendered)
 
     def test_unknown_bundle_fails_closed(self):
         env = {**self.db_env, "LIFE_ASSISTANT_BUNDLE": "not a supported bundle payload"}

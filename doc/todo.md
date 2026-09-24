@@ -1,8 +1,10 @@
 # life_assistant — TODO
 
-最後更新：2026-09-22
+最後更新：2026-09-24
 
 > 本清單以目前正式架構為準。舊 Flutter + SQLite 實作保留為既有資產，但不代表新的 Web / Cloud Phase 1 已完成。
+>
+> **Phase 1 採 scope freeze：先完成並上線目前 Web / Cloud 主線；Life OS 類新功能先做設計，不阻塞 Phase 1。**
 
 ## P0 — Cloud Foundation
 
@@ -135,6 +137,41 @@
 - [ ] operational monitoring
 - [ ] failure recovery runbook
 - [ ] release checklist
+
+## Phase 1 Release Gate
+
+- [ ] `acceptance.md` Phase 1 條件通過
+- [ ] 核心 Web / Backend / PostgreSQL flow 在 dev/test 可重跑驗證
+- [ ] SQLite migration 有 rollback / failure evidence
+- [ ] Google integrations failure state 可追蹤
+- [ ] Bridge / MCP 不繞過 Backend policy
+- [ ] 重要 mutation 有 execution log
+- [ ] deployment / runtime evidence 完整
+
+## Phase 1.5 — Real-use Validation
+
+> Phase 1 上線後執行；此階段以修正 friction 與資料一致性為主，不一次展開所有新功能。
+
+- [ ] 記錄首頁真正需要的資訊
+- [ ] 找出重複或干擾性提醒
+- [ ] 記錄 Gmail / Calendar / Task 最常見轉換流程
+- [ ] 記錄常用 routine / prompt
+- [ ] 找出需要手動跨頁完成的高摩擦流程
+- [ ] 依實際使用結果確認 Phase 2 優先順序
+
+## Phase 2 — Future Product Enhancements
+
+> 詳細規格見 `future_product_enhancements.md`。下列項目目前可做設計，但不應阻塞 Phase 1。
+
+- [ ] Today Cockpit
+- [ ] Attention Model / Focus
+- [ ] Routine Library
+- [ ] Global Capture
+- [ ] Plan
+- [ ] Review
+- [ ] Contextual AI entry points
+- [ ] People / relationship context（後續候選）
+- [ ] Portable Markdown views / export（後續候選）
 
 ## Existing Assets — 已有但需遷移/驗證
 

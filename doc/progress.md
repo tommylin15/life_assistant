@@ -1,7 +1,7 @@
 # 生活助理 App v0.1 — 開發進度
 
-最後更新：2026-09-21
-目前狀態：**原生 Flutter + SQLite 版本凍結；flutter analyze 0 error（68 info）、flutter test 7/7 通過；目前唯一主線為 Flutter Web/PWA + Cloud Run + PostgreSQL**
+最後更新：2026-09-24
+目前狀態：**原生 Flutter + SQLite 版本凍結；flutter analyze 0 error（68 info）、flutter test 7/7 通過；目前唯一主線為 Flutter Web/PWA + Cloud Run + PostgreSQL。Phase 1 採 scope freeze，先完成並上線，再進入 Phase 1.5 真實使用驗證與 Phase 2 產品強化。**
 
 ## 狀態定義
 
@@ -9,6 +9,18 @@
 - `已備妥測試`：測試案例已寫入，但依目前工作約定尚未執行。
 - `待驗證`：需執行 analyze、test、裝置或外部服務驗收。
 - `待外部設定`：需要 Android SDK／簽章或 macOS/Xcode 等環境資料。
+
+## 2026-09-24 文件與產品策略更新
+
+- 確認 Phase 1 不採「把所有新功能一起做完再第一次上線」策略。
+- Phase 1 先完成 Web/PWA、FastAPI、PostgreSQL、migration、Google integrations、Bridge / MCP、security / logging / observability。
+- Phase 1 期間可繼續做 UX / schema / API contract proposal，但 Today / Focus / Routine Library / Global Capture 等 Life OS 強化功能不阻塞 Phase 1 Release Gate。
+- Phase 1 上線後進入 Phase 1.5 real-use validation，再依實際使用決定 Phase 2 優先順序。
+- 新增 `future_product_enhancements.md` 作為 Compass / Life OS 類研究吸收基準。
+- WBS 已重整為 Phase 1 → Phase 1.5 → Phase 2，移除舊版以 Android / iOS Release 為主的當前工作排序。
+- UI 文件新增 Phase 2 situation-oriented navigation 候選：Today / Focus / Plan / Review / Projects；Phase 1 仍維持既有 Dashboard / Tasks / Calendar / Projects / More 主導航。
+
+> 本段只代表文件與產品決策已更新，不代表 Phase 1 平台實作或 Phase 2 功能已完成。
 
 ## 2026-09-22 完成
 
@@ -40,21 +52,6 @@
 - `WorkspaceEditorPage` 三個 AppBar 按鈕補 tooltip。
 
 ### todo.md 補勾（Accessibility / Empty states / Templates）
-
-- `[x] Templates`（移除「另存入口待補」備註）
-- `[x] Empty states`
-- `[x] Accessibility`
-
-- `NavigationBar` 五個 destination 補上 `selectedIcon`，提供視覺選中回饋。
-- `TaskTile` Checkbox 加 `semanticLabel`，TalkBack / VoiceOver 朗讀「任務標題，已完成／未完成」。
-- `TaskTile` 編輯按鈕加 `tooltip: '編輯待辦'`。
-- `Busy` widget 的 `CircularProgressIndicator` 加 `semanticsLabel: '載入中'`。
-- `Message` widget 用 `Semantics(label: text)` 包住整體，圖示與文字子節點各加 `ExcludeSemantics`，避免螢幕閱讀器重複朗讀。
-- `LockGate` PIN 欄位加 `autofillHints: [AutofillHints.password]`。
-- `CalendarIntegrationPage` 刪除行程 `IconButton` 加 `tooltip: '刪除行程'`。
-- `WorkspaceEditorPage` 預覽切換、儲存、刪除三個 AppBar `IconButton` 補 tooltip。
-
-### todo.md 補勾
 
 - `[x] Templates`（移除「另存入口待補」備註）
 - `[x] Empty states`
@@ -142,12 +139,15 @@
 3. 建立 PostgreSQL schema / migration。
 4. 實作 SQLite → PostgreSQL 可重跑、可驗證的資料遷移。
 5. 以 Firebase Hosting + Cloud Run dev/test 驗收核心流程。
+6. 通過 Phase 1 Release Gate 後才進入 Phase 1.5 / Phase 2。
 
 Android / iOS SDK、實機驗收、release signing 與上架暫停，不列入目前交付範圍。
 
 ## 已知尚未完成
 
+- Flutter Web / FastAPI / PostgreSQL 新主線尚未完成實作與部署驗證。
+- SQLite → PostgreSQL migration 尚未有 runtime evidence。
+- Phase 1 Release Gate 尚未通過。
+- Today / Focus / Routine Library 等 Phase 2 強化功能僅為規劃，尚未實作。
 - Android release signing 尚未設定。
 - iOS build／權限驗收需在 macOS + Xcode 執行。
-- Release Gate 各項需實機驗收後才能勾選。
-- 未 commit、未 push、未部署。

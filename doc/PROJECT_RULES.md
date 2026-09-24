@@ -111,19 +111,25 @@ life_assistant 可有一般 background jobs，例如：
 1. 檢查是否違反本文件與相關規格。
 2. 執行適用的測試、lint、`flutter analyze`、backend tests 或其他驗證。
 3. 說明修改內容、驗證結果與尚待決定事項。
-4. 未經明確授權，不得部署 production 或建立／擴大付費 GCP 資源。
+4. 正常 production deployment 依 `main → GitHub Actions → tests/build → GCP → runtime/integration validation` 執行，不需逐次確認；高風險例外仍依下節規則處理。
 
 尚未完成 Backend / Web migration 時，必須明確區分「現有 SQLite / 原生 App 實作」與「新的雲端目標架構」，不得把規劃當成 runtime evidence。
 
 life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案可獨立驗收。
 
-## GCP / WSL
+## GCP / CI/CD / IAM
 
-- 可使用本機 WSL 執行 dev migration、Linux/shell 驗證（包含 `bash -n`）與 GCP dev 驗收。
-- WSL 不得用於 production 部署，也不得因此建立或擴大付費 GCP 資源。
-- 需要既有 GCP/gcloud credentials 或 GCP dev 驗收時，使用既有已授權 dev 資源；不得自行建立 production 資源。
+- 正式派版優先走 `GitHub main → GitHub Actions → tests/build → GCP → runtime/integration validation`。
+- GitHub Actions 對 `gen-lang-client-0593591102` 使用 OIDC / Workload Identity Federation；不得建立長效 Service Account JSON key 作為一般部署憑證。
+- `tommylin15/life_assistant` 專案期間，為正常 CI/CD 與既有部署資源所需的最小權限 WIF、部署 Service Account、Cloud Run、Cloud Build、Artifact Registry、Secret Manager 與 Firebase 例行 IAM 調整，視為已持續授權，不需逐次再詢問。
+- IAM 必須遵守 least privilege，不得為方便直接授予 Owner / Editor。
+- 下列高風險操作仍需使用者明確確認：重大 IAM / Service Account 擴權、跨專案或跨組織權限、production credential / secret rotation、刪除 production GCP / database / Firebase 資源、destructive migration、可能造成重大 production outage 的權限或資源變更。
+- 可使用本機 WSL 執行 dev migration、Linux/shell 驗證（包含 `bash -n`）與 GCP dev 驗收；production 部署仍以 GitHub Actions 為主線。
 
 ## Git
 
-- 執行任何 commit 或 push 前，應先完成專案要求的 review 流程（目前文件稱 `/ponytail-review`）。
-- 未經使用者要求，不建立 commit、push、production deployment 或付費雲端資源。
+- `main` 是目前唯一正式 branch。
+- ChatGPT 可直接修改 application source、tests、schema/migration、CI/CD、deployment config、IaC 與專案文件，並可直接 commit / push 到 `main`；一般開發不需逐步再次確認。
+- 正常部署可由 GitHub Actions 自動觸發。
+- force push、rewrite `main` history 或其他高風險 Git 操作仍需使用者明確確認。
+- 修改前應先檢查目前 GitHub implementation；實作狀態以 GitHub/runtime evidence 為準。

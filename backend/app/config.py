@@ -1,6 +1,7 @@
 import json
 import os
 from io import StringIO
+from urllib.parse import quote
 
 from dotenv import dotenv_values
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -59,9 +60,46 @@ def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
     return {}, "unknown"
 
 
+def _database_url_from_password(password: str) -> str | None:
+    host = os.environ.get("DATABASE_HOST", "").strip()
+    user = os.environ.get("DATABASE_USER", "").strip()
+    database = os.environ.get("DATABASE_NAME", "").strip()
+    port = os.environ.get("DATABASE_PORT", "5432").strip() or "5432"
+    sslmode = os.environ.get("DATABASE_SSLMODE", "require").strip() or "require"
+    if not host or not user or not database:
+        return None
+
+    return (
+        "postgresql+asyncpg://"
+        + quote(user, safe="")
+        + ":"
+        + quote(password, safe="")
+        + "@"
+        + host
+        + ":"
+        + port
+        + "/"
+        + quote(database, safe="")
+        + "?sslmode="
+        + quote(sslmode, safe="")
+    )
+
+
 def _load_bundle() -> str:
     raw = os.environ.get("LIFE_ASSISTANT_BUNDLE", "")
     values, bundle_format = _parse_bundle(raw)
+
+    if (
+        bundle_format == "unknown"
+        and raw.strip()
+        and "\n" not in raw.strip()
+        and os.environ.get("LIFE_ASSISTANT_OPAQUE_SECRET_KIND") == "database-password"
+    ):
+        database_url = _database_url_from_password(raw.strip())
+        if database_url:
+            values = {"DATABASE_URL": database_url}
+            bundle_format = "opaque-database-password"
+
     for key, value in values.items():
         os.environ[key] = value
     return bundle_format

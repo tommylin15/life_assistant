@@ -33,8 +33,15 @@ def _normalize_key(value: str) -> str:
     return value.strip().lower().replace("-", "_").replace(".", "_")
 
 
-def _normalize_database_url(value: str) -> str:
+def _strip_matching_quotes(value: str) -> str:
     value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
+    return value
+
+
+def _normalize_database_url(value: str) -> str:
+    value = _strip_matching_quotes(value)
     if value.startswith("postgresql://"):
         value = "postgresql+asyncpg://" + value[len("postgresql://") :]
 
@@ -78,12 +85,17 @@ def _normalize_parsed_values(values: dict[str, str]) -> dict[str, str]:
         normalized_key = _normalize_key(key)
         if normalized_key == "database_url":
             parsed[key] = _normalize_database_url(value)
+        else:
+            parsed[key] = _strip_matching_quotes(value)
     return parsed
 
 
 def _parse_colon_comma_bundle(raw: str) -> dict[str, str] | None:
     key_pattern = "|".join(re.escape(key) for key in COLON_COMMA_BUNDLE_KEYS)
-    pattern = re.compile(rf"(?:^|,)\s*({key_pattern})\s*:", re.IGNORECASE)
+    pattern = re.compile(
+        rf"(?:^|,)\s*['\"]?({key_pattern})['\"]?\s*:",
+        re.IGNORECASE,
+    )
     matches = list(pattern.finditer(raw))
     if not matches or matches[0].start() != 0:
         return None
@@ -95,7 +107,7 @@ def _parse_colon_comma_bundle(raw: str) -> dict[str, str] | None:
             return None
         value_start = match.end()
         value_end = matches[index + 1].start() if index + 1 < len(matches) else len(raw)
-        value = raw[value_start:value_end].strip()
+        value = _strip_matching_quotes(raw[value_start:value_end])
         if not value:
             return None
         parsed[key] = value
@@ -220,6 +232,8 @@ def _bundle_structure_hints(raw: str) -> tuple[list[str], list[str], list[str]]:
         shape.append("brace-prefix")
     if raw.startswith("["):
         shape.append("bracket-prefix")
+    if raw.startswith(('"', "'")):
+        shape.append("quote-prefix")
 
     texts = [raw]
     decoded = _decoded_base64_text(raw)

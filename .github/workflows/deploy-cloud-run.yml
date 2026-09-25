@@ -63,7 +63,7 @@ jobs:
             --vpc-egress private-ranges-only \
             --allow-unauthenticated \
             --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI" \
-            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:3 \
+            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --quiet
 
       - name: Resolve Cloud Run service URL

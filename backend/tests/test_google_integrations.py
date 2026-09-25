@@ -9,6 +9,7 @@ from app.api.google_integrations import (
     GmailToCalendarCreate,
     GmailToTaskCreate,
 )
+from app.api.google_project import GmailToProjectCreate
 from app.models.task import TaskPriority
 from app.services import google_oauth
 
@@ -73,7 +74,7 @@ class GoogleIntegrationContractTests(TestCase):
             else:
                 os.environ["GOOGLE_TOKEN_ENCRYPTION_KEY"] = original_key
 
-    def test_capability_catalog_contains_second_batch(self):
+    def test_capability_catalog_contains_project_conversion(self):
         by_name = {item["name"]: item for item in CAPABILITIES}
         self.assertEqual(
             set(by_name),
@@ -81,6 +82,7 @@ class GoogleIntegrationContractTests(TestCase):
                 "gmail.list_metadata",
                 "gmail.to_task",
                 "gmail.to_calendar",
+                "gmail.to_project",
                 "calendar.list",
                 "calendar.create",
                 "calendar.update",
@@ -89,7 +91,6 @@ class GoogleIntegrationContractTests(TestCase):
             },
         )
         self.assertNotIn("gmail.send", by_name)
-        self.assertNotIn("gmail.to_project", by_name)
         self.assertEqual(
             by_name["calendar.delete"]["confirmation"],
             "explicit_user",
@@ -100,6 +101,10 @@ class GoogleIntegrationContractTests(TestCase):
                 "https://www.googleapis.com/auth/gmail.readonly",
                 "https://www.googleapis.com/auth/calendar.events",
             },
+        )
+        self.assertEqual(
+            by_name["gmail.to_project"]["required_scopes"],
+            ["https://www.googleapis.com/auth/gmail.readonly"],
         )
 
     def test_calendar_create_requires_timezone_and_order(self):
@@ -155,3 +160,8 @@ class GoogleIntegrationContractTests(TestCase):
     def test_gmail_to_task_uses_normal_priority_by_default(self):
         body = GmailToTaskCreate()
         self.assertEqual(body.priority, TaskPriority.normal)
+
+    def test_gmail_to_project_uses_active_status_by_default(self):
+        body = GmailToProjectCreate()
+        self.assertEqual(body.status, "active")
+        self.assertIsNone(body.name)

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.task import TaskPriority, TaskStatus
 
@@ -33,6 +33,39 @@ class TaskOut(BaseModel):
     due_at: datetime | None
     reminder_at: datetime | None
     project_id: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=500)
+    summary: str | None = Field(default=None, max_length=10000)
+    status: str = Field(default="active", min_length=1, max_length=32)
+
+
+class ProjectUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=500)
+    summary: str | None = Field(default=None, max_length=10000)
+    status: str | None = Field(default=None, min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one project field must be provided")
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("Project name cannot be null")
+        if "status" in self.model_fields_set and self.status is None:
+            raise ValueError("Project status cannot be null")
+        return self
+
+
+class ProjectOut(BaseModel):
+    id: str
+    name: str
+    summary: str | None
+    status: str
     created_at: datetime
     updated_at: datetime
 

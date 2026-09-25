@@ -11,6 +11,8 @@ from app import config as app_config
 from app.api.activity import router as activity_router
 from app.api.auth import router as auth_router
 from app.api.google_integrations import router as google_integrations_router
+from app.api.google_project import router as google_project_router
+from app.api.projects import router as projects_router
 from app.api.tasks import router as tasks_router
 from app.db import session as db_session
 from app.db.session import Base, engine
@@ -100,5 +102,7 @@ async def ready():
 
 app.include_router(auth_router)
 app.include_router(tasks_router, prefix="/api/v1")
+app.include_router(projects_router, prefix="/api/v1")
 app.include_router(google_integrations_router, prefix="/api/v1")
+app.include_router(google_project_router, prefix="/api/v1")
 app.include_router(activity_router, prefix="/api/v1")

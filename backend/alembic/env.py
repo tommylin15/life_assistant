@@ -10,6 +10,7 @@ from app.config import settings
 from app.db.session import Base
 from app.models.execution_log import ExecutionLog  # noqa: F401
 from app.models.google_integration import GoogleConnection, GoogleOAuthState  # noqa: F401
+from app.models.project import Project  # noqa: F401
 from app.models.task import Task  # noqa: F401
 
 config = context.config

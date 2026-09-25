@@ -53,6 +53,18 @@ class BundleParsingTests(unittest.TestCase):
         self.assertEqual(values["GOOGLE_CLIENT_ID"], "client-id")
         self.assertEqual(values["GOOGLE_CLIENT_SECRET"], "client:secret")
 
+    def test_rotated_duplicate_google_client_secret_uses_last_value(self):
+        values, bundle_format = _parse_bundle(
+            "DATABASE_URL:postgresql://life_assistant_user:secret@10.42.0.5:5432/life_assistant?sslmode=require,\n"
+            "GOOGLE_CLIENT_ID:client-id,\n"
+            "GOOGLE_CLIENT_SECRET:old-secret\n"
+            'GOOGLE_CLIENT_SECRET="new-secret"\n'
+        )
+        self.assertEqual(bundle_format, "known-key-bundle")
+        self.assertEqual(values["DATABASE_URL"], "postgresql+asyncpg://life_assistant_user:secret@10.42.0.5:5432/life_assistant?ssl=require")
+        self.assertEqual(values["GOOGLE_CLIENT_ID"], "client-id")
+        self.assertEqual(values["GOOGLE_CLIENT_SECRET"], "new-secret")
+
     def test_wrapped_quoted_known_key_bundle_is_supported(self):
         values, bundle_format = _parse_bundle(
             'legacy-wrapper,\\"DATABASE_URL\\":\\"postgresql://life_assistant_user:secret@10.42.0.5:5432/life_assistant?sslmode=require\\",'

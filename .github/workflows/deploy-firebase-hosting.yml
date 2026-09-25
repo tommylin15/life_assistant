@@ -40,14 +40,14 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pillow==11.3.0
           python scripts/prepare_branding_assets.py
-          echo "EXPECTED_ICON_SHA=$(sha256sum web/icons/life-assistant-192-v7.png | awk '{print $1}')" >> "$GITHUB_ENV"
-          echo "EXPECTED_HERO_SHA=$(sha256sum web/branding/life-assistant-hero-v7.png | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "EXPECTED_ICON_SHA=$(sha256sum web/icons/life-assistant-192-v8.png | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "EXPECTED_HERO_SHA=$(sha256sum web/branding/life-assistant-hero-v8.png | awk '{print $1}')" >> "$GITHUB_ENV"
           python - <<'PY'
           from PIL import Image
           checks = {
-              'web/icons/life-assistant-192-v7.png': (192, 192),
-              'web/icons/life-assistant-512-v7.png': (512, 512),
-              'web/branding/life-assistant-hero-v7.png': (512, 512),
+              'web/icons/life-assistant-192-v8.png': (192, 192),
+              'web/icons/life-assistant-512-v8.png': (512, 512),
+              'web/branding/life-assistant-hero-v8.png': (1024, 1024),
           }
           for name, expected in checks.items():
               with Image.open(name) as image:
@@ -128,31 +128,31 @@ jobs:
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
             --dump-header "$ICON_HEADERS" \
-            --output /tmp/life-assistant-192-v7.png \
-            "$BASE_URL/icons/life-assistant-192-v7.png"
+            --output /tmp/life-assistant-192-v8.png \
+            "$BASE_URL/icons/life-assistant-192-v8.png"
           grep -Eiq '^content-type: image/png' "$ICON_HEADERS"
-          test "$(sha256sum /tmp/life-assistant-192-v7.png | awk '{print $1}')" = "$EXPECTED_ICON_SHA"
+          test "$(sha256sum /tmp/life-assistant-192-v8.png | awk '{print $1}')" = "$EXPECTED_ICON_SHA"
 
           HERO_HEADERS="$(mktemp)"
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
             --dump-header "$HERO_HEADERS" \
-            --output /tmp/life-assistant-hero-v7.png \
-            "$BASE_URL/branding/life-assistant-hero-v7.png"
+            --output /tmp/life-assistant-hero-v8.png \
+            "$BASE_URL/branding/life-assistant-hero-v8.png"
           grep -Eiq '^content-type: image/png' "$HERO_HEADERS"
-          test "$(sha256sum /tmp/life-assistant-hero-v7.png | awk '{print $1}')" = "$EXPECTED_HERO_SHA"
+          test "$(sha256sum /tmp/life-assistant-hero-v8.png | awk '{print $1}')" = "$EXPECTED_HERO_SHA"
 
           python - <<'PY'
           from PIL import Image
-          icon = Image.open('/tmp/life-assistant-192-v7.png')
-          hero = Image.open('/tmp/life-assistant-hero-v7.png')
+          icon = Image.open('/tmp/life-assistant-192-v8.png')
+          hero = Image.open('/tmp/life-assistant-hero-v8.png')
           assert icon.size == (192, 192), icon.size
-          assert hero.size == (512, 512), hero.size
+          assert hero.size == (1024, 1024), hero.size
           PY
 
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
             "$BASE_URL/manifest-v6.json" > /tmp/manifest-v6.json
           grep -Fq '"id": "/life-assistant-v6"' /tmp/manifest-v6.json
-          grep -Fq '/icons/life-assistant-192-v7.png' /tmp/manifest-v6.json
-          grep -Fq '/icons/life-assistant-512-v7.png' /tmp/manifest-v6.json
+          grep -Fq '/icons/life-assistant-192-v8.png' /tmp/manifest-v6.json
+          grep -Fq '/icons/life-assistant-512-v8.png' /tmp/manifest-v6.json

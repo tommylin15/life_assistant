@@ -12,25 +12,25 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icons/life-assistant-192-v7.png",
+      "src": "/icons/life-assistant-192-v8.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/life-assistant-512-v7.png",
+      "src": "/icons/life-assistant-512-v8.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/life-assistant-maskable-192-v7.png",
+      "src": "/icons/life-assistant-maskable-192-v8.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/life-assistant-maskable-512-v7.png",
+      "src": "/icons/life-assistant-maskable-512-v8.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

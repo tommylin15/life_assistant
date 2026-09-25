@@ -16,9 +16,14 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install branding tooling
+        run: python -m pip install --disable-pip-version-check pillow==11.3.0
+
+      - name: Test branding source quality
+        run: python -m unittest tests/test_branding_assets.py -v
+
       - name: Prepare branding assets
         run: |
-          python -m pip install --disable-pip-version-check pillow==11.3.0
           python scripts/prepare_branding_assets.py
           python - <<'PY'
           from PIL import Image

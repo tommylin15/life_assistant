@@ -1,162 +1,240 @@
 # 生活助理 App v0.1 — 開發進度
 
-最後更新：2026-09-24
-目前狀態：**原生 Flutter + SQLite 版本凍結；flutter analyze 0 error（68 info）、flutter test 7/7 通過；目前唯一主線為 Flutter Web/PWA + Cloud Run + PostgreSQL。Phase 1 採 scope freeze，先完成並上線，再進入 Phase 1.5 真實使用驗證與 Phase 2 產品強化。**
+最後更新：2026-09-25
+
+目前狀態：**Phase 1 主線已從「基礎建置」進入「Google integrations / Cloud API 擴充與 Release Gate 收斂」。Flutter Web / PWA、Firebase Hosting、Cloud Run、PostgreSQL、Google Sign-In 與 Task CRUD 主線已建立；Google Gmail / Calendar / Drive 第一批能力已實作，但外部整合仍需 runtime acceptance。SQLite → PostgreSQL migration、execution log、完整 error contract、Project/Note/Habit/Shopping Cloud API 與 Bridge/MCP Release Gate 尚未完成。**
 
 ## 狀態定義
 
-- `已實作`：已有程式碼與畫面；不代表已通過測試。
-- `已備妥測試`：測試案例已寫入，但依目前工作約定尚未執行。
-- `待驗證`：需執行 analyze、test、裝置或外部服務驗收。
-- `待外部設定`：需要 Android SDK／簽章或 macOS/Xcode 等環境資料。
+- `Implementation PASS`：目前 main 有對應程式與 contract。
+- `Tests PASS`：有自動測試 evidence。
+- `CI PASS`：GitHub Actions 對該 commit / workflow 通過。
+- `Deployment PASS`：對應版本已成功發布。
+- `Runtime PASS`：實際服務可使用。
+- `Integration PASS`：實際跨系統流程已驗收。
+- `NOT VERIFIED`：缺必要證據；不得以程式存在推定完成。
 
-## 2026-09-24 文件與產品策略更新
+## 2026-09-25 — Current Cloud / Web evidence
 
-- 確認 Phase 1 不採「把所有新功能一起做完再第一次上線」策略。
-- Phase 1 先完成 Web/PWA、FastAPI、PostgreSQL、migration、Google integrations、Bridge / MCP、security / logging / observability。
-- Phase 1 期間可繼續做 UX / schema / API contract proposal，但 Today / Focus / Routine Library / Global Capture 等 Life OS 強化功能不阻塞 Phase 1 Release Gate。
-- Phase 1 上線後進入 Phase 1.5 real-use validation，再依實際使用決定 Phase 2 優先順序。
-- 新增 `future_product_enhancements.md` 作為 Compass / Life OS 類研究吸收基準。
-- WBS 已重整為 Phase 1 → Phase 1.5 → Phase 2，移除舊版以 Android / iOS Release 為主的當前工作排序。
-- UI 文件新增 Phase 2 situation-oriented navigation 候選：Today / Focus / Plan / Review / Projects；Phase 1 仍維持既有 Dashboard / Tasks / Calendar / Projects / More 主導航。
+### Deployment
 
-> 本段只代表文件與產品決策已更新，不代表 Phase 1 平台實作或 Phase 2 功能已完成。
+- Firebase Hosting：**PASS**。最新已知成功 evidence 為 workflow `Deploy Firebase Hosting` run #62，對應 main commit `1da5c1c0044a14406ff94896a04d994fcf48fd82`。
+- Cloud Run：**PASS**。最新已知成功 evidence 為 workflow `Deploy Cloud Run` run #116，對應同一 commit。
+- Cloud Run `life-assistant-api` 與 PostgreSQL runtime 已存在於 `gen-lang-client-0593591102`。
+- PWA icon / manifest / branding 已完成最新修正並發布。
 
-## 2026-09-22 Cloud Foundation
+### Flutter Web → Backend → PostgreSQL
 
-- Flutter Web/PWA 基礎已建立，`flutter build web --target=lib/main_web.dart` 通過。
-- FastAPI Backend 與 Task CRUD API 已建立並部署至 Cloud Run；文件記錄 Task CRUD 端對端測試已寫入 PostgreSQL。
-- PostgreSQL dev/test schema 已建立於 GCP VM，Cloud Run 到資料庫連線已驗證。
-- Flutter Web 有 API client 與待辦頁，但 `API_BASE_URL` 尚未設定，前端串接仍待驗證。
-- Backend auth / permission、統一錯誤回應、操作紀錄、Firebase Hosting 與 SQLite→PostgreSQL migration 尚未完成。
+- Web API client 會透過 Firebase Hosting rewrite / `/api/v1` 呼叫 Backend。
+- Task list / create / update / complete / delete API 已實作。
+- 使用者於 2026-09-25 完成 Google 登入與 Task CRUD 互動驗收。
+- 因此目前 Task 核心 flow：**Implementation PASS / Deployment PASS / Runtime PASS（互動驗收）**。
 
-## 2026-09-22 完成
+### Backend authentication
 
-### permissions status service
+- Google OAuth login / callback 已實作。
+- 使用 `__session` HttpOnly / Secure cookie 維持已驗證 Google identity session。
+- Task 與 Google integration API 以 `current_user` 保護。
+- OAuth state validation 已實作。
+- Google access / refresh token 以 encrypted storage 保存，支援 refresh。
+- Authentication baseline：**Implementation PASS**。
+- 更細的 mutation authorization / risk / confirmation policy：**NOT VERIFIED / 尚未完成**。
 
-- 新增 `lib/application/permissions_status_service.dart`：封裝 `checkAll()` / `request()` / `openSettings()`，覆蓋通知、相機、麥克風、儲存空間四個權限。
-- `providers.dart` 加入 `permissionsProvider`。
-- `app.dart` 加入 `PermissionsPage`：列出各權限狀態（已授權 / 未授權），未授權時顯示「授權」按鈕，拒絕後自動跳系統設定；SettingsPage 加入入口。
+## 2026-09-25 — Google integrations 第一批
 
-### CI（GitHub Actions）
+### 已實作
 
-- 新增 `.github/workflows/ci.yml`：push / PR 到 main 時自動執行 `flutter pub get` → `flutter analyze` → `flutter test`。
-- Flutter 版本固定 3.47.3，`--fatal-infos=false` 避免既有 style info 阻斷 CI。
+Backend 已有：
 
-### todo.md 補勾
+- `gmail.list_metadata`
+- `calendar.list`
+- `calendar.create`
+- `drive.bridge.ensure`
 
-- `[x] 建立 permissions status service`
-- `[x] 建立 test baseline / CI`
+Web Integrations 頁已提供：
 
-### Accessibility pass
+- Gmail 授權 / 重新授權
+- Calendar 授權 / 重新授權
+- Drive 授權 / 重新授權
+- Gmail metadata read 驗收
+- Calendar read 驗收
+- Drive `life_assistant/ChatGPT_Bridge` ensure 驗收
+- capability / risk / confirmation metadata 顯示
 
-- `NavigationBar` destinations 補 `selectedIcon`。
-- `TaskTile` Checkbox 加 `semanticLabel`。
-- `TaskTile` 編輯按鈕加 `tooltip`。
-- `Busy` 加 `semanticsLabel: '載入中'`。
-- `Message` 用 `Semantics(label:)` 包住，子節點加 `ExcludeSemantics`。
-- `LockGate` PIN 欄位加 `autofillHints`。
-- `CalendarIntegrationPage` 刪除行程按鈕加 `tooltip`。
-- `WorkspaceEditorPage` 三個 AppBar 按鈕補 tooltip。
+Google scope baseline：
 
-### todo.md 補勾（Accessibility / Empty states / Templates）
+- Gmail：`gmail.readonly`
+- Calendar：`calendar.events`
+- Drive：`drive.file`
 
-- `[x] Templates`（移除「另存入口待補」備註）
-- `[x] Empty states`
-- `[x] Accessibility`
+目前不包含 Gmail send、全 Drive scope 等高權限能力。
 
-## 2026-09-21 完成
+### Tests
 
-### flutter analyze 修正（0 error、0 warning）
+Backend `test_google_integrations.py` 已覆蓋：
 
-- `app.dart`：`ConsumerState.build` 移除多餘的 `WidgetRef` 參數。
-- `app_lock.dart`：`local_auth v3` API 改用 `persistAcrossBackgrounding`，移除 `AuthenticationOptions`。
-- `feature_pages.dart` + `attachment_service.dart`：`file_picker v11` 改為靜態方法 `FilePicker.pickFiles()` / `FilePicker.getDirectoryPath()`。
-- `folder_sync_engine.dart`：`Stream.isNotEmpty` 不存在，改為 `.any((_) => true)`；`jsonEncode(_extensions)` 改為 `.toList()`。
-- `safe_logger.dart`：Dart 不支援 `(?i)` regex inline flag，改用 `caseSensitive: false`。
-- `backup_service.dart`：`sqlite3.Database.dispose()` 改為 `close()`，移除 unused drift import，`sqlite3` 加入 pubspec.yaml dependencies。
-- `google_integration_service.dart`：移除 unused `_uuid` field 與 uuid import。
-- `google_services_adapter.dart`：修正兩處 unawaited Future in try block。
-- `speech_adapter.dart`：deprecated `localeId` 移入 `SpeechListenOptions`。
-- `providers.dart`：移除 unused `flutter/material.dart` import。
+- least-privilege scope
+- incremental OAuth authorization URL
+- encrypted token round-trip
+- 第一批 capability catalog
+- Calendar create timezone validation
 
-### flutter test 修正（7/7 通過）
+CI backend job會執行 `python -m unittest discover -s tests -v`。
 
-- `folder_sync_test`：`jsonEncode(_extensions)` 無法序列化 `const Set`，改為 `.toList()`。
-- `widget_test`：mock `AppLockService`（`_NoLock`）避免 `local_auth` platform channel 在測試環境 hang；override `appLockProvider`。
+### 尚待 runtime acceptance
 
-### Google OAuth 設定
+截至本次文件同步，不把以下項目標成 Integration PASS：
 
-- Google Cloud 專案 `life-assistant-509213` 已建立。
-- Calendar API、Gmail API、Google Drive API 已啟用。
-- OAuth 同意畫面已設定（外部、測試階段）。
-- Android OAuth 用戶端已建立（套件名稱 `com.lifeassistant.life_assistant`，SHA-1 `45:0B:28:B8:9D:C1:9C:6F:CD:35:46:28:F3:B4:D9:D3:76:16:B1:E5`）。
-- Web OAuth 用戶端已建立（`705113310914-c96ndkj4dhk2epk3o2ssqponeu0ub3p0.apps.googleusercontent.com`）。
-- `AndroidManifest.xml` 加入 Web client ID meta-data。
-- `GoogleServicesAdapter` 所有 `GoogleSignIn` 實例加入 `serverClientId`。
-- 不使用 Firebase，不需要 `google-services.json`。
-- debug.keystore 已在 `C:\Users\Administrator\.android\debug.keystore` 建立。
+- Gmail metadata 真實帳號 read
+- Calendar 真實帳號 read
+- Drive Bridge 真實帳號 ensure
 
-## 先前完成（2026-09-20）
+雖然 API / UI 已部署，仍需在已授權帳號上取得三項 PASS evidence。
 
-### 基礎與資料層
+## 2026-09-25 — 實作差異與依賴
 
-- Flutter 專案、Riverpod、GoRouter、Drift/SQLite、Repository 與 adapter 邊界已建立。
-- Database schema 已升至 v3；v2 新增 Folder Sync／Bridge 執行表，v3 新增 Calendar 專案關聯欄位，均保留 migration 路徑。
-- Notes FTS5、預設標籤、內建範本、Activity Log、Preferences 已實作。
-- SQLite backup、restore staging、JSON／CSV export 已實作；還原前有明確確認，原 DB 會保留為 `life_assistant.pre_restore.db`。
+### Calendar
 
-### App 功能
+目前 Cloud Backend：
 
-- Dashboard：規則摘要、優先排序、待辦／行程／提醒／等待中／採買／習慣／專案區塊、自訂顯示與順序、快捷列。
-- Tasks：CRUD、狀態、優先度、日期、提醒、Checklist、標籤、專案、附件、快速輸入。
-- Calendar：快取、讀取／新增／修改／刪除、簡化週／月範圍、重疊提示、專案關聯。
-- Gmail：metadata 快取、轉待辦／行程、掛到專案、離線快取錯誤狀態。
-- Projects：待辦、行程、筆記、Gmail、附件與最近活動彙整。
-- Notes：Markdown 編輯／預覽、自動儲存、FTS、標籤、雙向連結、專案、附件、轉待辦／行程。
-- Habits、Shopping、Templates、Activity Log、每日回顧、長期視圖、語音快速輸入已實作。
-- 溫暖、極簡、深色三套 Theme 與主題偏好持久化已實作。
+- read：已實作
+- create：已實作
+- update：尚未實作
+- delete：尚未實作
 
-### Folder Sync
+因此下一個 Cloud integration 批次應先補 `calendar.update` / `calendar.delete`。
 
-- 首次同步強制空 Local folder，且只做 Drive → Local。
-- 正常同步支援新增、修改、刪除、子資料夾、排除 DB／Bridge／暫存檔。
-- Snapshot 只在單檔成功後前進；每個 operation 另存成功／失敗紀錄。
-- 雙方修改、刪除對修改會進入 conflict；可保留本機、Drive 或兩份。
-- 內建 Local Markdown Workspace，可建立、開啟、編輯、預覽與刪除 `.md`。
+### Gmail conversion
 
-### ChatGPT Bridge 與安全
+目前 Gmail metadata read 已實作，但 Cloud Backend 尚未有正式 conversion endpoints。
 
-- versioned schema validator、action registry、`request_id + action_id` 防重複、逐項確認與 `action_results.json` 已實作。
-- Drive folder／manifest／README、current state、inbox、projects export、pending actions import 已實作。
-- App Lock、salted PIN hash、biometric fallback、安全 log scrubber 已實作。
+建議下一批：
 
-## 測試狀態
+1. Gmail → Task
+2. Gmail → Calendar（由 request 明確提供 start/end，不由 LLM 或 Backend 猜時間）
+3. Gmail → Project
 
-| 測試檔案 | 狀態 |
-|---------|------|
-| `test/application_rules_test.dart` | ✅ 3/3 通過 |
-| `test/repository_test.dart` | ✅ 2/2 通過 |
-| `test/folder_sync_test.dart` | ✅ 1/1 通過 |
-| `test/widget_test.dart` | ✅ 1/1 通過 |
+其中 Gmail → Project **目前被 Project Backend 缺口阻塞**：repository 的 Cloud Backend 目前只有 Task model，尚無 Project model / Project CRUD API。不得把舊 SQLite Project CRUD 當成新的 Cloud Backend Project CRUD 已完成。
 
-## 下一步：完成 Phase 1 Cloud 主線
+## 目前 Cloud Backend model / API 範圍
 
-1. 設定並驗證 Flutter Web 到 Cloud Run Task API 的連線。
-2. 建立 Backend auth / permission、錯誤回應與 execution log baseline。
-3. 發布 Firebase Hosting dev/test，並完成手機與桌面瀏覽器驗證。
-4. 實作 SQLite → PostgreSQL 可重跑、可驗證的資料遷移。
-5. 擴充核心 API 與 Google / Bridge / MCP 整合，通過 Phase 1 Release Gate。
+### 已有
 
-Android / iOS SDK、實機驗收、release signing 與上架暫停，不列入目前交付範圍。
+- Task model + Task CRUD
+- GoogleConnection / OAuth state model
+- Google auth API
+- Google integration API
+- `/health`
+- `/ready` + DB connectivity evidence
+- Alembic Google integration migration
+
+### 尚缺主要 Phase 1 Cloud API
+
+- Project CRUD
+- Note CRUD / search
+- Habit
+- Shopping
+- Template
+- Activity / execution log
+
+## CI / CD 現況
+
+`.github/workflows/ci.yml` 已包含：
+
+### Flutter
+
+- branding asset validation
+- `flutter pub get`
+- `flutter analyze --no-fatal-infos`
+- `flutter test`
+- Flutter Web build
+- built branding verification
+
+### Backend
+
+- dependency install
+- FastAPI import check
+- Alembic migration SQL validation
+- Backend unittest suite
+
+### Deployment script checks
+
+- GCP WIF bootstrap script syntax
+- PostgreSQL inspect / diagnostics script syntax
+- OAuth secret rotation helper syntax
+
+正式部署路徑維持：
+
+```text
+GitHub main
+  → GitHub Actions
+  → tests / build
+  → Firebase Hosting + Cloud Run
+  → runtime / integration validation
+```
+
+## SQLite / legacy native assets
+
+舊原生 Flutter + SQLite 版本保留，包含：
+
+- SQLite schema / migrations
+- Item / Project CRUD
+- Dashboard
+- Notes / FTS5
+- Habits
+- Shopping
+- Templates
+- Attachments
+- Calendar / Gmail adapters
+- Drive / Share Bridge
+- Bridge schema / idempotency / proposed-action UI
+- Activity log
+- App lock / PIN / biometric / sensitive log filtering
+
+這些是 migration source / existing assets，不代表相同能力已經完成 Cloud Backend / PostgreSQL 版本。
 
 ## 已知尚未完成
 
-- Web / Cloud 主線已有基礎 build、Cloud Run、PostgreSQL 與 Task API 驗證；Phase 1 整體仍未完成。
-- Flutter Web 尚未完成 Cloud Run API 串接與瀏覽器驗收；Firebase Hosting 尚未設定。
-- Backend auth / permission、統一錯誤回應與 execution log baseline 尚未完成。
+- Google Gmail / Calendar / Drive 三項 runtime acceptance 尚未完整取得 evidence。
+- Calendar update / delete 尚未實作。
+- Gmail → Task / Calendar / Project Cloud conversion 尚未實作。
+- Project CRUD Cloud API 尚未實作，並阻塞 Gmail → Project。
+- Backend 統一 error response 尚未完成。
+- Backend execution / activity log baseline 尚未完成。
 - SQLite → PostgreSQL migration 尚未有 runtime evidence。
-- Phase 1 Release Gate 尚未通過。
-- Today / Focus / Routine Library 等 Phase 2 強化功能僅為規劃，尚未實作。
-- Android release signing 尚未設定。
-- iOS build／權限驗收需在 macOS + Xcode 執行。
+- Project / Note / Habit / Shopping / Template Cloud API 尚未完成。
+- ChatGPT Bridge Backend / MCP 尚未達 Phase 1 Release Gate。
+- Phase 1 整體狀態仍為 **PARTIAL**。
+
+## 下一步：Phase 1 收斂順序
+
+1. 取得 Gmail / Calendar / Drive 真實帳號 runtime acceptance evidence。
+2. 實作 Calendar update / delete + tests + capability metadata。
+3. 實作 Gmail → Task / Calendar；Gmail → Project 等 Project CRUD API 後接上。
+4. 建立統一 Backend error response + execution / activity log baseline。
+5. 實作 SQLite → PostgreSQL 可重跑、可驗證 migration。
+6. 擴充 Project / Note / Habit / Shopping / Template Cloud API。
+7. 推進 ChatGPT Bridge Backend / MCP contract、policy、idempotency、audit。
+8. 重新跑 Phase 1 acceptance / deployment / runtime / integration evidence。
+
+Android / iOS 正式打包、release signing 與上架目前不是 Phase 1 主交付路線。
+
+## 歷史摘要
+
+### 2026-09-24
+
+- Phase 1 採 scope freeze。
+- 正式主線確立為 Firebase Hosting → Flutter Web / PWA → Cloud Run FastAPI → PostgreSQL。
+- Today / Focus / Routine Library / Global Capture 等功能移到 Phase 2，不阻塞第一次平台上線。
+
+### 2026-09-22
+
+- Flutter Web/PWA 基礎建立。
+- FastAPI Backend / Task CRUD 建立。
+- PostgreSQL dev/test schema 與 Cloud Run connectivity 建立。
+- GitHub Actions CI baseline 建立。
+
+### 2026-09-21 與更早
+
+- 原生 Flutter + SQLite 功能、Google adapters、Drive Bridge、folder sync、security baseline、Notes/FTS5、Habits、Shopping、Templates 等既有資產完成多輪實作與測試。
+- 這些成果保留，但新 Web / Cloud 主線需逐項遷移與重新驗證。

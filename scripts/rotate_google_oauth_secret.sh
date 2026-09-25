@@ -25,13 +25,15 @@ if ! gcloud secrets describe "$SECRET_NAME" --project="$PROJECT_ID" >/dev/null 2
   exit 1
 fi
 
+# Keep every temporary file private from creation time. Redirections below create
+# files with mode 600 under this umask; there is no chmod-before-create race.
+umask 077
 TMPDIR_ROTATE="$(mktemp -d)"
 chmod 700 "$TMPDIR_ROTATE"
 trap 'rm -rf "$TMPDIR_ROTATE"' EXIT
 CURRENT_FILE="$TMPDIR_ROTATE/current"
 NEW_SECRET_FILE="$TMPDIR_ROTATE/new-oauth-secret"
 UPDATED_FILE="$TMPDIR_ROTATE/updated"
-chmod 600 "$CURRENT_FILE" "$NEW_SECRET_FILE" "$UPDATED_FILE"
 
 CURRENT_VERSION="$(gcloud secrets versions list "$SECRET_NAME" \
   --project="$PROJECT_ID" \

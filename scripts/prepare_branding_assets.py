@@ -12,7 +12,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "branding" / "life_assistant_icon_192.b64"
 # Base64 decodes to the selected Life Assistant twin-beast icon as a compact JPEG.
-EXPECTED_SOURCE_SHA256 = "4f2e928d1fee36ad008515a7842acdaacdddc6401f31f52be988472af4aaac20"
+EXPECTED_SOURCE_SHA256 = "eade3259167002d3f94e25a321805b5d28b6b85d4d0161b350dddb4f2bcd2b9f"
 WARM_BG = (247, 243, 234, 255)
 
 

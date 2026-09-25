@@ -44,6 +44,9 @@ jobs:
       - name: Build Flutter Web
         run: flutter build web --target=lib/main_web.dart --no-pub
 
+      - name: Verify Google integrations entry is present in build
+        run: grep -q "Google 整合" build/web/main.dart.js
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -68,6 +71,9 @@ jobs:
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
             "$BASE_URL/" >/dev/null
+
+          CACHE_CONTROL="$(curl --silent --show-error --head "$BASE_URL/index.html" | tr -d '\r' | grep -i '^cache-control:' || true)"
+          echo "$CACHE_CONTROL" | grep -Eiq 'no-cache|no-store|must-revalidate'
 
           API_STATUS="$(curl --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \

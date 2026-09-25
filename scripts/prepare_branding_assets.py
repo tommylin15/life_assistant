@@ -11,7 +11,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "branding" / "life_assistant_icon_192.b64"
-EXPECTED_SOURCE_SHA256 = "592b4092846422ee0761b6200ef7c7c22a5e686d312aee0abcc209cb0383b4f4"
+EXPECTED_SOURCE_SHA256 = "9e0cd02d7036fcb6475d8fcb8f23cf30d280c5fdb68559028a029b9ad4837575"
 WARM_BG = (247, 243, 234, 255)
 
 
@@ -51,7 +51,6 @@ def main() -> None:
     raw, image = _load_source()
     web_icons = ROOT / "web" / "icons"
 
-    # Exact canonical 192px bytes: current and legacy aliases.
     for name in [
         "life-assistant-192-v6.png",
         "life-assistant-192-v5.png",
@@ -60,7 +59,6 @@ def main() -> None:
     ]:
         _write_raw(raw, web_icons / name)
 
-    # Larger PWA icons generated deterministically from the canonical source.
     for name in [
         "life-assistant-512-v6.png",
         "life-assistant-512-v5.png",
@@ -74,11 +72,9 @@ def main() -> None:
     _save_maskable(image, web_icons / "Icon-maskable-192.png", 192)
     _save_maskable(image, web_icons / "Icon-maskable-512.png", 512)
 
-    # Browser shortcut and login hero use the same visual identity.
     _write_raw(raw, ROOT / "web" / "favicon.png")
     _save(image, ROOT / "web" / "branding" / "life-assistant-hero-v6.png", (512, 512))
 
-    # Native Android fallback icon paths.
     _save(image, ROOT / "android" / "app" / "src" / "main" / "res" / "drawable" / "life_assistant_icon.png", (512, 512))
     for density, size in {
         "mdpi": 48,

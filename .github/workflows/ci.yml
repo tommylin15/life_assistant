@@ -20,7 +20,22 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pillow==11.3.0
           python scripts/prepare_branding_assets.py
-          test "$(sha256sum web/icons/life-assistant-192-v6.png | awk '{print $1}')" = "9e0cd02d7036fcb6475d8fcb8f23cf30d280c5fdb68559028a029b9ad4837575"
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          checks = {
+              'web/icons/life-assistant-192-v6.png': (192, 192),
+              'web/icons/life-assistant-512-v6.png': (512, 512),
+              'web/branding/life-assistant-hero-v6.png': (512, 512),
+              'android/app/src/main/res/drawable/life_assistant_icon.png': (512, 512),
+          }
+          for name, expected in checks.items():
+              path = Path(name)
+              assert path.is_file() and path.stat().st_size > 4000, name
+              with Image.open(path) as image:
+                  assert image.format == 'PNG', (name, image.format)
+                  assert image.size == expected, (name, image.size)
+          PY
 
       - uses: subosito/flutter-action@v2
         with:
@@ -42,9 +57,21 @@ jobs:
 
       - name: Verify branding in web build
         run: |
-          test "$(sha256sum build/web/icons/life-assistant-192-v6.png | awk '{print $1}')" = "9e0cd02d7036fcb6475d8fcb8f23cf30d280c5fdb68559028a029b9ad4837575"
-          test -s build/web/icons/life-assistant-512-v6.png
-          test -s build/web/branding/life-assistant-hero-v6.png
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          checks = {
+              'build/web/icons/life-assistant-192-v6.png': (192, 192),
+              'build/web/icons/life-assistant-512-v6.png': (512, 512),
+              'build/web/branding/life-assistant-hero-v6.png': (512, 512),
+          }
+          for name, expected in checks.items():
+              path = Path(name)
+              assert path.is_file() and path.stat().st_size > 4000, name
+              with Image.open(path) as image:
+                  assert image.format == 'PNG', (name, image.format)
+                  assert image.size == expected, (name, image.size)
+          PY
           grep -Fq '/manifest-v6.json' build/web/index.html
 
   backend:

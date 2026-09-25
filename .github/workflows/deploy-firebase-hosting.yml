@@ -40,7 +40,7 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pillow==11.3.0
           python scripts/prepare_branding_assets.py
-          test "$(sha256sum web/icons/life-assistant-192-v6.png | awk '{print $1}')" = "592b4092846422ee0761b6200ef7c7c22a5e686d312aee0abcc209cb0383b4f4"
+          test "$(sha256sum web/icons/life-assistant-192-v6.png | awk '{print $1}')" = "9e0cd02d7036fcb6475d8fcb8f23cf30d280c5fdb68559028a029b9ad4837575"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -118,7 +118,7 @@ jobs:
             --output /tmp/life-assistant-192-v6.png \
             "$BASE_URL/icons/life-assistant-192-v6.png"
           grep -Eiq '^content-type: image/png' "$ICON_HEADERS"
-          test "$(sha256sum /tmp/life-assistant-192-v6.png | awk '{print $1}')" = "592b4092846422ee0761b6200ef7c7c22a5e686d312aee0abcc209cb0383b4f4"
+          test "$(sha256sum /tmp/life-assistant-192-v6.png | awk '{print $1}')" = "9e0cd02d7036fcb6475d8fcb8f23cf30d280c5fdb68559028a029b9ad4837575"
 
           HERO_HEADERS="$(mktemp)"
           curl --fail --silent --show-error \

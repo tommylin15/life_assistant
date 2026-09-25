@@ -98,11 +98,7 @@ def _normalize_parsed_values(values: dict[str, str]) -> dict[str, str]:
 
 
 def _parse_known_key_bundle(raw: str) -> dict[str, str] | None:
-    """Parse known bundle keys even when a legacy wrapper precedes them.
-
-    Values are bounded only by the next known key assignment, so colons inside
-    DATABASE_URL and client-secret values remain intact.
-    """
+    """Parse known bundle keys even when a legacy wrapper precedes them."""
     key_pattern = "|".join(re.escape(key) for key in COLON_COMMA_BUNDLE_KEYS)
     pattern = re.compile(
         rf"(?i)(?:^|[\s{{,;|])(?:\\?[\"'])*({key_pattern})(?:\\?[\"'])*\s*[:=]\s*"
@@ -147,11 +143,9 @@ def _extract_embedded_database_url(raw: str) -> str | None:
     )
     end = start + next_key.start() if next_key is not None else len(raw)
     candidate = raw[start:end].strip()
-
     candidate = re.sub(r"[\s,;|]+$", "", candidate)
     candidate = re.sub(r"(?:\\?[\"'])+$", "", candidate)
-    candidate = re.sub(r"[\s}\])]+$", "", candidate)
-    candidate = candidate.strip()
+    candidate = re.sub(r"[\s}\])]+$", "", candidate).strip()
     if not candidate:
         return None
 
@@ -185,10 +179,6 @@ def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
     if raw.startswith(("postgresql://", "postgresql+asyncpg://")):
         return {"DATABASE_URL": _normalize_database_url(raw)}, "raw-database-url"
 
-    known_key_bundle = _parse_known_key_bundle(raw)
-    if known_key_bundle is not None:
-        return _normalize_parsed_values(known_key_bundle), "known-key-bundle"
-
     lines = [
         line.strip()
         for line in raw.splitlines()
@@ -210,6 +200,10 @@ def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
         value = None
     if isinstance(value, dict):
         return _normalize_parsed_values(_flatten_mapping(value)), "yaml-object"
+
+    known_key_bundle = _parse_known_key_bundle(raw)
+    if known_key_bundle is not None:
+        return _normalize_parsed_values(known_key_bundle), "known-key-bundle"
 
     embedded_database_url = _extract_embedded_database_url(raw)
     if embedded_database_url:

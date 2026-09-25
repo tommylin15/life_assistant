@@ -20,6 +20,11 @@ class TasksPage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('待辦'),
         actions: [
+          IconButton(
+            tooltip: '驗收中心',
+            icon: const Icon(Icons.fact_check_outlined),
+            onPressed: () => context.go('/acceptance'),
+          ),
           TextButton.icon(
             onPressed: () => context.go('/integrations'),
             icon: const Icon(Icons.hub_outlined),

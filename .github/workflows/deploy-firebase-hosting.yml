@@ -64,6 +64,27 @@ jobs:
 
       - name: Verify Firebase Hosting
         run: |
+          BASE_URL="https://${GCP_PROJECT_ID}.web.app"
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
-            "https://${GCP_PROJECT_ID}.web.app/" >/dev/null
+            "$BASE_URL/" >/dev/null
+
+          API_STATUS="$(curl --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            --output /tmp/tasks-body \
+            --write-out '%{http_code}' \
+            "$BASE_URL/api/v1/tasks")"
+          test "$API_STATUS" = "401"
+
+          AUTH_HEADERS="$(mktemp)"
+          AUTH_STATUS="$(curl --silent --show-error \
+            --output /dev/null \
+            --dump-header "$AUTH_HEADERS" \
+            --write-out '%{http_code}' \
+            "$BASE_URL/auth/login")"
+          case "$AUTH_STATUS" in
+            302|303|307|308) ;;
+            *) echo "Unexpected auth status: $AUTH_STATUS" >&2; exit 1 ;;
+          esac
+          grep -Eiq '^location: https://accounts\.google\.com/o/oauth2/v2/auth' "$AUTH_HEADERS"
+          grep -Eiq '^set-cookie: __session=' "$AUTH_HEADERS"

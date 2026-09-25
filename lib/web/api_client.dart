@@ -68,6 +68,38 @@ class ApiClient {
     return (body['capabilities'] as List).cast<Map<String, dynamic>>();
   }
 
+  Future<Map<String, dynamic>> getGmailMetadata({int limit = 1}) async {
+    final uri = _apiUri('/integrations/google/gmail/messages').replace(
+      queryParameters: {'limit': '$limit'},
+    );
+    final res = await _client.get(uri);
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getCalendarEvents({
+    required DateTime timeMin,
+    required DateTime timeMax,
+    int limit = 1,
+  }) async {
+    final uri = _apiUri('/integrations/google/calendar/events').replace(
+      queryParameters: {
+        'time_min': timeMin.toUtc().toIso8601String(),
+        'time_max': timeMax.toUtc().toIso8601String(),
+        'limit': '$limit',
+      },
+    );
+    final res = await _client.get(uri);
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> ensureDriveBridge() async {
+    final res = await _client.post(_apiUri('/integrations/google/drive/bridge'));
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   String googleAuthorizationUrl(String services) => _apiUri(
         '/integrations/google/authorize',
       ).replace(queryParameters: {'services': services}).toString();

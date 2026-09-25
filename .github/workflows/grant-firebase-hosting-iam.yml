@@ -1,0 +1,45 @@
+name: Grant Firebase Hosting IAM
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/grant-firebase-hosting-iam.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  grant:
+    runs-on: ubuntu-latest
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      DEPLOY_SA: life-assistant-github-deployer@gen-lang-client-0593591102.iam.gserviceaccount.com
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Grant Firebase Hosting Admin
+        run: |
+          gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
+            --member="serviceAccount:${DEPLOY_SA}" \
+            --role="roles/firebasehosting.admin" \
+            --condition=None \
+            --quiet
+
+      - name: Verify Firebase Hosting Admin binding
+        run: |
+          gcloud projects get-iam-policy "$GCP_PROJECT_ID" \
+            --flatten='bindings[].members' \
+            --filter="bindings.role:roles/firebasehosting.admin AND bindings.members:serviceAccount:${DEPLOY_SA}" \
+            --format='value(bindings.role,bindings.members)'

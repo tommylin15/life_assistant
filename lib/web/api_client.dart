@@ -77,6 +77,34 @@ class ApiClient {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> gmailMessageToTask(
+    String messageId,
+    Map<String, dynamic> body,
+  ) async {
+    final encoded = Uri.encodeComponent(messageId);
+    final res = await _client.post(
+      _apiUri('/integrations/google/gmail/messages/$encoded/task'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> gmailMessageToCalendar(
+    String messageId,
+    Map<String, dynamic> body,
+  ) async {
+    final encoded = Uri.encodeComponent(messageId);
+    final res = await _client.post(
+      _apiUri('/integrations/google/gmail/messages/$encoded/calendar'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getCalendarEvents({
     required DateTime timeMin,
     required DateTime timeMax,
@@ -92,6 +120,40 @@ class ApiClient {
     final res = await _client.get(uri);
     _check(res.statusCode, res.body);
     return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> createCalendarEvent(
+    Map<String, dynamic> body,
+  ) async {
+    final res = await _client.post(
+      _apiUri('/integrations/google/calendar/events'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateCalendarEvent(
+    String eventId,
+    Map<String, dynamic> body,
+  ) async {
+    final encoded = Uri.encodeComponent(eventId);
+    final res = await _client.patch(
+      _apiUri('/integrations/google/calendar/events/$encoded'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<void> deleteCalendarEvent(String eventId) async {
+    final encoded = Uri.encodeComponent(eventId);
+    final res = await _client.delete(
+      _apiUri('/integrations/google/calendar/events/$encoded'),
+    );
+    if (res.statusCode != 204) _check(res.statusCode, res.body);
   }
 
   Future<Map<String, dynamic>> ensureDriveBridge() async {

@@ -40,7 +40,20 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pillow==11.3.0
           python scripts/prepare_branding_assets.py
-          test "$(sha256sum web/icons/life-assistant-192-v6.png | awk '{print $1}')" = "9e0cd02d7036fcb6475d8fcb8f23cf30d280c5fdb68559028a029b9ad4837575"
+          echo "EXPECTED_ICON_SHA=$(sha256sum web/icons/life-assistant-192-v6.png | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "EXPECTED_HERO_SHA=$(sha256sum web/branding/life-assistant-hero-v6.png | awk '{print $1}')" >> "$GITHUB_ENV"
+          python - <<'PY'
+          from PIL import Image
+          checks = {
+              'web/icons/life-assistant-192-v6.png': (192, 192),
+              'web/icons/life-assistant-512-v6.png': (512, 512),
+              'web/branding/life-assistant-hero-v6.png': (512, 512),
+          }
+          for name, expected in checks.items():
+              with Image.open(name) as image:
+                  assert image.format == 'PNG', (name, image.format)
+                  assert image.size == expected, (name, image.size)
+          PY
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -118,7 +131,7 @@ jobs:
             --output /tmp/life-assistant-192-v6.png \
             "$BASE_URL/icons/life-assistant-192-v6.png"
           grep -Eiq '^content-type: image/png' "$ICON_HEADERS"
-          test "$(sha256sum /tmp/life-assistant-192-v6.png | awk '{print $1}')" = "9e0cd02d7036fcb6475d8fcb8f23cf30d280c5fdb68559028a029b9ad4837575"
+          test "$(sha256sum /tmp/life-assistant-192-v6.png | awk '{print $1}')" = "$EXPECTED_ICON_SHA"
 
           HERO_HEADERS="$(mktemp)"
           curl --fail --silent --show-error \
@@ -127,6 +140,7 @@ jobs:
             --output /tmp/life-assistant-hero-v6.png \
             "$BASE_URL/branding/life-assistant-hero-v6.png"
           grep -Eiq '^content-type: image/png' "$HERO_HEADERS"
+          test "$(sha256sum /tmp/life-assistant-hero-v6.png | awk '{print $1}')" = "$EXPECTED_HERO_SHA"
 
           python - <<'PY'
           from PIL import Image

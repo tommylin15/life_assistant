@@ -100,3 +100,30 @@ jobs:
           esac
           grep -Eiq '^location: https://accounts\.google\.com/o/oauth2/v2/auth' "$AUTH_HEADERS"
           grep -Eiq '^set-cookie: __session=' "$AUTH_HEADERS"
+
+          # Branding/runtime asset validation. These checks prevent an SPA rewrite
+          # or stale/missing asset from passing deployment while rendering blank UI.
+          HERO_HEADERS="$(mktemp)"
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            --dump-header "$HERO_HEADERS" \
+            --output /tmp/life-assistant-hero.jpg \
+            "$BASE_URL/branding/life-assistant-hero-v5.jpg"
+          grep -Eiq '^content-type: image/jpeg' "$HERO_HEADERS"
+          test "$(wc -c < /tmp/life-assistant-hero.jpg)" -gt 5000
+
+          ICON_HEADERS="$(mktemp)"
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            --dump-header "$ICON_HEADERS" \
+            --output /tmp/life-assistant-icon.png \
+            "$BASE_URL/favicon.png"
+          grep -Eiq '^content-type: image/png' "$ICON_HEADERS"
+          test "$(wc -c < /tmp/life-assistant-icon.png)" -gt 4000
+
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            "$BASE_URL/manifest-v5.json" > /tmp/manifest-v5.json
+          grep -Fq '"id": "/life-assistant"' /tmp/manifest-v5.json
+          grep -Fq '/icons/life-assistant-192-v5.png' /tmp/manifest-v5.json
+          grep -Fq '/icons/life-assistant-maskable-512-v5.png' /tmp/manifest-v5.json

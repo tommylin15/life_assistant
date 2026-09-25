@@ -110,7 +110,11 @@ def _parse_known_key_bundle(raw: str) -> dict[str, str] | None:
     parsed: dict[str, str] = {}
     for index, match in enumerate(matches):
         key = match.group(1).upper()
-        if key in parsed:
+        # OAuth secret rotation can temporarily leave the previous secret in a
+        # legacy bundle and append the replacement. Last value wins only for
+        # GOOGLE_CLIENT_SECRET; duplicate database/client-id keys remain
+        # ambiguous and therefore fail closed.
+        if key in parsed and key != "GOOGLE_CLIENT_SECRET":
             return None
         value_start = match.end()
         value_end = matches[index + 1].start() if index + 1 < len(matches) else len(raw)

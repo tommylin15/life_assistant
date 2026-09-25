@@ -2,6 +2,7 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlparse
 
+import httpx
 from fastapi import HTTPException
 from starlette.requests import Request
 
@@ -33,6 +34,16 @@ class AuthApiTests(IsolatedAsyncioTestCase):
             auth.settings.google_client_id = original_client_id
             auth.settings.google_redirect_uri = original_redirect
 
+    async def test_login_rejects_missing_client_id(self):
+        original_client_id = auth.settings.google_client_id
+        try:
+            auth.settings.google_client_id = ""
+            with self.assertRaises(HTTPException) as ctx:
+                await auth.login()
+            self.assertEqual(ctx.exception.status_code, 503)
+        finally:
+            auth.settings.google_client_id = original_client_id
+
     async def test_current_user_rejects_missing_session(self):
         request = Request({"type": "http", "headers": []})
         with self.assertRaises(HTTPException) as ctx:
@@ -58,3 +69,17 @@ class AuthApiTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(user["email"], "user@example.test")
         verify.assert_awaited_once_with("test-token")
+
+    def test_google_error_code_returns_machine_readable_error_only(self):
+        response = httpx.Response(
+            400,
+            json={
+                "error": "invalid_client",
+                "error_description": "client secret is wrong and must not leak",
+            },
+        )
+        self.assertEqual(auth._google_error_code(response), "invalid_client")
+
+    def test_google_error_code_rejects_unexpected_payload(self):
+        response = httpx.Response(400, content=b"not-json")
+        self.assertEqual(auth._google_error_code(response), "unknown_error")

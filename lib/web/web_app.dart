@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'acceptance_center_page.dart';
 import 'auth_state.dart';
 import 'integrations_page.dart';
 import 'login_page.dart';
@@ -14,6 +15,10 @@ final _router = GoRouter(
     GoRoute(
       path: '/integrations',
       builder: (_, __) => const AuthGuard(child: IntegrationsPage()),
+    ),
+    GoRoute(
+      path: '/acceptance',
+      builder: (_, __) => const AuthGuard(child: AcceptanceCenterPage()),
     ),
     GoRoute(path: '/login', builder: (_, __) => const LoginPage()),
   ],

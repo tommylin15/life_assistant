@@ -24,9 +24,9 @@ jobs:
           from PIL import Image
           from pathlib import Path
           checks = {
-              'web/icons/life-assistant-192-v6.png': (192, 192),
-              'web/icons/life-assistant-512-v6.png': (512, 512),
-              'web/branding/life-assistant-hero-v6.png': (512, 512),
+              'web/icons/life-assistant-192-v7.png': (192, 192),
+              'web/icons/life-assistant-512-v7.png': (512, 512),
+              'web/branding/life-assistant-hero-v7.png': (512, 512),
               'android/app/src/main/res/drawable/life_assistant_icon.png': (512, 512),
           }
           for name, expected in checks.items():
@@ -61,9 +61,9 @@ jobs:
           from PIL import Image
           from pathlib import Path
           checks = {
-              'build/web/icons/life-assistant-192-v6.png': (192, 192),
-              'build/web/icons/life-assistant-512-v6.png': (512, 512),
-              'build/web/branding/life-assistant-hero-v6.png': (512, 512),
+              'build/web/icons/life-assistant-192-v7.png': (192, 192),
+              'build/web/icons/life-assistant-512-v7.png': (512, 512),
+              'build/web/branding/life-assistant-hero-v7.png': (512, 512),
           }
           for name, expected in checks.items():
               path = Path(name)
@@ -73,6 +73,8 @@ jobs:
                   assert image.size == expected, (name, image.size)
           PY
           grep -Fq '/manifest-v6.json' build/web/index.html
+          grep -Fq '/icons/life-assistant-192-v7.png' build/web/manifest-v6.json
+          grep -Fq '/icons/life-assistant-512-v7.png' build/web/manifest-v6.json
 
   backend:
     runs-on: ubuntu-latest

@@ -11,8 +11,8 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "branding" / "life_assistant_icon_192.b64"
-# Base64 decodes to the selected warm Life Assistant icon as a compact JPEG.
-EXPECTED_SOURCE_SHA256 = "8d4da07232fa83e4024710f2ec6a6da1104b31fae56c084f4a897aa419dc23da"
+# Base64 decodes to the selected Life Assistant twin-beast icon as a compact JPEG.
+EXPECTED_SOURCE_SHA256 = "4f2e928d1fee36ad008515a7842acdaacdddc6401f31f52be988472af4aaac20"
 WARM_BG = (247, 243, 234, 255)
 
 
@@ -48,6 +48,7 @@ def main() -> None:
     web_icons = ROOT / "web" / "icons"
 
     for name in [
+        "life-assistant-192-v7.png",
         "life-assistant-192-v6.png",
         "life-assistant-192-v5.png",
         "life-assistant-192-v2.png",
@@ -56,6 +57,7 @@ def main() -> None:
         _save(image, web_icons / name, (192, 192))
 
     for name in [
+        "life-assistant-512-v7.png",
         "life-assistant-512-v6.png",
         "life-assistant-512-v5.png",
         "life-assistant-512-v2.png",
@@ -63,12 +65,15 @@ def main() -> None:
     ]:
         _save(image, web_icons / name, (512, 512))
 
+    _save_maskable(image, web_icons / "life-assistant-maskable-192-v7.png", 192)
+    _save_maskable(image, web_icons / "life-assistant-maskable-512-v7.png", 512)
     _save_maskable(image, web_icons / "life-assistant-maskable-192-v6.png", 192)
     _save_maskable(image, web_icons / "life-assistant-maskable-512-v6.png", 512)
     _save_maskable(image, web_icons / "Icon-maskable-192.png", 192)
     _save_maskable(image, web_icons / "Icon-maskable-512.png", 512)
 
     _save(image, ROOT / "web" / "favicon.png", (192, 192))
+    _save(image, ROOT / "web" / "branding" / "life-assistant-hero-v7.png", (512, 512))
     _save(image, ROOT / "web" / "branding" / "life-assistant-hero-v6.png", (512, 512))
 
     _save(
@@ -89,7 +94,7 @@ def main() -> None:
             (size, size),
         )
 
-    print("Prepared Life Assistant branding assets from verified canonical source.")
+    print("Prepared Life Assistant branding assets from verified twin-beast icon source.")
 
 
 if __name__ == "__main__":

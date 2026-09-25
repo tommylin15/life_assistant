@@ -128,10 +128,27 @@ class _AcceptanceCenterPageState extends ConsumerState<AcceptanceCenterPage> {
           ) ??
           _runner.retryCleanup(current.remainingArtifacts));
       if (!mounted) return;
+      final cleanupStatus =
+          remaining.isEmpty ? AcceptanceStatus.pass : AcceptanceStatus.fail;
+      final cleanupDetail = remaining.isEmpty
+          ? '重試清理成功，所有 [ACCEPTANCE TEST] 測試資料都已清除。'
+          : '重試清理後仍有測試資料未清除：${_remainingText(remaining)}';
+      final checks = current.checks
+          .map(
+            (check) => check.key == 'cleanup'
+                ? AcceptanceCheck(
+                    key: check.key,
+                    label: check.label,
+                    status: cleanupStatus,
+                    detail: cleanupDetail,
+                  )
+                : check,
+          )
+          .toList();
       setState(() {
         _result = AcceptanceRunResult(
           label: current.label,
-          checks: current.checks,
+          checks: checks,
           remainingArtifacts: remaining,
         );
       });

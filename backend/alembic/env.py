@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.config import settings
 from app.db.session import Base
+from app.models.execution_log import ExecutionLog  # noqa: F401
 from app.models.google_integration import GoogleConnection, GoogleOAuthState  # noqa: F401
 from app.models.task import Task  # noqa: F401
 

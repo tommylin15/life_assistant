@@ -12,6 +12,7 @@ from app.api.auth import current_user
 from app.db.session import get_db
 from app.models.google_integration import GoogleConnection
 from app.models.task import Task, TaskPriority
+from app.services.execution_log import fail_execution, finish_execution, start_execution
 from app.services.google_oauth import (
     SERVICE_SCOPES,
     build_authorization_url,
@@ -336,23 +337,49 @@ async def gmail_message_to_task(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    message = await _get_gmail_metadata(db, user["sub"], message_id)
-    source_note = _gmail_source_note(message)
-    note = source_note if not body.note else f"{body.note}\n\n{source_note}"
-    title = (body.title or str(message.get("subject") or "").strip() or "Gmail message")[
-        :500
-    ]
-    task = Task(
-        id=str(uuid.uuid4()),
-        title=title,
-        note=note,
-        priority=body.priority,
-        due_at=body.due_at,
-        reminder_at=body.reminder_at,
+    execution = await start_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="gmail.to_task",
+        provider="google",
+        entity_type="gmail_message",
+        entity_id=message_id,
+        summary="Convert Gmail message to task",
     )
-    db.add(task)
-    await db.commit()
-    await db.refresh(task)
+    try:
+        message = await _get_gmail_metadata(db, user["sub"], message_id)
+        source_note = _gmail_source_note(message)
+        note = source_note if not body.note else f"{body.note}\n\n{source_note}"
+        title = (
+            body.title or str(message.get("subject") or "").strip() or "Gmail message"
+        )[:500]
+        task = Task(
+            id=str(uuid.uuid4()),
+            title=title,
+            note=note,
+            priority=body.priority,
+            due_at=body.due_at,
+            reminder_at=body.reminder_at,
+        )
+        db.add(task)
+        await db.commit()
+        await db.refresh(task)
+    except Exception as exc:
+        await fail_execution(
+            db,
+            execution,
+            exc,
+            summary="Gmail to task conversion failed",
+        )
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="created",
+        entity_type="task",
+        entity_id=task.id,
+        summary="Gmail message converted to task",
+    )
     return {
         "task": {
             "id": task.id,
@@ -432,21 +459,41 @@ async def create_calendar_event(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    response = await _request_google(
+    execution = await start_execution(
         db,
-        user["sub"],
-        SERVICE_SCOPES["calendar"][0],
-        "POST",
-        CALENDAR_EVENTS_URL,
-        json=_calendar_create_payload(
-            body.summary,
-            body.start,
-            body.end,
-            body.description,
-            body.location,
-        ),
+        user_sub=user["sub"],
+        action_type="calendar.create",
+        provider="google",
+        entity_type="calendar_event",
+        summary="Create calendar event",
     )
-    return response.json()
+    try:
+        response = await _request_google(
+            db,
+            user["sub"],
+            SERVICE_SCOPES["calendar"][0],
+            "POST",
+            CALENDAR_EVENTS_URL,
+            json=_calendar_create_payload(
+                body.summary,
+                body.start,
+                body.end,
+                body.description,
+                body.location,
+            ),
+        )
+        event = response.json()
+    except Exception as exc:
+        await fail_execution(db, execution, exc, summary="Calendar create failed")
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="created",
+        entity_id=str(event.get("id") or "") or None,
+        summary="Calendar event created",
+    )
+    return event
 
 
 @router.patch("/calendar/events/{event_id}")
@@ -468,15 +515,35 @@ async def update_calendar_event(
         payload["start"] = {"dateTime": body.start.isoformat()}
         payload["end"] = {"dateTime": body.end.isoformat()}
 
-    response = await _request_google(
+    execution = await start_execution(
         db,
-        user["sub"],
-        SERVICE_SCOPES["calendar"][0],
-        "PATCH",
-        CALENDAR_EVENT_URL.format(event_id=quote(event_id, safe="")),
-        json=payload,
+        user_sub=user["sub"],
+        action_type="calendar.update",
+        provider="google",
+        entity_type="calendar_event",
+        entity_id=event_id,
+        summary="Update calendar event",
     )
-    return response.json()
+    try:
+        response = await _request_google(
+            db,
+            user["sub"],
+            SERVICE_SCOPES["calendar"][0],
+            "PATCH",
+            CALENDAR_EVENT_URL.format(event_id=quote(event_id, safe="")),
+            json=payload,
+        )
+        event = response.json()
+    except Exception as exc:
+        await fail_execution(db, execution, exc, summary="Calendar update failed")
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="updated",
+        summary="Calendar event updated",
+    )
+    return event
 
 
 @router.delete("/calendar/events/{event_id}", status_code=204)
@@ -485,12 +552,31 @@ async def delete_calendar_event(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await _request_google(
+    execution = await start_execution(
         db,
-        user["sub"],
-        SERVICE_SCOPES["calendar"][0],
-        "DELETE",
-        CALENDAR_EVENT_URL.format(event_id=quote(event_id, safe="")),
+        user_sub=user["sub"],
+        action_type="calendar.delete",
+        provider="google",
+        entity_type="calendar_event",
+        entity_id=event_id,
+        summary="Delete calendar event",
+    )
+    try:
+        await _request_google(
+            db,
+            user["sub"],
+            SERVICE_SCOPES["calendar"][0],
+            "DELETE",
+            CALENDAR_EVENT_URL.format(event_id=quote(event_id, safe="")),
+        )
+    except Exception as exc:
+        await fail_execution(db, execution, exc, summary="Calendar delete failed")
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="deleted",
+        summary="Calendar event deleted",
     )
     return Response(status_code=204)
 
@@ -502,30 +588,60 @@ async def gmail_message_to_calendar(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    message = await _get_gmail_metadata(db, user["sub"], message_id)
-    source_note = _gmail_source_note(message)
-    description = (
-        source_note if not body.description else f"{body.description}\n\n{source_note}"
-    )
-    summary = (
-        body.summary or str(message.get("subject") or "").strip() or "Gmail message"
-    )[:500]
-
-    response = await _request_google(
+    execution = await start_execution(
         db,
-        user["sub"],
-        SERVICE_SCOPES["calendar"][0],
-        "POST",
-        CALENDAR_EVENTS_URL,
-        json=_calendar_create_payload(
-            summary,
-            body.start,
-            body.end,
-            description,
-            body.location,
-        ),
+        user_sub=user["sub"],
+        action_type="gmail.to_calendar",
+        provider="google",
+        entity_type="gmail_message",
+        entity_id=message_id,
+        summary="Convert Gmail message to calendar event",
     )
-    event = response.json()
+    try:
+        message = await _get_gmail_metadata(db, user["sub"], message_id)
+        source_note = _gmail_source_note(message)
+        description = (
+            source_note
+            if not body.description
+            else f"{body.description}\n\n{source_note}"
+        )
+        summary = (
+            body.summary
+            or str(message.get("subject") or "").strip()
+            or "Gmail message"
+        )[:500]
+
+        response = await _request_google(
+            db,
+            user["sub"],
+            SERVICE_SCOPES["calendar"][0],
+            "POST",
+            CALENDAR_EVENTS_URL,
+            json=_calendar_create_payload(
+                summary,
+                body.start,
+                body.end,
+                description,
+                body.location,
+            ),
+        )
+        event = response.json()
+    except Exception as exc:
+        await fail_execution(
+            db,
+            execution,
+            exc,
+            summary="Gmail to calendar conversion failed",
+        )
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="created",
+        entity_type="calendar_event",
+        entity_id=str(event.get("id") or "") or None,
+        summary="Gmail message converted to calendar event",
+    )
     return {
         "event": event,
         "source": {
@@ -544,7 +660,7 @@ async def _ensure_drive_folder(
     user_sub: str,
     name: str,
     parent_id: str | None = None,
-) -> dict:
+) -> tuple[dict, bool]:
     scope = SERVICE_SCOPES["drive"][0]
     query = (
         f"name='{_escape_drive_query(name)}' and "
@@ -562,7 +678,7 @@ async def _ensure_drive_folder(
     )
     files = response.json().get("files") or []
     if files:
-        return files[0]
+        return files[0], False
     metadata = {
         "name": name,
         "mimeType": "application/vnd.google-apps.folder",
@@ -578,7 +694,7 @@ async def _ensure_drive_folder(
         params={"fields": "id,name"},
         json=metadata,
     )
-    return response.json()
+    return response.json(), True
 
 
 @router.post("/drive/bridge", status_code=201)
@@ -586,9 +702,46 @@ async def ensure_drive_bridge(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    root = await _ensure_drive_folder(db, user["sub"], "life_assistant")
-    bridge = await _ensure_drive_folder(
-        db, user["sub"], "ChatGPT_Bridge", root.get("id")
+    execution = await start_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="drive.bridge.ensure",
+        provider="google",
+        entity_type="drive_folder",
+        summary="Ensure Drive Bridge folders",
+    )
+    root_created = False
+    try:
+        root, root_created = await _ensure_drive_folder(
+            db,
+            user["sub"],
+            "life_assistant",
+        )
+        bridge, _bridge_created = await _ensure_drive_folder(
+            db,
+            user["sub"],
+            "ChatGPT_Bridge",
+            root.get("id"),
+        )
+    except Exception as exc:
+        await fail_execution(
+            db,
+            execution,
+            exc,
+            status="partial_success" if root_created else "failure",
+            summary=(
+                "Drive Bridge ensure partially completed"
+                if root_created
+                else "Drive Bridge ensure failed"
+            ),
+        )
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="ensured",
+        entity_id=str(bridge.get("id") or "") or None,
+        summary="Drive Bridge folders ensured",
     )
     return {
         "root": {"id": root.get("id"), "name": root.get("name")},

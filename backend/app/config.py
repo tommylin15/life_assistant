@@ -185,7 +185,11 @@ def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
         for line in raw.splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     ]
-    if lines and all("=" in line.removeprefix("export ") for line in lines):
+    dotenv_assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\s*=")
+    if lines and all(
+        dotenv_assignment.match(line.removeprefix("export ").lstrip())
+        for line in lines
+    ):
         values = dotenv_values(stream=StringIO(raw))
         if values and all(value is not None for value in values.values()):
             parsed = {str(key): str(value) for key, value in values.items()}

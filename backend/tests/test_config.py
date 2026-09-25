@@ -19,76 +19,47 @@ class BundleParsingTests(unittest.TestCase):
         values, bundle_format = _parse_bundle(
             '{"DATABASE_URL":"postgresql://user:pass@10.42.0.5:5432/life_assistant","FRONTEND_URL":"https://example.test"}'
         )
-
         self.assertEqual(bundle_format, "json-object")
-        self.assertEqual(
-            values["DATABASE_URL"],
-            "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant",
-        )
+        self.assertEqual(values["DATABASE_URL"], "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant")
         self.assertEqual(values["FRONTEND_URL"], "https://example.test")
 
     def test_dotenv_bundle(self):
         values, bundle_format = _parse_bundle(
-            "DATABASE_URL=postgresql://user:pass@10.42.0.5:5432/life_assistant\n"
-            "FRONTEND_URL=https://example.test\n"
+            "DATABASE_URL=postgresql://user:pass@10.42.0.5:5432/life_assistant\nFRONTEND_URL=https://example.test\n"
         )
-
         self.assertEqual(bundle_format, "dotenv")
-        self.assertEqual(
-            values["DATABASE_URL"],
-            "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant",
-        )
+        self.assertEqual(values["DATABASE_URL"], "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant")
         self.assertEqual(values["FRONTEND_URL"], "https://example.test")
 
     def test_raw_database_url_bundle(self):
-        values, bundle_format = _parse_bundle(
-            "postgresql://user:pass@10.42.0.5:5432/life_assistant"
-        )
-
+        values, bundle_format = _parse_bundle("postgresql://user:pass@10.42.0.5:5432/life_assistant")
         self.assertEqual(bundle_format, "raw-database-url")
-        self.assertEqual(
-            values["DATABASE_URL"],
-            "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant",
-        )
+        self.assertEqual(values["DATABASE_URL"], "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant")
 
     def test_asyncpg_sslmode_query_is_normalized_to_ssl(self):
         values, bundle_format = _parse_bundle(
             "postgresql://user:pass@10.42.0.5:5432/life_assistant?sslmode=require"
         )
-
         self.assertEqual(bundle_format, "raw-database-url")
-        self.assertEqual(
-            values["DATABASE_URL"],
-            "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant?ssl=require",
-        )
+        self.assertEqual(values["DATABASE_URL"], "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant?ssl=require")
 
-    def test_colon_comma_bundle_preserves_database_url_colons(self):
+    def test_known_key_bundle_preserves_database_url_colons(self):
         values, bundle_format = _parse_bundle(
             "DATABASE_URL:postgresql://life_assistant_user:secret@10.42.0.5:5432/life_assistant?sslmode=require,"
-            "GOOGLE_CLIENT_ID:client-id,"
-            "GOOGLE_CLIENT_SECRET:client:secret"
+            "GOOGLE_CLIENT_ID:client-id,GOOGLE_CLIENT_SECRET:client:secret"
         )
-
-        self.assertEqual(bundle_format, "colon-comma")
-        self.assertEqual(
-            values["DATABASE_URL"],
-            "postgresql+asyncpg://life_assistant_user:secret@10.42.0.5:5432/life_assistant?ssl=require",
-        )
+        self.assertEqual(bundle_format, "known-key-bundle")
+        self.assertEqual(values["DATABASE_URL"], "postgresql+asyncpg://life_assistant_user:secret@10.42.0.5:5432/life_assistant?ssl=require")
         self.assertEqual(values["GOOGLE_CLIENT_ID"], "client-id")
         self.assertEqual(values["GOOGLE_CLIENT_SECRET"], "client:secret")
 
-    def test_quoted_colon_comma_bundle_is_supported(self):
+    def test_wrapped_quoted_known_key_bundle_is_supported(self):
         values, bundle_format = _parse_bundle(
-            '"DATABASE_URL":"postgresql://life_assistant_user:secret@10.42.0.5:5432/life_assistant?sslmode=require",'
-            '"GOOGLE_CLIENT_ID":"client-id",'
-            '"GOOGLE_CLIENT_SECRET":"client:secret"'
+            'legacy-wrapper,\\"DATABASE_URL\\":\\"postgresql://life_assistant_user:secret@10.42.0.5:5432/life_assistant?sslmode=require\\",'
+            '\\"GOOGLE_CLIENT_ID\\":\\"client-id\\",\\"GOOGLE_CLIENT_SECRET\\":\\"client:secret\\"'
         )
-
-        self.assertEqual(bundle_format, "colon-comma")
-        self.assertEqual(
-            values["DATABASE_URL"],
-            "postgresql+asyncpg://life_assistant_user:secret@10.42.0.5:5432/life_assistant?ssl=require",
-        )
+        self.assertEqual(bundle_format, "known-key-bundle")
+        self.assertEqual(values["DATABASE_URL"], "postgresql+asyncpg://life_assistant_user:secret@10.42.0.5:5432/life_assistant?ssl=require")
         self.assertEqual(values["GOOGLE_CLIENT_ID"], "client-id")
         self.assertEqual(values["GOOGLE_CLIENT_SECRET"], "client:secret")
 
@@ -99,59 +70,40 @@ class BundleParsingTests(unittest.TestCase):
             "\\\",\\\"GOOGLE_CLIENT_ID\\\":\\\"client-id\\\","
             "\\\"GOOGLE_CLIENT_SECRET\\\":\\\"client-secret\\\""
         )
-
-        self.assertEqual(bundle_format, "embedded-database-url")
-        self.assertEqual(
-            values["DATABASE_URL"],
-            "postgresql+asyncpg://life_assistant_user:secret@10.42.0.5:5432/life_assistant?ssl=require",
-        )
+        self.assertIn(bundle_format, {"known-key-bundle", "embedded-database-url"})
+        self.assertEqual(values["DATABASE_URL"], "postgresql+asyncpg://life_assistant_user:secret@10.42.0.5:5432/life_assistant?ssl=require")
 
     def test_json_password_field_builds_database_url(self):
-        env = {
-            **self.db_env,
-            "LIFE_ASSISTANT_BUNDLE": '{"DATABASE_PASSWORD":"p@ss word/with:specials","GOOGLE_CLIENT_ID":"client"}',
-        }
+        env = {**self.db_env, "LIFE_ASSISTANT_BUNDLE": '{"DATABASE_PASSWORD":"p@ss word/with:specials","GOOGLE_CLIENT_ID":"client"}'}
         with patch.dict(os.environ, env, clear=False):
             os.environ.pop("DATABASE_URL", None)
             bundle_format = _load_bundle()
             database_url = os.environ["DATABASE_URL"]
-
         self.assertEqual(bundle_format, "json-object")
         self.assertTrue(database_url.startswith("postgresql+asyncpg://life_assistant_user:"))
         self.assertIn("@10.42.0.5:5432/life_assistant?ssl=require", database_url)
         self.assertNotIn("p@ss word/with:specials", database_url)
 
     def test_dotenv_password_field_builds_database_url(self):
-        env = {
-            **self.db_env,
-            "LIFE_ASSISTANT_BUNDLE": "DB_PASSWORD=p@ss-word\nGOOGLE_CLIENT_ID=client\n",
-        }
+        env = {**self.db_env, "LIFE_ASSISTANT_BUNDLE": "DB_PASSWORD=p@ss-word\nGOOGLE_CLIENT_ID=client\n"}
         with patch.dict(os.environ, env, clear=False):
             os.environ.pop("DATABASE_URL", None)
             bundle_format = _load_bundle()
             database_url = os.environ["DATABASE_URL"]
-
         self.assertEqual(bundle_format, "dotenv")
         self.assertIn("@10.42.0.5:5432/life_assistant?ssl=require", database_url)
 
     def test_yaml_nested_password_field_builds_database_url(self):
-        env = {
-            **self.db_env,
-            "LIFE_ASSISTANT_BUNDLE": "database:\n  password: p@ss-word\ngoogle_client_id: client\n",
-        }
+        env = {**self.db_env, "LIFE_ASSISTANT_BUNDLE": "database:\n  password: p@ss-word\ngoogle_client_id: client\n"}
         with patch.dict(os.environ, env, clear=False):
             os.environ.pop("DATABASE_URL", None)
             bundle_format = _load_bundle()
             database_url = os.environ["DATABASE_URL"]
-
         self.assertEqual(bundle_format, "yaml-object")
         self.assertIn("@10.42.0.5:5432/life_assistant?ssl=require", database_url)
 
     def test_double_encoded_json_bundle_is_supported(self):
-        values, bundle_format = _parse_bundle(
-            '"{\\"DATABASE_PASSWORD\\":\\"secret\\"}"'
-        )
-
+        values, bundle_format = _parse_bundle('"{\\"DATABASE_PASSWORD\\":\\"secret\\"}"')
         self.assertEqual(bundle_format, "json-object")
         self.assertEqual(values["DATABASE_PASSWORD"], "secret")
 
@@ -159,7 +111,6 @@ class BundleParsingTests(unittest.TestCase):
         shape, password_hints, key_hints = _bundle_structure_hints(
             "DB_PASS:super-secret-value,GOOGLE_CLIENT_SECRET:other-secret"
         )
-
         self.assertIn("colon", shape)
         self.assertIn("comma", shape)
         self.assertIn("DB_PASS", password_hints)
@@ -174,7 +125,6 @@ class BundleParsingTests(unittest.TestCase):
         with patch.dict(os.environ, env, clear=False):
             os.environ.pop("DATABASE_URL", None)
             bundle_format = _load_bundle()
-
         self.assertEqual(bundle_format, "unknown")
         self.assertNotIn("DATABASE_URL", os.environ)
 

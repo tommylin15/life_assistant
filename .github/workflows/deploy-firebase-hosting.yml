@@ -32,6 +32,16 @@ jobs:
         with:
           ref: ${{ env.RELEASE_SHA }}
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prepare branding assets
+        run: |
+          python -m pip install --disable-pip-version-check pillow==11.3.0
+          python scripts/prepare_branding_assets.py
+          test "$(sha256sum web/icons/life-assistant-192-v6.png | awk '{print $1}')" = "592b4092846422ee0761b6200ef7c7c22a5e686d312aee0abcc209cb0383b4f4"
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -101,29 +111,34 @@ jobs:
           grep -Eiq '^location: https://accounts\.google\.com/o/oauth2/v2/auth' "$AUTH_HEADERS"
           grep -Eiq '^set-cookie: __session=' "$AUTH_HEADERS"
 
-          # Branding/runtime asset validation. These checks prevent an SPA rewrite
-          # or stale/missing asset from passing deployment while rendering blank UI.
-          HERO_HEADERS="$(mktemp)"
-          curl --fail --silent --show-error \
-            --retry 5 --retry-delay 5 --retry-all-errors \
-            --dump-header "$HERO_HEADERS" \
-            --output /tmp/life-assistant-hero.jpg \
-            "$BASE_URL/branding/life-assistant-hero-v5.jpg"
-          grep -Eiq '^content-type: image/jpeg' "$HERO_HEADERS"
-          test "$(wc -c < /tmp/life-assistant-hero.jpg)" -gt 5000
-
           ICON_HEADERS="$(mktemp)"
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
             --dump-header "$ICON_HEADERS" \
-            --output /tmp/life-assistant-icon.png \
-            "$BASE_URL/favicon.png"
+            --output /tmp/life-assistant-192-v6.png \
+            "$BASE_URL/icons/life-assistant-192-v6.png"
           grep -Eiq '^content-type: image/png' "$ICON_HEADERS"
-          test "$(wc -c < /tmp/life-assistant-icon.png)" -gt 4000
+          test "$(sha256sum /tmp/life-assistant-192-v6.png | awk '{print $1}')" = "592b4092846422ee0761b6200ef7c7c22a5e686d312aee0abcc209cb0383b4f4"
+
+          HERO_HEADERS="$(mktemp)"
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            --dump-header "$HERO_HEADERS" \
+            --output /tmp/life-assistant-hero-v6.png \
+            "$BASE_URL/branding/life-assistant-hero-v6.png"
+          grep -Eiq '^content-type: image/png' "$HERO_HEADERS"
+
+          python - <<'PY'
+          from PIL import Image
+          icon = Image.open('/tmp/life-assistant-192-v6.png')
+          hero = Image.open('/tmp/life-assistant-hero-v6.png')
+          assert icon.size == (192, 192), icon.size
+          assert hero.size == (512, 512), hero.size
+          PY
 
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
-            "$BASE_URL/manifest-v5.json" > /tmp/manifest-v5.json
-          grep -Fq '"id": "/life-assistant"' /tmp/manifest-v5.json
-          grep -Fq '/icons/life-assistant-192-v5.png' /tmp/manifest-v5.json
-          grep -Fq '/icons/life-assistant-maskable-512-v5.png' /tmp/manifest-v5.json
+            "$BASE_URL/manifest-v6.json" > /tmp/manifest-v6.json
+          grep -Fq '"id": "/life-assistant-v6"' /tmp/manifest-v6.json
+          grep -Fq '/icons/life-assistant-192-v6.png' /tmp/manifest-v6.json
+          grep -Fq '/icons/life-assistant-512-v6.png' /tmp/manifest-v6.json

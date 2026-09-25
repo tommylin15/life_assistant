@@ -12,6 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prepare branding assets
+        run: |
+          python -m pip install --disable-pip-version-check pillow==11.3.0
+          python scripts/prepare_branding_assets.py
+          test "$(sha256sum web/icons/life-assistant-192-v6.png | awk '{print $1}')" = "592b4092846422ee0761b6200ef7c7c22a5e686d312aee0abcc209cb0383b4f4"
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.3'
@@ -29,6 +39,13 @@ jobs:
 
       - name: Build Web
         run: flutter build web --target=lib/main_web.dart --no-pub
+
+      - name: Verify branding in web build
+        run: |
+          test "$(sha256sum build/web/icons/life-assistant-192-v6.png | awk '{print $1}')" = "592b4092846422ee0761b6200ef7c7c22a5e686d312aee0abcc209cb0383b4f4"
+          test -s build/web/icons/life-assistant-512-v6.png
+          test -s build/web/branding/life-assistant-hero-v6.png
+          grep -Fq '/manifest-v6.json' build/web/index.html
 
   backend:
     runs-on: ubuntu-latest

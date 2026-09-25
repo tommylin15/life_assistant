@@ -53,7 +53,7 @@
         ]
       },
       {
-        "source": "/favicon.png",
+        "source": "/manifest-v6.json",
         "headers": [
           {
             "key": "Cache-Control",

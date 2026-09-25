@@ -1,10 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
@@ -14,16 +10,17 @@
 
   <!-- Mobile/PWA metadata -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="生活助理">
-  <link rel="apple-touch-icon" sizes="192x192" href="/icons/life-assistant-192-v5.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/icons/life-assistant-192-v6.png">
 
-  <!-- Keep a real root favicon because some Android launchers ignore manifest icons for shortcuts. -->
-  <link rel="icon" type="image/png" sizes="192x192" href="/favicon.png?v=5">
-  <link rel="shortcut icon" type="image/png" href="/favicon.png?v=5">
+  <!-- Root favicon is intentionally the same icon used by the manifest. -->
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/life-assistant-192-v6.png">
+  <link rel="shortcut icon" type="image/png" href="/icons/life-assistant-192-v6.png">
 
   <title>生活助理</title>
-  <link rel="manifest" href="/manifest-v5.json">
+  <link rel="manifest" href="/manifest-v6.json">
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

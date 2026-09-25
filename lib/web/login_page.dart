@@ -60,7 +60,7 @@ class LoginPage extends StatelessWidget {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(40),
                             child: Image.network(
-                              '/branding/life-assistant-hero-v5.jpg',
+                              '/branding/life-assistant-hero-v6.png',
                               width: imageSize,
                               height: imageSize,
                               fit: BoxFit.cover,

@@ -50,12 +50,12 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
             echo "Manual dispatch: backend deployment requested."
-          elif git diff --quiet HEAD^ HEAD -- backend; then
+          elif git diff --quiet HEAD^ HEAD -- backend .github/workflows/deploy-cloud-run.yml; then
             echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "No backend changes in release commit; skipping Cloud Run deployment."
+            echo "No backend/deployment changes in release commit; skipping Cloud Run deployment."
           else
             echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "Backend changes detected; Cloud Run deployment required."
+            echo "Backend or deployment workflow changes detected; Cloud Run deployment required."
           fi
 
       - name: Authenticate to Google Cloud
@@ -69,6 +69,16 @@ jobs:
       - name: Set up gcloud
         if: steps.backend_changes.outputs.deploy == 'true'
         uses: google-github-actions/setup-gcloud@v2
+
+      - name: Ensure Google integration APIs are enabled
+        if: steps.backend_changes.outputs.deploy == 'true'
+        run: |
+          gcloud services enable \
+            gmail.googleapis.com \
+            calendar-json.googleapis.com \
+            drive.googleapis.com \
+            --project "$GCP_PROJECT_ID" \
+            --quiet
 
       - name: Deploy backend to Cloud Run
         if: steps.backend_changes.outputs.deploy == 'true'

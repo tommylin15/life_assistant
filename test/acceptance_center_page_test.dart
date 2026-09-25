@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:life_assistant/web/acceptance_center_page.dart';
 import 'package:life_assistant/web/acceptance_runner.dart';
@@ -127,16 +128,18 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: AcceptanceCenterPage(
-          runAcceptance: () async {
-            runCalls += 1;
-            return result;
-          },
-          retryCleanup: (artifacts) async {
-            cleanupCalls += 1;
-            return AcceptanceArtifacts();
-          },
+      ProviderScope(
+        child: MaterialApp(
+          home: AcceptanceCenterPage(
+            runAcceptance: () async {
+              runCalls += 1;
+              return result;
+            },
+            retryCleanup: (artifacts) async {
+              cleanupCalls += 1;
+              return AcceptanceArtifacts();
+            },
+          ),
         ),
       ),
     );

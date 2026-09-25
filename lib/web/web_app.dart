@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'auth_state.dart';
+import 'integrations_page.dart';
 import 'login_page.dart';
 import 'tasks_page.dart';
 
@@ -10,6 +11,10 @@ final _router = GoRouter(
   redirect: (context, state) => null,
   routes: [
     GoRoute(path: '/', builder: (_, __) => const AuthGuard(child: TasksPage())),
+    GoRoute(
+      path: '/integrations',
+      builder: (_, __) => const AuthGuard(child: IntegrationsPage()),
+    ),
     GoRoute(path: '/login', builder: (_, __) => const LoginPage()),
   ],
 );

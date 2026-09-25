@@ -27,6 +27,9 @@ class AuthApiTests(IsolatedAsyncioTestCase):
                 ["https://example.test/auth/callback"],
             )
             self.assertIn("state", query)
+            self.assertEqual(set(query["scope"][0].split()), {"openid", "email", "profile"})
+            self.assertNotIn("gmail", query["scope"][0])
+            self.assertNotIn("calendar", query["scope"][0])
             self.assertIn(auth.SESSION_COOKIE, response.headers["set-cookie"])
             self.assertIn("HttpOnly", response.headers["set-cookie"])
             self.assertIn("Secure", response.headers["set-cookie"])

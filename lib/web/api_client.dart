@@ -55,6 +55,23 @@ class ApiClient {
     if (res.statusCode != 204) _check(res.statusCode, res.body);
   }
 
+  Future<Map<String, dynamic>> getGoogleIntegrationStatus() async {
+    final res = await _client.get(_apiUri('/integrations/google/status'));
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> getGoogleCapabilities() async {
+    final res = await _client.get(_apiUri('/integrations/google/capabilities'));
+    _check(res.statusCode, res.body);
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return (body['capabilities'] as List).cast<Map<String, dynamic>>();
+  }
+
+  String googleAuthorizationUrl(String services) => _apiUri(
+        '/integrations/google/authorize',
+      ).replace(queryParameters: {'services': services}).toString();
+
   void _check(int statusCode, String body) {
     if (statusCode >= 400) {
       throw Exception('API $statusCode: $body');

@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app import config as app_config
 from app.api.auth import router as auth_router
+from app.api.google_integrations import router as google_integrations_router
 from app.api.tasks import router as tasks_router
 from app.db import session as db_session
 from app.db.session import Base, engine
@@ -23,6 +24,8 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     try:
+        # Transitional safety net for legacy tables. New schema changes are
+        # versioned with Alembic and applied before uvicorn starts.
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
     except Exception as e:
@@ -60,3 +63,4 @@ async def ready():
 
 app.include_router(auth_router)
 app.include_router(tasks_router, prefix="/api/v1")
+app.include_router(google_integrations_router, prefix="/api/v1")

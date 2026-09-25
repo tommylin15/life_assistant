@@ -49,6 +49,9 @@ jobs:
       - name: Check import
         run: python -c "from app.main import app; print('OK')"
 
+      - name: Validate Alembic migrations
+        run: alembic upgrade head --sql > /tmp/life-assistant-migrations.sql
+
       - name: Test backend
         run: python -m unittest discover -s tests -v
 

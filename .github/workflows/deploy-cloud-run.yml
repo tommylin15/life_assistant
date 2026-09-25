@@ -61,6 +61,7 @@ jobs:
             --network "$GCP_NETWORK" \
             --subnet "$GCP_SUBNET" \
             --vpc-egress private-ranges-only \
+            --allow-unauthenticated \
             --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --quiet
@@ -75,28 +76,20 @@ jobs:
           test -n "$SERVICE_URL"
           echo "url=$SERVICE_URL" >> "$GITHUB_OUTPUT"
 
-      - name: Mint Cloud Run health ID token
-        id: health_auth
-        uses: google-github-actions/auth@v2
-        with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-          token_format: id_token
-          id_token_audience: ${{ steps.service_url.outputs.url }}
-          create_credentials_file: false
-          export_environment_variables: false
-
       - name: Verify Cloud Run health
         run: |
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
-            --header "Authorization: Bearer ${{ steps.health_auth.outputs.id_token }}" \
             "${{ steps.service_url.outputs.url }}/health"
 
       - name: Verify Cloud Run database readiness
         run: |
           curl --fail-with-body --silent --show-error \
             --retry 2 --retry-delay 3 --retry-all-errors \
-            --header "Authorization: Bearer ${{ steps.health_auth.outputs.id_token }}" \
             "${{ steps.service_url.outputs.url }}/ready"
+
+      - name: Verify unauthenticated API is application-protected
+        run: |
+          STATUS="$(curl --silent --output /tmp/tasks-body --write-out '%{http_code}' \
+            "${{ steps.service_url.outputs.url }}/api/v1/tasks")"
+          test "$STATUS" = "401"

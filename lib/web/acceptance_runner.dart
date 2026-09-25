@@ -85,6 +85,8 @@ abstract class AcceptanceApi {
   Future<List<Map<String, dynamic>>> getActivity({int limit = 100});
 }
 
+typedef _ExpectedActivity = ({String actionType, String entityId});
+
 class AcceptanceRunner {
   AcceptanceRunner(this.api);
 
@@ -95,107 +97,48 @@ class AcceptanceRunner {
         '[ACCEPTANCE TEST] ${DateTime.now().toUtc().toIso8601String()}';
     final checks = <AcceptanceCheck>[];
     final artifacts = AcceptanceArtifacts();
-    final expectedActivity = <String, Set<String>>{};
+    final expectedActivity = <_ExpectedActivity>{};
 
-    void add(
-      String key,
-      String displayLabel,
-      AcceptanceStatus status,
-      String detail,
-    ) {
-      checks.add(AcceptanceCheck(
-        key: key,
-        label: displayLabel,
-        status: status,
-        detail: detail,
-      ));
-    }
-
-    void expectActivity(String actionType, String entityId) {
-      expectedActivity.putIfAbsent(actionType, () => <String>{}).add(entityId);
-    }
-
-    Set<String> grantedServices = const {};
+    var grantedServices = <String>{};
     try {
       final status = await api.getGoogleIntegrationStatus();
       grantedServices = ((status['granted_services'] as List?) ?? const [])
           .map((item) => item.toString())
           .toSet();
     } catch (_) {
-      grantedServices = const {};
+      grantedServices = <String>{};
     }
 
-    await _runProjectChecks(
-      label: label,
-      checks: checks,
-      artifacts: artifacts,
-      expectedActivity: expectedActivity,
-      add: add,
-      expectActivity: expectActivity,
+    await _runProject(label, checks, artifacts, expectedActivity);
+    await _runCalendar(
+      label,
+      grantedServices,
+      checks,
+      artifacts,
+      expectedActivity,
+    );
+    await _runGmail(
+      label,
+      grantedServices,
+      checks,
+      artifacts,
+      expectedActivity,
     );
 
-    await _runCalendarChecks(
-      label: label,
-      grantedServices: grantedServices,
-      checks: checks,
-      artifacts: artifacts,
-      expectedActivity: expectedActivity,
-      add: add,
-      expectActivity: expectActivity,
-    );
-
-    await _runGmailChecks(
-      label: label,
-      grantedServices: grantedServices,
-      checks: checks,
-      artifacts: artifacts,
-      expectedActivity: expectedActivity,
-      add: add,
-      expectActivity: expectActivity,
-    );
-
-    final cleanupErrors = await _cleanupArtifacts(artifacts);
-    add(
-      'cleanup',
-      '測試資料清理',
-      cleanupErrors.isEmpty ? AcceptanceStatus.pass : AcceptanceStatus.fail,
-      cleanupErrors.isEmpty
+    final cleanupErrors = await _cleanup(artifacts);
+    _add(
+      checks,
+      key: 'cleanup',
+      label: '測試資料清理',
+      status: cleanupErrors.isEmpty
+          ? AcceptanceStatus.pass
+          : AcceptanceStatus.fail,
+      detail: cleanupErrors.isEmpty
           ? '所有已建立的 [ACCEPTANCE TEST] 測試資料都已清除。'
-          : '仍有 ${artifacts.projectIds.length + artifacts.taskIds.length + artifacts.calendarEventIds.length} 筆測試資料未清除：${cleanupErrors.join('；')}',
+          : '仍有 ${_artifactCount(artifacts)} 筆測試資料未清除：${cleanupErrors.join('；')}',
     );
 
-    try {
-      final activity = await api.getActivity(limit: 100);
-      final missing = <String>[];
-      for (final entry in expectedActivity.entries) {
-        for (final entityId in entry.value) {
-          final found = activity.any(
-            (item) =>
-                item['action_type'] == entry.key &&
-                item['entity_id'] == entityId &&
-                item['status'] == 'succeeded',
-          );
-          if (!found) {
-            missing.add('${entry.key}:$entityId');
-          }
-        }
-      }
-      add(
-        'activity',
-        'Activity Log',
-        missing.isEmpty ? AcceptanceStatus.pass : AcceptanceStatus.fail,
-        missing.isEmpty
-            ? '本次重要操作均找到成功 execution evidence。'
-            : '缺少 ${missing.length} 筆 execution evidence：${missing.join(', ')}',
-      );
-    } catch (error) {
-      add(
-        'activity',
-        'Activity Log',
-        AcceptanceStatus.fail,
-        'Activity Log 讀取失敗：$error',
-      );
-    }
+    await _verifyActivity(checks, expectedActivity);
 
     return AcceptanceRunResult(
       label: label,
@@ -204,81 +147,68 @@ class AcceptanceRunner {
     );
   }
 
-  Future<void> _runProjectChecks({
-    required String label,
-    required List<AcceptanceCheck> checks,
-    required AcceptanceArtifacts artifacts,
-    required Map<String, Set<String>> expectedActivity,
-    required void Function(
-      String key,
-      String displayLabel,
-      AcceptanceStatus status,
-      String detail,
-    ) add,
-    required void Function(String actionType, String entityId) expectActivity,
-  }) async {
+  Future<void> _runProject(
+    String label,
+    List<AcceptanceCheck> checks,
+    AcceptanceArtifacts artifacts,
+    Set<_ExpectedActivity> expectedActivity,
+  ) async {
     String? projectId;
     final updatedName = '$label Project Updated';
 
     try {
-      final project = await api.createProject({
+      final created = await api.createProject({
         'name': '$label Project',
         'summary': '$label automatic project acceptance',
         'status': 'active',
       });
-      projectId = _extractId(project);
+      projectId = _extractId(created);
       if (projectId == null) {
         throw StateError('Project create response missing id');
       }
       artifacts.projectIds.add(projectId);
-      expectActivity('project.create', projectId);
-      add(
-        'project.create',
-        'Project 建立',
-        AcceptanceStatus.pass,
-        '已建立 $projectId',
+      expectedActivity.add((actionType: 'project.create', entityId: projectId));
+      _add(
+        checks,
+        key: 'project.create',
+        label: 'Project 建立',
+        status: AcceptanceStatus.pass,
+        detail: '已建立 $projectId',
       );
     } catch (error) {
-      add(
-        'project.create',
-        'Project 建立',
-        AcceptanceStatus.fail,
-        '建立失敗：$error',
+      _add(
+        checks,
+        key: 'project.create',
+        label: 'Project 建立',
+        status: AcceptanceStatus.fail,
+        detail: '建立失敗：$error',
       );
-      for (final item in const [
-        ('project.update', 'Project 修改'),
-        ('project.reread', 'Project 讀回'),
-        ('project.delete', 'Project 刪除'),
-      ]) {
-        add(
-          item.$1,
-          item.$2,
-          AcceptanceStatus.notVerified,
-          '前置 Project 建立未成功。',
-        );
-      }
+      _notVerified(checks, 'project.update', 'Project 修改', '前置 Project 建立未成功。');
+      _notVerified(checks, 'project.reread', 'Project 讀回', '前置 Project 建立未成功。');
+      _notVerified(checks, 'project.delete', 'Project 刪除', '前置 Project 建立未成功。');
       return;
     }
 
     try {
       final updated = await api.updateProject(projectId, {'name': updatedName});
-      final matches = updated['name'] == updatedName;
-      if (!matches) {
+      if (updated['name'] != updatedName) {
         throw StateError('Project update response did not contain updated name');
       }
-      expectActivity('project.update', projectId);
-      add(
-        'project.update',
-        'Project 修改',
-        AcceptanceStatus.pass,
-        '修改回應符合預期。',
+      expectedActivity.add((actionType: 'project.update', entityId: projectId));
+      _add(
+        checks,
+        key: 'project.update',
+        label: 'Project 修改',
+        status: AcceptanceStatus.pass,
+        detail: '修改回應符合預期。',
       );
     } catch (error) {
-      add(
-        'project.update',
-        'Project 修改',
-        AcceptanceStatus.fail,
-        '修改失敗：$error',
+      _add(
+        checks,
+        key: 'project.update',
+        label: 'Project 修改',
+        status: AcceptanceStatus.fail,
+        detail: '修改失敗：$error',
       );
     }
 
@@ -287,68 +217,56 @@ class AcceptanceRunner {
       if (reread['name'] != updatedName) {
         throw StateError('Project reread data mismatch');
       }
-      add(
-        'project.reread',
-        'Project 讀回',
-        AcceptanceStatus.pass,
-        '重新讀取後資料與修改結果一致。',
+      _add(
+        checks,
+        key: 'project.reread',
+        label: 'Project 讀回',
+        status: AcceptanceStatus.pass,
+        detail: '重新讀取後資料與修改結果一致。',
       );
     } catch (error) {
-      add(
-        'project.reread',
-        'Project 讀回',
-        AcceptanceStatus.fail,
-        '讀回驗證失敗：$error',
+      _add(
+        checks,
+        key: 'project.reread',
+        label: 'Project 讀回',
+        status: AcceptanceStatus.fail,
+        detail: '讀回驗證失敗：$error',
       );
     }
 
     try {
       await api.deleteProject(projectId);
       artifacts.projectIds.remove(projectId);
-      expectActivity('project.delete', projectId);
-      add(
-        'project.delete',
-        'Project 刪除',
-        AcceptanceStatus.pass,
-        '測試 Project 已刪除。',
+      expectedActivity.add((actionType: 'project.delete', entityId: projectId));
+      _add(
+        checks,
+        key: 'project.delete',
+        label: 'Project 刪除',
+        status: AcceptanceStatus.pass,
+        detail: '測試 Project 已刪除。',
       );
     } catch (error) {
-      add(
-        'project.delete',
-        'Project 刪除',
-        AcceptanceStatus.fail,
-        '刪除失敗；將由 cleanup 再嘗試：$error',
+      _add(
+        checks,
+        key: 'project.delete',
+        label: 'Project 刪除',
+        status: AcceptanceStatus.fail,
+        detail: '刪除失敗；將由 cleanup 再嘗試：$error',
       );
     }
   }
 
-  Future<void> _runCalendarChecks({
-    required String label,
-    required Set<String> grantedServices,
-    required List<AcceptanceCheck> checks,
-    required AcceptanceArtifacts artifacts,
-    required Map<String, Set<String>> expectedActivity,
-    required void Function(
-      String key,
-      String displayLabel,
-      AcceptanceStatus status,
-      String detail,
-    ) add,
-    required void Function(String actionType, String entityId) expectActivity,
-  }) async {
+  Future<void> _runCalendar(
+    String label,
+    Set<String> grantedServices,
+    List<AcceptanceCheck> checks,
+    AcceptanceArtifacts artifacts,
+    Set<_ExpectedActivity> expectedActivity,
+  ) async {
     if (!grantedServices.contains('calendar')) {
-      for (final item in const [
-        ('calendar.create', 'Calendar 建立'),
-        ('calendar.update', 'Calendar 修改'),
-        ('calendar.delete', 'Calendar 刪除'),
-      ]) {
-        add(
-          item.$1,
-          item.$2,
-          AcceptanceStatus.notVerified,
-          'Calendar 尚未授權，未執行真實帳號測試。',
-        );
-      }
+      _notVerified(checks, 'calendar.create', 'Calendar 建立', 'Calendar 尚未授權。');
+      _notVerified(checks, 'calendar.update', 'Calendar 修改', 'Calendar 尚未授權。');
+      _notVerified(checks, 'calendar.delete', 'Calendar 刪除', 'Calendar 尚未授權。');
       return;
     }
 
@@ -358,105 +276,95 @@ class AcceptanceRunner {
     String? eventId;
 
     try {
-      final event = await api.createCalendarEvent({
+      final created = await api.createCalendarEvent({
         'summary': '$label Calendar',
         'start': start.toIso8601String(),
         'end': end.toIso8601String(),
         'description': '$label automatic calendar acceptance',
       });
-      eventId = _extractId(event, nestedKey: 'event');
+      eventId = _extractId(created, nestedKey: 'event');
       if (eventId == null) {
         throw StateError('Calendar create response missing id');
       }
       artifacts.calendarEventIds.add(eventId);
-      expectActivity('calendar.create', eventId);
-      add(
-        'calendar.create',
-        'Calendar 建立',
-        AcceptanceStatus.pass,
-        '已建立 $eventId',
+      expectedActivity.add((actionType: 'calendar.create', entityId: eventId));
+      _add(
+        checks,
+        key: 'calendar.create',
+        label: 'Calendar 建立',
+        status: AcceptanceStatus.pass,
+        detail: '已建立 $eventId',
       );
     } catch (error) {
-      add(
-        'calendar.create',
-        'Calendar 建立',
-        AcceptanceStatus.fail,
-        '建立失敗：$error',
+      _add(
+        checks,
+        key: 'calendar.create',
+        label: 'Calendar 建立',
+        status: AcceptanceStatus.fail,
+        detail: '建立失敗：$error',
       );
-      add(
-        'calendar.update',
-        'Calendar 修改',
-        AcceptanceStatus.notVerified,
-        '前置 Calendar 建立未成功。',
-      );
-      add(
-        'calendar.delete',
-        'Calendar 刪除',
-        AcceptanceStatus.notVerified,
-        '前置 Calendar 建立未成功。',
-      );
+      _notVerified(checks, 'calendar.update', 'Calendar 修改', '前置 Calendar 建立未成功。');
+      _notVerified(checks, 'calendar.delete', 'Calendar 刪除', '前置 Calendar 建立未成功。');
       return;
     }
 
     try {
-      final updated = await api.updateCalendarEvent(eventId, {
-        'summary': updatedSummary,
-      });
+      final updated = await api.updateCalendarEvent(
+        eventId,
+        {'summary': updatedSummary},
+      );
       if (updated['summary'] != updatedSummary) {
         throw StateError('Calendar update response mismatch');
       }
-      expectActivity('calendar.update', eventId);
-      add(
-        'calendar.update',
-        'Calendar 修改',
-        AcceptanceStatus.pass,
-        '修改回應符合預期。',
+      expectedActivity.add((actionType: 'calendar.update', entityId: eventId));
+      _add(
+        checks,
+        key: 'calendar.update',
+        label: 'Calendar 修改',
+        status: AcceptanceStatus.pass,
+        detail: '修改回應符合預期。',
       );
     } catch (error) {
-      add(
-        'calendar.update',
-        'Calendar 修改',
-        AcceptanceStatus.fail,
-        '修改失敗：$error',
+      _add(
+        checks,
+        key: 'calendar.update',
+        label: 'Calendar 修改',
+        status: AcceptanceStatus.fail,
+        detail: '修改失敗：$error',
       );
     }
 
     try {
       await api.deleteCalendarEvent(eventId);
       artifacts.calendarEventIds.remove(eventId);
-      expectActivity('calendar.delete', eventId);
-      add(
-        'calendar.delete',
-        'Calendar 刪除',
-        AcceptanceStatus.pass,
-        '測試 Calendar event 已刪除。',
+      expectedActivity.add((actionType: 'calendar.delete', entityId: eventId));
+      _add(
+        checks,
+        key: 'calendar.delete',
+        label: 'Calendar 刪除',
+        status: AcceptanceStatus.pass,
+        detail: '測試 Calendar event 已刪除。',
       );
     } catch (error) {
-      add(
-        'calendar.delete',
-        'Calendar 刪除',
-        AcceptanceStatus.fail,
-        '刪除失敗；將由 cleanup 再嘗試：$error',
+      _add(
+        checks,
+        key: 'calendar.delete',
+        label: 'Calendar 刪除',
+        status: AcceptanceStatus.fail,
+        detail: '刪除失敗；將由 cleanup 再嘗試：$error',
       );
     }
   }
 
-  Future<void> _runGmailChecks({
-    required String label,
-    required Set<String> grantedServices,
-    required List<AcceptanceCheck> checks,
-    required AcceptanceArtifacts artifacts,
-    required Map<String, Set<String>> expectedActivity,
-    required void Function(
-      String key,
-      String displayLabel,
-      AcceptanceStatus status,
-      String detail,
-    ) add,
-    required void Function(String actionType, String entityId) expectActivity,
-  }) async {
+  Future<void> _runGmail(
+    String label,
+    Set<String> grantedServices,
+    List<AcceptanceCheck> checks,
+    AcceptanceArtifacts artifacts,
+    Set<_ExpectedActivity> expectedActivity,
+  ) async {
     if (!grantedServices.contains('gmail')) {
-      _addGmailNotVerified(add, 'Gmail 尚未授權，未執行真實帳號測試。');
+      _gmailNotVerified(checks, 'Gmail 尚未授權，未執行真實帳號測試。');
       return;
     }
 
@@ -465,8 +373,8 @@ class AcceptanceRunner {
       final response = await api.getGmailMetadata(limit: 1);
       final messages = (response['messages'] as List?) ?? const [];
       if (messages.isEmpty) {
-        _addGmailNotVerified(
-          add,
+        _gmailNotVerified(
+          checks,
           '最近沒有可供驗收的 Gmail 郵件，因此未建立衍生資料。',
         );
         return;
@@ -479,31 +387,24 @@ class AcceptanceRunner {
       if (messageId == null || messageId.isEmpty) {
         throw StateError('Gmail message missing id');
       }
-      add(
-        'gmail.read',
-        'Gmail 讀取',
-        AcceptanceStatus.pass,
-        '已取得一封 Gmail metadata。',
+      _add(
+        checks,
+        key: 'gmail.read',
+        label: 'Gmail 讀取',
+        status: AcceptanceStatus.pass,
+        detail: '已取得一封 Gmail metadata。',
       );
     } catch (error) {
-      add(
-        'gmail.read',
-        'Gmail 讀取',
-        AcceptanceStatus.fail,
-        'Gmail metadata 讀取失敗：$error',
+      _add(
+        checks,
+        key: 'gmail.read',
+        label: 'Gmail 讀取',
+        status: AcceptanceStatus.fail,
+        detail: 'Gmail metadata 讀取失敗：$error',
       );
-      for (final item in const [
-        ('gmail.to_task', 'Gmail → Task'),
-        ('gmail.to_project', 'Gmail → Project'),
-        ('gmail.to_calendar', 'Gmail → Calendar'),
-      ]) {
-        add(
-          item.$1,
-          item.$2,
-          AcceptanceStatus.notVerified,
-          '前置 Gmail 讀取未成功。',
-        );
-      }
+      _notVerified(checks, 'gmail.to_task', 'Gmail → Task', '前置 Gmail 讀取未成功。');
+      _notVerified(checks, 'gmail.to_project', 'Gmail → Project', '前置 Gmail 讀取未成功。');
+      _notVerified(checks, 'gmail.to_calendar', 'Gmail → Calendar', '前置 Gmail 讀取未成功。');
       return;
     }
 
@@ -517,19 +418,21 @@ class AcceptanceRunner {
         throw StateError('Gmail to Task response missing id');
       }
       artifacts.taskIds.add(taskId);
-      expectActivity('gmail.to_task', taskId);
-      add(
-        'gmail.to_task',
-        'Gmail → Task',
-        AcceptanceStatus.pass,
-        '已建立測試 Task $taskId',
+      expectedActivity.add((actionType: 'gmail.to_task', entityId: taskId));
+      _add(
+        checks,
+        key: 'gmail.to_task',
+        label: 'Gmail → Task',
+        status: AcceptanceStatus.pass,
+        detail: '已建立測試 Task $taskId',
       );
     } catch (error) {
-      add(
-        'gmail.to_task',
-        'Gmail → Task',
-        AcceptanceStatus.fail,
-        '轉換失敗：$error',
+      _add(
+        checks,
+        key: 'gmail.to_task',
+        label: 'Gmail → Task',
+        status: AcceptanceStatus.fail,
+        detail: '轉換失敗：$error',
       );
     }
 
@@ -544,27 +447,29 @@ class AcceptanceRunner {
         throw StateError('Gmail to Project response missing id');
       }
       artifacts.projectIds.add(projectId);
-      expectActivity('gmail.to_project', projectId);
-      add(
-        'gmail.to_project',
-        'Gmail → Project',
-        AcceptanceStatus.pass,
-        '已建立測試 Project $projectId',
+      expectedActivity.add((actionType: 'gmail.to_project', entityId: projectId));
+      _add(
+        checks,
+        key: 'gmail.to_project',
+        label: 'Gmail → Project',
+        status: AcceptanceStatus.pass,
+        detail: '已建立測試 Project $projectId',
       );
     } catch (error) {
-      add(
-        'gmail.to_project',
-        'Gmail → Project',
-        AcceptanceStatus.fail,
-        '轉換失敗：$error',
+      _add(
+        checks,
+        key: 'gmail.to_project',
+        label: 'Gmail → Project',
+        status: AcceptanceStatus.fail,
+        detail: '轉換失敗：$error',
       );
     }
 
     if (!grantedServices.contains('calendar')) {
-      add(
+      _notVerified(
+        checks,
         'gmail.to_calendar',
         'Gmail → Calendar',
-        AcceptanceStatus.notVerified,
         'Calendar 尚未授權，無法驗證 Gmail → Calendar。',
       );
       return;
@@ -584,43 +489,26 @@ class AcceptanceRunner {
         throw StateError('Gmail to Calendar response missing id');
       }
       artifacts.calendarEventIds.add(eventId);
-      expectActivity('gmail.to_calendar', eventId);
-      add(
-        'gmail.to_calendar',
-        'Gmail → Calendar',
-        AcceptanceStatus.pass,
-        '已建立測試 Calendar event $eventId',
+      expectedActivity.add((actionType: 'gmail.to_calendar', entityId: eventId));
+      _add(
+        checks,
+        key: 'gmail.to_calendar',
+        label: 'Gmail → Calendar',
+        status: AcceptanceStatus.pass,
+        detail: '已建立測試 Calendar event $eventId',
       );
     } catch (error) {
-      add(
-        'gmail.to_calendar',
-        'Gmail → Calendar',
-        AcceptanceStatus.fail,
-        '轉換失敗：$error',
+      _add(
+        checks,
+        key: 'gmail.to_calendar',
+        label: 'Gmail → Calendar',
+        status: AcceptanceStatus.fail,
+        detail: '轉換失敗：$error',
       );
     }
   }
 
-  void _addGmailNotVerified(
-    void Function(
-      String key,
-      String displayLabel,
-      AcceptanceStatus status,
-      String detail,
-    ) add,
-    String detail,
-  ) {
-    for (final item in const [
-      ('gmail.read', 'Gmail 讀取'),
-      ('gmail.to_task', 'Gmail → Task'),
-      ('gmail.to_project', 'Gmail → Project'),
-      ('gmail.to_calendar', 'Gmail → Calendar'),
-    ]) {
-      add(item.$1, item.$2, AcceptanceStatus.notVerified, detail);
-    }
-  }
-
-  Future<List<String>> _cleanupArtifacts(AcceptanceArtifacts artifacts) async {
+  Future<List<String>> _cleanup(AcceptanceArtifacts artifacts) async {
     final errors = <String>[];
 
     for (final id in artifacts.taskIds.toList()) {
@@ -631,7 +519,6 @@ class AcceptanceRunner {
         errors.add('Task $id: $error');
       }
     }
-
     for (final id in artifacts.projectIds.toList()) {
       try {
         await api.deleteProject(id);
@@ -640,7 +527,6 @@ class AcceptanceRunner {
         errors.add('Project $id: $error');
       }
     }
-
     for (final id in artifacts.calendarEventIds.toList()) {
       try {
         await api.deleteCalendarEvent(id);
@@ -652,6 +538,86 @@ class AcceptanceRunner {
 
     return errors;
   }
+
+  Future<void> _verifyActivity(
+    List<AcceptanceCheck> checks,
+    Set<_ExpectedActivity> expectedActivity,
+  ) async {
+    try {
+      final activity = await api.getActivity(limit: 100);
+      final missing = <String>[];
+      for (final expected in expectedActivity) {
+        final found = activity.any(
+          (item) =>
+              item['action_type'] == expected.actionType &&
+              item['entity_id'] == expected.entityId &&
+              item['status'] == 'success',
+        );
+        if (!found) {
+          missing.add('${expected.actionType}:${expected.entityId}');
+        }
+      }
+      _add(
+        checks,
+        key: 'activity',
+        label: 'Activity Log',
+        status: missing.isEmpty ? AcceptanceStatus.pass : AcceptanceStatus.fail,
+        detail: missing.isEmpty
+            ? '本次重要操作均找到成功 execution evidence。'
+            : '缺少 ${missing.length} 筆 execution evidence：${missing.join(', ')}',
+      );
+    } catch (error) {
+      _add(
+        checks,
+        key: 'activity',
+        label: 'Activity Log',
+        status: AcceptanceStatus.fail,
+        detail: 'Activity Log 讀取失敗：$error',
+      );
+    }
+  }
+
+  void _gmailNotVerified(List<AcceptanceCheck> checks, String detail) {
+    _notVerified(checks, 'gmail.read', 'Gmail 讀取', detail);
+    _notVerified(checks, 'gmail.to_task', 'Gmail → Task', detail);
+    _notVerified(checks, 'gmail.to_project', 'Gmail → Project', detail);
+    _notVerified(checks, 'gmail.to_calendar', 'Gmail → Calendar', detail);
+  }
+
+  void _notVerified(
+    List<AcceptanceCheck> checks,
+    String key,
+    String label,
+    String detail,
+  ) {
+    _add(
+      checks,
+      key: key,
+      label: label,
+      status: AcceptanceStatus.notVerified,
+      detail: detail,
+    );
+  }
+
+  void _add(
+    List<AcceptanceCheck> checks, {
+    required String key,
+    required String label,
+    required AcceptanceStatus status,
+    required String detail,
+  }) {
+    checks.add(AcceptanceCheck(
+      key: key,
+      label: label,
+      status: status,
+      detail: detail,
+    ));
+  }
+
+  int _artifactCount(AcceptanceArtifacts artifacts) =>
+      artifacts.projectIds.length +
+      artifacts.taskIds.length +
+      artifacts.calendarEventIds.length;
 
   String? _extractId(Map<String, dynamic> response, {String? nestedKey}) {
     final root = response['id'];

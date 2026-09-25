@@ -40,6 +40,13 @@ def _strip_matching_quotes(value: str) -> str:
     return value
 
 
+def _strip_wrapper_quotes(value: str) -> str:
+    value = value.strip()
+    value = re.sub(r"^(?:\\?[\"'])+", "", value)
+    value = re.sub(r"(?:\\?[\"'])+$", "", value)
+    return value.strip()
+
+
 def _normalize_database_url(value: str) -> str:
     value = _strip_matching_quotes(value)
     if value.startswith("postgresql://"):
@@ -90,14 +97,18 @@ def _normalize_parsed_values(values: dict[str, str]) -> dict[str, str]:
     return parsed
 
 
-def _parse_colon_comma_bundle(raw: str) -> dict[str, str] | None:
+def _parse_known_key_bundle(raw: str) -> dict[str, str] | None:
+    """Parse known bundle keys even when a legacy wrapper precedes them.
+
+    Values are bounded only by the next known key assignment, so colons inside
+    DATABASE_URL and client-secret values remain intact.
+    """
     key_pattern = "|".join(re.escape(key) for key in COLON_COMMA_BUNDLE_KEYS)
     pattern = re.compile(
-        rf"(?:^|,)\s*['\"]?({key_pattern})['\"]?\s*:",
-        re.IGNORECASE,
+        rf"(?i)(?:^|[\s{{,;|])(?:\\?[\"'])*({key_pattern})(?:\\?[\"'])*\s*[:=]\s*"
     )
     matches = list(pattern.finditer(raw))
-    if not matches or matches[0].start() != 0:
+    if not matches:
         return None
 
     parsed: dict[str, str] = {}
@@ -107,23 +118,21 @@ def _parse_colon_comma_bundle(raw: str) -> dict[str, str] | None:
             return None
         value_start = match.end()
         value_end = matches[index + 1].start() if index + 1 < len(matches) else len(raw)
-        value = _strip_matching_quotes(raw[value_start:value_end])
+        value = raw[value_start:value_end].strip()
+        value = re.sub(r"[\s,;|]+$", "", value)
+        value = _strip_wrapper_quotes(value)
+        value = re.sub(r"[\s}\])]+$", "", value).strip()
         if not value:
             return None
         parsed[key] = value
 
-    if set(parsed) != set(COLON_COMMA_BUNDLE_KEYS):
+    if "DATABASE_URL" not in parsed:
         return None
     return parsed
 
 
 def _extract_embedded_database_url(raw: str) -> str | None:
-    """Extract only the PostgreSQL URL from an otherwise unknown bundle framing.
-
-    This is intentionally narrow: it ignores all other secret values and only
-    activates when a literal PostgreSQL URL is present. That lets us consume
-    legacy wrappers/escaping without guessing arbitrary key-value formats.
-    """
+    """Extract only the PostgreSQL URL from an otherwise unknown bundle framing."""
     url_match = re.search(r"postgresql(?:\+asyncpg)?://", raw, re.IGNORECASE)
     if url_match is None:
         return None
@@ -176,9 +185,9 @@ def _parse_bundle(raw: str) -> tuple[dict[str, str], str]:
     if raw.startswith(("postgresql://", "postgresql+asyncpg://")):
         return {"DATABASE_URL": _normalize_database_url(raw)}, "raw-database-url"
 
-    colon_comma = _parse_colon_comma_bundle(raw)
-    if colon_comma is not None:
-        return _normalize_parsed_values(colon_comma), "colon-comma"
+    known_key_bundle = _parse_known_key_bundle(raw)
+    if known_key_bundle is not None:
+        return _normalize_parsed_values(known_key_bundle), "known-key-bundle"
 
     lines = [
         line.strip()

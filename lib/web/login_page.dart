@@ -59,13 +59,25 @@ class LoginPage extends StatelessWidget {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(40),
-                            child: Image.asset(
-                              'assets/branding/life_assistant_hero_v2.jpg',
+                            child: Image.network(
+                              '/branding/life-assistant-hero-v5.jpg',
                               width: imageSize,
                               height: imageSize,
                               fit: BoxFit.cover,
                               filterQuality: FilterQuality.high,
                               semanticLabel: '生活助理主視覺',
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                    width: imageSize,
+                                    height: imageSize,
+                                    color: _apricotSoft,
+                                    alignment: Alignment.center,
+                                    child: const Icon(
+                                      Icons.home_rounded,
+                                      size: 88,
+                                      color: _sage,
+                                    ),
+                                  ),
                             ),
                           ),
                         );

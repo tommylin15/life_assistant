@@ -12,7 +12,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "branding" / "life_assistant_icon_192.b64"
 # Base64 decodes to the selected Life Assistant twin-beast icon as a compact JPEG.
-EXPECTED_SOURCE_SHA256 = "eade3259167002d3f94e25a321805b5d28b6b85d4d0161b350dddb4f2bcd2b9f"
+EXPECTED_SOURCE_SHA256 = "3114c6d355e389b74467c4055b7369bee14f4c82f0d7acb4e609e11666ad1077"
 WARM_BG = (247, 243, 234, 255)
 
 
@@ -23,7 +23,7 @@ def _load_source() -> Image.Image:
     if actual != EXPECTED_SOURCE_SHA256:
         raise RuntimeError(f"Canonical icon SHA-256 mismatch: {actual}")
     image = Image.open(BytesIO(raw)).convert("RGBA")
-    if image.size != (192, 192):
+    if image.size != (128, 128):
         raise RuntimeError(f"Unexpected canonical icon size: {image.size}")
     return image
 

@@ -21,7 +21,7 @@ class _FakeAcceptanceApi implements AcceptanceApi {
     _activity.insert(0, {
       'action_type': actionType,
       'entity_id': entityId,
-      'status': 'succeeded',
+      'status': 'success',
       'result': 'ok',
     });
   }

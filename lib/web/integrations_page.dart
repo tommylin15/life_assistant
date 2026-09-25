@@ -14,11 +14,86 @@ final _googleCapabilitiesProvider =
   return ref.read(apiClientProvider).getGoogleCapabilities();
 });
 
-class IntegrationsPage extends ConsumerWidget {
+class IntegrationsPage extends ConsumerStatefulWidget {
   const IntegrationsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<IntegrationsPage> createState() => _IntegrationsPageState();
+}
+
+class _IntegrationsPageState extends ConsumerState<IntegrationsPage> {
+  bool _verifyingReadConnections = false;
+  bool _ensuringDriveBridge = false;
+  Map<String, String>? _verificationResults;
+  String? _driveBridgeResult;
+
+  Future<void> _verifyReadConnections() async {
+    setState(() {
+      _verifyingReadConnections = true;
+      _verificationResults = null;
+    });
+
+    final client = ref.read(apiClientProvider);
+    final results = <String, String>{};
+
+    try {
+      final gmail = await client.getGmailMetadata(limit: 1);
+      results['Gmail'] = 'PASS（API 可讀，returned: ${gmail['returned'] ?? 0}）';
+    } catch (_) {
+      results['Gmail'] = 'FAIL（請重新授權或檢查 Gmail API）';
+    }
+
+    try {
+      final now = DateTime.now().toUtc();
+      final calendar = await client.getCalendarEvents(
+        timeMin: now,
+        timeMax: now.add(const Duration(days: 7)),
+        limit: 1,
+      );
+      results['Calendar'] =
+          'PASS（API 可讀，returned: ${calendar['returned'] ?? 0}）';
+    } catch (_) {
+      results['Calendar'] = 'FAIL（請重新授權或檢查 Calendar API）';
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _verifyingReadConnections = false;
+      _verificationResults = results;
+    });
+  }
+
+  Future<void> _ensureDriveBridge() async {
+    setState(() {
+      _ensuringDriveBridge = true;
+      _driveBridgeResult = null;
+    });
+
+    try {
+      final result = await ref.read(apiClientProvider).ensureDriveBridge();
+      final bridge = result['bridge'];
+      final bridgeName = bridge is Map ? bridge['name'] : null;
+      if (!mounted) return;
+      setState(() {
+        _driveBridgeResult =
+            'PASS（${bridgeName ?? 'ChatGPT_Bridge'} 已建立或確認可用）';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _driveBridgeResult = 'FAIL（請重新授權 Drive 或檢查 Drive API）';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _ensuringDriveBridge = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final status = ref.watch(_googleStatusProvider);
     final capabilities = ref.watch(_googleCapabilitiesProvider);
 
@@ -61,6 +136,69 @@ class IntegrationsPage extends ConsumerWidget {
               data: data,
               onAuthorize: (service) => navigateBrowser(
                 ref.read(apiClientProvider).googleAuthorizationUrl(service),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('API 驗收', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '先驗證 Gmail 與 Calendar 唯讀 API；Drive 只有在你明確按下按鈕時，才會建立或確認 life_assistant/ChatGPT_Bridge。',
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: _verifyingReadConnections
+                        ? null
+                        : _verifyReadConnections,
+                    icon: _verifyingReadConnections
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.fact_check),
+                    label: Text(
+                      _verifyingReadConnections
+                          ? '驗證中…'
+                          : '驗證 Gmail / Calendar',
+                    ),
+                  ),
+                  if (_verificationResults != null) ...[
+                    const SizedBox(height: 12),
+                    for (final entry in _verificationResults!.entries)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text('${entry.key}: ${entry.value}'),
+                      ),
+                  ],
+                  const Divider(height: 24),
+                  FilledButton.tonalIcon(
+                    onPressed:
+                        _ensuringDriveBridge ? null : _ensureDriveBridge,
+                    icon: _ensuringDriveBridge
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.create_new_folder),
+                    label: Text(
+                      _ensuringDriveBridge
+                          ? '建立 / 確認中…'
+                          : '建立 / 確認 Drive Bridge',
+                    ),
+                  ),
+                  if (_driveBridgeResult != null) ...[
+                    const SizedBox(height: 12),
+                    Text('Drive: $_driveBridgeResult'),
+                  ],
+                ],
               ),
             ),
           ),

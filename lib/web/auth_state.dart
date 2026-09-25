@@ -1,12 +1,20 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:convert';
 
-const _kAccessToken = 'access_token';
-const _kUserEmail = 'user_email';
-const _kUserName = 'user_name';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/browser_client.dart';
+
+const _configuredAuthBase =
+    String.fromEnvironment('AUTH_BASE_URL', defaultValue: '');
+
+Uri _authUri(String path) {
+  if (_configuredAuthBase.isNotEmpty) {
+    return Uri.parse('$_configuredAuthBase$path');
+  }
+  return Uri.base.resolve(path);
+}
 
 class AuthNotifier extends Notifier<AsyncValue<Map<String, String>?>> {
-  final _storage = const FlutterSecureStorage();
+  final BrowserClient _client = BrowserClient()..withCredentials = true;
 
   @override
   AsyncValue<Map<String, String>?> build() {
@@ -15,33 +23,41 @@ class AuthNotifier extends Notifier<AsyncValue<Map<String, String>?>> {
   }
 
   Future<void> _init() async {
-    final token = await _storage.read(key: _kAccessToken);
-    if (token == null) {
-      state = const AsyncValue.data(null);
-      return;
+    try {
+      final response = await _client.get(_authUri('/auth/me'));
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        state = const AsyncValue.data(null);
+        return;
+      }
+      if (response.statusCode >= 400) {
+        throw Exception('Auth ${response.statusCode}: ${response.body}');
+      }
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      state = AsyncValue.data({
+        'email': body['email']?.toString() ?? '',
+        'name': body['name']?.toString() ?? '',
+      });
+    } catch (error, stackTrace) {
+      state = AsyncValue.error(error, stackTrace);
     }
-    final email = await _storage.read(key: _kUserEmail) ?? '';
-    final name = await _storage.read(key: _kUserName) ?? '';
-    state = AsyncValue.data({'token': token, 'email': email, 'name': name});
   }
 
-  Future<void> saveSession({
-    required String token,
-    required String email,
-    required String name,
-  }) async {
-    await _storage.write(key: _kAccessToken, value: token);
-    await _storage.write(key: _kUserEmail, value: email);
-    await _storage.write(key: _kUserName, value: name);
-    state = AsyncValue.data({'token': token, 'email': email, 'name': name});
+  Future<void> refresh() async {
+    state = const AsyncValue.loading();
+    await _init();
   }
 
   Future<void> logout() async {
-    await _storage.deleteAll();
-    state = const AsyncValue.data(null);
+    try {
+      await _client.post(_authUri('/auth/logout'));
+    } finally {
+      state = const AsyncValue.data(null);
+    }
   }
 }
 
-final authProvider = NotifierProvider<AuthNotifier, AsyncValue<Map<String, String>?>>(
+final authProvider =
+    NotifierProvider<AuthNotifier, AsyncValue<Map<String, String>?>>(
   AuthNotifier.new,
 );

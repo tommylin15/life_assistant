@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import current_user
 from app.db.session import get_db
 from app.models.schemas import TaskCreate, TaskOut, TaskUpdate
 from app.models.task import Task, TaskStatus
@@ -12,13 +13,20 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
 @router.get("", response_model=list[TaskOut])
-async def list_tasks(db: AsyncSession = Depends(get_db)):
+async def list_tasks(
+    _user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(select(Task).order_by(Task.created_at.desc()))
     return result.scalars().all()
 
 
 @router.post("", response_model=TaskOut, status_code=201)
-async def create_task(body: TaskCreate, db: AsyncSession = Depends(get_db)):
+async def create_task(
+    body: TaskCreate,
+    _user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
     task = Task(id=str(uuid.uuid4()), **body.model_dump())
     db.add(task)
     await db.commit()
@@ -27,7 +35,11 @@ async def create_task(body: TaskCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{task_id}", response_model=TaskOut)
-async def get_task(task_id: str, db: AsyncSession = Depends(get_db)):
+async def get_task(
+    task_id: str,
+    _user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
     task = await db.get(Task, task_id)
     if not task:
         raise HTTPException(404, "Task not found")
@@ -35,7 +47,12 @@ async def get_task(task_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{task_id}", response_model=TaskOut)
-async def update_task(task_id: str, body: TaskUpdate, db: AsyncSession = Depends(get_db)):
+async def update_task(
+    task_id: str,
+    body: TaskUpdate,
+    _user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
     task = await db.get(Task, task_id)
     if not task:
         raise HTTPException(404, "Task not found")
@@ -47,7 +64,11 @@ async def update_task(task_id: str, body: TaskUpdate, db: AsyncSession = Depends
 
 
 @router.post("/{task_id}/complete", response_model=TaskOut)
-async def complete_task(task_id: str, db: AsyncSession = Depends(get_db)):
+async def complete_task(
+    task_id: str,
+    _user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
     task = await db.get(Task, task_id)
     if not task:
         raise HTTPException(404, "Task not found")
@@ -58,7 +79,11 @@ async def complete_task(task_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/{task_id}", status_code=204)
-async def delete_task(task_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_task(
+    task_id: str,
+    _user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
     task = await db.get(Task, task_id)
     if not task:
         raise HTTPException(404, "Task not found")

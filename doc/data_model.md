@@ -2,302 +2,229 @@
 
 最後更新：2026-09-25
 
-## 1. 資料模型定位
+## 1. 定位與 Source of Truth
 
-新的正式目標資料庫為 PostgreSQL。現有 SQLite schema 仍是 migration source，欄位語意原則上保留，避免因架構轉向而重做 domain model。
-
-第一階段原則：
-
-- 保留既有文字型 ID，避免 migration 時重建識別碼。
-- SQLite `INTEGER` boolean 對應 PostgreSQL `boolean`。
-- 時間欄位優先使用 `timestamptz`。
-- JSON 字串欄位可逐步改為 `jsonb`。
-- 既有 FTS5 不直接搬移 index，PostgreSQL 搜尋另建索引。
-- operational / integration tables 以 Alembic migration 管理，不以文件存在視為 schema 已部署。
-
-## 2. items / tasks
-
-Cloud Backend 目前已有 Task model / CRUD；legacy SQLite 對應欄位語意如下：
-
-- id text PK
-- title text NOT NULL
-- note text
-- status text NOT NULL
-- priority text NOT NULL
-- due_at timestamptz NULL
-- reminder_at timestamptz NULL
-- project_id text NULL
-- source_type text
-- source_ref text
-- created_at timestamptz NOT NULL
-- updated_at timestamptz NOT NULL
-- completed_at timestamptz NULL
-- deleted_at timestamptz NULL
-
-> Cloud Task model 的實際欄位 / migration 以 Backend code + Alembic 為 source of truth；SQLite 欄位仍作 migration mapping 來源。
-
-## 3. checklist_items
-
-- id text PK
-- item_id text FK
-- title text NOT NULL
-- is_done boolean
-- sort_order integer
-- created_at timestamptz
-
-## 4. projects
-
-- id text PK
-- name text NOT NULL
-- summary text
-- status text
-- created_at timestamptz
-- updated_at timestamptz
-
-目前 Cloud Backend Project model / CRUD **尚未實作**；legacy SQLite Project 不代表 Cloud Project 已完成。
-
-## 5. notes
-
-- id text PK
-- title text
-- body text
-- project_id text NULL
-- created_at timestamptz
-- updated_at timestamptz
-
-全文搜尋改以 PostgreSQL full-text search / trigram 等方案評估，不延續 SQLite FTS5 index 本身。
-
-## 6. note_links
-
-- source_note_id text
-- target_note_id text
-
-## 7. habits
-
-- id text PK
-- title text
-- recurrence_rule text
-- reminder_time text NULL
-- is_active boolean
-- created_at timestamptz
-
-## 8. habit_logs
-
-- id text PK
-- habit_id text FK
-- completed_at timestamptz
-
-## 9. shopping_lists
-
-- id text PK
-- name text
-- project_id text NULL
-- created_at timestamptz
-
-## 10. shopping_items
-
-- id text PK
-- list_id text FK
-- name text
-- category text
-- is_done boolean
-- sort_order integer
-
-## 11. tags
-
-- id text PK
-- name text UNIQUE
-
-## 12. entity_tags
-
-- entity_type text
-- entity_id text
-- tag_id text
-
-## 13. attachments
-
-- id text PK
-- entity_type text
-- entity_id text
-- display_name text
-- storage_ref text
-- mime_type text
-- created_at timestamptz
-
-`storage_ref` 取代把本機絕對路徑視為長期中央資料模型的做法；實際附件儲存方式另由 integration / storage 規格定義。
-
-## 14. calendar_events_cache
-
-Legacy / cache mapping：
-
-- id text PK
-- google_event_id text UNIQUE
-- calendar_id text
-- title text
-- starts_at timestamptz
-- ends_at timestamptz
-- location text
-- description text
-- project_id text NULL
-- last_synced_at timestamptz
-
-目前 Cloud Google Calendar API 直接透過 Backend 呼叫 Google Calendar；是否建立 PostgreSQL cache 仍屬後續架構決策。
-
-## 15. gmail_refs
-
-只保存必要 metadata，不長期保存完整郵件正文。
-
-- id text PK
-- gmail_message_id text UNIQUE
-- thread_id text
-- subject text
-- sender text
-- received_at timestamptz
-- snippet text
-- linked_entity_type text NULL
-- linked_entity_id text NULL
-- last_synced_at timestamptz
-
-目前 Cloud Gmail metadata API 可即時讀取；PostgreSQL `gmail_refs` 是否落地仍需配合 migration / cache 策略。
-
-## 16. reminders
-
-- id text PK
-- entity_type text
-- entity_id text
-- scheduled_at timestamptz
-- type text
-- is_enabled boolean
-
-## 17. templates
-
-- id text PK
-- name text
-- template_type text
-- payload_json jsonb
-- created_at timestamptz
-- updated_at timestamptz
-
-## 18. legacy activity_logs
-
-Legacy SQLite activity log：
-
-- id text PK
-- action_type text
-- entity_type text NULL
-- entity_id text NULL
-- summary text
-- result text
-- created_at timestamptz
-
-此表屬舊原生資產；新的 Cloud Backend audit baseline 使用 `execution_logs`，兩者在 migration 時需明確區分，不應直接假設相同語意。
-
-## 19. preferences
-
-- key text PK
-- value_json jsonb
-
-## 20. bridge_state
-
-- key text PK
-- value_json jsonb
-
-用途：
-
-- Bridge ID
-- schema version
-- last export timestamp
-- last import timestamp
-- last Drive folder reference
-
-## 21. Google integration operational tables
-
-Cloud Backend 已實作並部署：
-
-### google_connections
-
-用途：保存使用者 Google integration connection metadata 與 encrypted token references/data。
-
-主要欄位 baseline：
-
-- user_sub PK
-- email
-- encrypted_access_token
-- encrypted_refresh_token
-- scopes
-- access_token_expires_at
-- created_at
-- updated_at
-
-不得把 token 明文輸出到 API / debug log。
-
-### google_oauth_states
-
-用途：OAuth state validation / expiry。
-
-主要欄位 baseline：
-
-- state_hash PK
-- user_sub
-- email
-- services
-- expires_at
-- created_at
-
-## 22. execution_logs
-
-Cloud Backend 已於 2026-09-25 建立 operational execution log baseline，並以 Alembic migration 管理。
-
-主要欄位：
-
-- id text PK
-- request_id text NOT NULL
-- action_id text NULL
-- user_sub text NOT NULL
-- action_type text NOT NULL
-- entity_type text NULL
-- entity_id text NULL
-- provider text NULL
-- status text NOT NULL
-- summary text NULL
-- result text NULL
-- error_category text NULL
-- started_at timestamptz NOT NULL
-- finished_at timestamptz NULL
-
-用途：
-
-- Task mutation audit
-- Google Calendar create/update/delete audit
-- Gmail → Task / Calendar audit
-- Drive Bridge ensure audit
-- failure / partial-success / audit-finalization evidence
+正式目標資料庫為 PostgreSQL；legacy Flutter SQLite schema v3 保留作 migration source。實際 Cloud schema / migration 狀態以 `backend/app/models`、Alembic revisions 與 runtime evidence 為準。
 
 原則：
 
-- action 執行前先建立 `running` record；audit start 失敗則 action 不執行。
-- 成功後轉 `success` 並記錄 result。
-- 失敗後轉 `failure` 並記錄 error category。
-- 部分完成可使用 `partial_success`，不得寫成 full success。
-- 不保存 token、password 或完整敏感郵件正文。
+- migration 優先保留 stable text IDs。
+- 時間欄位使用 timezone-aware timestamp 語意。
+- SQLite FTS5 index 不直接搬到 PostgreSQL。
+- operational / integration tables 必須版本化管理。
+- 文件描述不代表 table 已實際部署；code + migration + evidence 才能判定。
 
-目前 `/api/v1/activity` 提供 authenticated read baseline。
+## 2. Cloud `tasks`
 
-## 23. 後續 operational tables
+目前已實作並有互動 CRUD evidence。
 
-仍可依 Phase 1 / Phase 2 需求增加：
+主要欄位：
 
-- scheduled_tasks
-- task_executions（若需要與通用 execution_logs 分離）
-- migration_runs
-- MCP / Bridge idempotency records
-- confirmation / policy decision records
+- `id` varchar(36) PK
+- `title` varchar(500) NOT NULL
+- `note` text NULL
+- `status` varchar(20)
+- `priority` varchar(10)
+- `due_at` timestamptz NULL
+- `reminder_at` timestamptz NULL
+- `project_id` varchar(36) NULL
+- `created_at` timestamptz
+- `updated_at` timestamptz
 
-這些仍屬目標方向，除非 repository code + migration + runtime evidence 已存在，否則不得標成完成。
+注意：目前 `project_id` 為 application-level reference，尚未建立 DB foreign key；Project delete API 會先檢查 linked Task 並在有關聯時回 409。
 
-## 24. Source of Truth / Migration 規則
+## 3. Cloud `projects`
 
-- 目前實際 schema / migration 狀態：以 Backend models + Alembic + runtime evidence 為準。
-- legacy SQLite schema：作為資料搬遷來源，不等於 Cloud schema 已完成。
-- 文件描述與程式不同時，先保留差異並以 repository implementation 判定現況，再更新文件。
-- destructive schema change 必須依工程治理 runbook 取得必要確認與 recovery evidence。
+2026-09-25 已實作；commit `0ea1d1fad596bcce4683df82b7d68caa4d7e42be`。
+
+主要欄位：
+
+- `id` varchar(36) PK
+- `name` varchar(500) NOT NULL
+- `summary` text NULL
+- `status` varchar(32) NOT NULL，default `active`
+- `created_at` timestamptz
+- `updated_at` timestamptz
+
+Indexes：
+
+- `ix_projects_status`
+- `ix_projects_name`
+
+Migration：`20260925_0003_projects`，down revision `20260925_0002`。
+
+Evidence：Alembic chain CI validation PASS、Cloud Run deploy PASS。部署流程目前沒有 production `alembic upgrade` evidence，因此 production Alembic apply 狀態為 NOT VERIFIED；Cloud startup 仍有 additive `Base.metadata.create_all` transitional safety net。
+
+## 4. Legacy SQLite domain mapping
+
+以下 table 仍是 migration source / existing assets；除另有 Cloud model 說明外，不代表已完成 PostgreSQL target schema。
+
+### `items`
+
+對應 Cloud `tasks`。Legacy 額外語意包含 `source_type`、`source_ref`、`completed_at`、`deleted_at` 等，完整 migration mapping 尚未完成。
+
+### `checklist_items`
+
+- id
+- item_id
+- title
+- is_done
+- sort_order
+- created_at
+
+Cloud target：尚未完成。
+
+### `projects`
+
+Legacy 與 Cloud 皆有 target；stable IDs 應優先保留。
+
+### `notes` / `note_links`
+
+- notes：id, title, body, project_id, created_at, updated_at
+- note_links：source_note_id, target_note_id
+- legacy FTS5 不直接搬 index
+
+Cloud target：尚未完成。
+
+### `habits` / `habit_logs`
+
+Cloud target：尚未完成。
+
+### `shopping_lists` / `shopping_items`
+
+Cloud target：尚未完成。
+
+### `tags` / `entity_tags`
+
+Cloud target：尚未完成。
+
+### `attachments`
+
+Legacy 使用 local path；Cloud 目標應改用 central `storage_ref` / equivalent，不把單一裝置絕對路徑當中央資料模型。
+
+Cloud target：尚未完成。
+
+### `calendar_events_cache`
+
+Legacy cache table 可保留作 migration/reference；目前 Cloud Calendar 能力直接由 Backend 呼叫 Google Calendar，是否建立 PostgreSQL cache 仍待架構決策。
+
+### `gmail_refs`
+
+只應保存必要 metadata，不長期鏡像完整郵件正文。Cloud Gmail API 目前可直接即時讀 metadata；是否持久化 cache 仍待決策。
+
+### `reminders`
+
+Cloud target：尚未完成。
+
+### `templates`
+
+Cloud target：尚未完成。
+
+### `activity_logs`
+
+Legacy SQLite activity log 與新的 Cloud `execution_logs` 不應直接視為相同 table；migration 時須定義語意轉換。
+
+### `preferences` / `bridge_state`
+
+Cloud target / migration strategy：尚未完成。
+
+## 5. Google Integration Operational Tables
+
+### `google_connections`
+
+已實作。
+
+主要欄位：
+
+- `user_sub` PK
+- `email`
+- `encrypted_access_token`
+- `encrypted_refresh_token`
+- `scopes`
+- `access_token_expires_at`
+- `created_at`
+- `updated_at`
+
+Token 不得以 plaintext 輸出至一般 API / log。
+
+### `google_oauth_states`
+
+已實作，用於 state validation / expiry。
+
+主要欄位：
+
+- `state_hash` PK
+- `user_sub`
+- `email`
+- `services`
+- `expires_at`
+- `created_at`
+
+## 6. Cloud `execution_logs`
+
+已實作；migration `20260925_0002_execution_logs`。
+
+主要欄位：
+
+- id PK
+- request_id
+- action_id NULL
+- user_sub
+- action_type
+- entity_type / entity_id NULL
+- provider NULL
+- status
+- result NULL
+- error_category NULL
+- summary NULL
+- started_at
+- finished_at NULL
+
+目前 audit 對象：
+
+- Task create/update/complete/delete
+- Project create/update/delete
+- Calendar create/update/delete
+- Gmail → Task / Calendar / Project
+- Drive Bridge ensure
+
+狀態語意：`running`、`success`、`failure`、必要時 `partial_success`。
+
+## 7. Alembic Chain
+
+目前版本：
+
+1. `20260925_0001_google_integrations`
+2. `20260925_0002_execution_logs`
+3. `20260925_0003_projects`
+
+CI 會驗證 migration SQL chain。正式 production migration runner / job 尚待完成；目前 Cloud Run startup 有 additive create-all safety net。
+
+## 8. Full Migration Target Readiness
+
+| Domain | Cloud target |
+|---|---|
+| Task | ✅ 已有 |
+| Project | ✅ 已有 |
+| Execution audit | ✅ 已有 |
+| Google integration operational data | ✅ 已有 |
+| Checklist | ❌ 尚缺 |
+| Notes / Links / search | ❌ 尚缺 |
+| Habits / logs | ❌ 尚缺 |
+| Shopping | ❌ 尚缺 |
+| Tags | ❌ 尚缺 |
+| Attachments | ❌ 尚缺 |
+| Reminders | ❌ 尚缺 |
+| Templates | ❌ 尚缺 |
+| Preferences / Bridge state | ❌ 尚缺 / 待策略 |
+
+因此完整 SQLite → PostgreSQL migration 尚不可宣告 READY/DONE。下一階段應先補其餘必要 Cloud target schema，再實作 deterministic export/import/upsert 與 verification。
+
+## 9. Migration / Integrity Rules
+
+- 不 drop / 清空 legacy SQLite source。
+- stable ID 優先。
+- 重跑需 idempotent。
+- row counts、keys、relationships、critical timestamps 必須驗證。
+- partial success 不得寫成 success。
+- destructive schema change 需依工程治理 runbook 取得必要確認與 recovery evidence。

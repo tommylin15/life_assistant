@@ -1,4 +1,6 @@
+import logging
 import os
+import re
 import secrets
 import time
 from urllib.parse import urlencode
@@ -10,6 +12,7 @@ from fastapi.responses import RedirectResponse
 from app.config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -31,6 +34,20 @@ SCOPES = " ".join([
 
 def _http_error(status_code: int, detail: str) -> HTTPException:
     return HTTPException(status_code=status_code, detail=detail)
+
+
+def _google_error_code(response: httpx.Response) -> str:
+    """Return only Google's machine-readable OAuth error code, never secrets."""
+    try:
+        payload = response.json()
+    except ValueError:
+        return "unknown_error"
+    if not isinstance(payload, dict):
+        return "unknown_error"
+    error = str(payload.get("error", "")).strip()
+    if not error or not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", error):
+        return "unknown_error"
+    return error
 
 
 async def _verify_id_token(id_token: str) -> dict:
@@ -88,6 +105,9 @@ async def current_user(request: Request) -> dict:
 
 @router.get("/login")
 async def login():
+    if not settings.google_client_id:
+        raise _http_error(503, "Google OAuth client ID is not configured")
+
     state = secrets.token_urlsafe(32)
     params = {
         "client_id": settings.google_client_id,
@@ -118,6 +138,9 @@ async def callback(code: str, state: str, request: Request):
     if not expected_state or not secrets.compare_digest(state, expected_state):
         raise _http_error(400, "Invalid OAuth state")
 
+    if not settings.google_client_secret:
+        raise _http_error(503, "Google OAuth client secret is not configured")
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             token_resp = await client.post(
@@ -134,7 +157,13 @@ async def callback(code: str, state: str, request: Request):
         raise _http_error(503, "Google token exchange unavailable") from exc
 
     if token_resp.status_code != 200:
-        raise _http_error(400, "Failed to exchange Google authorization code")
+        error_code = _google_error_code(token_resp)
+        logger.warning(
+            "Google OAuth token exchange failed: status=%s error=%s",
+            token_resp.status_code,
+            error_code,
+        )
+        raise _http_error(400, f"Google token exchange failed: {error_code}")
 
     id_token = str(token_resp.json().get("id_token", ""))
     user = await _verify_id_token(id_token)

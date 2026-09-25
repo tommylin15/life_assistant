@@ -11,11 +11,12 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "branding" / "life_assistant_icon_192.b64"
-EXPECTED_SOURCE_SHA256 = "9e0cd02d7036fcb6475d8fcb8f23cf30d280c5fdb68559028a029b9ad4837575"
+# Base64 decodes to the selected warm Life Assistant icon as a compact JPEG.
+EXPECTED_SOURCE_SHA256 = "8d4da07232fa83e4024710f2ec6a6da1104b31fae56c084f4a897aa419dc23da"
 WARM_BG = (247, 243, 234, 255)
 
 
-def _load_source() -> tuple[bytes, Image.Image]:
+def _load_source() -> Image.Image:
     encoded = "".join(SOURCE.read_text(encoding="utf-8").split())
     raw = base64.b64decode(encoded)
     actual = hashlib.sha256(raw).hexdigest()
@@ -24,12 +25,7 @@ def _load_source() -> tuple[bytes, Image.Image]:
     image = Image.open(BytesIO(raw)).convert("RGBA")
     if image.size != (192, 192):
         raise RuntimeError(f"Unexpected canonical icon size: {image.size}")
-    return raw, image
-
-
-def _write_raw(raw: bytes, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(raw)
+    return image
 
 
 def _save(image: Image.Image, path: Path, size: tuple[int, int]) -> None:
@@ -48,7 +44,7 @@ def _save_maskable(image: Image.Image, path: Path, size: int) -> None:
 
 
 def main() -> None:
-    raw, image = _load_source()
+    image = _load_source()
     web_icons = ROOT / "web" / "icons"
 
     for name in [
@@ -57,7 +53,7 @@ def main() -> None:
         "life-assistant-192-v2.png",
         "Icon-192.png",
     ]:
-        _write_raw(raw, web_icons / name)
+        _save(image, web_icons / name, (192, 192))
 
     for name in [
         "life-assistant-512-v6.png",
@@ -72,10 +68,14 @@ def main() -> None:
     _save_maskable(image, web_icons / "Icon-maskable-192.png", 192)
     _save_maskable(image, web_icons / "Icon-maskable-512.png", 512)
 
-    _write_raw(raw, ROOT / "web" / "favicon.png")
+    _save(image, ROOT / "web" / "favicon.png", (192, 192))
     _save(image, ROOT / "web" / "branding" / "life-assistant-hero-v6.png", (512, 512))
 
-    _save(image, ROOT / "android" / "app" / "src" / "main" / "res" / "drawable" / "life_assistant_icon.png", (512, 512))
+    _save(
+        image,
+        ROOT / "android" / "app" / "src" / "main" / "res" / "drawable" / "life_assistant_icon.png",
+        (512, 512),
+    )
     for density, size in {
         "mdpi": 48,
         "hdpi": 72,
@@ -89,7 +89,7 @@ def main() -> None:
             (size, size),
         )
 
-    print("Prepared Life Assistant branding assets from canonical icon source.")
+    print("Prepared Life Assistant branding assets from verified canonical source.")
 
 
 if __name__ == "__main__":

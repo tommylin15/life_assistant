@@ -24,12 +24,13 @@ jobs:
     environment: dev-test
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     steps:
       - name: Checkout release commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ env.RELEASE_SHA }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -44,8 +45,8 @@ jobs:
       - name: Build Flutter Web
         run: flutter build web --target=lib/main_web.dart --no-pub
 
-      - name: Verify Google integrations entry is present in build
-        run: grep -q "Google 整合" build/web/main.dart.js
+      - name: Stamp release commit
+        run: printf '%s\n' "$RELEASE_SHA" > build/web/release.txt
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -71,6 +72,11 @@ jobs:
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
             "$BASE_URL/" >/dev/null
+
+          REMOTE_RELEASE="$(curl --fail --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            "$BASE_URL/release.txt")"
+          test "$REMOTE_RELEASE" = "$RELEASE_SHA"
 
           CACHE_CONTROL="$(curl --silent --show-error --head "$BASE_URL/index.html" | tr -d '\r' | grep -i '^cache-control:' || true)"
           echo "$CACHE_CONTROL" | grep -Eiq 'no-cache|no-store|must-revalidate'

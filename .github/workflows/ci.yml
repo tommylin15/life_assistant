@@ -62,3 +62,4 @@ jobs:
           bash -n scripts/bootstrap_gcp_wif.sh
           bash -n scripts/inspect_postgres_dev.sh
           bash -n scripts/diagnose_db_secret.sh
+          bash -n scripts/rotate_google_oauth_secret.sh

@@ -149,6 +149,10 @@ class _IntegrationsPageState extends ConsumerState<IntegrationsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
+                    '授權完成後請做這兩項驗收；Gmail、Calendar、Drive 三項都顯示 PASS，才算 Google 整合完成。',
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
                     '先驗證 Gmail 與 Calendar 唯讀 API；Drive 只有在你明確按下按鈕時，才會建立或確認 life_assistant/ChatGPT_Bridge。',
                   ),
                   const SizedBox(height: 12),

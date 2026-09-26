@@ -162,6 +162,8 @@ void main() {
     expect(find.text('NOT VERIFIED'), findsOneWidget);
 
     await tester.scrollUntilVisible(find.text('重試清理'), 200);
+    await tester.drag(find.byType(ListView), const Offset(0, -200));
+    await tester.pumpAndSettle();
     expect(find.text('重試清理'), findsOneWidget);
 
     await tester.tap(find.text('重試清理'));

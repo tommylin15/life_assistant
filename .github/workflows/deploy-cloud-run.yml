@@ -62,7 +62,7 @@ jobs:
             --region "$GCP_REGION" \
             --source backend \
             --command python \
-            --args scripts/apply_cloud_domain_parity_migration.py \
+            --args=-m,scripts.apply_cloud_domain_parity_migration \
             --network "$GCP_NETWORK" \
             --subnet "$GCP_SUBNET" \
             --vpc-egress private-ranges-only \

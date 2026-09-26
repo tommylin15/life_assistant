@@ -54,6 +54,8 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Apply verified database migration
+        id: migration
+        continue-on-error: true
         run: |
           gcloud run jobs deploy "$MIGRATION_JOB" \
             --project "$GCP_PROJECT_ID" \
@@ -70,6 +72,39 @@ jobs:
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --wait \
             --quiet
+
+      - name: Collect failed migration diagnostics
+        if: steps.migration.outcome == 'failure'
+        run: |
+          EXECUTION="$(gcloud run jobs executions list \
+            --job "$MIGRATION_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --sort-by='~metadata.creationTimestamp' \
+            --limit=1 \
+            --format='value(metadata.name)' || true)"
+
+          echo "Latest migration execution: ${EXECUTION:-unknown}"
+          if [ -n "$EXECUTION" ]; then
+            gcloud run jobs executions describe "$EXECUTION" \
+              --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" \
+              --format=yaml || true
+          fi
+
+          gcloud logging read \
+            "resource.type=\"cloud_run_job\" AND resource.labels.job_name=\"$MIGRATION_JOB\"" \
+            --project "$GCP_PROJECT_ID" \
+            --freshness=30m \
+            --limit=200 \
+            --order=asc \
+            --format='value(timestamp,severity,textPayload,jsonPayload.message)' || true
+
+      - name: Fail migration gate
+        if: steps.migration.outcome == 'failure'
+        run: |
+          echo "::error::Verified database migration failed; see diagnostics above."
+          exit 1
 
       - name: Deploy backend to Cloud Run
         run: |

@@ -106,6 +106,38 @@ class CloudDomainMigrationRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(runner.PrecreatedDriftError, "target tables already exist"):
             runner.validate_unversioned_baseline_tables(tables)
 
+    def test_unversioned_target_presence_encodes_exact_subset(self):
+        runner = _load_runner()
+        present = {"notes", "templates"}
+        self.assertEqual(129, runner.encode_unversioned_target_tables(present))
+        error = runner.UnversionedTargetTablesPresentError(present)
+        self.assertEqual(present, error.tables)
+        self.assertEqual(129, runner.classify_failure(error))
+
+    def test_unversioned_target_presence_uses_stable_target_order(self):
+        runner = _load_runner()
+        self.assertEqual(
+            {
+                "notes": 1,
+                "note_links": 2,
+                "habits": 4,
+                "habit_completions": 8,
+                "shopping_lists": 16,
+                "shopping_items": 32,
+                "templates": 64,
+            },
+            runner.UNVERSIONED_TARGET_TABLE_BITS,
+        )
+        self.assertEqual(191, runner.encode_unversioned_target_tables(set(runner.TARGET_TABLES)))
+
+    def test_unversioned_database_raises_encoded_target_presence_error(self):
+        runner = _load_runner()
+        tables = set(runner.BASELINE_TABLES) | {"tasks", "notes", "shopping_items"}
+        with self.assertRaises(runner.UnversionedTargetTablesPresentError) as captured:
+            runner.validate_unversioned_baseline_tables(tables)
+        self.assertEqual({"notes", "shopping_items"}, captured.exception.tables)
+        self.assertEqual(97, runner.classify_failure(captured.exception))
+
     def test_unversioned_database_with_baseline_tables_allows_shape_check(self):
         runner = _load_runner()
         runner.validate_unversioned_baseline_tables(set(runner.BASELINE_TABLES) | {"tasks"})

@@ -4,7 +4,7 @@
 The release flow may repair only the two previously diagnosed missing projects
 indexes. If the database is still unversioned afterward, a stronger read-only
 metadata-bootstrap preflight runs. Passing that preflight is intentionally a
-non-zero approval gate: this module contains no Alembic stamp/write path.
+non-zero approval gate: this module contains no metadata write path.
 """
 
 from __future__ import annotations

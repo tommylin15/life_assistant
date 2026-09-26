@@ -8,6 +8,14 @@
 - 再閱讀與目前工作直接相關的規格文件；不要因未使用的功能而載入全部文件。
 - 若本文件與使用者的新指示衝突，先指出衝突，再依使用者最新明確指示執行。
 
+## Skill / Workflow 限制
+
+- 本專案**不得使用、呼叫或套用任何 Superpowers skill / workflow**。
+- 禁止範圍包含所有 `skills://plugins/superpowers/...` skills，以及其衍生的 brainstorming、planning、TDD、debugging、execution、review、verification 等 Superpowers 工作流程。
+- 本專案的工程方法、測試策略、debugging、驗證、CI/CD 與交付流程，應以本文件、GitHub 目前實作、相關正式規格與專案治理 / delivery runbook 為準，不得以 Superpowers 規則覆蓋或補充。
+- 既有 `docs/superpowers/` 內容視為歷史資料 / legacy artifact；不得把它當作目前的強制流程、Source of Truth 或後續工作的必要輸入，也不得因舊文件存在而重新啟用 Superpowers skill。
+- 除非使用者日後明確修改本條規則，所有代理人與開發工作都必須遵守本禁令。
+
 ## 目前架構基準
 
 目前正式目標架構改為：

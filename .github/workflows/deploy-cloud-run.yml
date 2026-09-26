@@ -90,6 +90,26 @@ jobs:
               --project "$GCP_PROJECT_ID" \
               --region "$GCP_REGION" \
               --format=yaml || true
+
+            TASK="$(gcloud run jobs executions tasks list \
+              --execution "$EXECUTION" \
+              --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" \
+              --limit=1 \
+              --format='value(metadata.name)' || true)"
+            echo "Latest migration task: ${TASK:-unknown}"
+
+            if [ -n "$TASK" ]; then
+              TASK_EXIT="$(gcloud run jobs executions tasks describe "$TASK" \
+                --project "$GCP_PROJECT_ID" \
+                --region "$GCP_REGION" \
+                --format='value(status.lastAttemptResult.exitCode)' || true)"
+              echo "Migration task exit code: ${TASK_EXIT:-unknown}"
+              gcloud run jobs executions tasks describe "$TASK" \
+                --project "$GCP_PROJECT_ID" \
+                --region "$GCP_REGION" \
+                --format='yaml(status.lastAttemptResult,status.conditions)' || true
+            fi
           fi
 
           gcloud logging read \

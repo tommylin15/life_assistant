@@ -222,6 +222,12 @@ BASELINE_SCHEMA_MISMATCH_EXIT_CODES = {
     ("projects", "shape"): 40,
     ("projects", "index"): 41,
 }
+PROJECTS_INDEX_MISMATCH_EXIT_CODES = {
+    ("ix_projects_status", "missing"): 42,
+    ("ix_projects_status", "definition"): 43,
+    ("ix_projects_name", "missing"): 44,
+    ("ix_projects_name", "definition"): 45,
+}
 # Backward-compatible names for earlier evidence/documents.
 EXIT_REVISION = EXIT_REVISION_TABLE_MISSING
 EXIT_CONTRACT = EXIT_REVISION_TABLE_MISSING
@@ -297,13 +303,17 @@ class BaselineTableShapeMismatchError(BaselineSchemaMismatchError):
 class BaselineRequiredIndexMismatchError(BaselineSchemaMismatchError):
     """Identify which baseline table has a required index mismatch."""
 
-    def __init__(self, table: str, index_name: str):
+    def __init__(self, table: str, index_name: str, reason: str | None = None):
         if table not in BASELINE_TABLES:
             raise ValueError(f"unknown baseline table: {table}")
+        if reason not in {None, "missing", "definition"}:
+            raise ValueError(f"unknown baseline index mismatch reason: {reason}")
         self.table = table
         self.index_name = index_name
+        self.reason = reason
+        detail = reason or "missing or mismatched"
         super().__init__(
-            f"baseline index mismatch for {table}: {index_name} missing or mismatched"
+            f"baseline index mismatch for {table}: {index_name} {detail}"
         )
 
 
@@ -334,6 +344,9 @@ def classify_failure(exc: BaseException) -> int:
     if isinstance(exc, BaselineTableShapeMismatchError):
         return BASELINE_SCHEMA_MISMATCH_EXIT_CODES[(exc.table, "shape")]
     if isinstance(exc, BaselineRequiredIndexMismatchError):
+        exact_projects_key = (exc.index_name, exc.reason)
+        if exc.table == "projects" and exact_projects_key in PROJECTS_INDEX_MISMATCH_EXIT_CODES:
+            return PROJECTS_INDEX_MISMATCH_EXIT_CODES[exact_projects_key]
         return BASELINE_SCHEMA_MISMATCH_EXIT_CODES[(exc.table, "index")]
     if isinstance(exc, BaselineSchemaMismatchError):
         return EXIT_BASELINE_SCHEMA_MISMATCH
@@ -408,9 +421,12 @@ def validate_baseline_required_indexes(
     actual_index_defs: dict[str, str],
 ) -> None:
     for index_name, required_fragment in BASELINE_REQUIRED_INDEXES[table].items():
-        normalized = " ".join(actual_index_defs.get(index_name, "").lower().split())
+        raw_definition = actual_index_defs.get(index_name)
+        if raw_definition is None:
+            raise BaselineRequiredIndexMismatchError(table, index_name, "missing")
+        normalized = " ".join(raw_definition.lower().split())
         if required_fragment.lower() not in normalized:
-            raise BaselineRequiredIndexMismatchError(table, index_name)
+            raise BaselineRequiredIndexMismatchError(table, index_name, "definition")
 
 
 def decide_migration_action(current_revision: str, target_tables_present: set[str]) -> str:

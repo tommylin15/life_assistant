@@ -23,6 +23,23 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         self.assertIn(deploy_marker, self.text)
         self.assertLess(self.text.index(migration_marker), self.text.index(deploy_marker))
 
+    def test_failed_migration_surfaces_execution_and_logs_before_failing_gate(self):
+        migration_marker = "Apply verified database migration"
+        diagnostics_marker = "Collect failed migration diagnostics"
+        fail_marker = "Fail migration gate"
+        deploy_marker = "Deploy backend to Cloud Run"
+
+        self.assertIn("id: migration", self.text)
+        self.assertIn("continue-on-error: true", self.text)
+        self.assertIn(diagnostics_marker, self.text)
+        self.assertIn("steps.migration.outcome == 'failure'", self.text)
+        self.assertIn("gcloud run jobs executions describe", self.text)
+        self.assertIn("gcloud logging read", self.text)
+        self.assertIn(fail_marker, self.text)
+        self.assertLess(self.text.index(migration_marker), self.text.index(diagnostics_marker))
+        self.assertLess(self.text.index(diagnostics_marker), self.text.index(fail_marker))
+        self.assertLess(self.text.index(fail_marker), self.text.index(deploy_marker))
+
     def test_runtime_verification_remains_mandatory(self):
         self.assertIn("Verify Cloud Run health", self.text)
         self.assertIn("Verify Cloud Run database readiness", self.text)

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Apply and verify the additive Cloud Domain Parity migration in dev-test.
 
-This runner deliberately fails closed when target tables were pre-created while
-Alembic is still at the previous revision. It never stamps, drops, truncates, or
-rewrites data to hide migration drift.
+This runner deliberately fails closed when migration metadata or schema state is
+ambiguous. It never stamps, drops, truncates, or rewrites data to hide drift.
 """
 
 from __future__ import annotations
@@ -102,6 +101,87 @@ EXPECTED_FOREIGN_KEYS = {
     "shopping_items": {("list_id", "shopping_lists", "id")},
 }
 
+# These are the tables created by Alembic revisions 0001-0003. When an
+# existing database has no alembic_version table, they are verified read-only
+# before any metadata bootstrap can even be considered.
+BASELINE_TABLES = (
+    "google_connections",
+    "google_oauth_states",
+    "execution_logs",
+    "projects",
+)
+
+BASELINE_EXPECTED_COLUMNS = {
+    "google_connections": {
+        "user_sub": ("character varying", 255, False),
+        "email": ("character varying", 320, False),
+        "encrypted_access_token": ("text", None, True),
+        "encrypted_refresh_token": ("text", None, True),
+        "scopes": ("text", None, False),
+        "access_token_expires_at": ("timestamp with time zone", None, True),
+        "created_at": ("timestamp with time zone", None, False),
+        "updated_at": ("timestamp with time zone", None, False),
+    },
+    "google_oauth_states": {
+        "state_hash": ("character varying", 64, False),
+        "user_sub": ("character varying", 255, False),
+        "email": ("character varying", 320, False),
+        "services": ("character varying", 255, False),
+        "expires_at": ("timestamp with time zone", None, False),
+        "created_at": ("timestamp with time zone", None, False),
+    },
+    "execution_logs": {
+        "id": ("character varying", 36, False),
+        "request_id": ("character varying", 128, False),
+        "action_id": ("character varying", 128, True),
+        "user_sub": ("character varying", 255, False),
+        "action_type": ("character varying", 128, False),
+        "entity_type": ("character varying", 64, True),
+        "entity_id": ("character varying", 255, True),
+        "provider": ("character varying", 64, True),
+        "status": ("character varying", 32, False),
+        "result": ("character varying", 64, True),
+        "error_category": ("character varying", 128, True),
+        "summary": ("text", None, True),
+        "started_at": ("timestamp with time zone", None, False),
+        "finished_at": ("timestamp with time zone", None, True),
+    },
+    "projects": {
+        "id": ("character varying", 36, False),
+        "name": ("character varying", 500, False),
+        "summary": ("text", None, True),
+        "status": ("character varying", 32, False),
+        "created_at": ("timestamp with time zone", None, False),
+        "updated_at": ("timestamp with time zone", None, False),
+    },
+}
+
+BASELINE_EXPECTED_PRIMARY_KEYS = {
+    "google_connections": ("user_sub",),
+    "google_oauth_states": ("state_hash",),
+    "execution_logs": ("id",),
+    "projects": ("id",),
+}
+
+BASELINE_REQUIRED_INDEXES = {
+    "google_connections": {},
+    "google_oauth_states": {
+        "ix_google_oauth_states_user_sub": "(user_sub)",
+        "ix_google_oauth_states_expires_at": "(expires_at)",
+    },
+    "execution_logs": {
+        "ix_execution_logs_request_id": "(request_id)",
+        "ix_execution_logs_action_id": "(action_id)",
+        "ix_execution_logs_user_sub": "(user_sub)",
+        "ix_execution_logs_action_type": "(action_type)",
+        "ix_execution_logs_status": "(status)",
+    },
+    "projects": {
+        "ix_projects_status": "(status)",
+        "ix_projects_name": "(name)",
+    },
+}
+
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
@@ -118,6 +198,9 @@ EXIT_REVISION_ROW_COUNT = 26
 EXIT_UNEXPECTED_CURRENT_REVISION = 27
 EXIT_POST_MIGRATION_REVISION = 28
 EXIT_UNEXPECTED = 29
+EXIT_BASELINE_TABLES_MISSING = 30
+EXIT_BASELINE_SCHEMA_MISMATCH = 31
+EXIT_BASELINE_VERIFIED_UNVERSIONED = 32
 # Backward-compatible names for earlier evidence/documents.
 EXIT_REVISION = EXIT_REVISION_TABLE_MISSING
 EXIT_CONTRACT = EXIT_REVISION_TABLE_MISSING
@@ -159,11 +242,29 @@ class PreservedDataMismatchError(MigrationContractError):
     """Pre-existing tables or row counts changed during the additive migration."""
 
 
+class BaselineTablesMissingError(MigrationContractError):
+    """An unversioned database is missing tables required by revisions 0001-0003."""
+
+
+class BaselineSchemaMismatchError(MigrationContractError):
+    """An unversioned database does not match the expected 0001-0003 schema."""
+
+
+class BaselineVerifiedWithoutVersionError(MigrationContractError):
+    """The baseline matches, but Alembic metadata is intentionally still absent."""
+
+
 def classify_failure(exc: BaseException) -> int:
     if isinstance(exc, subprocess.CalledProcessError):
         return EXIT_ALEMBIC
     if isinstance(exc, SQLAlchemyError):
         return EXIT_DATABASE
+    if isinstance(exc, BaselineTablesMissingError):
+        return EXIT_BASELINE_TABLES_MISSING
+    if isinstance(exc, BaselineSchemaMismatchError):
+        return EXIT_BASELINE_SCHEMA_MISMATCH
+    if isinstance(exc, BaselineVerifiedWithoutVersionError):
+        return EXIT_BASELINE_VERIFIED_UNVERSIONED
     if isinstance(exc, RevisionTableMissingError):
         return EXIT_REVISION_TABLE_MISSING
     if isinstance(exc, RevisionRowCountError):
@@ -198,6 +299,47 @@ def require_target_revision(revision: str) -> None:
         )
 
 
+def validate_unversioned_baseline_tables(tables: set[str]) -> None:
+    present = set(tables)
+    target_present = set(TARGET_TABLES) & present
+    if target_present:
+        raise PrecreatedDriftError(
+            "migration drift: target tables already exist in unversioned database: "
+            + ",".join(sorted(target_present))
+        )
+    missing = set(BASELINE_TABLES) - present
+    if missing:
+        raise BaselineTablesMissingError(
+            "missing baseline tables in unversioned database: "
+            + ",".join(sorted(missing))
+        )
+
+
+def validate_baseline_table_shape(
+    table: str,
+    actual_columns: dict[str, tuple[str, int | None, bool]],
+    actual_pk: tuple[str, ...],
+) -> None:
+    expected_columns = BASELINE_EXPECTED_COLUMNS[table]
+    expected_pk = BASELINE_EXPECTED_PRIMARY_KEYS[table]
+    if actual_columns != expected_columns or actual_pk != expected_pk:
+        raise BaselineSchemaMismatchError(
+            f"baseline schema mismatch for {table}: columns/type/nullability/primary key differ"
+        )
+
+
+def validate_baseline_required_indexes(
+    table: str,
+    actual_index_defs: dict[str, str],
+) -> None:
+    for index_name, required_fragment in BASELINE_REQUIRED_INDEXES[table].items():
+        normalized = " ".join(actual_index_defs.get(index_name, "").lower().split())
+        if required_fragment.lower() not in normalized:
+            raise BaselineSchemaMismatchError(
+                f"baseline index mismatch for {table}: {index_name} missing or mismatched"
+            )
+
+
 def decide_migration_action(current_revision: str, target_tables_present: set[str]) -> str:
     present = set(target_tables_present)
     expected = set(TARGET_TABLES)
@@ -223,14 +365,6 @@ def decide_migration_action(current_revision: str, target_tables_present: set[st
     )
 
 
-async def _current_revision(conn: AsyncConnection) -> str:
-    exists = await conn.scalar(text("SELECT to_regclass('public.alembic_version') IS NOT NULL"))
-    if not exists:
-        return validate_revision_state(False, [])
-    rows = (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalars().all()
-    return validate_revision_state(True, list(rows))
-
-
 async def _public_tables(conn: AsyncConnection) -> set[str]:
     rows = (
         await conn.execute(
@@ -243,6 +377,14 @@ async def _public_tables(conn: AsyncConnection) -> set[str]:
     return {str(row) for row in rows}
 
 
+async def _current_revision(conn: AsyncConnection) -> str:
+    exists = await conn.scalar(text("SELECT to_regclass('public.alembic_version') IS NOT NULL"))
+    if not exists:
+        return validate_revision_state(False, [])
+    rows = (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalars().all()
+    return validate_revision_state(True, list(rows))
+
+
 async def _row_counts(conn: AsyncConnection, tables: set[str]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for table in sorted(tables):
@@ -253,7 +395,10 @@ async def _row_counts(conn: AsyncConnection, tables: set[str]) -> dict[str, int]
     return counts
 
 
-async def _verify_columns(conn: AsyncConnection, table: str) -> None:
+async def _table_columns(
+    conn: AsyncConnection,
+    table: str,
+) -> dict[str, tuple[str, int | None, bool]]:
     result = await conn.execute(
         text(
             "SELECT column_name, data_type, character_maximum_length, is_nullable "
@@ -263,7 +408,7 @@ async def _verify_columns(conn: AsyncConnection, table: str) -> None:
         ),
         {"table": table},
     )
-    actual = {
+    return {
         str(row.column_name): (
             str(row.data_type),
             int(row.character_maximum_length) if row.character_maximum_length is not None else None,
@@ -271,6 +416,10 @@ async def _verify_columns(conn: AsyncConnection, table: str) -> None:
         )
         for row in result
     }
+
+
+async def _verify_columns(conn: AsyncConnection, table: str) -> None:
+    actual = await _table_columns(conn, table)
     expected = EXPECTED_COLUMNS[table]
     if actual != expected:
         raise SchemaMismatchError(f"schema mismatch for {table}: columns/nullability/type differ")
@@ -289,6 +438,17 @@ async def _primary_key(conn: AsyncConnection, table: str) -> tuple[str, ...]:
         {"qualified_table": f"public.{table}"},
     )
     return tuple(str(row.column_name) for row in result)
+
+
+async def _table_indexes(conn: AsyncConnection, table: str) -> dict[str, str]:
+    result = await conn.execute(
+        text(
+            "SELECT indexname, indexdef FROM pg_indexes "
+            "WHERE schemaname = 'public' AND tablename = :table"
+        ),
+        {"table": table},
+    )
+    return {str(row.indexname): str(row.indexdef) for row in result}
 
 
 async def _foreign_keys(conn: AsyncConnection, table: str) -> set[tuple[str, str, str]]:
@@ -312,6 +472,15 @@ async def _foreign_keys(conn: AsyncConnection, table: str) -> set[tuple[str, str
     }
 
 
+async def _verify_unversioned_baseline_schema(conn: AsyncConnection) -> None:
+    for table in BASELINE_TABLES:
+        columns = await _table_columns(conn, table)
+        primary_key = await _primary_key(conn, table)
+        validate_baseline_table_shape(table, columns, primary_key)
+        indexes = await _table_indexes(conn, table)
+        validate_baseline_required_indexes(table, indexes)
+
+
 async def _verify_schema(conn: AsyncConnection) -> None:
     tables = await _public_tables(conn)
     missing = set(TARGET_TABLES) - tables
@@ -329,22 +498,25 @@ async def _verify_schema(conn: AsyncConnection) -> None:
         if actual != expected:
             raise SchemaMismatchError(f"foreign key mismatch for {table}: {sorted(actual)}")
 
-    index_def = await conn.scalar(
-        text(
-            "SELECT indexdef FROM pg_indexes "
-            "WHERE schemaname = 'public' AND tablename = 'habit_completions' "
-            "AND indexname = 'ix_habit_completions_habit_id_completed_at'"
-        )
+    index_defs = await _table_indexes(conn, "habit_completions")
+    normalized = " ".join(
+        index_defs.get("ix_habit_completions_habit_id_completed_at", "").lower().split()
     )
-    normalized = " ".join(str(index_def or "").lower().split())
     if "(habit_id, completed_at desc)" not in normalized:
         raise SchemaMismatchError("habit completion descending index is missing or mismatched")
 
 
 async def _inspect_before(engine) -> tuple[str, set[str], set[str], dict[str, int]]:
     async with engine.connect() as conn:
-        revision = await _current_revision(conn)
         tables = await _public_tables(conn)
+        if "alembic_version" not in tables:
+            validate_unversioned_baseline_tables(tables)
+            await _verify_unversioned_baseline_schema(conn)
+            raise BaselineVerifiedWithoutVersionError(
+                "baseline schema verified but alembic_version table is missing"
+            )
+
+        revision = await _current_revision(conn)
         target_present = set(TARGET_TABLES) & tables
         preserved_tables = tables - set(TARGET_TABLES) - {"alembic_version"}
         counts = await _row_counts(conn, preserved_tables)

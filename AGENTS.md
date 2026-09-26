@@ -2,6 +2,8 @@
 
 這是「生活助理 App v0.1」的代理人工作指引。正式專案規則以 [`doc/PROJECT_RULES.md`](doc/PROJECT_RULES.md) 為準；開始任何工作前必須先完整閱讀它。
 
+> **專案級禁令：本專案不得使用、呼叫或套用任何 Superpowers skill / workflow。** 所有 `skills://plugins/superpowers/...` skills 均禁止；既有 `docs/superpowers/` 僅視為歷史資料，不得作為目前工作流程、Source of Truth 或必要輸入。完整規則見 `doc/PROJECT_RULES.md`。
+
 ## 工作順序
 
 1. 讀取 `doc/PROJECT_RULES.md`。

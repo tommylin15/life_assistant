@@ -81,6 +81,8 @@ abstract class AcceptanceApi {
     Map<String, dynamic> body,
   );
 
+  Future<Map<String, dynamic>> ensureDriveBridge();
+
   Future<void> deleteTask(String id);
   Future<List<Map<String, dynamic>>> getActivity({int limit = 100});
 }
@@ -124,6 +126,7 @@ class AcceptanceRunner {
       artifacts,
       expectedActivity,
     );
+    await _runDrive(grantedServices, checks, expectedActivity);
 
     final cleanupErrors = await _cleanup(artifacts);
     _add(
@@ -504,6 +507,57 @@ class AcceptanceRunner {
         label: 'Gmail → Calendar',
         status: AcceptanceStatus.fail,
         detail: '轉換失敗：$error',
+      );
+    }
+  }
+
+  Future<void> _runDrive(
+    Set<String> grantedServices,
+    List<AcceptanceCheck> checks,
+    Set<_ExpectedActivity> expectedActivity,
+  ) async {
+    if (!grantedServices.contains('drive')) {
+      _notVerified(
+        checks,
+        'drive.bridge.ensure',
+        'Drive Bridge',
+        'Drive 尚未授權，未執行真實帳號測試。',
+      );
+      return;
+    }
+
+    try {
+      final result = await api.ensureDriveBridge();
+      final bridge = result['bridge'];
+      if (bridge is! Map) {
+        throw StateError('Drive Bridge response missing bridge');
+      }
+      final bridgeId = bridge['id']?.toString();
+      final bridgeName = bridge['name']?.toString();
+      if (bridgeId == null || bridgeId.isEmpty) {
+        throw StateError('Drive Bridge response missing id');
+      }
+      if (bridgeName != 'ChatGPT_Bridge') {
+        throw StateError('Drive Bridge response name mismatch');
+      }
+
+      expectedActivity.add(
+        (actionType: 'drive.bridge.ensure', entityId: bridgeId),
+      );
+      _add(
+        checks,
+        key: 'drive.bridge.ensure',
+        label: 'Drive Bridge',
+        status: AcceptanceStatus.pass,
+        detail: '已確認 life_assistant/ChatGPT_Bridge 可用（$bridgeId）。',
+      );
+    } catch (error) {
+      _add(
+        checks,
+        key: 'drive.bridge.ensure',
+        label: 'Drive Bridge',
+        status: AcceptanceStatus.fail,
+        detail: 'Drive Bridge 驗收失敗：$error',
       );
     }
   }

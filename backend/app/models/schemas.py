@@ -148,3 +148,47 @@ class HabitCompletionOut(BaseModel):
     completed_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ShoppingListCreate(BaseModel):
+    name: str = Field(max_length=500)
+    project_id: str | None = None
+
+
+class ShoppingItemCreate(BaseModel):
+    name: str = Field(max_length=500)
+    category: str | None = Field(default=None, max_length=255)
+
+
+class ShoppingItemUpdate(BaseModel):
+    is_done: bool | None = None
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("is_done must be provided")
+        if self.is_done is None:
+            raise ValueError("is_done cannot be null")
+        return self
+
+
+class ShoppingItemOut(BaseModel):
+    id: str
+    list_id: str
+    name: str
+    category: str | None
+    is_done: bool
+    sort_order: int
+
+    model_config = {"from_attributes": True}
+
+
+class ShoppingListOut(BaseModel):
+    id: str
+    name: str
+    project_id: str | None
+    created_at: datetime
+    items: list[ShoppingItemOut]
+
+    model_config = {"from_attributes": True}

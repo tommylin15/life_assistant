@@ -11,7 +11,7 @@
 | Task | Scope | Implementation | Tests | CI | Deployment | Runtime |
 |---|---|---|---|---|---|---|
 | 1 | PostgreSQL target models + Alembic migration | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
-| 2 | Notes API parity | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
+| 2 | Notes API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 3 | Habits API parity | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 4 | Shopping API parity | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 5 | Templates API parity | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
@@ -56,6 +56,61 @@
 - PostgreSQL runtime table state：NOT VERIFIED
 - dev/test DB `alembic_version` runtime head：NOT VERIFIED
 - SQLite → PostgreSQL historical backfill：NOT VERIFIED；目前 repository 尚未有可證明本批四 domain 真實 backfill 的 importer evidence。
+
+## Task 2 — Notes API parity
+
+狀態：**PASS（implementation / local tests）**
+
+本 Task 建立 / 更新：
+
+- `backend/app/api/notes.py`
+- `backend/app/models/schemas.py`：新增 `NoteCreate` / `NoteUpdate` / `NoteOut` / `NoteLinkCreate`
+- `backend/app/main.py`：註冊 `/api/v1/notes`
+- `backend/tests/test_notes.py`
+
+API contract：
+
+- `GET /api/v1/notes`
+- `POST /api/v1/notes`
+- `GET /api/v1/notes/{note_id}`
+- `PATCH /api/v1/notes/{note_id}`
+- `DELETE /api/v1/notes/{note_id}`
+- `GET /api/v1/notes/{note_id}/links`
+- `POST /api/v1/notes/{note_id}/links`
+
+重要行為：
+
+- Create 要求 `title` / `body` 欄位存在，但允許空字串。
+- `NoteOut.title/body` 允許 null，以保留 legacy migrated row。
+- 空 PATCH、`title=null`、`body=null` 會被 validation 拒絕；`project_id=null` 可用於解除 project association。
+- self-link → 422。
+- source / target note 不存在 → 404。
+- 已存在的正向或反向 link → idempotent 204，不重複插入。
+- delete note 時先刪除兩個方向的 NoteLink，再刪 note。
+- mutation action types：`note.create` / `note.update` / `note.delete` / `note.link`。
+- provider 固定 `life_assistant`。
+- execution summary 不寫入 Note body。
+
+TDD / verification evidence：
+
+- RED：Note schemas / router 尚不存在時，contract tests 如預期失敗。
+- RED：main 尚未註冊 `notes_router` 時，registration test 如預期失敗。
+- GREEN：`python -m unittest tests.test_notes -v`：12/12 PASS，無 warning。
+- Regression：`python -m unittest tests.test_cloud_domain_models tests.test_notes -v`：18/18 PASS。
+- Python compile（Task 2 touched code/tests）：PASS。
+
+GitHub 寫入說明：
+
+- 本 Task 因 GitHub connector Contents API 以單檔 commit 寫入，實際形成數個連續 commit，而非單一 atomic commit。
+- 未進行 force-push 或 history rewrite。
+- Task 2 只在所有 router / schemas / main registration / tests 全部補齊後才標示 PASS。
+
+尚未驗證：
+
+- GitHub Actions CI：NOT VERIFIED
+- Cloud Run deployment：NOT VERIFIED
+- PostgreSQL runtime CRUD / persistence：NOT VERIFIED
+- execution log runtime visibility：NOT VERIFIED
 
 ## 執行規則
 

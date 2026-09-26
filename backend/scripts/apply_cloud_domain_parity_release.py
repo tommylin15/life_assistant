@@ -17,6 +17,23 @@ from scripts import preflight_alembic_metadata_bootstrap as metadata_preflight
 from scripts.reconcile_projects_indexes import run_reconciliation
 
 
+EXIT_PROJECTS_STATUS_DEFAULT_MISSING = 250
+EXIT_PROJECTS_STATUS_DEFAULT_VALUE_MISMATCH = 251
+
+
+def classify_failure(exc: BaseException) -> int:
+    if (
+        isinstance(exc, metadata_preflight.BootstrapDefaultMismatchError)
+        and exc.table == "projects"
+        and exc.column == "status"
+    ):
+        if exc.expected is not None and exc.actual is None:
+            return EXIT_PROJECTS_STATUS_DEFAULT_MISSING
+        if exc.actual is not None and exc.actual != exc.expected:
+            return EXIT_PROJECTS_STATUS_DEFAULT_VALUE_MISMATCH
+    return metadata_preflight.classify_failure(exc)
+
+
 async def main() -> None:
     repaired = await run_reconciliation()
     print(
@@ -38,6 +55,6 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except BaseException as exc:
-        exit_code = metadata_preflight.classify_failure(exc)
+        exit_code = classify_failure(exc)
         print(f"migration_failure_exit_code={exit_code}", file=sys.stderr)
         raise SystemExit(exit_code) from exc

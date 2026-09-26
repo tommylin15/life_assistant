@@ -228,6 +228,12 @@ PROJECTS_INDEX_MISMATCH_EXIT_CODES = {
     ("ix_projects_name", "missing"): 44,
     ("ix_projects_name", "definition"): 45,
 }
+PROJECTS_COMBINED_INDEX_MISMATCH_EXIT_CODES = {
+    ("missing", "missing"): 46,
+    ("missing", "definition"): 47,
+    ("definition", "missing"): 48,
+    ("definition", "definition"): 49,
+}
 # Backward-compatible names for earlier evidence/documents.
 EXIT_REVISION = EXIT_REVISION_TABLE_MISSING
 EXIT_CONTRACT = EXIT_REVISION_TABLE_MISSING
@@ -317,6 +323,23 @@ class BaselineRequiredIndexMismatchError(BaselineSchemaMismatchError):
         )
 
 
+class ProjectsRequiredIndexesMismatchError(BaselineSchemaMismatchError):
+    """Both required projects indexes are wrong, preserving both read-only diagnoses."""
+
+    def __init__(self, status_reason: str, name_reason: str):
+        valid = {"missing", "definition"}
+        if status_reason not in valid or name_reason not in valid:
+            raise ValueError(
+                "combined projects index mismatch reasons must be missing or definition"
+            )
+        self.status_reason = status_reason
+        self.name_reason = name_reason
+        super().__init__(
+            "baseline index mismatch for projects: "
+            f"ix_projects_status {status_reason}; ix_projects_name {name_reason}"
+        )
+
+
 class BaselineVerifiedWithoutVersionError(MigrationContractError):
     """The baseline matches, but Alembic metadata is intentionally still absent."""
 
@@ -348,6 +371,10 @@ def classify_failure(exc: BaseException) -> int:
         if exc.table == "projects" and exact_projects_key in PROJECTS_INDEX_MISMATCH_EXIT_CODES:
             return PROJECTS_INDEX_MISMATCH_EXIT_CODES[exact_projects_key]
         return BASELINE_SCHEMA_MISMATCH_EXIT_CODES[(exc.table, "index")]
+    if isinstance(exc, ProjectsRequiredIndexesMismatchError):
+        return PROJECTS_COMBINED_INDEX_MISMATCH_EXIT_CODES[
+            (exc.status_reason, exc.name_reason)
+        ]
     if isinstance(exc, BaselineSchemaMismatchError):
         return EXIT_BASELINE_SCHEMA_MISMATCH
     if isinstance(exc, FullSchemaVerifiedWithoutVersionError):
@@ -420,13 +447,26 @@ def validate_baseline_required_indexes(
     table: str,
     actual_index_defs: dict[str, str],
 ) -> None:
+    mismatches: list[tuple[str, str]] = []
     for index_name, required_fragment in BASELINE_REQUIRED_INDEXES[table].items():
         raw_definition = actual_index_defs.get(index_name)
         if raw_definition is None:
-            raise BaselineRequiredIndexMismatchError(table, index_name, "missing")
+            mismatches.append((index_name, "missing"))
+            continue
         normalized = " ".join(raw_definition.lower().split())
         if required_fragment.lower() not in normalized:
-            raise BaselineRequiredIndexMismatchError(table, index_name, "definition")
+            mismatches.append((index_name, "definition"))
+
+    if not mismatches:
+        return
+    if table == "projects" and len(mismatches) == 2:
+        reasons = {index_name: reason for index_name, reason in mismatches}
+        raise ProjectsRequiredIndexesMismatchError(
+            reasons["ix_projects_status"],
+            reasons["ix_projects_name"],
+        )
+    index_name, reason = mismatches[0]
+    raise BaselineRequiredIndexMismatchError(table, index_name, reason)
 
 
 def decide_migration_action(current_revision: str, target_tables_present: set[str]) -> str:

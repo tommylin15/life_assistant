@@ -31,6 +31,16 @@ TARGET_TABLES = (
     "shopping_items",
     "templates",
 )
+UNVERSIONED_TARGET_TABLE_BITS = {
+    "notes": 1,
+    "note_links": 2,
+    "habits": 4,
+    "habit_completions": 8,
+    "shopping_lists": 16,
+    "shopping_items": 32,
+    "templates": 64,
+}
+EXIT_UNVERSIONED_TARGETS_BASE = 64
 
 EXPECTED_COLUMNS = {
     "notes": {
@@ -234,6 +244,17 @@ class PrecreatedDriftError(MigrationContractError):
     """Target tables exist before the migration revision that should create them."""
 
 
+class UnversionedTargetTablesPresentError(PrecreatedDriftError):
+    """Encode the exact target-table subset present in an unversioned database."""
+
+    def __init__(self, tables: set[str]):
+        self.tables = set(tables)
+        super().__init__(
+            "migration drift: target tables already exist in unversioned database: "
+            + ",".join(sorted(self.tables))
+        )
+
+
 class SchemaMismatchError(MigrationContractError):
     """Target table, column, key, or index shape differs from the contract."""
 
@@ -252,6 +273,15 @@ class BaselineSchemaMismatchError(MigrationContractError):
 
 class BaselineVerifiedWithoutVersionError(MigrationContractError):
     """The baseline matches, but Alembic metadata is intentionally still absent."""
+
+
+def encode_unversioned_target_tables(tables: set[str]) -> int:
+    present = set(tables)
+    unknown = present - set(UNVERSIONED_TARGET_TABLE_BITS)
+    if unknown:
+        raise ValueError(f"unknown target tables for exit-code bitmap: {sorted(unknown)}")
+    mask = sum(UNVERSIONED_TARGET_TABLE_BITS[table] for table in present)
+    return EXIT_UNVERSIONED_TARGETS_BASE + mask
 
 
 def classify_failure(exc: BaseException) -> int:
@@ -275,6 +305,8 @@ def classify_failure(exc: BaseException) -> int:
         return EXIT_POST_MIGRATION_REVISION
     if isinstance(exc, RevisionValidationError):
         return EXIT_REVISION_TABLE_MISSING
+    if isinstance(exc, UnversionedTargetTablesPresentError):
+        return encode_unversioned_target_tables(exc.tables)
     if isinstance(exc, PrecreatedDriftError):
         return EXIT_PRECREATED_DRIFT
     if isinstance(exc, SchemaMismatchError):
@@ -303,10 +335,7 @@ def validate_unversioned_baseline_tables(tables: set[str]) -> None:
     present = set(tables)
     target_present = set(TARGET_TABLES) & present
     if target_present:
-        raise PrecreatedDriftError(
-            "migration drift: target tables already exist in unversioned database: "
-            + ",".join(sorted(target_present))
-        )
+        raise UnversionedTargetTablesPresentError(target_present)
     missing = set(BASELINE_TABLES) - present
     if missing:
         raise BaselineTablesMissingError(

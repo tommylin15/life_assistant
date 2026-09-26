@@ -143,6 +143,25 @@ class AlembicMetadataBootstrapContractTests(unittest.TestCase):
             )
         self.assertEqual("projects", captured.exception.table)
 
+    def test_preflight_exit_mapping_is_stable_and_non_overlapping(self):
+        preflight = _load_preflight()
+        self.assertEqual(
+            {
+                preflight.MetadataBootstrapApprovalRequiredError: 50,
+                preflight.BootstrapDefaultMismatchError: 51,
+                preflight.BootstrapIndexMismatchError: 52,
+                preflight.BootstrapForeignKeyMismatchError: 53,
+                preflight.BootstrapConstraintMismatchError: 54,
+            },
+            preflight.BOOTSTRAP_EXIT_CODES,
+        )
+        self.assertTrue(
+            all(
+                code < preflight.migration.EXIT_UNVERSIONED_TARGETS_BASE
+                for code in preflight.BOOTSTRAP_EXIT_CODES.values()
+            )
+        )
+
 
 class AlembicMetadataBootstrapInspectionTests(unittest.IsolatedAsyncioTestCase):
     async def test_versioned_database_skips_bootstrap_preflight(self):

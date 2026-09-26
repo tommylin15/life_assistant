@@ -242,6 +242,7 @@ class ApiClient implements AcceptanceApi {
     return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
   }
 
+  @override
   Future<Map<String, dynamic>> ensureDriveBridge() async {
     final res = await _client.post(_apiUri('/integrations/google/drive/bridge'));
     _check(res.statusCode, res.body);

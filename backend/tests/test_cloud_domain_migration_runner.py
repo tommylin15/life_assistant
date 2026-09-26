@@ -165,6 +165,51 @@ class CloudDomainMigrationRunnerTests(unittest.TestCase):
             runner.classify_failure(runner.BaselineSchemaMismatchError("schema mismatch")),
         )
 
+    def test_baseline_shape_mismatch_exit_identifies_exact_table(self):
+        runner = _load_runner()
+        expected = {
+            "google_connections": 34,
+            "google_oauth_states": 36,
+            "execution_logs": 38,
+            "projects": 40,
+        }
+        for table, exit_code in expected.items():
+            with self.subTest(table=table):
+                error = runner.BaselineTableShapeMismatchError(table)
+                self.assertEqual(table, error.table)
+                self.assertEqual(exit_code, runner.classify_failure(error))
+
+    def test_baseline_required_index_mismatch_exit_identifies_exact_table(self):
+        runner = _load_runner()
+        expected = {
+            "google_connections": 35,
+            "google_oauth_states": 37,
+            "execution_logs": 39,
+            "projects": 41,
+        }
+        for table, exit_code in expected.items():
+            with self.subTest(table=table):
+                error = runner.BaselineRequiredIndexMismatchError(table, "required_index")
+                self.assertEqual(table, error.table)
+                self.assertEqual(exit_code, runner.classify_failure(error))
+
+    def test_baseline_subtype_exit_mapping_is_stable_and_below_bitmap_range(self):
+        runner = _load_runner()
+        self.assertEqual(
+            {
+                ("google_connections", "shape"): 34,
+                ("google_connections", "index"): 35,
+                ("google_oauth_states", "shape"): 36,
+                ("google_oauth_states", "index"): 37,
+                ("execution_logs", "shape"): 38,
+                ("execution_logs", "index"): 39,
+                ("projects", "shape"): 40,
+                ("projects", "index"): 41,
+            },
+            runner.BASELINE_SCHEMA_MISMATCH_EXIT_CODES,
+        )
+        self.assertLess(max(runner.BASELINE_SCHEMA_MISMATCH_EXIT_CODES.values()), runner.EXIT_UNVERSIONED_TARGETS_BASE)
+
     def test_unversioned_baseline_matching_table_shape_passes(self):
         runner = _load_runner()
         runner.validate_baseline_table_shape(

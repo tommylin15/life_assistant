@@ -2,11 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:life_assistant/web/acceptance_runner.dart';
 
 class _FakeAcceptanceApi implements AcceptanceApi {
-  _FakeAcceptanceApi({this.gmailMessages = const [
-    {'id': 'gmail-1', 'subject': 'Acceptance source'}
-  ]});
+  _FakeAcceptanceApi({
+    this.gmailMessages = const [
+      {'id': 'gmail-1', 'subject': 'Acceptance source'}
+    ],
+    this.grantedServices = const ['gmail', 'calendar', 'drive'],
+    this.driveShouldFail = false,
+  });
 
   final List<Map<String, dynamic>> gmailMessages;
+  final List<String> grantedServices;
+  final bool driveShouldFail;
   final List<String> deletedProjectIds = [];
   final List<String> deletedTaskIds = [];
   final List<String> deletedCalendarIds = [];
@@ -16,6 +22,7 @@ class _FakeAcceptanceApi implements AcceptanceApi {
   var _projectCounter = 0;
   var _calendarCounter = 0;
   var _taskCounter = 0;
+  var driveEnsureCalls = 0;
 
   void _log(String actionType, String entityId) {
     _activity.insert(0, {
@@ -29,7 +36,7 @@ class _FakeAcceptanceApi implements AcceptanceApi {
   @override
   Future<Map<String, dynamic>> getGoogleIntegrationStatus() async => {
         'connected': true,
-        'granted_services': ['gmail', 'calendar'],
+        'granted_services': grantedServices,
       };
 
   @override
@@ -124,6 +131,19 @@ class _FakeAcceptanceApi implements AcceptanceApi {
     return {'id': id, ...body};
   }
 
+  Future<Map<String, dynamic>> ensureDriveBridge() async {
+    driveEnsureCalls += 1;
+    if (driveShouldFail) {
+      throw Exception('Drive unavailable');
+    }
+    const id = 'drive-bridge-1';
+    _log('drive.bridge.ensure', id);
+    return const {
+      'root': {'id': 'drive-root-1', 'name': 'life_assistant'},
+      'bridge': {'id': id, 'name': 'ChatGPT_Bridge'},
+    };
+  }
+
   @override
   Future<void> deleteTask(String id) async {
     deletedTaskIds.add(id);
@@ -155,12 +175,14 @@ void main() {
       'gmail.to_task',
       'gmail.to_project',
       'gmail.to_calendar',
+      'drive.bridge.ensure',
       'activity',
       'cleanup',
     ]) {
       expect(_check(result, key).status, AcceptanceStatus.pass, reason: key);
     }
 
+    expect(api.driveEnsureCalls, 1);
     expect(api.deletedTaskIds, contains('task-1'));
     expect(api.deletedProjectIds, containsAll(['project-1', 'project-2']));
     expect(api.deletedCalendarIds, containsAll(['calendar-1', 'calendar-2']));
@@ -184,5 +206,26 @@ void main() {
       );
     }
     expect(_check(result, 'cleanup').status, AcceptanceStatus.pass);
+  });
+
+  test('Drive without authorization is NOT VERIFIED and is not called', () async {
+    final api = _FakeAcceptanceApi(
+      grantedServices: const ['gmail', 'calendar'],
+    );
+    final result = await AcceptanceRunner(api).runAll();
+
+    expect(
+      _check(result, 'drive.bridge.ensure').status,
+      AcceptanceStatus.notVerified,
+    );
+    expect(api.driveEnsureCalls, 0);
+  });
+
+  test('Drive ensure failure is reported as FAIL', () async {
+    final api = _FakeAcceptanceApi(driveShouldFail: true);
+    final result = await AcceptanceRunner(api).runAll();
+
+    expect(_check(result, 'drive.bridge.ensure').status, AcceptanceStatus.fail);
+    expect(api.driveEnsureCalls, 1);
   });
 }

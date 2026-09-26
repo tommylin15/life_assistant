@@ -1,6 +1,6 @@
 # Cloud Domain Parity — Implementation Progress
 
-最後更新：2026-09-26（Task 7）
+最後更新：2026-09-26（Task 8 runtime migration diagnosis）
 
 對應設計：`doc/cloud_domain_parity_design.md`
 
@@ -10,58 +10,62 @@
 
 | Task | Scope | Implementation | Tests | CI | Deployment | Runtime |
 |---|---|---|---|---|---|---|
-| 1 | PostgreSQL target models + Alembic migration | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
-| 2 | Notes API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
-| 3 | Habits API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
-| 4 | Shopping API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
-| 5 | Templates API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
-| 6 | Project delete guard | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
+| 1 | PostgreSQL target models + Alembic migration | PASS | PASS | PASS | NOT VERIFIED | NOT VERIFIED |
+| 2 | Notes API parity | PASS | PASS | PASS | NOT VERIFIED | NOT VERIFIED |
+| 3 | Habits API parity | PASS | PASS | PASS | NOT VERIFIED | NOT VERIFIED |
+| 4 | Shopping API parity | PASS | PASS | PASS | NOT VERIFIED | NOT VERIFIED |
+| 5 | Templates API parity | PASS | PASS | PASS | NOT VERIFIED | NOT VERIFIED |
+| 6 | Project delete guard | PASS | PASS | PASS | NOT VERIFIED | NOT VERIFIED |
 | 7 | Full backend verification | PASS | PASS | PASS | NOT VERIFIED | NOT VERIFIED |
-| 8 | CI / deployment / runtime acceptance | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
+| 8 | CI / deployment / runtime acceptance | PASS | PASS | PASS | FAIL | FAIL |
 
 ## Task 1 — PostgreSQL target models + Alembic migration
 
-狀態：**PASS（implementation / local tests）**
+狀態：**PASS（implementation / tests / formal main CI）**
 
 - 建立 Notes / Habits / Shopping / Templates ORM target models。
 - Alembic revision：`20260926_0004`，`down_revision=20260925_0003`。
 - model contract tests：6/6 PASS。
 - Python compile：PASS。
+- Task 8 formal main CI #228 已覆蓋本批 backend regression，CI：PASS。
 - Runtime DB revision/table state、historical SQLite backfill：NOT VERIFIED。
 
 ## Task 2 — Notes API parity
 
-狀態：**PASS（implementation / local tests）**
+狀態：**PASS（implementation / tests / formal main CI）**
 
 - Notes CRUD、bidirectional links、delete link cleanup、legacy nullable read。
 - `note.create` / `note.update` / `note.delete` / `note.link`。
 - Notes tests：12/12 PASS；Task 1–2 regression：18/18 PASS。
-- CI / deployment / PostgreSQL runtime CRUD：NOT VERIFIED。
+- Task 8 formal main CI #228：PASS。
+- PostgreSQL runtime CRUD：NOT VERIFIED。
 
 ## Task 3 — Habits API parity
 
-狀態：**PASS（implementation / local tests）**
+狀態：**PASS（implementation / tests / formal main CI）**
 
 - active-only list、create/get/patch、append completion、descending history。
 - 不新增 delete / activate / deactivate。
 - `habit.create` / `habit.update` / `habit.complete`。
 - Habits tests：14/14 PASS；Task 1–3 regression：32/32 PASS。
-- CI / deployment / PostgreSQL runtime completion persistence：NOT VERIFIED。
+- Task 8 formal main CI #228：PASS。
+- PostgreSQL runtime completion persistence：NOT VERIFIED。
 
 ## Task 4 — Shopping API parity
 
-狀態：**PASS（implementation / local tests）**
+狀態：**PASS（implementation / tests / formal main CI）**
 
 - Shopping List create/read、item create、nested sorted read、`is_done` toggle。
 - `project_id` 原樣保存，本批不做 project existence validation。
 - 不新增 delete / quantity / price / store。
 - `shopping_list.create` / `shopping_item.create` / `shopping_item.toggle`。
 - Shopping tests：14/14 PASS；Shopping + execution-log：17/17 PASS；Task 1–4 regression：49/49 PASS。
-- CI / deployment / PostgreSQL runtime Shopping persistence：NOT VERIFIED。
+- Task 8 formal main CI #228：PASS。
+- PostgreSQL runtime Shopping persistence：NOT VERIFIED。
 
 ## Task 5 — Templates API parity
 
-狀態：**PASS（implementation / local tests）**
+狀態：**PASS（implementation / tests / formal main CI）**
 
 本 Task 建立 / 更新：
 
@@ -97,18 +101,18 @@ TDD / verification evidence：
 - Full Task 1–5 regression（warnings-as-errors）：61/61 PASS。
 - Python compile：PASS。
 - JSON parse/serialize static scan：PASS。
+- Task 8 formal main CI #228：PASS。
 
 尚未驗證：
 
-- GitHub Actions CI：NOT VERIFIED
-- Cloud Run deployment：NOT VERIFIED
-- PostgreSQL runtime Template create/update/read persistence：NOT VERIFIED
-- opaque payload runtime round-trip：NOT VERIFIED
-- execution log runtime visibility：NOT VERIFIED
+- Cloud Run deployment：NOT VERIFIED（Task 8 migration gate 先失敗，因此 service release 未執行）。
+- PostgreSQL runtime Template create/update/read persistence：NOT VERIFIED。
+- opaque payload runtime round-trip：NOT VERIFIED。
+- execution log runtime visibility：NOT VERIFIED。
 
 ## Task 6 — Project delete guard
 
-狀態：**PASS（implementation / tests）**
+狀態：**PASS（implementation / tests / formal main CI）**
 
 本 Task 更新：
 
@@ -132,11 +136,11 @@ TDD / verification evidence：
 - GREEN implementation commit：`c7a2cdb2062aaa7f9ef43a079c6213c92d3fd4a5`。
 - GREEN GitHub Actions CI run #207 / backend：import PASS、Alembic offline chain PASS、backend full suite 104/104 PASS。
 - Task 6 四個 Project delete guard cases：4/4 PASS。
+- Task 8 formal main CI #228：PASS。
 
 Task 6 尚未驗證：
 
-- 正式 `main` CI 完整 workflow：NOT VERIFIED（保留給 Task 8）。
-- Cloud Run deployment：NOT VERIFIED。
+- Cloud Run deployment：NOT VERIFIED（Task 8 migration gate 先失敗）。
 - PostgreSQL runtime Project delete guard acceptance：NOT VERIFIED。
 
 ## Task 7 — Full backend verification
@@ -147,7 +151,7 @@ Task 6 尚未驗證：
 
 - FastAPI import：PASS。
 - Alembic offline chain：PASS，包含 `20260925_0003 -> 20260926_0004`。
-- Backend full suite：104/104 PASS。
+- Backend full suite：104/104 PASS（Task 7 時點）。
 - Flutter analyze：PASS。
 - Flutter tests：PASS。
 - Flutter Web build：PASS。
@@ -172,7 +176,62 @@ Contract review：
 - 目前 ChatGPT container 無法解析 `github.com`，因此無法在 container 另跑一份 local clone；這一層不冒充 local PASS。
 - 上述可重跑驗證由 GitHub Actions 對 Task 1–7 最終 branch 執行並取得 PASS。
 - Historical SQLite → PostgreSQL backfill：NOT VERIFIED；本批仍未建立/執行 importer，不宣稱 PASS。
-- 正式 `main` CI、Cloud Run deployment、PostgreSQL runtime acceptance：留給 Task 8，仍為 NOT VERIFIED。
+
+## Task 8 — CI / deployment / runtime acceptance
+
+狀態：**PARTIAL — implementation / tests / formal main CI PASS；deployment / runtime migration FAIL**
+
+### Implementation / CI evidence
+
+- 修正原 deploy workflow 只檢查 `HEAD^..HEAD`、在批次 fast-forward 時可能錯誤跳過 backend release 的問題。
+- 新增 Cloud Run migration job `life-assistant-db-migrate`，在 Cloud Run service deploy 前先驗證 / 執行 Alembic target migration。
+- migration runner：`backend/scripts/apply_cloud_domain_parity_migration.py`。
+- runner 對 revision / pre-created target tables / target schema / preserved table row counts 採 fail-closed；不以 stamp / drop / truncate 隱藏 drift。
+- 加入 migration execution / task diagnostics；不增加 Cloud Logging IAM 權限。
+- 加入穩定、非 secret 的 failure exit classification：
+  - `20`：database / SQLAlchemy 類錯誤。
+  - `21`：migration contract / schema / revision 類錯誤。
+  - `22`：Alembic subprocess 類錯誤。
+  - `29`：其他未預期 runtime 類錯誤。
+- Deploy #180 曾得到 task exit code `1`；依實際啟動方式確認 runner 是以 `python scripts/...py` 啟動，可能在 classifier 前發生 package import failure。
+- TDD 修正 Cloud Run migration job 為 module mode：`python -m scripts.apply_cloud_domain_parity_migration`。
+- module-mode RED：PR CI #226 backend 如預期失敗於新 workflow contract。
+- module-mode GREEN：PR CI #227 全部 PASS。
+- 正式 `main` commit：`411f0a9dcfea4bd9d9207f2518703310a14b7a4e`。
+- 正式 main CI #228：backend / flutter / deployment-scripts 全部 PASS。
+- backend full suite：118/118 PASS。
+- Alembic offline chain：PASS。
+- Flutter analyze / tests / Web build / branding verification：PASS。
+
+### Deployment / runtime evidence
+
+- Deploy Cloud Run #181：**FAIL**，run ID `36232750109`。
+- Migration execution：`life-assistant-db-migrate-l2zlg`。
+- Migration task：`life-assistant-db-migrate-l2zlg-task0`。
+- Execution spec 已確認以 module mode 啟動：args 為 `-m`, `scripts.apply_cloud_domain_parity_migration`。
+- Migration task `status.lastAttemptResult.exitCode`：**21**。
+- 因此已實證失敗類別為：**migration contract / schema / Alembic revision validation failure**。
+- 已排除本分類器中的：database / SQLAlchemy（20）、Alembic subprocess（22）、unexpected runtime（29）。
+- Deploy workflow fail gate 正確阻擋後續 Cloud Run service release；`Deploy backend to Cloud Run`、health、ready、unauthenticated protection runtime checks 全部 skipped。
+- GitHub deploy service account 讀 Cloud Logging 時回 `PERMISSION_DENIED`；本 Task 未變更 IAM，避免未經核准的重大權限變更。
+- 因無 Cloud Logging 內容，目前尚不能再細分 exit 21 是：
+  - unexpected / missing Alembic revision；
+  - `20260925_0003` 時已有 target table 的 pre-created drift；
+  - `20260926_0004` 下 target table / columns / PK / FK / index schema mismatch；
+  - preserved table / row-count validation mismatch。
+- 上述 exact subtype：**NOT VERIFIED**，不得猜測。
+
+### 尚未完成的 Task 8 acceptance
+
+- Cloud Run service deployment：FAIL / blocked by migration gate。
+- `/health`：本次 release NOT VERIFIED。
+- `/ready`：本次 release NOT VERIFIED。
+- unauthenticated API protection：本次 release NOT VERIFIED。
+- authenticated Notes / Habits / Shopping / Templates runtime CRUD：NOT VERIFIED。
+- Project delete guard runtime acceptance：NOT VERIFIED。
+- historical SQLite → PostgreSQL backfill：NOT VERIFIED；本批沒有 importer execution evidence，不宣稱 PASS。
+
+Task 8 目前不得標示 DONE。
 
 ## 執行規則
 

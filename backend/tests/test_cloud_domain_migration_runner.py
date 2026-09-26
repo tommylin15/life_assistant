@@ -1,6 +1,9 @@
 import importlib.util
 from pathlib import Path
+import subprocess
 import unittest
+
+from sqlalchemy.exc import SQLAlchemyError
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +48,34 @@ class CloudDomainMigrationRunnerTests(unittest.TestCase):
         runner = _load_runner()
         with self.assertRaisesRegex(RuntimeError, "unexpected alembic revision"):
             runner.decide_migration_action("legacy", set())
+
+    def test_database_failure_has_distinct_process_exit_code(self):
+        runner = _load_runner()
+        self.assertEqual(
+            runner.EXIT_DATABASE,
+            runner.classify_failure(SQLAlchemyError("database unavailable")),
+        )
+
+    def test_contract_failure_has_distinct_process_exit_code(self):
+        runner = _load_runner()
+        self.assertEqual(
+            runner.EXIT_CONTRACT,
+            runner.classify_failure(RuntimeError("migration drift")),
+        )
+
+    def test_alembic_failure_has_distinct_process_exit_code(self):
+        runner = _load_runner()
+        self.assertEqual(
+            runner.EXIT_ALEMBIC,
+            runner.classify_failure(subprocess.CalledProcessError(1, ["alembic"])),
+        )
+
+    def test_unexpected_failure_is_fail_closed_with_distinct_exit_code(self):
+        runner = _load_runner()
+        self.assertEqual(
+            runner.EXIT_UNEXPECTED,
+            runner.classify_failure(ValueError("unexpected")),
+        )
 
 
 if __name__ == "__main__":

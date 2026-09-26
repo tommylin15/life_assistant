@@ -154,6 +154,7 @@ Task 6 尚未驗證：
 - Branding web-build verification：PASS。
 - GCP deployment scripts syntax：PASS。
 - GitHub Actions PR CI #208：backend / flutter / deployment-scripts 全部 PASS。
+- Task 7 final documentation head GitHub Actions PR CI #209：backend / flutter / deployment-scripts 全部 PASS。
 
 Contract review：
 

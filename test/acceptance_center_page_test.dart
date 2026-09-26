@@ -157,7 +157,11 @@ void main() {
     expect(runCalls, 1);
     expect(find.text('PASS'), findsOneWidget);
     expect(find.text('FAIL'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('NOT VERIFIED'), 200);
     expect(find.text('NOT VERIFIED'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('重試清理'), 200);
     expect(find.text('重試清理'), findsOneWidget);
 
     await tester.tap(find.text('重試清理'));

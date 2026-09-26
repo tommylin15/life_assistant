@@ -26,6 +26,7 @@ jobs:
       GCP_PROJECT_ID: gen-lang-client-0593591102
       GCP_REGION: us-central1
       CLOUD_RUN_SERVICE: life-assistant-api
+      MIGRATION_JOB: life-assistant-db-migrate
       GCP_NETWORK: janusai-lake-poc
       GCP_SUBNET: janusai-lake-poc-uscentral1
       DATABASE_HOST: 10.42.0.5
@@ -41,25 +42,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          fetch-depth: 2
-
-      - name: Detect backend changes
-        id: backend_changes
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "Manual dispatch: backend deployment requested."
-          elif git diff --quiet HEAD^ HEAD -- backend; then
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "No backend changes in release commit; skipping Cloud Run deployment."
-          else
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "Backend changes detected; Cloud Run deployment required."
-          fi
 
       - name: Authenticate to Google Cloud
-        if: steps.backend_changes.outputs.deploy == 'true'
         uses: google-github-actions/auth@v2
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
@@ -67,11 +51,27 @@ jobs:
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
       - name: Set up gcloud
-        if: steps.backend_changes.outputs.deploy == 'true'
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Apply verified database migration
+        run: |
+          gcloud run jobs deploy "$MIGRATION_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --source backend \
+            --command python \
+            --args scripts/apply_cloud_domain_parity_migration.py \
+            --network "$GCP_NETWORK" \
+            --subnet "$GCP_SUBNET" \
+            --vpc-egress private-ranges-only \
+            --max-retries 0 \
+            --task-timeout 10m \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
+            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --wait \
+            --quiet
+
       - name: Deploy backend to Cloud Run
-        if: steps.backend_changes.outputs.deploy == 'true'
         run: |
           gcloud run deploy "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" \
@@ -86,7 +86,6 @@ jobs:
             --quiet
 
       - name: Resolve Cloud Run service URL
-        if: steps.backend_changes.outputs.deploy == 'true'
         id: service_url
         run: |
           SERVICE_URL="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
@@ -97,21 +96,18 @@ jobs:
           echo "url=$SERVICE_URL" >> "$GITHUB_OUTPUT"
 
       - name: Verify Cloud Run health
-        if: steps.backend_changes.outputs.deploy == 'true'
         run: |
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
             "${{ steps.service_url.outputs.url }}/health"
 
       - name: Verify Cloud Run database readiness
-        if: steps.backend_changes.outputs.deploy == 'true'
         run: |
           curl --fail-with-body --silent --show-error \
             --retry 2 --retry-delay 3 --retry-all-errors \
             "${{ steps.service_url.outputs.url }}/ready"
 
       - name: Verify unauthenticated API is application-protected
-        if: steps.backend_changes.outputs.deploy == 'true'
         run: |
           STATUS="$(curl --silent --output /tmp/tasks-body --write-out '%{http_code}' \
             "${{ steps.service_url.outputs.url }}/api/v1/tasks")"

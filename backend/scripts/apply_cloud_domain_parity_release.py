@@ -25,6 +25,12 @@ from scripts.reconcile_projects_status_default import (
 
 EXIT_PROJECTS_STATUS_DEFAULT_MISSING = 250
 EXIT_PROJECTS_STATUS_DEFAULT_VALUE_MISMATCH = 251
+FOREIGN_KEY_MISMATCH_EXIT_CODES = {
+    "note_links": 252,
+    "habit_completions": 253,
+    "shopping_items": 254,
+}
+EXIT_UNEXPECTED_FOREIGN_KEY_TABLE = 255
 
 
 def classify_failure(exc: BaseException) -> int:
@@ -37,6 +43,11 @@ def classify_failure(exc: BaseException) -> int:
             return EXIT_PROJECTS_STATUS_DEFAULT_MISSING
         if exc.actual is not None and exc.actual != exc.expected:
             return EXIT_PROJECTS_STATUS_DEFAULT_VALUE_MISMATCH
+    if isinstance(exc, metadata_preflight.BootstrapForeignKeyMismatchError):
+        return FOREIGN_KEY_MISMATCH_EXIT_CODES.get(
+            exc.table,
+            EXIT_UNEXPECTED_FOREIGN_KEY_TABLE,
+        )
     return metadata_preflight.classify_failure(exc)
 
 

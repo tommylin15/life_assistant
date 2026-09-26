@@ -1,6 +1,6 @@
 # 生活助理 App v0.1 — Acceptance Criteria
 
-最後更新：2026-09-25
+最後更新：2026-09-26
 
 > 本文件定義 Phase 1 Platform Release Gate。`[x]` 只代表該條要求層級已有足夠 evidence；Implementation / CI / Deployment PASS 不自動等於 Runtime / Integration PASS。
 
@@ -39,10 +39,10 @@
 
 ### Final runtime / integration acceptance
 
-- [ ] Authenticated Project CRUD runtime PASS。
-- [ ] Project persistence / reread runtime PASS。
-- [ ] Gmail → Project true-account runtime PASS。
-- [ ] Project mutation → `/activity` end-to-end evidence PASS。
+- [x] Authenticated Project CRUD runtime PASS。
+- [x] Project persistence / reread runtime PASS。
+- [x] Gmail → Project true-account runtime PASS。
+- [x] Project mutation → `/activity` end-to-end evidence PASS。
 
 > migration file 已 CI 驗證；目前 deployment workflow 沒有 production `alembic upgrade` evidence，因此不得把「Alembic production apply」標成 PASS。
 
@@ -60,9 +60,9 @@
 ### Final integration acceptance
 
 - [ ] 真實帳號 Calendar read PASS。
-- [ ] 真實帳號 create PASS。
-- [ ] 真實帳號 update PASS。
-- [ ] 真實帳號 delete PASS。
+- [x] 真實帳號 create PASS。
+- [x] 真實帳號 update PASS。
+- [x] 真實帳號 delete PASS。
 - [ ] 真實 provider failure 有 execution evidence。
 - [ ] destructive confirmation enforcement PASS。
 
@@ -79,10 +79,10 @@
 
 ### Final integration acceptance
 
-- [ ] 真實帳號 metadata read PASS。
-- [ ] Gmail → Task PASS。
-- [ ] Gmail → Calendar PASS。
-- [ ] Gmail → Project PASS。
+- [x] 真實帳號 metadata read PASS。
+- [x] Gmail → Task PASS。
+- [x] Gmail → Calendar PASS。
+- [x] Gmail → Project PASS。
 - [ ] Gmail provider failure → execution evidence PASS。
 
 ## Google Drive
@@ -96,7 +96,7 @@
 
 ### Final integration acceptance
 
-- [ ] 真實帳號 Drive Bridge ensure PASS。
+- [x] 真實帳號 Drive Bridge ensure PASS。
 - [ ] failure / partial-success execution evidence PASS。
 
 ## Backend Error / Audit
@@ -108,7 +108,8 @@
 - [x] audit start fail-closed：audit unavailable 時 mutation 不執行。
 - [x] audit finalize failure 有 `audit_finalize_failed`，不包裝成 full success。
 - [x] `/api/v1/activity` authenticated API baseline。
-- [ ] 真實 Google mutation success/failure/partial-success → activity 的 end-to-end runtime PASS。
+- [x] 真實 Google mutation success → activity end-to-end runtime PASS。
+- [ ] 真實 Google mutation failure / partial-success → activity end-to-end runtime PASS。
 
 ## SQLite → PostgreSQL Migration
 
@@ -157,24 +158,25 @@ Legacy SQLite 同名能力不等於 Cloud acceptance。
 - [ ] destructive/sensitive action final policy gate。
 - [ ] Cloud mutation idempotency policy。
 
-## Release Evidence Snapshot — 2026-09-25
+## Release Evidence Snapshot — 2026-09-26
 
-- Docs sync commit `0be77b05c40bcdc2434ff4b94689bab49ef5173a`；CI #153 PASS。
-- Project/Gmail-to-project commit `0ea1d1fad596bcce4683df82b7d68caa4d7e42be`。
-- CI #154：PASS。
-- Cloud Run #123：PASS（deploy / health / ready / protected 401）。
-- Firebase Hosting #69：PASS（build / deploy / verify）。
-- 使用者互動：Google login PASS；Task CRUD PASS。
-- Project authenticated CRUD：NOT VERIFIED。
-- Gmail / Calendar / Drive true-account integration：NOT VERIFIED。
+- Acceptance Center / Drive integration final commit `7f7da43eacce23054c91429bceaf39b536c8a75c`。
+- CI #186：PASS；Flutter Analyze / Test / Build Web / branding verification PASS，13 tests PASS。
+- Firebase Hosting #102：PASS（build / deploy / runtime verify），release SHA = `7f7da43eacce23054c91429bceaf39b536c8a75c`。
+- Cloud Run #156：workflow PASS；本次無 Backend 變更，deploy / runtime steps 依 change detection 正確 skipped。
+- 使用者真實帳號驗收：Project create/update/reread/delete PASS。
+- 使用者真實帳號驗收：Gmail metadata read、Gmail → Task / Project / Calendar PASS。
+- 使用者真實帳號驗收：Calendar create/update/delete PASS。
+- 使用者真實帳號驗收：Drive Bridge ensure PASS。
+- Acceptance Center Activity Log evidence PASS；`[ACCEPTANCE TEST]` 測試資料 cleanup PASS。
+- 尚未由本次真實驗收覆蓋：Calendar list/read、真實 provider failure / Drive partial-success、destructive confirmation enforcement。
 - SQLite → PostgreSQL full migration：NOT VERIFIED。
 
 ## Phase 1 Status
 
-**PARTIAL**。尚不可標 DONE，主要缺口：
+**PARTIAL**。真實帳號 success-path integration 已跨過主要 gate，但尚不可標 DONE，主要缺口：
 
-- Project authenticated runtime acceptance。
-- Google integrations true-account success/failure acceptance。
+- Calendar 真實 read/list 與 Google provider failure / partial-success runtime evidence。
 - remaining Cloud target schemas + full SQLite migration evidence。
 - authorization / confirmation / idempotency policy。
 - Bridge/MCP Release Gate。

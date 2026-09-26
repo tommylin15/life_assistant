@@ -70,3 +70,40 @@ class ProjectOut(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class NoteCreate(BaseModel):
+    title: str
+    body: str
+    project_id: str | None = None
+
+
+class NoteUpdate(BaseModel):
+    title: str | None = None
+    body: str | None = None
+    project_id: str | None = None
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one note field must be provided")
+        if "title" in self.model_fields_set and self.title is None:
+            raise ValueError("Note title cannot be null")
+        if "body" in self.model_fields_set and self.body is None:
+            raise ValueError("Note body cannot be null")
+        return self
+
+
+class NoteOut(BaseModel):
+    id: str
+    title: str | None
+    body: str | None
+    project_id: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class NoteLinkCreate(BaseModel):
+    target_note_id: str

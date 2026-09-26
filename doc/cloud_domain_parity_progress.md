@@ -1,6 +1,6 @@
 # Cloud Domain Parity — Implementation Progress
 
-最後更新：2026-09-26（Task 8 runtime migration diagnosis）
+最後更新：2026-09-26（Task 8 revision validation diagnosis）
 
 對應設計：`doc/cloud_domain_parity_design.md`
 
@@ -188,38 +188,57 @@ Contract review：
 - migration runner：`backend/scripts/apply_cloud_domain_parity_migration.py`。
 - runner 對 revision / pre-created target tables / target schema / preserved table row counts 採 fail-closed；不以 stamp / drop / truncate 隱藏 drift。
 - 加入 migration execution / task diagnostics；不增加 Cloud Logging IAM 權限。
-- 加入穩定、非 secret 的 failure exit classification：
-  - `20`：database / SQLAlchemy 類錯誤。
-  - `21`：migration contract / schema / revision 類錯誤。
-  - `22`：Alembic subprocess 類錯誤。
-  - `29`：其他未預期 runtime 類錯誤。
-- Deploy #180 曾得到 task exit code `1`；依實際啟動方式確認 runner 是以 `python scripts/...py` 啟動，可能在 classifier 前發生 package import failure。
+- 初版 failure exit classification：20 database / SQLAlchemy、21 contract、22 Alembic subprocess、29 unexpected。
+- Deploy #180 曾得到 task exit code `1`；依實際啟動方式確認 runner 是以 script path 啟動，classifier 前可能 package import failure。
 - TDD 修正 Cloud Run migration job 為 module mode：`python -m scripts.apply_cloud_domain_parity_migration`。
 - module-mode RED：PR CI #226 backend 如預期失敗於新 workflow contract。
 - module-mode GREEN：PR CI #227 全部 PASS。
-- 正式 `main` commit：`411f0a9dcfea4bd9d9207f2518703310a14b7a4e`。
-- 正式 main CI #228：backend / flutter / deployment-scripts 全部 PASS。
-- backend full suite：118/118 PASS。
+- 正式 `main` commit `411f0a9dcfea4bd9d9207f2518703310a14b7a4e`；正式 main CI #228 全部 PASS；backend 118/118 PASS。
+- Deploy Cloud Run #181 取得 task exit 21，但當時 21 仍包含多種 contract subtype。
+
+### Exit 21 subtype refinement
+
+為了在不增加 Cloud Logging IAM 的前提下再定位失敗，將 contract failure 改為可由 Cloud Run task exit code直接分辨：
+
+- `20`：database / SQLAlchemy error。
+- `21`：**revision validation failure**。
+- `22`：Alembic subprocess failure。
+- `23`：pre-created target table drift。
+- `24`：target schema / PK / FK / index mismatch。
+- `25`：preserved table / row-count mismatch。
+- `29`：unexpected runtime failure。
+
+TDD evidence：
+
+- RED commit：`58fd8347822fb90baf645b7a90e9589ae100a3dc`（`test: split migration contract failure classes`）。
+- CI #229 backend 如預期 RED：121 tests 中 7 errors，原因為新 failure classes / exit constants 尚未實作。
+- GREEN implementation commit：`90875fdeadfba93b2a334e7d951a28c10f136eeb`（`fix: expose migration contract failure subtypes`）。
+- CI #230：backend / flutter / deployment-scripts 全部 PASS。
+- Backend full suite：121/121 PASS。
 - Alembic offline chain：PASS。
 - Flutter analyze / tests / Web build / branding verification：PASS。
 
 ### Deployment / runtime evidence
 
-- Deploy Cloud Run #181：**FAIL**，run ID `36232750109`。
-- Migration execution：`life-assistant-db-migrate-l2zlg`。
-- Migration task：`life-assistant-db-migrate-l2zlg-task0`。
-- Execution spec 已確認以 module mode 啟動：args 為 `-m`, `scripts.apply_cloud_domain_parity_migration`。
+- Deploy Cloud Run #183：**FAIL**，run ID `36233593693`，release commit `90875fdeadfba93b2a334e7d951a28c10f136eeb`。
+- Migration execution：`life-assistant-db-migrate-hpf54`。
+- Migration task：`life-assistant-db-migrate-hpf54-task0`。
 - Migration task `status.lastAttemptResult.exitCode`：**21**。
-- 因此已實證失敗類別為：**migration contract / schema / Alembic revision validation failure**。
-- 已排除本分類器中的：database / SQLAlchemy（20）、Alembic subprocess（22）、unexpected runtime（29）。
-- Deploy workflow fail gate 正確阻擋後續 Cloud Run service release；`Deploy backend to Cloud Run`、health、ready、unauthenticated protection runtime checks 全部 skipped。
-- GitHub deploy service account 讀 Cloud Logging 時回 `PERMISSION_DENIED`；本 Task 未變更 IAM，避免未經核准的重大權限變更。
-- 因無 Cloud Logging 內容，目前尚不能再細分 exit 21 是：
-  - unexpected / missing Alembic revision；
-  - `20260925_0003` 時已有 target table 的 pre-created drift；
-  - `20260926_0004` 下 target table / columns / PK / FK / index schema mismatch；
-  - preserved table / row-count validation mismatch。
-- 上述 exact subtype：**NOT VERIFIED**，不得猜測。
+- 因 #183 使用細分後 classifier，現在可確定 production failure subtype 是：**revision validation failure**。
+- 已排除：database / SQLAlchemy（20）、Alembic subprocess（22）、pre-created target table drift（23）、target schema mismatch（24）、preserved-data mismatch（25）、unexpected runtime（29）。
+- Deploy workflow migration gate 正確阻擋後續 Cloud Run service release；service deploy、`/health`、`/ready`、unauthenticated protection runtime checks 全部 skipped。
+- GitHub deploy service account 讀 Cloud Logging 仍回 `PERMISSION_DENIED`；本 Task 未變更 IAM。
+
+### Revision validation 尚未細分
+
+目前 exit 21 仍可能代表下列 revision-state 子情況，**exact subtype 仍 NOT VERIFIED**：
+
+- `public.alembic_version` table missing；
+- `alembic_version` row count 不是 1；
+- current revision 既不是 `20260925_0003` 也不是 `20260926_0004`；
+- post-migration revision 未成為 `20260926_0004`。
+
+目前沒有證據支持直接 `stamp`、改 revision row、drop table 或執行其他 production DB 修復，因此不做猜測式修正。
 
 ### 尚未完成的 Task 8 acceptance
 
@@ -232,6 +251,8 @@ Contract review：
 - historical SQLite → PostgreSQL backfill：NOT VERIFIED；本批沒有 importer execution evidence，不宣稱 PASS。
 
 Task 8 目前不得標示 DONE。
+
+下一個安全診斷步驟：在不增加 IAM 的前提下，把 revision validation `21` 再細分成「version table missing / invalid row count / unexpected current revision / post-migration revision mismatch」的獨立 exit code，再由正式 CI → Deploy 的 task exit code取得 production evidence。
 
 ## 執行規則
 

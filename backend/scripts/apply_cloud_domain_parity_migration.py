@@ -109,9 +109,34 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 # deploy service account cannot read Cloud Logging. Keep these stable and
 # non-secret so deployment evidence can distinguish failure classes.
 EXIT_DATABASE = 20
-EXIT_CONTRACT = 21
+EXIT_REVISION = 21
 EXIT_ALEMBIC = 22
+EXIT_PRECREATED_DRIFT = 23
+EXIT_SCHEMA_MISMATCH = 24
+EXIT_PRESERVED_DATA = 25
 EXIT_UNEXPECTED = 29
+# Backward-compatible name for evidence/documents that referred to generic 21.
+EXIT_CONTRACT = EXIT_REVISION
+
+
+class MigrationContractError(RuntimeError):
+    """Base class for migration contract validation failures."""
+
+
+class RevisionValidationError(MigrationContractError):
+    """Alembic revision state is missing, malformed, unexpected, or regressed."""
+
+
+class PrecreatedDriftError(MigrationContractError):
+    """Target tables exist before the migration revision that should create them."""
+
+
+class SchemaMismatchError(MigrationContractError):
+    """Target table, column, key, or index shape differs from the contract."""
+
+
+class PreservedDataMismatchError(MigrationContractError):
+    """Pre-existing tables or row counts changed during the additive migration."""
 
 
 def classify_failure(exc: BaseException) -> int:
@@ -119,8 +144,14 @@ def classify_failure(exc: BaseException) -> int:
         return EXIT_ALEMBIC
     if isinstance(exc, SQLAlchemyError):
         return EXIT_DATABASE
-    if isinstance(exc, RuntimeError):
-        return EXIT_CONTRACT
+    if isinstance(exc, RevisionValidationError):
+        return EXIT_REVISION
+    if isinstance(exc, PrecreatedDriftError):
+        return EXIT_PRECREATED_DRIFT
+    if isinstance(exc, SchemaMismatchError):
+        return EXIT_SCHEMA_MISMATCH
+    if isinstance(exc, PreservedDataMismatchError):
+        return EXIT_PRESERVED_DATA
     return EXIT_UNEXPECTED
 
 
@@ -130,7 +161,7 @@ def decide_migration_action(current_revision: str, target_tables_present: set[st
     if current_revision == PREVIOUS_REVISION:
         if present:
             names = ",".join(sorted(present))
-            raise RuntimeError(
+            raise PrecreatedDriftError(
                 "migration drift: target tables already exist before Alembic "
                 f"{TARGET_REVISION}: {names}"
             )
@@ -138,12 +169,12 @@ def decide_migration_action(current_revision: str, target_tables_present: set[st
     if current_revision == TARGET_REVISION:
         missing = expected - present
         if missing:
-            raise RuntimeError(
+            raise SchemaMismatchError(
                 "missing target tables at applied revision "
                 f"{TARGET_REVISION}: {','.join(sorted(missing))}"
             )
         return "verify"
-    raise RuntimeError(
+    raise RevisionValidationError(
         f"unexpected alembic revision: {current_revision or '<missing>'}; "
         f"expected {PREVIOUS_REVISION} or {TARGET_REVISION}"
     )
@@ -152,10 +183,10 @@ def decide_migration_action(current_revision: str, target_tables_present: set[st
 async def _current_revision(conn: AsyncConnection) -> str:
     exists = await conn.scalar(text("SELECT to_regclass('public.alembic_version') IS NOT NULL"))
     if not exists:
-        raise RuntimeError("alembic_version table is missing")
+        raise RevisionValidationError("alembic_version table is missing")
     rows = (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalars().all()
     if len(rows) != 1:
-        raise RuntimeError(f"expected one alembic_version row, found {len(rows)}")
+        raise RevisionValidationError(f"expected one alembic_version row, found {len(rows)}")
     return str(rows[0])
 
 
@@ -175,7 +206,7 @@ async def _row_counts(conn: AsyncConnection, tables: set[str]) -> dict[str, int]
     counts: dict[str, int] = {}
     for table in sorted(tables):
         if not _SAFE_IDENTIFIER.fullmatch(table):
-            raise RuntimeError(f"unsafe table identifier in catalog: {table!r}")
+            raise PreservedDataMismatchError(f"unsafe table identifier in catalog: {table!r}")
         value = await conn.scalar(text(f'SELECT count(*) FROM "{table}"'))
         counts[table] = int(value or 0)
     return counts
@@ -201,7 +232,7 @@ async def _verify_columns(conn: AsyncConnection, table: str) -> None:
     }
     expected = EXPECTED_COLUMNS[table]
     if actual != expected:
-        raise RuntimeError(f"schema mismatch for {table}: columns/nullability/type differ")
+        raise SchemaMismatchError(f"schema mismatch for {table}: columns/nullability/type differ")
 
 
 async def _primary_key(conn: AsyncConnection, table: str) -> tuple[str, ...]:
@@ -244,18 +275,18 @@ async def _verify_schema(conn: AsyncConnection) -> None:
     tables = await _public_tables(conn)
     missing = set(TARGET_TABLES) - tables
     if missing:
-        raise RuntimeError(f"missing target tables: {','.join(sorted(missing))}")
+        raise SchemaMismatchError(f"missing target tables: {','.join(sorted(missing))}")
 
     for table in TARGET_TABLES:
         await _verify_columns(conn, table)
         actual_pk = await _primary_key(conn, table)
         if actual_pk != EXPECTED_PRIMARY_KEYS[table]:
-            raise RuntimeError(f"primary key mismatch for {table}: {actual_pk}")
+            raise SchemaMismatchError(f"primary key mismatch for {table}: {actual_pk}")
 
     for table, expected in EXPECTED_FOREIGN_KEYS.items():
         actual = await _foreign_keys(conn, table)
         if actual != expected:
-            raise RuntimeError(f"foreign key mismatch for {table}: {sorted(actual)}")
+            raise SchemaMismatchError(f"foreign key mismatch for {table}: {sorted(actual)}")
 
     index_def = await conn.scalar(
         text(
@@ -266,7 +297,7 @@ async def _verify_schema(conn: AsyncConnection) -> None:
     )
     normalized = " ".join(str(index_def or "").lower().split())
     if "(habit_id, completed_at desc)" not in normalized:
-        raise RuntimeError("habit completion descending index is missing or mismatched")
+        raise SchemaMismatchError("habit completion descending index is missing or mismatched")
 
 
 async def _inspect_before(engine) -> tuple[str, set[str], set[str], dict[str, int]]:
@@ -287,14 +318,14 @@ async def _verify_after(
     async with engine.connect() as conn:
         revision = await _current_revision(conn)
         if revision != TARGET_REVISION:
-            raise RuntimeError(
+            raise RevisionValidationError(
                 f"post-migration revision mismatch: {revision}; expected {TARGET_REVISION}"
             )
         await _verify_schema(conn)
         tables = await _public_tables(conn)
         missing_preserved = preserved_tables - tables
         if missing_preserved:
-            raise RuntimeError(
+            raise PreservedDataMismatchError(
                 "pre-existing tables disappeared: " + ",".join(sorted(missing_preserved))
             )
         after_counts = await _row_counts(conn, preserved_tables)
@@ -304,7 +335,7 @@ async def _verify_after(
                 for table in preserved_tables
                 if after_counts.get(table) != baseline_counts.get(table)
             )
-            raise RuntimeError(
+            raise PreservedDataMismatchError(
                 "pre-existing row counts changed during migration: " + ",".join(changed)
             )
 

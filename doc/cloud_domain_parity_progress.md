@@ -1,6 +1,6 @@
 # Cloud Domain Parity — Implementation Progress
 
-最後更新：2026-09-26（Task 5）
+最後更新：2026-09-26（Task 6）
 
 對應設計：`doc/cloud_domain_parity_design.md`
 
@@ -15,7 +15,7 @@
 | 3 | Habits API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 4 | Shopping API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 5 | Templates API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
-| 6 | Project delete guard | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
+| 6 | Project delete guard | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 7 | Full backend verification | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 8 | CI / deployment / runtime acceptance | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 
@@ -105,6 +105,39 @@ TDD / verification evidence：
 - PostgreSQL runtime Template create/update/read persistence：NOT VERIFIED
 - opaque payload runtime round-trip：NOT VERIFIED
 - execution log runtime visibility：NOT VERIFIED
+
+## Task 6 — Project delete guard
+
+狀態：**PASS（implementation / tests）**
+
+本 Task 更新：
+
+- `backend/app/api/projects.py`
+- `backend/tests/test_projects.py`
+
+Delete guard contract：
+
+- `DELETE /api/v1/projects/{project_id}` 在 Project 被 Task 參照時回 `409`。
+- Project 被 Note 參照時回 `409`。
+- Project 被 Shopping List 參照時回 `409`。
+- 三類都無關聯時，維持既有 Project delete path。
+- guard 發生在 `project.delete` execution record 建立之前；被阻擋的刪除不建立 delete execution record，也不執行 `db.delete(project)`。
+- 每一類只用 `select(<Entity>.id).where(<Entity>.project_id == project_id).limit(1)` 做存在性查詢。
+- 本 Task 不新增 Project FK、cascade 或跨 domain destructive behavior。
+
+TDD / verification evidence：
+
+- RED commit：`3680844cb81b1be6c3529ba76ed8895e9ee28f47`。
+- RED GitHub Actions CI run #206 / backend：Task guard PASS；linked Note、linked Shopping List、no-linked 三個新案例如預期 FAIL；backend 共 104 tests，3 failures。
+- GREEN implementation commit：`c7a2cdb2062aaa7f9ef43a079c6213c92d3fd4a5`。
+- GREEN GitHub Actions CI run #207 / backend：import PASS、Alembic offline chain PASS、backend full suite 104/104 PASS。
+- Task 6 四個 Project delete guard cases：4/4 PASS。
+
+Task 6 尚未驗證：
+
+- 正式 `main` CI 完整 workflow：NOT VERIFIED（保留給 Task 7/8 統一驗證）。
+- Cloud Run deployment：NOT VERIFIED。
+- PostgreSQL runtime Project delete guard acceptance：NOT VERIFIED。
 
 ## 執行規則
 

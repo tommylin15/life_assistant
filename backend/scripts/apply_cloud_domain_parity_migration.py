@@ -212,6 +212,16 @@ EXIT_BASELINE_TABLES_MISSING = 30
 EXIT_BASELINE_SCHEMA_MISMATCH = 31
 EXIT_BASELINE_VERIFIED_UNVERSIONED = 32
 EXIT_FULL_SCHEMA_VERIFIED_UNVERSIONED = 33
+BASELINE_SCHEMA_MISMATCH_EXIT_CODES = {
+    ("google_connections", "shape"): 34,
+    ("google_connections", "index"): 35,
+    ("google_oauth_states", "shape"): 36,
+    ("google_oauth_states", "index"): 37,
+    ("execution_logs", "shape"): 38,
+    ("execution_logs", "index"): 39,
+    ("projects", "shape"): 40,
+    ("projects", "index"): 41,
+}
 # Backward-compatible names for earlier evidence/documents.
 EXIT_REVISION = EXIT_REVISION_TABLE_MISSING
 EXIT_CONTRACT = EXIT_REVISION_TABLE_MISSING
@@ -272,6 +282,31 @@ class BaselineSchemaMismatchError(MigrationContractError):
     """An unversioned database does not match the expected 0001-0003 schema."""
 
 
+class BaselineTableShapeMismatchError(BaselineSchemaMismatchError):
+    """Identify which baseline table has a column/type/nullability/PK mismatch."""
+
+    def __init__(self, table: str):
+        if table not in BASELINE_TABLES:
+            raise ValueError(f"unknown baseline table: {table}")
+        self.table = table
+        super().__init__(
+            f"baseline schema mismatch for {table}: columns/type/nullability/primary key differ"
+        )
+
+
+class BaselineRequiredIndexMismatchError(BaselineSchemaMismatchError):
+    """Identify which baseline table has a required index mismatch."""
+
+    def __init__(self, table: str, index_name: str):
+        if table not in BASELINE_TABLES:
+            raise ValueError(f"unknown baseline table: {table}")
+        self.table = table
+        self.index_name = index_name
+        super().__init__(
+            f"baseline index mismatch for {table}: {index_name} missing or mismatched"
+        )
+
+
 class BaselineVerifiedWithoutVersionError(MigrationContractError):
     """The baseline matches, but Alembic metadata is intentionally still absent."""
 
@@ -296,6 +331,10 @@ def classify_failure(exc: BaseException) -> int:
         return EXIT_DATABASE
     if isinstance(exc, BaselineTablesMissingError):
         return EXIT_BASELINE_TABLES_MISSING
+    if isinstance(exc, BaselineTableShapeMismatchError):
+        return BASELINE_SCHEMA_MISMATCH_EXIT_CODES[(exc.table, "shape")]
+    if isinstance(exc, BaselineRequiredIndexMismatchError):
+        return BASELINE_SCHEMA_MISMATCH_EXIT_CODES[(exc.table, "index")]
     if isinstance(exc, BaselineSchemaMismatchError):
         return EXIT_BASELINE_SCHEMA_MISMATCH
     if isinstance(exc, FullSchemaVerifiedWithoutVersionError):
@@ -361,9 +400,7 @@ def validate_baseline_table_shape(
     expected_columns = BASELINE_EXPECTED_COLUMNS[table]
     expected_pk = BASELINE_EXPECTED_PRIMARY_KEYS[table]
     if actual_columns != expected_columns or actual_pk != expected_pk:
-        raise BaselineSchemaMismatchError(
-            f"baseline schema mismatch for {table}: columns/type/nullability/primary key differ"
-        )
+        raise BaselineTableShapeMismatchError(table)
 
 
 def validate_baseline_required_indexes(
@@ -373,9 +410,7 @@ def validate_baseline_required_indexes(
     for index_name, required_fragment in BASELINE_REQUIRED_INDEXES[table].items():
         normalized = " ".join(actual_index_defs.get(index_name, "").lower().split())
         if required_fragment.lower() not in normalized:
-            raise BaselineSchemaMismatchError(
-                f"baseline index mismatch for {table}: {index_name} missing or mismatched"
-            )
+            raise BaselineRequiredIndexMismatchError(table, index_name)
 
 
 def decide_migration_action(current_revision: str, target_tables_present: set[str]) -> str:

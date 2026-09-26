@@ -19,9 +19,13 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         migration_marker = "Apply verified database migration"
         deploy_marker = "Deploy backend to Cloud Run"
         self.assertIn(migration_marker, self.text)
-        self.assertIn("apply_cloud_domain_parity_migration.py", self.text)
+        self.assertIn("apply_cloud_domain_parity_migration", self.text)
         self.assertIn(deploy_marker, self.text)
         self.assertLess(self.text.index(migration_marker), self.text.index(deploy_marker))
+
+    def test_migration_runner_starts_as_module_from_backend_workdir(self):
+        self.assertIn("--args=-m,scripts.apply_cloud_domain_parity_migration", self.text)
+        self.assertNotIn("--args scripts/apply_cloud_domain_parity_migration.py", self.text)
 
     def test_failed_migration_surfaces_execution_task_exit_code_before_failing_gate(self):
         migration_marker = "Apply verified database migration"

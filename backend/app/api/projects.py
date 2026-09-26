@@ -6,8 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
 from app.db.session import get_db
+from app.models.note import Note
 from app.models.project import Project
 from app.models.schemas import ProjectCreate, ProjectOut, ProjectUpdate
+from app.models.shopping import ShoppingList
 from app.models.task import Task
 from app.services.execution_log import fail_execution, finish_execution, start_execution
 
@@ -114,11 +116,23 @@ async def delete_project(
     if not project:
         raise HTTPException(404, "Project not found")
 
-    linked_result = await db.execute(
+    linked_task_result = await db.execute(
         select(Task.id).where(Task.project_id == project_id).limit(1)
     )
-    if linked_result.scalar_one_or_none() is not None:
+    if linked_task_result.scalar_one_or_none() is not None:
         raise HTTPException(409, "Project has linked tasks")
+
+    linked_note_result = await db.execute(
+        select(Note.id).where(Note.project_id == project_id).limit(1)
+    )
+    if linked_note_result.scalar_one_or_none() is not None:
+        raise HTTPException(409, "Project has linked notes")
+
+    linked_shopping_result = await db.execute(
+        select(ShoppingList.id).where(ShoppingList.project_id == project_id).limit(1)
+    )
+    if linked_shopping_result.scalar_one_or_none() is not None:
+        raise HTTPException(409, "Project has linked shopping lists")
 
     execution = await start_execution(
         db,

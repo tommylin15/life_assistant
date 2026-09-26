@@ -28,8 +28,22 @@ NOTE_LINKS_FK_DIAGNOSTIC_EXIT_CODES = {
     "both_missing": 1,
     "source_missing": 2,
     "target_missing": 3,
-    "semantics_mismatch": 4,
-    "other": 5,
+    "driver_action_representation": 4,
+    "source_update_action": 5,
+    "target_update_action": 6,
+    "both_update_action": 7,
+    "source_delete_action": 8,
+    "target_delete_action": 9,
+    "both_delete_action": 10,
+    "source_deferrable": 11,
+    "target_deferrable": 12,
+    "both_deferrable": 13,
+    "source_initially_deferred": 14,
+    "target_initially_deferred": 15,
+    "both_initially_deferred": 16,
+    "source_validation": 17,
+    "target_validation": 18,
+    "both_validation": 19,
 }
 EXIT_PROJECTS_STATUS_DEFAULT_MISSING = 250
 EXIT_PROJECTS_STATUS_DEFAULT_VALUE_MISMATCH = 251
@@ -43,7 +57,10 @@ EXIT_UNEXPECTED_FOREIGN_KEY_TABLE = 255
 
 def classify_failure(exc: BaseException) -> int:
     if isinstance(exc, note_links_fk_diagnosis.NoteLinksForeignKeyDiagnosisError):
-        return NOTE_LINKS_FK_DIAGNOSTIC_EXIT_CODES[exc.reason]
+        return NOTE_LINKS_FK_DIAGNOSTIC_EXIT_CODES.get(
+            exc.reason,
+            FOREIGN_KEY_MISMATCH_EXIT_CODES["note_links"],
+        )
     if (
         isinstance(exc, metadata_preflight.BootstrapDefaultMismatchError)
         and exc.table == "projects"

@@ -84,6 +84,130 @@ class AlembicMetadataBootstrapContractTests(unittest.TestCase):
         self.assertEqual("projects", captured.exception.table)
         self.assertEqual("status", captured.exception.column)
 
+    def test_default_mismatch_exit_mapping_identifies_exact_table_and_column(self):
+        preflight = _load_preflight()
+        expected_columns = {
+            "google_connections": (
+                "user_sub",
+                "email",
+                "encrypted_access_token",
+                "encrypted_refresh_token",
+                "scopes",
+                "access_token_expires_at",
+                "created_at",
+                "updated_at",
+            ),
+            "google_oauth_states": (
+                "state_hash",
+                "user_sub",
+                "email",
+                "services",
+                "expires_at",
+                "created_at",
+            ),
+            "execution_logs": (
+                "id",
+                "request_id",
+                "action_id",
+                "user_sub",
+                "action_type",
+                "entity_type",
+                "entity_id",
+                "provider",
+                "status",
+                "result",
+                "error_category",
+                "summary",
+                "started_at",
+                "finished_at",
+            ),
+            "projects": (
+                "id",
+                "name",
+                "summary",
+                "status",
+                "created_at",
+                "updated_at",
+            ),
+            "notes": (
+                "id",
+                "title",
+                "body",
+                "project_id",
+                "created_at",
+                "updated_at",
+            ),
+            "note_links": ("source_note_id", "target_note_id"),
+            "habits": (
+                "id",
+                "title",
+                "recurrence_rule",
+                "reminder_time",
+                "is_active",
+                "created_at",
+            ),
+            "habit_completions": ("id", "habit_id", "completed_at"),
+            "shopping_lists": ("id", "name", "project_id", "created_at"),
+            "shopping_items": (
+                "id",
+                "list_id",
+                "name",
+                "category",
+                "is_done",
+                "sort_order",
+            ),
+            "templates": (
+                "id",
+                "name",
+                "template_type",
+                "payload_json",
+                "created_at",
+                "updated_at",
+            ),
+        }
+        expected_keys = [
+            (table, column)
+            for table, columns in expected_columns.items()
+            for column in columns
+        ]
+        expected_codes = list(range(55, 64)) + list(range(192, 250))
+        self.assertEqual(67, len(expected_keys))
+        self.assertEqual(
+            list(zip(expected_keys, expected_codes, strict=True)),
+            list(preflight.DEFAULT_MISMATCH_EXIT_CODES.items()),
+        )
+        self.assertEqual(len(expected_codes), len(set(expected_codes)))
+        self.assertTrue(
+            set(expected_codes).isdisjoint(preflight.BOOTSTRAP_EXIT_CODES.values())
+        )
+        self.assertTrue(
+            set(expected_codes).isdisjoint(
+                range(
+                    preflight.migration.EXIT_UNVERSIONED_TARGETS_BASE,
+                    preflight.migration.EXIT_UNVERSIONED_TARGETS_BASE + 128,
+                )
+            )
+        )
+        for (table, column), code in zip(expected_keys, expected_codes, strict=True):
+            error = preflight.BootstrapDefaultMismatchError(
+                table,
+                column,
+                expected=None,
+                actual="unexpected",
+            )
+            self.assertEqual(code, preflight.classify_failure(error))
+
+        unknown = preflight.BootstrapDefaultMismatchError(
+            "future_table",
+            "future_column",
+            expected=None,
+            actual="unexpected",
+        )
+        self.assertEqual(
+            preflight.EXIT_BOOTSTRAP_DEFAULT_MISMATCH,
+            preflight.classify_failure(unknown),
+        )
+
     def test_required_index_definition_is_exact_and_rejects_partial_index(self):
         preflight = _load_preflight()
         indexes = {

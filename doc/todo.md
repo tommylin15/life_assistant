@@ -1,6 +1,6 @@
 # life_assistant — TODO
 
-最後更新：2026-09-25
+最後更新：2026-09-26
 
 > Source of truth：GitHub `main` + CI / deployment / runtime evidence。舊 Flutter + SQLite 保留為 migration source / existing assets；正式主線為 Firebase Hosting → Flutter Web → Cloud Run FastAPI → PostgreSQL。
 >
@@ -14,15 +14,18 @@
 
 ## 最新 evidence snapshot
 
-- 最新功能 commit：`0ea1d1fad596bcce4683df82b7d68caa4d7e42be` — `feat: add cloud projects and Gmail conversion`
-- CI #154：PASS（Backend import / Alembic validation / tests；Flutter analyze / test / build；deployment script checks）。
-- Cloud Run #123：PASS（deploy、service URL、`/health`、`/ready`、未登入 protected API 401）。
-- Firebase Hosting #69：PASS（build、deploy、Hosting verify）。
-- 文件一致化 commit：`0be77b05c40bcdc2434ff4b94689bab49ef5173a`；CI #153 PASS。
+- Acceptance Center / Drive integration final commit：`7f7da43eacce23054c91429bceaf39b536c8a75c`。
+- CI #186：PASS（Backend、deployment scripts、Flutter analyze / test / build、branding verify）；Flutter 13 tests PASS。
+- Firebase Hosting #102：PASS（build、deploy、Hosting runtime verify）。
+- Cloud Run #156：workflow PASS；本次沒有 Backend 變更，deploy/runtime steps 依 change detection 正確 skipped。
 - Google Sign-In：使用者互動驗收 PASS。
 - Task CRUD → PostgreSQL：使用者互動驗收 PASS。
-- Project CRUD / Gmail → Project：Implementation / CI / Deployment PASS；登入後 runtime / integration 尚未驗收。
-- Gmail / Calendar / Drive 真實帳號整合：仍為 NOT VERIFIED。
+- Project authenticated create/update/reread/delete：真實帳號驗收 PASS。
+- Gmail metadata read、Gmail → Task / Calendar / Project：真實帳號驗收 PASS。
+- Calendar create/update/delete：真實帳號驗收 PASS；Calendar read/list 尚未由 Acceptance Center 覆蓋。
+- Drive Bridge ensure：真實帳號驗收 PASS。
+- Acceptance Center Activity Log evidence + `[ACCEPTANCE TEST]` cleanup：PASS。
+- 真實 provider failure / Drive partial-success、destructive confirmation enforcement：NOT VERIFIED。
 
 ## P0 — Cloud Foundation
 
@@ -82,15 +85,17 @@
 - [x] Drive ensure `partial_success` baseline
 - [x] Gmail → Calendar 明確要求 request 提供 start/end + timezone，不由 Backend 猜時間
 
-### Runtime / integration NOT VERIFIED
+### Runtime / integration acceptance
 
-- [ ] 真實帳號 Gmail metadata read
-- [ ] 真實帳號 Gmail → Task
-- [ ] 真實帳號 Gmail → Calendar
-- [ ] 真實帳號 Gmail → Project
-- [ ] 真實帳號 Calendar read/create/update/delete
-- [ ] 真實帳號 Drive Bridge ensure
-- [ ] 真實 provider failure → execution/activity evidence
+- [x] 真實帳號 Gmail metadata read
+- [x] 真實帳號 Gmail → Task
+- [x] 真實帳號 Gmail → Calendar
+- [x] 真實帳號 Gmail → Project
+- [ ] 真實帳號 Calendar read/list
+- [x] 真實帳號 Calendar create/update/delete
+- [x] 真實帳號 Drive Bridge ensure
+- [x] 真實 Google success-path mutation → execution/activity evidence
+- [ ] 真實 provider failure / partial-success → execution/activity evidence
 
 ## P1 — Project Cloud
 
@@ -100,8 +105,8 @@
 - [x] Project mutation audit
 - [x] Gmail → Project capability
 - [ ] Flutter Web Projects 主線
-- [ ] Authenticated Project CRUD runtime acceptance
-- [ ] Gmail → Project true-account integration acceptance
+- [x] Authenticated Project CRUD runtime acceptance
+- [x] Gmail → Project true-account integration acceptance
 
 ## P1 — MCP / Integration Contract
 
@@ -168,17 +173,18 @@
 - [x] Task Web / Backend / PostgreSQL 互動驗收
 - [x] CI / Firebase / Cloud Run deployment evidence
 - [x] 目前主要 mutation execution-log implementation baseline
-- [ ] Project authenticated runtime acceptance
-- [ ] Google integrations 真實帳號 success/failure evidence
+- [x] Project authenticated runtime acceptance
+- [x] Google integrations 真實帳號 success-path evidence
+- [ ] Google provider failure / partial-success runtime evidence
 - [ ] SQLite migration runtime evidence
 - [ ] Bridge / MCP policy + idempotency + integration evidence
 - [ ] Phase 1 整體 deployment / runtime / integration evidence 完整
 
 ## 當前建議執行順序
 
-1. 在已登入 App session 做 Project CRUD + Gmail/Calendar/Drive 真實帳號 acceptance，並核對 `/activity` execution records。
-2. 補 Note / Habit / Shopping / Template Cloud target schema/API，讓完整 SQLite migration 有合法 target。
-3. 實作 SQLite → PostgreSQL 可重跑 export/import + verification。
+1. 補 Note / Habit / Shopping / Template Cloud target schema/API，讓完整 SQLite migration 有合法 target。
+2. 實作 SQLite → PostgreSQL 可重跑 export/import + verification。
+3. 補 Calendar read/list 與 Google provider failure / Drive partial-success 真實 runtime evidence。
 4. 補完整 authorization / confirmation / idempotency policy。
 5. 完成 ChatGPT Bridge Backend / MCP contract 與 Phase 1 Release Gate。
 

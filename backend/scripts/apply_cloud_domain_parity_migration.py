@@ -12,8 +12,10 @@ import asyncio
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 from app.config import settings
@@ -102,6 +104,24 @@ EXPECTED_FOREIGN_KEYS = {
 
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+
+# Cloud Run execution describe exposes the container exit code even when the
+# deploy service account cannot read Cloud Logging. Keep these stable and
+# non-secret so deployment evidence can distinguish failure classes.
+EXIT_DATABASE = 20
+EXIT_CONTRACT = 21
+EXIT_ALEMBIC = 22
+EXIT_UNEXPECTED = 29
+
+
+def classify_failure(exc: BaseException) -> int:
+    if isinstance(exc, subprocess.CalledProcessError):
+        return EXIT_ALEMBIC
+    if isinstance(exc, SQLAlchemyError):
+        return EXIT_DATABASE
+    if isinstance(exc, RuntimeError):
+        return EXIT_CONTRACT
+    return EXIT_UNEXPECTED
 
 
 def decide_migration_action(current_revision: str, target_tables_present: set[str]) -> str:
@@ -320,4 +340,9 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except BaseException as exc:
+        exit_code = classify_failure(exc)
+        print(f"migration_failure_exit_code={exit_code}", file=sys.stderr)
+        raise SystemExit(exit_code) from exc

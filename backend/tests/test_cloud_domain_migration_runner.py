@@ -28,7 +28,7 @@ class CloudDomainMigrationRunnerTests(unittest.TestCase):
 
     def test_previous_revision_with_precreated_target_table_is_drift(self):
         runner = _load_runner()
-        with self.assertRaisesRegex(RuntimeError, "migration drift"):
+        with self.assertRaisesRegex(runner.PrecreatedDriftError, "migration drift"):
             runner.decide_migration_action("20260925_0003", {"notes"})
 
     def test_target_revision_requires_schema_verification_only(self):
@@ -39,14 +39,14 @@ class CloudDomainMigrationRunnerTests(unittest.TestCase):
         )
         self.assertEqual("verify", action)
 
-    def test_target_revision_missing_table_is_invalid(self):
+    def test_target_revision_missing_table_is_schema_mismatch(self):
         runner = _load_runner()
-        with self.assertRaisesRegex(RuntimeError, "missing target tables"):
+        with self.assertRaisesRegex(runner.SchemaMismatchError, "missing target tables"):
             runner.decide_migration_action("20260926_0004", {"notes"})
 
-    def test_unknown_revision_is_rejected(self):
+    def test_unknown_revision_is_revision_validation_failure(self):
         runner = _load_runner()
-        with self.assertRaisesRegex(RuntimeError, "unexpected alembic revision"):
+        with self.assertRaisesRegex(runner.RevisionValidationError, "unexpected alembic revision"):
             runner.decide_migration_action("legacy", set())
 
     def test_database_failure_has_distinct_process_exit_code(self):
@@ -56,11 +56,32 @@ class CloudDomainMigrationRunnerTests(unittest.TestCase):
             runner.classify_failure(SQLAlchemyError("database unavailable")),
         )
 
-    def test_contract_failure_has_distinct_process_exit_code(self):
+    def test_revision_failure_has_distinct_process_exit_code(self):
         runner = _load_runner()
         self.assertEqual(
-            runner.EXIT_CONTRACT,
-            runner.classify_failure(RuntimeError("migration drift")),
+            runner.EXIT_REVISION,
+            runner.classify_failure(runner.RevisionValidationError("bad revision")),
+        )
+
+    def test_precreated_drift_has_distinct_process_exit_code(self):
+        runner = _load_runner()
+        self.assertEqual(
+            runner.EXIT_PRECREATED_DRIFT,
+            runner.classify_failure(runner.PrecreatedDriftError("migration drift")),
+        )
+
+    def test_schema_mismatch_has_distinct_process_exit_code(self):
+        runner = _load_runner()
+        self.assertEqual(
+            runner.EXIT_SCHEMA_MISMATCH,
+            runner.classify_failure(runner.SchemaMismatchError("schema mismatch")),
+        )
+
+    def test_preserved_data_mismatch_has_distinct_process_exit_code(self):
+        runner = _load_runner()
+        self.assertEqual(
+            runner.EXIT_PRESERVED_DATA,
+            runner.classify_failure(runner.PreservedDataMismatchError("data changed")),
         )
 
     def test_alembic_failure_has_distinct_process_exit_code(self):

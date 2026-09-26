@@ -196,8 +196,31 @@ BOOTSTRAP_EXIT_CODES = {
     BootstrapConstraintMismatchError: EXIT_BOOTSTRAP_CONSTRAINT_MISMATCH,
 }
 
+_DEFAULT_MISMATCH_KEYS = tuple(
+    (table, column)
+    for table in MANAGED_TABLES
+    for column in (
+        migration.BASELINE_EXPECTED_COLUMNS[table]
+        if table in migration.BASELINE_EXPECTED_COLUMNS
+        else migration.EXPECTED_COLUMNS[table]
+    )
+)
+_DEFAULT_MISMATCH_DIAGNOSTIC_CODES = tuple(range(55, 64)) + tuple(range(192, 250))
+DEFAULT_MISMATCH_EXIT_CODES = dict(
+    zip(
+        _DEFAULT_MISMATCH_KEYS,
+        _DEFAULT_MISMATCH_DIAGNOSTIC_CODES,
+        strict=True,
+    )
+)
+
 
 def classify_failure(exc: BaseException) -> int:
+    if isinstance(exc, BootstrapDefaultMismatchError):
+        return DEFAULT_MISMATCH_EXIT_CODES.get(
+            (exc.table, exc.column),
+            EXIT_BOOTSTRAP_DEFAULT_MISMATCH,
+        )
     for error_type, exit_code in BOOTSTRAP_EXIT_CODES.items():
         if isinstance(exc, error_type):
             return exit_code

@@ -1,6 +1,6 @@
 # Cloud Domain Parity — Implementation Progress
 
-最後更新：2026-09-26（Task 6）
+最後更新：2026-09-26（Task 7）
 
 對應設計：`doc/cloud_domain_parity_design.md`
 
@@ -16,7 +16,7 @@
 | 4 | Shopping API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 5 | Templates API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 6 | Project delete guard | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
-| 7 | Full backend verification | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
+| 7 | Full backend verification | PASS | PASS | PASS | NOT VERIFIED | NOT VERIFIED |
 | 8 | CI / deployment / runtime acceptance | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 
 ## Task 1 — PostgreSQL target models + Alembic migration
@@ -135,9 +135,43 @@ TDD / verification evidence：
 
 Task 6 尚未驗證：
 
-- 正式 `main` CI 完整 workflow：NOT VERIFIED（保留給 Task 7/8 統一驗證）。
+- 正式 `main` CI 完整 workflow：NOT VERIFIED（保留給 Task 8）。
 - Cloud Run deployment：NOT VERIFIED。
 - PostgreSQL runtime Project delete guard acceptance：NOT VERIFIED。
+
+## Task 7 — Full backend verification
+
+狀態：**PASS（pre-main implementation / tests / CI verification）**
+
+驗證內容：
+
+- FastAPI import：PASS。
+- Alembic offline chain：PASS，包含 `20260925_0003 -> 20260926_0004`。
+- Backend full suite：104/104 PASS。
+- Flutter analyze：PASS。
+- Flutter tests：PASS。
+- Flutter Web build：PASS。
+- Branding web-build verification：PASS。
+- GCP deployment scripts syntax：PASS。
+- GitHub Actions PR CI #208：backend / flutter / deployment-scripts 全部 PASS。
+
+Contract review：
+
+- Notes endpoints、legacy nullable read、link idempotency/self-link/delete cleanup：符合核准 spec。
+- Habits active-only list、append-only completions、無 delete/activate/deactivate mutation：符合核准 spec。
+- Shopping list/item endpoint 與 `is_done`-only PATCH：符合核准 spec。
+- Template `payload_json` 維持 opaque string，無 delete/apply/versioning：符合核准 spec。
+- 新 domain mutation provider 固定 `life_assistant`，action types 與 spec 一致。
+- Note body / Template payload 不進 execution summary。
+- Project delete guard 對 Task / Note / Shopping List 皆為 409，無新增 FK/cascade。
+- 未發現 Tasks 1–6 需要額外修正的 defect；Task 7 沒有修改 production code。
+
+環境限制與狀態分類：
+
+- 目前 ChatGPT container 無法解析 `github.com`，因此無法在 container 另跑一份 local clone；這一層不冒充 local PASS。
+- 上述可重跑驗證由 GitHub Actions 對 Task 1–7 最終 branch 執行並取得 PASS。
+- Historical SQLite → PostgreSQL backfill：NOT VERIFIED；本批仍未建立/執行 importer，不宣稱 PASS。
+- 正式 `main` CI、Cloud Run deployment、PostgreSQL runtime acceptance：留給 Task 8，仍為 NOT VERIFIED。
 
 ## 執行規則
 

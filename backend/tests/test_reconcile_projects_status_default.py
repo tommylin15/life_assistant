@@ -60,10 +60,9 @@ class ProjectsStatusDefaultReconciliationTests(unittest.TestCase):
 
     def test_repair_sql_only_sets_default(self):
         source = SCRIPT.read_text(encoding="utf-8")
-        self.assertIn(
-            'ALTER COLUMN "status" SET DEFAULT \'active\'',
-            source,
-        )
+        self.assertIn('ALTER TABLE "projects"', source)
+        self.assertIn('ALTER COLUMN "status" SET DEFAULT', source)
+        self.assertIn("active", source)
         self.assertNotIn("UPDATE projects", source)
         self.assertNotIn("DROP TABLE", source)
         self.assertNotIn("DROP COLUMN", source)

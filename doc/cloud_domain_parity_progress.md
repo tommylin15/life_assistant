@@ -1,6 +1,6 @@
 # Cloud Domain Parity — Implementation Progress
 
-最後更新：2026-09-26（Task 8 exact projects index drift diagnosis）
+最後更新：2026-09-26（Task 8 projects index reconciliation design）
 
 對應設計：`doc/cloud_domain_parity_design.md`
 
@@ -19,48 +19,50 @@
 | 7 | Full backend verification | PASS | PASS | PASS | NOT VERIFIED | NOT VERIFIED |
 | 8 | CI / deployment / runtime acceptance | PASS | PASS | PASS | FAIL | FAIL |
 
-## Task 1 — PostgreSQL target models + Alembic migration
+Task 8 整體狀態：**PARTIAL**。不得標示 DONE。
+
+---
+
+## Tasks 1–7 — 已完成 implementation / tests / CI
+
+### Task 1 — PostgreSQL target models + Alembic migration
 
 狀態：**PASS（implementation / tests / formal main CI）**
 
 - 建立 Notes / Habits / Shopping / Templates ORM target models。
 - Alembic revision：`20260926_0004`，`down_revision=20260925_0003`。
-- model contract tests：6/6 PASS。
-- Python compile：PASS。
-- Task 8 formal main CI 已持續覆蓋本批 backend regression。
-- Runtime DB metadata / historical SQLite backfill：NOT VERIFIED。
+- model contract tests：PASS。
+- Alembic offline chain：PASS。
+- Runtime DB metadata / historical SQLite backfill：仍依 Task 8 evidence 判定，不以程式完成代替 runtime acceptance。
 
-## Task 2 — Notes API parity
+### Task 2 — Notes API parity
 
 狀態：**PASS（implementation / tests / formal main CI）**
 
 - Notes CRUD、bidirectional links、delete link cleanup、legacy nullable read。
-- `note.create` / `note.update` / `note.delete` / `note.link`。
-- 正式 main CI regression：PASS。
+- mutation action types：`note.create` / `note.update` / `note.delete` / `note.link`。
 - PostgreSQL runtime CRUD：NOT VERIFIED。
 
-## Task 3 — Habits API parity
+### Task 3 — Habits API parity
 
 狀態：**PASS（implementation / tests / formal main CI）**
 
 - active-only list、create/get/patch、append completion、descending history。
 - 不新增 delete / activate / deactivate。
-- `habit.create` / `habit.update` / `habit.complete`。
-- 正式 main CI regression：PASS。
+- mutation action types：`habit.create` / `habit.update` / `habit.complete`。
 - PostgreSQL runtime completion persistence：NOT VERIFIED。
 
-## Task 4 — Shopping API parity
+### Task 4 — Shopping API parity
 
 狀態：**PASS（implementation / tests / formal main CI）**
 
 - Shopping List create/read、item create、nested sorted read、`is_done` toggle。
 - `project_id` 原樣保存，本批不做 project existence validation。
 - 不新增 delete / quantity / price / store。
-- `shopping_list.create` / `shopping_item.create` / `shopping_item.toggle`。
-- 正式 main CI regression：PASS。
-- PostgreSQL runtime Shopping persistence：NOT VERIFIED。
+- mutation action types：`shopping_list.create` / `shopping_item.create` / `shopping_item.toggle`。
+- PostgreSQL runtime persistence：NOT VERIFIED。
 
-## Task 5 — Templates API parity
+### Task 5 — Templates API parity
 
 狀態：**PASS（implementation / tests / formal main CI）**
 
@@ -69,24 +71,21 @@
 - `GET /api/v1/templates/{template_id}`
 - `PATCH /api/v1/templates/{template_id}`
 - `payload_json` 維持 opaque `TEXT` string，不 parse / normalize / reserialize。
-- 不新增 template delete / apply / version-history endpoint。
+- 不新增 delete / apply / version-history endpoint。
 - mutation action types：`template.create` / `template.update`。
-- provider 固定 `life_assistant`。
-- execution summaries 不包含 `payload_json` 本文。
-- 正式 main CI regression：PASS。
-- PostgreSQL runtime Template persistence / opaque payload round-trip：NOT VERIFIED。
+- provider 固定 `life_assistant`；execution summary 不包含 payload 本文。
+- PostgreSQL runtime opaque payload round-trip：NOT VERIFIED。
 
-## Task 6 — Project delete guard
+### Task 6 — Project delete guard
 
 狀態：**PASS（implementation / tests / formal main CI）**
 
 - `DELETE /api/v1/projects/{project_id}` 在 Project 被 Task / Note / Shopping List 參照時回 `409`。
-- guard 發生在 `project.delete` execution record 建立之前；被阻擋的刪除不建立 delete execution record。
-- 本 Task 不新增 Project FK、cascade 或跨 domain destructive behavior。
-- 正式 main CI regression：PASS。
+- guard 發生在 `project.delete` execution record 建立之前。
+- 本 Task 不新增 Project FK、cascade 或跨-domain destructive behavior。
 - PostgreSQL runtime Project delete guard acceptance：NOT VERIFIED。
 
-## Task 7 — Full backend verification
+### Task 7 — Full backend verification
 
 狀態：**PASS（implementation / tests / CI verification）**
 
@@ -95,200 +94,259 @@
 - Backend full suite：PASS。
 - Flutter analyze / tests / Web build / branding verification：PASS。
 - GCP deployment scripts syntax：PASS。
-- Historical SQLite → PostgreSQL backfill：NOT VERIFIED；本批未建立/執行 importer，不宣稱 PASS。
+- Historical SQLite → PostgreSQL backfill：NOT VERIFIED；沒有 importer execution evidence，不宣稱 PASS。
+
+---
 
 ## Task 8 — CI / deployment / runtime acceptance
 
 狀態：**PARTIAL — implementation / tests / formal main CI PASS；production migration contract FAIL；service/runtime blocked**
 
-### Implementation / CI evidence
+### Runtime migration gate
 
-- 修正 deploy workflow 在批次 fast-forward 時可能錯誤跳過 backend release 的問題。
-- Cloud Run migration job：`life-assistant-db-migrate`，在 Cloud Run service deploy 前先驗證 / 執行 migration contract。
-- migration runner：`backend/scripts/apply_cloud_domain_parity_migration.py`。
-- runner 對 revision / pre-created target tables / target schema / preserved table row counts 採 fail-closed；不以 stamp / drop / truncate 隱藏 drift。
-- migration job 使用 module mode：`python -m scripts.apply_cloud_domain_parity_migration`。
-- 加入 execution / task exit-code diagnostics；在既有 Logging IAM 不足時仍能取得非敏感 production evidence。
-- 本 Task 未增加 Cloud Logging IAM 權限。
+Cloud Run migration job：`life-assistant-db-migrate`。
+
+正式 deployment 在 Cloud Run service deploy 前先執行 migration contract；runner：
+
+`backend/scripts/apply_cloud_domain_parity_migration.py`
+
+原則：
+
+- fail-closed；
+- 不以 stamp / drop / truncate 隱藏 drift；
+- production diagnostics 優先使用 execution / task exit code；
+- Cloud Logging 權限不足時不為除錯額外增加 IAM；
+- diagnosis 階段不修改 production schema / data / Alembic metadata。
 
 ### Diagnostic history
 
 #### 1. Generic contract diagnosis
 
-- 正式 main CI #228：PASS；backend 118/118 PASS。
+- main CI #228：PASS；backend 118/118 PASS。
 - Deploy Cloud Run #181：FAIL；migration task exit `21`。
-- 先前 script-path 啟動造成 classifier 前 import failure 的 exit `1` 已透過 module mode 排除。
+- 先前 script-path import failure exit `1` 已由 module mode `python -m scripts.apply_cloud_domain_parity_migration` 排除。
 
 #### 2. Contract subtype split
 
-exit mapping：
+固定分類：
 
 - `20`：database / SQLAlchemy error。
 - `21`：revision validation failure。
 - `22`：Alembic subprocess failure。
-- `23`：pre-created target table drift。
+- `23`：pre-created target-table drift。
 - `24`：target schema / PK / FK / index mismatch。
 - `25`：preserved table / row-count mismatch。
 - `29`：unexpected runtime failure。
 
-TDD evidence：
+Evidence：
 
-- RED commit：`58fd8347822fb90baf645b7a90e9589ae100a3dc`。
-- CI #229：backend 如預期 RED。
-- GREEN commit：`90875fdeadfba93b2a334e7d951a28c10f136eeb`。
-- CI #230：PASS；backend 121/121 PASS。
-- Deploy Cloud Run #183：FAIL；task exit `21`，確認 production failure 在 revision validation。
+- RED commit：`58fd8347822fb90baf645b7a90e9589ae100a3dc`；CI #229 如預期 RED。
+- GREEN commit：`90875fdeadfba93b2a334e7d951a28c10f136eeb`；CI #230 PASS；backend 121/121 PASS。
+- Deploy #183：exit `21`，確認 production failure 在 revision validation。
 
 #### 3. Revision-state subtype split
 
-revision-state exit mapping：
-
 - `21`：`alembic_version` table missing。
-- `26`：`alembic_version` row count invalid。
+- `26`：revision row count invalid。
 - `27`：unexpected current revision。
 - `28`：post-migration revision mismatch。
 
+Evidence：
+
 - CI #232：PASS。
-- Deploy Cloud Run #185：FAIL，task exit **21**。
-- Production evidence：`public.alembic_version` **不存在**。
-- 未執行 stamp、revision-row edit 或其他 DB metadata 寫入。
+- Deploy #185：exit **21**。
+- Production：`public.alembic_version` **不存在 / VERIFIED**。
+- 未 stamp、未修改 revision row。
 
 #### 4. Read-only baseline verification
 
-針對 unversioned production DB，加入 revisions `0001–0003` baseline read-only validation：
+Baseline revisions `0001–0003`：
 
-- baseline tables：`google_connections`、`google_oauth_states`、`execution_logs`、`projects`。
-- 驗證 exact columns / type / nullability / primary key / required indexes。
+- `google_connections`
+- `google_oauth_states`
+- `execution_logs`
+- `projects`
+
+驗證 columns / type / nullability / PK / required indexes。
+
 - `30`：baseline tables missing。
 - `31`：baseline schema mismatch。
 - `32`：baseline verified but unversioned。
 
-TDD / CI：
+Evidence：
 
-- RED CI #233：如預期失敗。
+- RED CI #233：如預期 RED。
 - GREEN commit：`6d7261f06fc0c71e23ac22321a4d8d1eb2cc2876`。
 - CI #234：PASS；backend 133/133 PASS。
-- Deploy Cloud Run #187：FAIL；task exit **23**。
-
-因 verifier 當時先檢查 target-table presence，exit 23 證明 unversioned DB 中至少一張 `0004` target table 已存在，因此不能把 DB 當成乾淨 `0003` baseline 直接 stamp。
+- Deploy #187：exit **23**，證明 unversioned DB 已有至少一張 `0004` target table，因此不能把 production 當成乾淨 `0003` 直接 stamp。
 
 #### 5. Exact target-table presence bitmap
 
-為在不增加 Logging IAM 的前提下確認 target table presence，加入穩定 bitmap：
+Target order / bit：
 
-- bit 0 `notes`
-- bit 1 `note_links`
-- bit 2 `habits`
-- bit 3 `habit_completions`
-- bit 4 `shopping_lists`
-- bit 5 `shopping_items`
-- bit 6 `templates`
-- diagnostic exit = `64 + bitmap`
+- `notes` = 1
+- `note_links` = 2
+- `habits` = 4
+- `habit_completions` = 8
+- `shopping_lists` = 16
+- `shopping_items` = 32
+- `templates` = 64
 
-TDD / CI：
+Diagnostic exit = `64 + bitmap`。
+
+Evidence：
 
 - RED commit：`4f3ae9e31aceb7b62fd31287fc6007b7a19c3f9c`；CI #235 如預期 RED。
 - GREEN commit：`1a94cf2141260170af6f7a63067d761c4df1b741`。
 - CI #236：PASS；backend 136/136 PASS；Alembic / Flutter / deployment-scripts PASS。
 - Firebase Hosting #135：PASS。
-- Deploy Cloud Run #189：FAIL；execution `life-assistant-db-migrate-q85fd`；task exit **191**。
+- Deploy #189：execution `life-assistant-db-migrate-q85fd`；task exit **191**。
 
-`191 = 64 + 127`，七個 bits 全部存在，因此 production 已驗證：
+`191 = 64 + 127`：七張 `0004` target tables **全部存在 / VERIFIED**。
 
-- `alembic_version` 不存在；
-- `notes`、`note_links`、`habits`、`habit_completions`、`shopping_lists`、`shopping_items`、`templates` 七張 target tables 全部存在。
-
-但 table presence 不等於 schema exact match，因此仍不能 stamp。
+但 table presence 不等於 schema exact equivalence，因此仍不能 stamp。
 
 #### 6. Full unversioned schema path
 
-調整診斷路徑：
+路徑改為：
 
-- partial target subset：仍 fail-closed，回 bitmap；
-- all seven target tables present：先驗證 `0001–0003` baseline exact shape，再驗證 `0004` target exact shape；
-- baseline mismatch：exit `31`；
-- target mismatch：exit `24`；
-- 若 `0001–0004` 全部 exact match、但 metadata 缺失：exit `33`，仍不自動 stamp。
+- partial target subset → bitmap fail-closed；
+- all seven target tables present → 先驗證 baseline `0001–0003` exact shape，再驗證 `0004` exact schema；
+- baseline mismatch → `31`；
+- target mismatch → `24`；
+- 若 `0001–0004` 全部 exact match、但 metadata 缺失 → `33`，仍不自動 stamp。
 
-TDD / CI：
+Evidence：
 
-- RED commit：`c6d3dcbf105b41d26883271d93b9b7a325c20189`；CI #237 backend 如預期 FAIL。
+- RED commit：`c6d3dcbf105b41d26883271d93b9b7a325c20189`；CI #237 如預期 RED。
 - GREEN commit：`0ef210a6a8f953598456151a994e25e142861624`。
 - CI #238：PASS；backend 139/139 PASS。
 - Firebase Hosting #137：PASS。
-- Deploy Cloud Run #191：FAIL；execution `life-assistant-db-migrate-sqmz4`；task exit **31**。
+- Deploy #191：execution `life-assistant-db-migrate-sqmz4`；task exit **31**。
 
-此時 production root state 確認為 baseline schema mismatch，但 exact table / mismatch 類型仍未知。
+Production root state 因此確認為 baseline schema mismatch；當時 exact table / mismatch type 尚未知。
 
 #### 7. Exact baseline table + mismatch-class subtype
 
-為把 generic exit `31` 再唯讀細分，加入固定 subtype mapping：
-
-- `34`：`google_connections` columns/type/nullability/PK shape mismatch。
+- `34`：`google_connections` shape mismatch。
 - `35`：`google_connections` required-index mismatch。
-- `36`：`google_oauth_states` columns/type/nullability/PK shape mismatch。
+- `36`：`google_oauth_states` shape mismatch。
 - `37`：`google_oauth_states` required-index mismatch。
-- `38`：`execution_logs` columns/type/nullability/PK shape mismatch。
+- `38`：`execution_logs` shape mismatch。
 - `39`：`execution_logs` required-index mismatch。
-- `40`：`projects` columns/type/nullability/PK shape mismatch。
+- `40`：`projects` shape mismatch。
 - `41`：`projects` required-index mismatch。
 
-`31` 保留作 generic baseline-schema fallback；`34–41` 均低於 `64+bitmap` 診斷區間。
+Evidence：
 
-TDD / CI evidence：
+- RED commit：`1c9f4cea83c506b977da512056149914cf428f02`；CI #239 如預期 RED。
+- GREEN commit：`b5bf6ddaf98e43d15f40a0f7a26e516c77889723`。
+- CI #240：PASS；backend 142/142 PASS；Alembic / Flutter / deployment-scripts PASS。
+- Firebase Hosting #139：PASS。
+- Deploy #193：run `36240544928`；execution `life-assistant-db-migrate-hcx8n`；task exit **41**。
 
-- RED commit：`1c9f4cea83c506b977da512056149914cf428f02`（`test: identify baseline schema drift subtype`）。
-- CI #239 backend：**如預期 RED**；142 tests 中新增的 9 個 subtype assertions 因新 exception / mapping 尚未實作而 ERROR；既有 contract tests、Alembic validation、deployment-scripts 未出現新 regression。
-- GREEN commit：`b5bf6ddaf98e43d15f40a0f7a26e516c77889723`（`fix: classify baseline schema drift subtype`）。
-- CI #240：**PASS**。
-- Backend full suite：**142/142 PASS**。
-- Alembic offline chain：PASS，`0001 -> 0002 -> 0003 -> 0004`。
-- Flutter analyze / tests / Web build / branding verification：PASS。
-- deployment-scripts：PASS。
-- Firebase Hosting #139：**PASS**。
+因 verifier 依序通過前三張 baseline table，再於 `projects` index 檢查失敗，所以已驗證：
 
-Deploy Cloud Run #193：**FAIL**，run ID `36240544928`，release commit `b5bf6ddaf98e43d15f40a0f7a26e516c77889723`。
+- `google_connections` columns/type/nullability/PK：PASS / VERIFIED。
+- `google_oauth_states` shape + required indexes：PASS / VERIFIED。
+- `execution_logs` shape + required indexes：PASS / VERIFIED。
+- `projects` columns/type/nullability/PK：PASS / VERIFIED。
+- `projects` required indexes：FAIL / VERIFIED。
 
-- Migration execution：`life-assistant-db-migrate-hcx8n`。
-- Migration task：`life-assistant-db-migrate-hcx8n-task0`。
-- Migration task exit：**41** = `projects` required-index mismatch。
-- 因 baseline verifier 依序驗證 `google_connections` → `google_oauth_states` → `execution_logs` → `projects`，可確認前三張 baseline contract PASS，且 `projects` columns/type/nullability/PK PASS。
+#### 8. Exact single `projects` required-index subtype
 
-#### 8. Exact `projects` required-index subtype
-
-為把 exit `41` 再唯讀細分到 exact index 與 mismatch reason，加入固定 mapping：
-
-- `42`：`ix_projects_status` **missing**。
+- `42`：`ix_projects_status` missing。
 - `43`：`ix_projects_status` definition mismatch。
-- `44`：`ix_projects_name` **missing**。
+- `44`：`ix_projects_name` missing。
 - `45`：`ix_projects_name` definition mismatch。
 
-若 exception 沒有 exact reason，仍保留原 table-level exit `41` 作 backward-compatible fallback；`42–45` 全部低於 `64+bitmap` 診斷區間。
+Evidence：
+
+- RED commit：`76371e7472e1e3ba18f617dc0dbd0e26a7be62a8`；CI #241 backend 如預期 RED，147 tests 中新增 5 個 assertions ERROR。
+- GREEN commit：`30f8ac5a70e7e6ec739ab49511c49ec3d75b8f0f`。
+- CI #242：PASS；backend **147/147 PASS**；Alembic / Flutter / deployment-scripts PASS。
+- Firebase Hosting #141（run `36242072583`）：PASS。
+- Deploy Cloud Run #195（run `36242072582`）：FAIL。
+- Execution：`life-assistant-db-migrate-94jpj`。
+- Task：`life-assistant-db-migrate-94jpj-task0`。
+- Exit：**42** = `ix_projects_status` missing。
+
+該版 validator 在第一個 index failure 即停止，因此當時 `ix_projects_name` 仍 NOT VERIFIED。
+
+#### 9. Combined `projects` index diagnosis
+
+本 checkpoint 改成一次收集兩個 `projects` required-index 狀態。單一 mismatch 仍沿用 `42–45`；兩個同時 mismatch 使用：
+
+- `46`：status missing + name missing。
+- `47`：status missing + name definition mismatch。
+- `48`：status definition mismatch + name missing。
+- `49`：status definition mismatch + name definition mismatch。
+
+全部低於 target-table bitmap range（64+），避免診斷碼碰撞。
 
 TDD / CI evidence：
 
-- RED commit：`76371e7472e1e3ba18f617dc0dbd0e26a7be62a8`（`test: identify exact projects index drift`）。
-- CI #241 backend：**如預期 RED**；backend 共 147 tests，新增的 5 個 exact-index assertions 因 mapping / `reason` 尚未實作而 ERROR；Alembic offline validation 與 deployment-scripts PASS。
-- GREEN commit：`30f8ac5a70e7e6ec739ab49511c49ec3d75b8f0f`（`fix: classify exact projects index drift`）。
-- CI #242：**PASS**。
-- Backend full suite：**147/147 PASS**。
+- RED commit：`c60cb1b11e8fbbe11a324eab0b4d670287b7c69a`（`test: diagnose combined projects index drift`）。
+- CI #243：backend 共 **152 tests**；只有新增的 5 個 combined-index tests 因新 mapping / exception 尚未實作而 ERROR；既有 147 tests PASS；Alembic validation / deployment-scripts PASS。
+- GREEN commit：`0388efa53822eb7ba762f58e8745fe2348a99091`（`fix: diagnose both projects indexes`）。
+- CI #244（run `36248619499`）：**PASS**。
+- Backend full suite：**152/152 PASS**。
 - Alembic offline chain：PASS，`0001 -> 0002 -> 0003 -> 0004`。
 - Flutter analyze / tests / Web build / branding verification：PASS。
 - deployment-scripts：PASS。
-- Firebase Hosting #141（run `36242072583`）：**PASS**。
+- Firebase Hosting #143（run `36248731171`）：**PASS**。
 
-### Latest production evidence — `ix_projects_status` is missing
+Production evidence：
 
-Deploy Cloud Run #195：**FAIL**，run ID `36242072582`，release commit `30f8ac5a70e7e6ec739ab49511c49ec3d75b8f0f`。
-
-- Migration execution：`life-assistant-db-migrate-94jpj`。
-- Migration task：`life-assistant-db-migrate-94jpj-task0`。
-- Migration task `status.lastAttemptResult.exitCode`：**42**。
-- Cloud Run execution condition 同樣明確指出 task failed with exit code `42`。
-- `42` 的唯一分類：**`ix_projects_status` index missing**。
-- 這不是 definition mismatch：若 index 存在但不符合 `(status)` contract，會回 `43`。
-- 因 required-index validator 固定先檢查 `ix_projects_status` 再檢查 `ix_projects_name`，本次在 status index 即 fail，所以 `ix_projects_name` 狀態仍 **NOT VERIFIED**；不得推論其存在或正確。
+- Deploy Cloud Run #197：run `36248731070`，release commit `0388efa53822eb7ba762f58e8745fe2348a99091`。
+- Migration execution：`life-assistant-db-migrate-hbjxj`。
+- Migration task：`life-assistant-db-migrate-hbjxj-task0`。
+- `status.lastAttemptResult.exitCode`：**46**。
+- Cloud Run execution condition 同樣指出 task failed with exit code **46**。
+- `46` 的唯一分類：
+  - `ix_projects_status`：**missing / FAIL / VERIFIED**。
+  - `ix_projects_name`：**missing / FAIL / VERIFIED**。
+- 兩者都不是 definition mismatch。
+- Migration gate 正確阻擋後續 Cloud Run service deploy；service URL / `/health` / `/ready` / unauthenticated API checks 均 skipped。
 - Logging read 仍 `PERMISSION_DENIED`；未變更 IAM。
+
+### Migration contract vs ORM metadata discrepancy
+
+GitHub Source of Truth 顯示：
+
+- `backend/alembic/versions/20260925_0003_projects.py` 明確建立：
+  - `ix_projects_status` on `projects(status)`；
+  - `ix_projects_name` on `projects(name)`。
+- `backend/app/models/project.py` 目前沒有 `index=True` 或等價的 explicit `Index(...)` metadata。
+
+判定：
+
+- 正式歷史 migration contract 要求兩個 index；
+- ORM metadata 未同步表達該 contract；
+- 不應修改既有 `20260925_0003` 歷史 migration 來掩蓋差異；
+- 後續應讓 ORM metadata / contract tests 與既有 migration 對齊，但 ORM 修正本身不等於 production DB repair。
+
+### Repair / reconciliation design（本 checkpoint 僅設計，不執行 production mutation）
+
+Production 目前是 **unversioned + pre-existing schema**，因此不能直接把一般 Alembic forward migration 當成修復手段，也不能先 stamp。
+
+建議安全順序：
+
+1. **建立 dedicated pre-stamp reconciliation path**，只處理已被 production evidence 證實缺失的 `ix_projects_status` / `ix_projects_name`。
+2. 對每個 index 先做 exact catalog preflight：
+   - 若名稱不存在 → 才允許 additive create；
+   - 若同名 index 已存在且 definition 不符 → fail-closed，不自動 drop / replace；
+   - 不用 blind `IF NOT EXISTS` 掩蓋錯誤 definition。
+3. Repair implementation 必須可重跑、可稽核、明確區分「already exact / created / conflict」。
+4. 同步補齊 Project ORM metadata，使其明確表達兩個 index，並以 tests 防止 migration/ORM contract 再次分叉。
+5. Index repair 後重新跑完整 **read-only 0001–0004 verifier**：
+   - baseline 必須全部 exact match；
+   - 七張 `0004` target tables 必須通過 columns / type / nullability / PK / FK / required-index exact verification。
+6. 只有 verifier 達到「full schema verified but unversioned」狀態（目前 exit `33` contract）後，才可評估 Alembic metadata bootstrap / `stamp 20260926_0004`。
+7. **production stamp 不在本 checkpoint 執行**。在真正寫入 Alembic metadata 前，必須取得使用者明確確認。
+8. Metadata 恢復後，才回到正常的 Alembic forward migration lifecycle。
+
+是否使用 `CREATE INDEX CONCURRENTLY` 暫不先決定：需先以 production table size / lock tolerance / transaction model 為依據；不得只為避免 lock 就直接引入 concurrent-index transaction 複雜度。
 
 ### Current production state
 
@@ -297,37 +355,48 @@ Deploy Cloud Run #195：**FAIL**，run ID `36242072582`，release commit `30f8ac
 - `google_connections` baseline shape：**PASS / VERIFIED**。
 - `google_oauth_states` baseline shape + required indexes：**PASS / VERIFIED**。
 - `execution_logs` baseline shape + required indexes：**PASS / VERIFIED**。
-- `projects` baseline columns/type/nullability/PK：**PASS / VERIFIED**。
+- `projects` columns/type/nullability/PK：**PASS / VERIFIED**。
 - `ix_projects_status`：**missing / FAIL / VERIFIED**。
-- `ix_projects_name`：**NOT VERIFIED**（status index 先 fail，尚未執行 name index 判定）。
-- `0004` target schema exact equivalence：**NOT VERIFIED**（baseline required-index gate 尚未通過）。
+- `ix_projects_name`：**missing / FAIL / VERIFIED**。
+- `0004` target schema exact equivalence：**NOT VERIFIED**，因 baseline index gate 尚未通過。
+- Cloud Run service current release：**FAIL / blocked by migration gate**。
+- `/health`：current release **NOT VERIFIED**。
+- `/ready`：current release **NOT VERIFIED**。
+- unauthenticated API protection：current release **NOT VERIFIED**。
+- authenticated Notes / Habits / Shopping / Templates runtime CRUD：**NOT VERIFIED**。
+- Project delete guard runtime acceptance：**NOT VERIFIED**。
+- historical SQLite → PostgreSQL backfill：**NOT VERIFIED**。
 
 ### Safety / mutation record
 
-本輪 production diagnosis 全程維持 read-only contract inspection：
+截至本 checkpoint，production diagnosis 仍維持 read-only：
 
 - 未執行 `alembic stamp`。
-- 未建立或修改 `alembic_version`。
+- 未建立 / 修改 `alembic_version`。
 - 未 drop / truncate / recreate production table。
 - 未 create / drop / alter / reindex production index。
-- 未改 production data。
+- 未修改 production data。
 - 未增加 Cloud Logging IAM 權限。
 
-因此目前仍 **禁止把 production DB stamp 成 `20260925_0003` 或 `20260926_0004`**；現有 evidence 尚未證明完整 schema equivalence。
+因此目前仍 **禁止直接 stamp `20260925_0003` 或 `20260926_0004`**。
 
-### 尚未完成的 Task 8 acceptance
+### Progress-document lineage correction
 
-- Cloud Run service deployment：**FAIL / blocked by migration gate**。
-- `/health`：本次 release **NOT VERIFIED**。
-- `/ready`：本次 release **NOT VERIFIED**。
-- unauthenticated API protection：本次 release **NOT VERIFIED**。
-- authenticated Notes / Habits / Shopping / Templates runtime CRUD：**NOT VERIFIED**。
-- Project delete guard runtime acceptance：**NOT VERIFIED**。
-- historical SQLite → PostgreSQL backfill：**NOT VERIFIED**；本批沒有 importer execution evidence，不宣稱 PASS。
+先前 Task 8 詳細進度曾存在 commit `c3f8518cee82924db58f84dfe13c64f78d52e5e9`，但本 checkpoint 檢查 main 時發現 `doc/cloud_domain_parity_progress.md` 仍停在 Task 7 舊版。
 
-Task 8 目前：**PARTIAL**，不得標示 DONE。
+本 checkpoint 已先將該 Task 8 history 以既有 blob 恢復到目前 main，再用本文件整併 checkpoint 9 evidence，避免正式 progress document 與 GitHub implementation/runtime evidence 分叉。
 
-下一個安全 checkpoint：先檢查 revision `20260925_0003` 與目前 ORM / migration contract 中 `projects` index 的來源，設計一個 **additive、idempotent、可稽核** 的 repair migration / reconciliation 路徑；同時必須處理 `ix_projects_name` 仍 NOT VERIFIED 的事實。下一 checkpoint 只做設計與必要的唯讀診斷，不直接修改 production schema，也不先 stamp。
+### 下一個安全 checkpoint
+
+下一步才進 implementation：
+
+- TDD 實作 controlled pre-stamp index reconciliation path；
+- 補 Project ORM explicit index metadata 與 migration/ORM parity tests；
+- CI 驗證。
+
+下一 checkpoint **不先 stamp**。是否讓 repair path 實際對 production 建立兩個 index，必須先完成 implementation/tests/CI 與必要的 production preflight，再依風險與證據決定執行方式。
+
+---
 
 ## 執行規則
 

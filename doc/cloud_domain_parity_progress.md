@@ -1,6 +1,6 @@
 # Cloud Domain Parity — Implementation Progress
 
-最後更新：2026-09-26（Task 4）
+最後更新：2026-09-26（Task 5）
 
 對應設計：`doc/cloud_domain_parity_design.md`
 
@@ -14,7 +14,7 @@
 | 2 | Notes API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 3 | Habits API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 4 | Shopping API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
-| 5 | Templates API parity | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
+| 5 | Templates API parity | PASS | PASS | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 6 | Project delete guard | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 7 | Full backend verification | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
 | 8 | CI / deployment / runtime acceptance | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED |
@@ -23,106 +23,87 @@
 
 狀態：**PASS（implementation / local tests）**
 
-主要證據：
-
 - 建立 Notes / Habits / Shopping / Templates ORM target models。
 - Alembic revision：`20260926_0004`，`down_revision=20260925_0003`。
-- `python -m unittest tests.test_cloud_domain_models -v`：6/6 PASS。
+- model contract tests：6/6 PASS。
 - Python compile：PASS。
-
-仍為 NOT VERIFIED：GitHub Actions CI、Cloud Run deployment、PostgreSQL runtime table state、runtime `alembic_version`、SQLite → PostgreSQL historical backfill。
+- Runtime DB revision/table state、historical SQLite backfill：NOT VERIFIED。
 
 ## Task 2 — Notes API parity
 
 狀態：**PASS（implementation / local tests）**
 
-主要內容：
-
-- `backend/app/api/notes.py`
-- Note request/response schemas
-- `/api/v1/notes` router registration
-- Note CRUD / bidirectional links / link cleanup
-- execution actions：`note.create` / `note.update` / `note.delete` / `note.link`
-
-驗證證據：
-
-- Notes：12/12 PASS。
-- Task 1 + Task 2 regression：18/18 PASS。
-- Python compile：PASS。
-
-仍為 NOT VERIFIED：GitHub Actions CI、Cloud Run deployment、PostgreSQL runtime CRUD/persistence、execution-log runtime visibility。
+- Notes CRUD、bidirectional links、delete link cleanup、legacy nullable read。
+- `note.create` / `note.update` / `note.delete` / `note.link`。
+- Notes tests：12/12 PASS；Task 1–2 regression：18/18 PASS。
+- CI / deployment / PostgreSQL runtime CRUD：NOT VERIFIED。
 
 ## Task 3 — Habits API parity
 
 狀態：**PASS（implementation / local tests）**
 
-主要內容：
-
-- `backend/app/api/habits.py`
-- Habit request/response schemas
-- `/api/v1/habits` router registration
-- active-only list / create / get / patch / complete / completion history
-- execution actions：`habit.create` / `habit.update` / `habit.complete`
-
-驗證證據：
-
-- Habits：14/14 PASS。
-- Task 1–3 regression（warnings-as-errors）：32/32 PASS。
-- Python compile：PASS。
-
-仍為 NOT VERIFIED：GitHub Actions CI、Cloud Run deployment、PostgreSQL runtime Habit CRUD/completion persistence、execution-log runtime visibility。
+- active-only list、create/get/patch、append completion、descending history。
+- 不新增 delete / activate / deactivate。
+- `habit.create` / `habit.update` / `habit.complete`。
+- Habits tests：14/14 PASS；Task 1–3 regression：32/32 PASS。
+- CI / deployment / PostgreSQL runtime completion persistence：NOT VERIFIED。
 
 ## Task 4 — Shopping API parity
 
 狀態：**PASS（implementation / local tests）**
 
+- Shopping List create/read、item create、nested sorted read、`is_done` toggle。
+- `project_id` 原樣保存，本批不做 project existence validation。
+- 不新增 delete / quantity / price / store。
+- `shopping_list.create` / `shopping_item.create` / `shopping_item.toggle`。
+- Shopping tests：14/14 PASS；Shopping + execution-log：17/17 PASS；Task 1–4 regression：49/49 PASS。
+- CI / deployment / PostgreSQL runtime Shopping persistence：NOT VERIFIED。
+
+## Task 5 — Templates API parity
+
+狀態：**PASS（implementation / local tests）**
+
 本 Task 建立 / 更新：
 
-- `backend/app/api/shopping.py`
-- `backend/app/models/schemas.py`：新增 `ShoppingListCreate` / `ShoppingItemCreate` / `ShoppingItemUpdate` / `ShoppingItemOut` / `ShoppingListOut`
-- `backend/app/main.py`：註冊 Shopping router
-- `backend/tests/test_shopping.py`
+- `backend/app/api/templates.py`
+- `backend/app/models/schemas.py`：新增 `TemplateCreate` / `TemplateUpdate` / `TemplateOut`
+- `backend/app/main.py`：註冊 `/api/v1/templates`
+- `backend/tests/test_templates.py`
 
 API contract：
 
-- `GET /api/v1/shopping-lists`
-- `POST /api/v1/shopping-lists`
-- `GET /api/v1/shopping-lists/{list_id}`
-- `POST /api/v1/shopping-lists/{list_id}/items`
-- `PATCH /api/v1/shopping-items/{item_id}`
+- `GET /api/v1/templates`
+- `POST /api/v1/templates`
+- `GET /api/v1/templates/{template_id}`
+- `PATCH /api/v1/templates/{template_id}`
 
 重要行為：
 
-- Shopping List `name` 必須提供；`project_id` 可選，原樣保存且本批不做 project existence validation。
-- Shopping Item `name` 必須提供；`category` 可選。
-- request 長度限制與 DB 欄位一致：list/item name 500、category 255。
-- `ShoppingItemUpdate` 只接受 `is_done`，空 PATCH、`is_done=null` 或額外欄位都拒絕。
-- list response 巢狀 items，依 `sort_order ASC` 排序；同 sort order 以 id 提供穩定次序。
-- item creation 先確認 list 存在，不存在回 404。
-- item toggle 只改 `is_done`，不改 `name` / `category` / `list_id`。
-- 不新增 delete / quantity / price / store API。
-- mutation action types：`shopping_list.create` / `shopping_item.create` / `shopping_item.toggle`。
+- Create 必須提供 `name` / `template_type` / `payload_json`。
+- PATCH 只允許 `name` / `template_type` / `payload_json`；空 PATCH 與三欄 explicit null 都拒絕。
+- request 長度限制與 DB 欄位一致：name 500、template_type 64。
+- `payload_json` 保持 opaque `TEXT` string；不 `json.loads`、不 serialize、不 normalize、不重排 JSON key。
+- JSON-like payload 與任意非 JSON 字串皆 lossless round-trip。
+- 不新增 template delete / apply / version-history endpoint。
+- mutation action types：`template.create` / `template.update`。
 - provider 固定 `life_assistant`。
+- execution summaries 不包含 `payload_json` 本文。
 
 TDD / verification evidence：
 
-- RED：Shopping schemas、router、main registration 尚不存在時，contract tests 如預期失敗。
-- GREEN：`python -m unittest tests.test_shopping -v`：14/14 PASS。
-- Regression slice：`python -m unittest tests.test_shopping tests.test_execution_log -v`：17/17 PASS。
-- Full Task 1–4 regression（warnings-as-errors）：49/49 PASS。
-- Python compile（Task 4 touched code/tests）：PASS。
-
-GitHub 寫入說明：
-
-- 本 Task 因 connector 的 Contents API 先建立 `shopping.py`，後續再補 schemas、main registration、tests 與進度文件，因此形成數個連續 commit。
-- 未進行 force-push 或 history rewrite。
-- Task 4 只在所有組件補齊後才標示 PASS。
+- RED：Template schemas、router、main registration 尚不存在時，contract tests 如預期失敗。
+- GREEN：Templates tests 12/12 PASS。
+- Templates + execution-log regression（warnings-as-errors）：15/15 PASS。
+- Full Task 1–5 regression（warnings-as-errors）：61/61 PASS。
+- Python compile：PASS。
+- JSON parse/serialize static scan：PASS。
 
 尚未驗證：
 
 - GitHub Actions CI：NOT VERIFIED
 - Cloud Run deployment：NOT VERIFIED
-- PostgreSQL runtime Shopping CRUD / nested read / toggle persistence：NOT VERIFIED
+- PostgreSQL runtime Template create/update/read persistence：NOT VERIFIED
+- opaque payload runtime round-trip：NOT VERIFIED
 - execution log runtime visibility：NOT VERIFIED
 
 ## 執行規則

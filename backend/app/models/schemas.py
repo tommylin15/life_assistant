@@ -192,3 +192,39 @@ class ShoppingListOut(BaseModel):
     items: list[ShoppingItemOut]
 
     model_config = {"from_attributes": True}
+
+
+class TemplateCreate(BaseModel):
+    name: str = Field(max_length=500)
+    template_type: str = Field(max_length=64)
+    payload_json: str
+
+
+class TemplateUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=500)
+    template_type: str | None = Field(default=None, max_length=64)
+    payload_json: str | None = None
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one template field must be provided")
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("Template name cannot be null")
+        if "template_type" in self.model_fields_set and self.template_type is None:
+            raise ValueError("Template template_type cannot be null")
+        if "payload_json" in self.model_fields_set and self.payload_json is None:
+            raise ValueError("Template payload_json cannot be null")
+        return self
+
+
+class TemplateOut(BaseModel):
+    id: str
+    name: str
+    template_type: str
+    payload_json: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}

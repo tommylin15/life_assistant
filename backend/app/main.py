@@ -17,6 +17,7 @@ from app.api.notes import router as notes_router
 from app.api.projects import router as projects_router
 from app.api.shopping import router as shopping_router
 from app.api.tasks import router as tasks_router
+from app.api.templates import router as templates_router
 from app.db import session as db_session
 from app.db.session import Base, engine
 from app.errors import (
@@ -109,6 +110,7 @@ app.include_router(projects_router, prefix="/api/v1")
 app.include_router(notes_router, prefix="/api/v1")
 app.include_router(habits_router, prefix="/api/v1")
 app.include_router(shopping_router, prefix="/api/v1")
+app.include_router(templates_router, prefix="/api/v1")
 app.include_router(google_integrations_router, prefix="/api/v1")
 app.include_router(google_project_router, prefix="/api/v1")
 app.include_router(activity_router, prefix="/api/v1")

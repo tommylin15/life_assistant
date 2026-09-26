@@ -23,7 +23,7 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         self.assertIn(deploy_marker, self.text)
         self.assertLess(self.text.index(migration_marker), self.text.index(deploy_marker))
 
-    def test_failed_migration_surfaces_execution_and_logs_before_failing_gate(self):
+    def test_failed_migration_surfaces_execution_task_exit_code_before_failing_gate(self):
         migration_marker = "Apply verified database migration"
         diagnostics_marker = "Collect failed migration diagnostics"
         fail_marker = "Fail migration gate"
@@ -34,7 +34,9 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         self.assertIn(diagnostics_marker, self.text)
         self.assertIn("steps.migration.outcome == 'failure'", self.text)
         self.assertIn("gcloud run jobs executions describe", self.text)
-        self.assertIn("gcloud logging read", self.text)
+        self.assertIn("gcloud run jobs executions tasks list", self.text)
+        self.assertIn("gcloud run jobs executions tasks describe", self.text)
+        self.assertIn("status.lastAttemptResult.exitCode", self.text)
         self.assertIn(fail_marker, self.text)
         self.assertLess(self.text.index(migration_marker), self.text.index(diagnostics_marker))
         self.assertLess(self.text.index(diagnostics_marker), self.text.index(fail_marker))

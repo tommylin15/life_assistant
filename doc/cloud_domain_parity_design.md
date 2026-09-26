@@ -2,7 +2,7 @@
 
 最後更新：2026-09-26
 
-狀態：**Design approved in chat; implementation not started**
+狀態：**Approach A approved; written spec awaiting user review; implementation not started**
 
 ## 1. 目的
 
@@ -49,10 +49,10 @@ PostgreSQL
 - `LifeTemplate` / `Templates`
 - 對應 `LifeRepository` contract
 
-但目前 Cloud Backend 主要只有 Task / Project 等 PostgreSQL model 與 FastAPI CRUD。四個 domain 尚未有 Cloud target schema/API，因此：
+目前 Cloud Backend 主要已有 Task / Project 等 PostgreSQL model 與 FastAPI CRUD，但上述四個 domain 尚未有 Cloud target schema/API，因此：
 
 1. Web / Cloud 尚無法把這些 domain 當 PostgreSQL operational source of truth。
-2. SQLite → PostgreSQL migration 無完整 target tables。
+2. SQLite → PostgreSQL migration 尚無完整 target tables。
 3. Phase 1 Release Checklist 的 Notes / Habits / Shopping persistence 尚無法用 Cloud runtime evidence 驗證。
 
 ## 3. 設計原則
@@ -61,12 +61,13 @@ PostgreSQL
 
 ### 3.1 必須維持
 
-- 優先保留既有 SQLite entity shape 與 stable ID。
+- 優先保留既有 SQLite entity shape、stable ID 與既有 repository 行為。
 - PostgreSQL schema 使用 versioned Alembic migration。
 - mutation 經 FastAPI auth / validation / execution log。
 - API 採既有 `/api/v1` pattern。
 - 不清空或 drop SQLite 原資料。
 - 不把 migration 時間偽裝成不存在的歷史業務時間。
+- 不因 Cloud 化自行捏造既有資料缺值。
 - 不把 partial success 包裝成 full success。
 
 ### 3.2 本批不做
@@ -93,11 +94,13 @@ PostgreSQL
 | Column | Type | Null | Notes |
 |---|---|---:|---|
 | `id` | `varchar(36)` | no | stable ID；migration 優先保留 SQLite ID |
-| `title` | `text` | yes | 與既有 SQLite nullable 語意一致 |
-| `body` | `text` | yes | Markdown content；不轉成檔案 source of truth |
+| `title` | `text` | yes | DB 保留既有 SQLite nullable 能力，避免 migration 捏造缺值 |
+| `body` | `text` | yes | Markdown content；DB 保留既有 SQLite nullable 能力 |
 | `project_id` | `varchar(36)` | yes | relationship reference；本批不新增 DB FK |
 | `created_at` | `timestamptz` | no | preserve source value |
 | `updated_at` | `timestamptz` | no | preserve source value；Cloud update 時更新 |
+
+Cloud create/update request 仍對齊現有 `LifeRepository.saveNote()`：`title` 與 `body` 為必填字串；空字串可保留。DB nullable 是 migration compatibility，不代表新 Cloud request 可省略兩欄。
 
 不在本批替 `project_id` 加 PostgreSQL FK，理由是既有 SQLite schema 本身沒有此 FK，migration 必須先接受並驗證既有資料，而不是用新約束讓 migration 失敗。
 
@@ -116,23 +119,26 @@ Primary key：
 
 規則：
 
-- duplicate link 不建立第二筆。
+- duplicate link 不建立第二筆，API 視為 idempotent success。
 - source 與 target note 必須存在。
+- 新 API request 不允許 self-link，回 422；migration 不新增 DB check constraint，既有來源若已有 self-link 不在 schema migration 階段被毀損或靜默改寫。
 - note delete 時清除該 note 相關的 note_links；不刪除另一端 note。
-- self-link 視為 invalid request，不建立。
+- `GET /notes/{id}/links` 回傳雙向視角下的 linked notes，對齊現有 `watchLinkedNotes()`，不把 storage direction 暴露成產品語意。
 
 ### 4.3 `habits`
 
 | Column | Type | Null | Notes |
 |---|---|---:|---|
 | `id` | `varchar(36)` | no | stable ID |
-| `title` | `varchar(500)` | no | required |
+| `title` | `varchar(500)` | no | request required |
 | `recurrence_rule` | `text` | no | 第一階段保留既有 recurrence string contract |
 | `reminder_time` | `varchar(16)` | yes | 保留既有 local representation；本批不改 recurrence engine |
-| `is_active` | `boolean` | no | default true |
+| `is_active` | `boolean` | no | preserve existing state；default true |
 | `created_at` | `timestamptz` | no | preserve source value |
 
 本批**不新增 `updated_at`**。既有 SQLite Habit 沒有該歷史欄位；若 migration 時用匯入時間代填，會製造不存在的歷史事實。
+
+Cloud API 不新增 `is_active` mutation，因現有 `LifeRepository.saveHabit()` 沒有此 mutation contract。`GET /habits` 預設只列 active habits，對齊既有 `watchHabits()` / `watchActive()` 行為。
 
 ### 4.4 `habit_completions`
 
@@ -150,14 +156,14 @@ Index：
 (habit_id, completed_at DESC)
 ```
 
-每次 complete 新增一筆 completion，不覆寫既有紀錄。
+每次 complete 新增一筆 completion，不覆寫既有紀錄。Cloud complete 只要求 habit 存在；不額外發明 inactive habit completion 限制。
 
 ### 4.5 `shopping_lists`
 
 | Column | Type | Null | Notes |
 |---|---|---:|---|
 | `id` | `varchar(36)` | no | stable ID |
-| `name` | `varchar(500)` | no | required |
+| `name` | `varchar(500)` | no | request required |
 | `project_id` | `varchar(36)` | yes | optional project reference；本批不新增 DB FK |
 | `created_at` | `timestamptz` | no | preserve source value |
 
@@ -169,31 +175,31 @@ Index：
 |---|---|---:|---|
 | `id` | `varchar(36)` | no | stable ID |
 | `list_id` | `varchar(36)` | no | FK → `shopping_lists.id` |
-| `name` | `varchar(500)` | no | required |
+| `name` | `varchar(500)` | no | request required |
 | `category` | `varchar(255)` | yes | optional |
 | `is_done` | `boolean` | no | default false |
 | `sort_order` | `integer` | no | default 0 |
 
 本批不新增 source 不存在的 created/updated timestamp。
 
-Shopping list 回傳資料時可組合 items；DB 保持 normalized tables。
+Shopping list 回傳資料時組合 items；DB 保持 normalized tables。
 
 ### 4.7 `templates`
 
 | Column | Type | Null | Notes |
 |---|---|---:|---|
 | `id` | `varchar(36)` | no | stable ID |
-| `name` | `varchar(500)` | no | required |
+| `name` | `varchar(500)` | no | request required |
 | `template_type` | `varchar(64)` | no | 既有 template type string |
-| `payload_json` | `text` | no | 第一階段保留既有 raw JSON string contract |
+| `payload_json` | `text` | no | 對齊既有 opaque string contract；本批不解析或重寫 |
 | `created_at` | `timestamptz` | no | preserve source value |
 | `updated_at` | `timestamptz` | no | preserve source value；Cloud update 時更新 |
 
-本批不直接改成 PostgreSQL `jsonb`。原因：SQLite 現有 contract 是 JSON string，先完成 lossless parity；未來若要 JSONB，需要另外定義 payload schema、validation 與 migration。
+本批不直接改成 PostgreSQL `jsonb`，也不新增 payload schema validation。原因是現有 `LifeRepository.saveTemplate()` 只把 `payloadJson` 當字串保存；Cloud parity 先確保 lossless round-trip。若未來要 JSONB，需要另定 payload schema、validation 與 migration。
 
-## 5. SQLAlchemy Model 邊界
+## 5. SQLAlchemy / Pydantic 邊界
 
-Backend 新增 focused model modules，避免把所有 domain 塞進單一檔案：
+Backend 新增 focused SQLAlchemy model modules：
 
 ```text
 backend/app/models/
@@ -203,7 +209,7 @@ backend/app/models/
 └── template.py
 ```
 
-Pydantic API schemas 可先沿用目前 `models/schemas.py` 慣例；若該檔因本批變得過大，實作時可拆成 domain schema modules，但不可為了抽象而抽象。
+Pydantic request / response schema 本批先沿用現有 `backend/app/models/schemas.py`，避免為只有一批 endpoint 提前建立新的 schema package。若未來該檔確實變成維護瓶頸，再獨立重構。
 
 ## 6. API Contract
 
@@ -214,8 +220,9 @@ Pydantic API schemas 可先沿用目前 `models/schemas.py` 慣例；若該檔�
 - validation：Pydantic
 - DB access：`AsyncSession`
 - mutation：execution log
-- not found：404
-- relationship conflict / invalid relationship：409 或 validation error，依既有 error contract 統一
+- missing entity：404
+- state / relation conflict：409
+- malformed request / validation rule：422
 
 ### 6.1 Notes
 
@@ -233,11 +240,13 @@ Create body：
 
 ```json
 {
-  "title": "optional title",
+  "title": "",
   "body": "markdown text",
   "project_id": "optional-project-id"
 }
 ```
+
+`title` 與 `body` 必須出現在 request；空字串允許。
 
 Patch 允許更新：
 
@@ -254,6 +263,8 @@ Link body：
   "target_note_id": "..."
 }
 ```
+
+`GET /notes/{note_id}/links` 回傳與指定 note 有任一方向 link 的 linked Note 清單，每個 note 去重一次。
 
 Mutation action types：
 
@@ -278,15 +289,16 @@ Create / patch contract 對應：
 - title
 - recurrence_rule
 - reminder_time
-- is_active（patch only；create default true）
 
-空 PATCH 必須被拒絕。
+Create 時三者中的 `title`、`recurrence_rule` 必填；`reminder_time` optional。Patch 可更新這三欄，空 PATCH 必須被拒絕。
+
+`GET /habits` 只列 active habits。
 
 Complete：
 
-- 建立一筆新的 `habit_completions`。
+- habit 不存在 → 404。
+- habit 存在 → 建立一筆新的 `habit_completions`。
 - 不修改過去 completion。
-- inactive habit 是否允許 complete：本批定義為 **不允許**，回傳 conflict；避免 inactive state 與 completion 同時成立造成語意不清。
 
 Mutation action types：
 
@@ -294,7 +306,7 @@ Mutation action types：
 - `habit.update`
 - `habit.complete`
 
-本批不新增 habit delete endpoint，保持既有 repository contract 的最小 parity。
+本批不新增 habit delete / activate / deactivate endpoint。
 
 ### 6.3 Shopping
 
@@ -349,9 +361,9 @@ Create / patch：
 - template_type
 - payload_json
 
-`payload_json` 必須至少能被解析為 JSON；本批不限制其內部 business schema，因既有 repository 尚未定義 per-template-type schema。
+Create 時三欄必填。Patch 可更新三欄，空 PATCH 必須被拒絕。
 
-空 PATCH 必須被拒絕。
+`payload_json` 在本批是 opaque string，不解析、不正規化、不重排 JSON key；API round-trip 必須保存原字串內容。
 
 Mutation action types：
 
@@ -364,7 +376,7 @@ Mutation action types：
 
 Notes 與 Shopping Lists 已有 optional `project_id` contract。
 
-為避免 Cloud 上刪除 Project 後留下明顯 orphan relationship，既有 `DELETE /api/v1/projects/{project_id}` guard 應擴充：
+為避免 Cloud 上刪除 Project 後留下明顯 orphan relationship，既有 `DELETE /api/v1/projects/{project_id}` guard 擴充：
 
 若任何以下 entity 仍 reference 該 project，回 409：
 
@@ -373,6 +385,8 @@ Notes 與 Shopping Lists 已有 optional `project_id` contract。
 - Shopping List
 
 本批不替 `project_id` 建 DB FK，因 migration correctness 優先；刪除 guard 屬 Backend invariant。
+
+Create / update Note 或 create Shopping List 本批不新增「project_id 必須存在」驗證，因現有 Task Cloud API 也尚未以 DB FK 或 request validation 強制該 invariant。若後續要全面收緊 project reference，應一次對 Task / Note / Shopping 統一設計，不只改新 domain。
 
 ## 8. Execution Log / Audit
 
@@ -393,10 +407,16 @@ start_execution
 → normalized API error
 ```
 
+本批新 domain 的 execution log 固定使用：
+
+```text
+provider = "life_assistant"
+```
+
 Log 至少保留：
 
 - user_sub / actor
-- provider = `life_assistant` 或現行 internal naming 慣例
+- provider
 - action_type
 - entity_type
 - entity_id（建立成功後補）
@@ -407,9 +427,13 @@ Log 至少保留：
 
 ## 9. Migration Design
 
-Alembic 使用 additive migration，接在目前 migration chain 後。
+Alembic 使用 additive migration，接在目前 migration chain 後。預期新 revision：
 
-預期 migration 建立：
+```text
+20260926_0004_cloud_domain_parity.py
+```
+
+建立：
 
 ```text
 notes
@@ -436,11 +460,12 @@ templates
 ### 9.2 Mapping rules
 
 - 保留 stable IDs。
-- SQLite datetime → timezone-aware PostgreSQL timestamp，依 migration_spec 統一時區語意。
+- SQLite datetime → timezone-aware PostgreSQL timestamp，依 `migration_spec.md` 統一時區語意。
 - boolean integer → PostgreSQL boolean。
 - `payloadJson` → `payload_json` text，字串內容不重寫。
 - `HabitLogs` table rename 不改 completion semantics。
 - source 沒有的 timestamp 不補假歷史值。
+- source nullable 欄位保留 null，不以空字串或 migration time 自動補值。
 
 ### 9.3 Verification
 
@@ -451,7 +476,7 @@ templates
 - habit completion → habit relationship。
 - shopping item → list relationship。
 - project_id reference summary（合法 / orphan 必須可觀察，不靜默捏造）。
-- template payload JSON parseability；無法解析時標 migration failure/partial，不自行修內容。
+- template payload string round-trip unchanged。
 - stable ID uniqueness。
 
 Migration 必須可重跑或以 stable ID / upsert 避免 duplicate。
@@ -461,26 +486,25 @@ Migration 必須可重跑或以 stable ID / upsert 避免 duplicate。
 最低行為：
 
 - unknown entity → 404
-- duplicate note link → idempotent success 或 409 二選一；本設計固定採 **idempotent success**，避免重試產生不必要 failure
-- note self-link → 422 validation error
-- inactive habit complete → 409
-- shopping item list 不存在 → 404
-- invalid template JSON → 422
+- duplicate note link → idempotent success
+- new note self-link request → 422
+- shopping item target list 不存在 → 404
+- empty PATCH → 422
 - database failure → 使用既有 normalized backend error contract
 
 Mutation failure 不得留下 success execution record。
 
 ## 11. Transaction Boundaries
 
-每個單一 mutation request 使用單一 DB transaction 語意。
+每個單一 mutation request 使用單一 business transaction 語意。
 
 特別是：
 
 - create note link：existence check + insert 視為同一 mutation。
-- complete habit：habit state check + completion insert 視為同一 mutation。
+- complete habit：habit existence check + completion insert 視為同一 mutation。
 - add shopping item：list existence check + insert 視為同一 mutation。
 
-Execution log 依現有 service pattern 落地；若現行 log service 本身需跨 commit，實作必須保持「business mutation success / failure」與 log result 一致，不得把 business failure 記成 success。
+Execution log 依現有 service pattern 落地；若現行 log service 本身需跨 commit，實作仍必須保持「business mutation success / failure」與 log result 一致，不得把 business failure 記成 success。
 
 ## 12. Backend Files Expected to Change
 
@@ -491,22 +515,22 @@ backend/app/models/note.py
 backend/app/models/habit.py
 backend/app/models/shopping.py
 backend/app/models/template.py
-backend/app/models/schemas.py                 # 或拆 domain schema modules
+backend/app/models/schemas.py
 backend/app/api/notes.py
 backend/app/api/habits.py
 backend/app/api/shopping.py
 backend/app/api/templates.py
-backend/app/api/projects.py                  # delete guard
-backend/app/main.py                          # router registration
-backend/alembic/versions/<new_revision>.py
+backend/app/api/projects.py
+backend/app/main.py
+backend/alembic/versions/20260926_0004_cloud_domain_parity.py
 backend/tests/test_notes.py
 backend/tests/test_habits.py
 backend/tests/test_shopping.py
 backend/tests/test_templates.py
-backend/tests/test_projects.py               # relation delete guard
+backend/tests/test_projects.py
 ```
 
-若 implementation 發現現有 migration/export code 已有 domain-specific mapping，需一併更新並加測試；不得只建立 target tables 而留下 SQLite → PostgreSQL mapping 缺口。
+若 implementation 發現現有 SQLite → PostgreSQL export/import code 已有 domain-specific mapping，需一併更新並加測試；不得只建立 target tables 而留下 migration mapping 缺口。
 
 ## 13. Tests
 
@@ -514,16 +538,18 @@ backend/tests/test_projects.py               # relation delete guard
 
 - Alembic upgrade 建表成功。
 - migration chain 可從現行 head 連續 upgrade。
-- downgrade 僅在安全可定義時提供；不得以破壞 production data 的方式當一般 rollback。
 - SQLite mapping 的 stable IDs / relationships / row count 可驗證。
+- source null 不被靜默改成捏造值。
+- payload string 不被重寫。
 
 ### 13.2 Notes
 
 - create / list / get / patch / delete。
-- nullable title/body parity。
-- note link create / list。
+- create request title/body required，空字串允許。
+- migrated nullable title/body 可安全讀回，不在 migration 時捏造。
+- note link create / linked-note list。
 - duplicate link idempotent。
-- self-link rejection。
+- new self-link request rejection。
 - delete cleanup links。
 - execution log。
 
@@ -531,16 +557,16 @@ backend/tests/test_projects.py               # relation delete guard
 
 - create / list / get / patch。
 - default active。
+- list 只回 active。
 - complete adds history row。
 - multiple completions preserved。
-- inactive completion rejected。
 - execution log。
 
 ### 13.4 Shopping
 
 - create list。
 - create item。
-- list returns expected items。
+- list returns expected nested items。
 - toggle item。
 - invalid list rejection。
 - project relation preserved。
@@ -549,8 +575,7 @@ backend/tests/test_projects.py               # relation delete guard
 ### 13.5 Templates
 
 - create / list / get / patch。
-- valid JSON accepted。
-- malformed JSON rejected。
+- opaque payload string accepted。
 - payload round-trip unchanged。
 - execution log。
 
@@ -610,15 +635,16 @@ Activity / execution log: verify mutations visible
 
 ## 16. Explicit Non-Goals / Deferred Decisions
 
-本設計刻意不決定：
+本設計刻意不實作：
 
 - Notes PostgreSQL FTS/search implementation。
 - Tags / attachments 的 Cloud schema。
 - Template apply semantics。
-- Template typed payload schema。
+- Template typed payload schema / JSONB migration。
 - Habit streak / analytics。
+- Habit activate / deactivate API。
 - Shopping quantity / price / store。
-- hard FK from Note/Shopping project_id to Projects。
+- hard FK from Note/Shopping `project_id` to Projects。
 - generic soft-delete model。
 
 這些不阻礙本次 Cloud parity，但不得在 implementation 時偷偷加入。

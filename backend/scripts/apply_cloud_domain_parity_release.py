@@ -3,9 +3,9 @@
 
 The release flow may repair only the previously diagnosed missing projects
 indexes and projects.status server default. If the database is still
-unversioned afterward, a stronger read-only metadata-bootstrap preflight runs.
-Passing that preflight is intentionally a non-zero approval gate: this module
-contains no metadata write path.
+unversioned afterward, targeted read-only diagnostics and the stronger
+metadata-bootstrap preflight run. Passing that preflight is intentionally a
+non-zero approval gate: this module contains no metadata write path.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import asyncio
 import sys
 
 from scripts import apply_cloud_domain_parity_migration as migration
+from scripts import diagnose_note_links_foreign_keys as note_links_fk_diagnosis
 from scripts import preflight_alembic_metadata_bootstrap as metadata_preflight
 from scripts.reconcile_projects_indexes import (
     run_reconciliation as run_projects_index_reconciliation,
@@ -23,6 +24,13 @@ from scripts.reconcile_projects_status_default import (
 )
 
 
+NOTE_LINKS_FK_DIAGNOSTIC_EXIT_CODES = {
+    "both_missing": 1,
+    "source_missing": 2,
+    "target_missing": 3,
+    "semantics_mismatch": 4,
+    "other": 5,
+}
 EXIT_PROJECTS_STATUS_DEFAULT_MISSING = 250
 EXIT_PROJECTS_STATUS_DEFAULT_VALUE_MISMATCH = 251
 FOREIGN_KEY_MISMATCH_EXIT_CODES = {
@@ -34,6 +42,8 @@ EXIT_UNEXPECTED_FOREIGN_KEY_TABLE = 255
 
 
 def classify_failure(exc: BaseException) -> int:
+    if isinstance(exc, note_links_fk_diagnosis.NoteLinksForeignKeyDiagnosisError):
+        return NOTE_LINKS_FK_DIAGNOSTIC_EXIT_CODES[exc.reason]
     if (
         isinstance(exc, metadata_preflight.BootstrapDefaultMismatchError)
         and exc.table == "projects"
@@ -63,6 +73,10 @@ async def main() -> None:
         "migration_reconciled_projects_status_default="
         + ("active" if repaired_status_default else "none")
     )
+
+    # Diagnose the already-observed note_links FK drift before the generic
+    # preflight so Cloud Run task metadata remains useful without log-viewer IAM.
+    await note_links_fk_diagnosis.run_diagnosis()
 
     ready_revision = await metadata_preflight.run_preflight()
     if ready_revision is not None:

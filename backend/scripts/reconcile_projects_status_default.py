@@ -59,11 +59,11 @@ async def reconcile_projects_status_default(conn: AsyncConnection) -> bool:
     await migration._verify_unversioned_baseline_schema(conn)
     await migration._verify_schema(conn)
 
-    # Verify the stronger bootstrap contract that is independent of the one
-    # diagnosed default. This prevents a write when some other hidden mismatch
-    # already exists.
+    # Guard the parts of the stronger bootstrap contract that can invalidate
+    # this narrowly-scoped DEFAULT repair. Foreign-key semantics are verified
+    # separately: they are independent of a server default and must not block
+    # this additive ALTER COLUMN SET DEFAULT operation.
     await metadata_preflight._verify_required_indexes(conn)
-    await metadata_preflight._verify_foreign_key_semantics(conn)
     await metadata_preflight._verify_extra_constraints(conn)
 
     should_repair = False

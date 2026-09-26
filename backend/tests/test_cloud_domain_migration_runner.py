@@ -44,23 +44,58 @@ class CloudDomainMigrationRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(runner.SchemaMismatchError, "missing target tables"):
             runner.decide_migration_action("20260926_0004", {"notes"})
 
-    def test_unknown_revision_is_revision_validation_failure(self):
+    def test_missing_revision_table_is_distinct_revision_failure(self):
         runner = _load_runner()
-        with self.assertRaisesRegex(runner.RevisionValidationError, "unexpected alembic revision"):
+        with self.assertRaisesRegex(runner.RevisionTableMissingError, "alembic_version table is missing"):
+            runner.validate_revision_state(False, [])
+        self.assertEqual(
+            runner.EXIT_REVISION_TABLE_MISSING,
+            runner.classify_failure(runner.RevisionTableMissingError("missing")),
+        )
+
+    def test_invalid_revision_row_count_is_distinct_revision_failure(self):
+        runner = _load_runner()
+        with self.assertRaisesRegex(runner.RevisionRowCountError, "expected one alembic_version row"):
+            runner.validate_revision_state(True, [])
+        self.assertEqual(
+            runner.EXIT_REVISION_ROW_COUNT,
+            runner.classify_failure(runner.RevisionRowCountError("bad row count")),
+        )
+
+    def test_single_revision_row_is_returned(self):
+        runner = _load_runner()
+        self.assertEqual(
+            "20260925_0003",
+            runner.validate_revision_state(True, ["20260925_0003"]),
+        )
+
+    def test_unknown_revision_is_distinct_current_revision_failure(self):
+        runner = _load_runner()
+        with self.assertRaisesRegex(runner.UnexpectedCurrentRevisionError, "unexpected alembic revision"):
             runner.decide_migration_action("legacy", set())
+        self.assertEqual(
+            runner.EXIT_UNEXPECTED_CURRENT_REVISION,
+            runner.classify_failure(runner.UnexpectedCurrentRevisionError("legacy")),
+        )
+
+    def test_post_migration_revision_mismatch_is_distinct_failure(self):
+        runner = _load_runner()
+        with self.assertRaisesRegex(runner.PostMigrationRevisionMismatchError, "post-migration revision mismatch"):
+            runner.require_target_revision("20260925_0003")
+        self.assertEqual(
+            runner.EXIT_POST_MIGRATION_REVISION,
+            runner.classify_failure(runner.PostMigrationRevisionMismatchError("mismatch")),
+        )
+
+    def test_target_revision_passes_post_migration_check(self):
+        runner = _load_runner()
+        runner.require_target_revision(runner.TARGET_REVISION)
 
     def test_database_failure_has_distinct_process_exit_code(self):
         runner = _load_runner()
         self.assertEqual(
             runner.EXIT_DATABASE,
             runner.classify_failure(SQLAlchemyError("database unavailable")),
-        )
-
-    def test_revision_failure_has_distinct_process_exit_code(self):
-        runner = _load_runner()
-        self.assertEqual(
-            runner.EXIT_REVISION,
-            runner.classify_failure(runner.RevisionValidationError("bad revision")),
         )
 
     def test_precreated_drift_has_distinct_process_exit_code(self):

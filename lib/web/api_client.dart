@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/browser_client.dart';
 
 import 'acceptance_runner.dart';
+import 'api_http_client.dart';
 
 const _configuredBase =
     String.fromEnvironment('API_BASE_URL', defaultValue: '');
@@ -16,7 +16,7 @@ Uri _apiUri(String path) {
 }
 
 class ApiClient implements AcceptanceApi {
-  final BrowserClient _client = BrowserClient()..withCredentials = true;
+  final _client = createApiHttpClient();
 
   Future<List<Map<String, dynamic>>> getTasks() async {
     final res = await _client.get(_apiUri('/tasks'));

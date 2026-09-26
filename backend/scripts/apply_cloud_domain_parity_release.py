@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Release entrypoint for guarded reconciliation and migration verification.
 
-The release flow may repair only the two previously diagnosed missing projects
-indexes. If the database is still unversioned afterward, a stronger read-only
-metadata-bootstrap preflight runs. Passing that preflight is intentionally a
-non-zero approval gate: this module contains no metadata write path.
+The release flow may repair only the previously diagnosed missing projects
+indexes and projects.status server default. If the database is still
+unversioned afterward, a stronger read-only metadata-bootstrap preflight runs.
+Passing that preflight is intentionally a non-zero approval gate: this module
+contains no metadata write path.
 """
 
 from __future__ import annotations
@@ -14,7 +15,12 @@ import sys
 
 from scripts import apply_cloud_domain_parity_migration as migration
 from scripts import preflight_alembic_metadata_bootstrap as metadata_preflight
-from scripts.reconcile_projects_indexes import run_reconciliation
+from scripts.reconcile_projects_indexes import (
+    run_reconciliation as run_projects_index_reconciliation,
+)
+from scripts.reconcile_projects_status_default import (
+    run_reconciliation as run_projects_status_default_reconciliation,
+)
 
 
 EXIT_PROJECTS_STATUS_DEFAULT_MISSING = 250
@@ -35,10 +41,16 @@ def classify_failure(exc: BaseException) -> int:
 
 
 async def main() -> None:
-    repaired = await run_reconciliation()
+    repaired_indexes = await run_projects_index_reconciliation()
     print(
         "migration_reconciled_projects_indexes="
-        + (",".join(repaired) if repaired else "none")
+        + (",".join(repaired_indexes) if repaired_indexes else "none")
+    )
+
+    repaired_status_default = await run_projects_status_default_reconciliation()
+    print(
+        "migration_reconciled_projects_status_default="
+        + ("active" if repaired_status_default else "none")
     )
 
     ready_revision = await metadata_preflight.run_preflight()

@@ -107,3 +107,44 @@ class NoteOut(BaseModel):
 
 class NoteLinkCreate(BaseModel):
     target_note_id: str
+
+
+class HabitCreate(BaseModel):
+    title: str = Field(max_length=500)
+    recurrence_rule: str
+    reminder_time: str | None = Field(default=None, max_length=16)
+
+
+class HabitUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=500)
+    recurrence_rule: str | None = None
+    reminder_time: str | None = Field(default=None, max_length=16)
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one habit field must be provided")
+        if "title" in self.model_fields_set and self.title is None:
+            raise ValueError("Habit title cannot be null")
+        if "recurrence_rule" in self.model_fields_set and self.recurrence_rule is None:
+            raise ValueError("Habit recurrence_rule cannot be null")
+        return self
+
+
+class HabitOut(BaseModel):
+    id: str
+    title: str
+    recurrence_rule: str
+    reminder_time: str | None
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class HabitCompletionOut(BaseModel):
+    id: str
+    habit_id: str
+    completed_at: datetime
+
+    model_config = {"from_attributes": True}

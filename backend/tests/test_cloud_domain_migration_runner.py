@@ -140,7 +140,21 @@ class CloudDomainMigrationRunnerTests(unittest.TestCase):
 
     def test_unversioned_database_with_baseline_tables_allows_shape_check(self):
         runner = _load_runner()
-        runner.validate_unversioned_baseline_tables(set(runner.BASELINE_TABLES) | {"tasks"})
+        self.assertFalse(
+            runner.validate_unversioned_baseline_tables(set(runner.BASELINE_TABLES) | {"tasks"})
+        )
+
+    def test_unversioned_database_with_all_target_tables_allows_full_shape_check(self):
+        runner = _load_runner()
+        tables = set(runner.BASELINE_TABLES) | set(runner.TARGET_TABLES) | {"tasks"}
+        self.assertTrue(runner.validate_unversioned_baseline_tables(tables))
+
+    def test_unversioned_database_with_partial_target_tables_still_encodes_bitmap(self):
+        runner = _load_runner()
+        tables = set(runner.BASELINE_TABLES) | {"notes", "templates"}
+        with self.assertRaises(runner.UnversionedTargetTablesPresentError) as captured:
+            runner.validate_unversioned_baseline_tables(tables)
+        self.assertEqual(129, runner.classify_failure(captured.exception))
 
     def test_unversioned_baseline_schema_mismatch_is_distinct_failure(self):
         runner = _load_runner()
@@ -182,6 +196,16 @@ class CloudDomainMigrationRunnerTests(unittest.TestCase):
                 runner.BaselineVerifiedWithoutVersionError("baseline verified")
             ),
         )
+
+    def test_verified_full_unversioned_schema_has_distinct_diagnostic_exit(self):
+        runner = _load_runner()
+        self.assertEqual(
+            runner.EXIT_FULL_SCHEMA_VERIFIED_UNVERSIONED,
+            runner.classify_failure(
+                runner.FullSchemaVerifiedWithoutVersionError("full schema verified")
+            ),
+        )
+        self.assertEqual(33, runner.EXIT_FULL_SCHEMA_VERIFIED_UNVERSIONED)
 
     def test_database_failure_has_distinct_process_exit_code(self):
         runner = _load_runner()

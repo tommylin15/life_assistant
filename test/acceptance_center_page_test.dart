@@ -77,6 +77,10 @@ class _CleanupApi implements AcceptanceApi {
       throw UnimplementedError();
 
   @override
+  Future<Map<String, dynamic>> ensureDriveBridge() async =>
+      throw UnimplementedError();
+
+  @override
   Future<List<Map<String, dynamic>>> getActivity({int limit = 100}) async =>
       throw UnimplementedError();
 }

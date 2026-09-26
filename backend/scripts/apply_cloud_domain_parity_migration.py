@@ -109,14 +109,18 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 # deploy service account cannot read Cloud Logging. Keep these stable and
 # non-secret so deployment evidence can distinguish failure classes.
 EXIT_DATABASE = 20
-EXIT_REVISION = 21
+EXIT_REVISION_TABLE_MISSING = 21
 EXIT_ALEMBIC = 22
 EXIT_PRECREATED_DRIFT = 23
 EXIT_SCHEMA_MISMATCH = 24
 EXIT_PRESERVED_DATA = 25
+EXIT_REVISION_ROW_COUNT = 26
+EXIT_UNEXPECTED_CURRENT_REVISION = 27
+EXIT_POST_MIGRATION_REVISION = 28
 EXIT_UNEXPECTED = 29
-# Backward-compatible name for evidence/documents that referred to generic 21.
-EXIT_CONTRACT = EXIT_REVISION
+# Backward-compatible names for earlier evidence/documents.
+EXIT_REVISION = EXIT_REVISION_TABLE_MISSING
+EXIT_CONTRACT = EXIT_REVISION_TABLE_MISSING
 
 
 class MigrationContractError(RuntimeError):
@@ -124,7 +128,23 @@ class MigrationContractError(RuntimeError):
 
 
 class RevisionValidationError(MigrationContractError):
-    """Alembic revision state is missing, malformed, unexpected, or regressed."""
+    """Base class for Alembic revision-state validation failures."""
+
+
+class RevisionTableMissingError(RevisionValidationError):
+    """The public alembic_version table does not exist."""
+
+
+class RevisionRowCountError(RevisionValidationError):
+    """The alembic_version table does not contain exactly one row."""
+
+
+class UnexpectedCurrentRevisionError(RevisionValidationError):
+    """The current revision is not one of the expected migration states."""
+
+
+class PostMigrationRevisionMismatchError(RevisionValidationError):
+    """The revision after migration is not the target revision."""
 
 
 class PrecreatedDriftError(MigrationContractError):
@@ -144,8 +164,16 @@ def classify_failure(exc: BaseException) -> int:
         return EXIT_ALEMBIC
     if isinstance(exc, SQLAlchemyError):
         return EXIT_DATABASE
+    if isinstance(exc, RevisionTableMissingError):
+        return EXIT_REVISION_TABLE_MISSING
+    if isinstance(exc, RevisionRowCountError):
+        return EXIT_REVISION_ROW_COUNT
+    if isinstance(exc, UnexpectedCurrentRevisionError):
+        return EXIT_UNEXPECTED_CURRENT_REVISION
+    if isinstance(exc, PostMigrationRevisionMismatchError):
+        return EXIT_POST_MIGRATION_REVISION
     if isinstance(exc, RevisionValidationError):
-        return EXIT_REVISION
+        return EXIT_REVISION_TABLE_MISSING
     if isinstance(exc, PrecreatedDriftError):
         return EXIT_PRECREATED_DRIFT
     if isinstance(exc, SchemaMismatchError):
@@ -153,6 +181,21 @@ def classify_failure(exc: BaseException) -> int:
     if isinstance(exc, PreservedDataMismatchError):
         return EXIT_PRESERVED_DATA
     return EXIT_UNEXPECTED
+
+
+def validate_revision_state(table_exists: bool, rows: list[object]) -> str:
+    if not table_exists:
+        raise RevisionTableMissingError("alembic_version table is missing")
+    if len(rows) != 1:
+        raise RevisionRowCountError(f"expected one alembic_version row, found {len(rows)}")
+    return str(rows[0])
+
+
+def require_target_revision(revision: str) -> None:
+    if revision != TARGET_REVISION:
+        raise PostMigrationRevisionMismatchError(
+            f"post-migration revision mismatch: {revision}; expected {TARGET_REVISION}"
+        )
 
 
 def decide_migration_action(current_revision: str, target_tables_present: set[str]) -> str:
@@ -174,7 +217,7 @@ def decide_migration_action(current_revision: str, target_tables_present: set[st
                 f"{TARGET_REVISION}: {','.join(sorted(missing))}"
             )
         return "verify"
-    raise RevisionValidationError(
+    raise UnexpectedCurrentRevisionError(
         f"unexpected alembic revision: {current_revision or '<missing>'}; "
         f"expected {PREVIOUS_REVISION} or {TARGET_REVISION}"
     )
@@ -183,11 +226,9 @@ def decide_migration_action(current_revision: str, target_tables_present: set[st
 async def _current_revision(conn: AsyncConnection) -> str:
     exists = await conn.scalar(text("SELECT to_regclass('public.alembic_version') IS NOT NULL"))
     if not exists:
-        raise RevisionValidationError("alembic_version table is missing")
+        return validate_revision_state(False, [])
     rows = (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalars().all()
-    if len(rows) != 1:
-        raise RevisionValidationError(f"expected one alembic_version row, found {len(rows)}")
-    return str(rows[0])
+    return validate_revision_state(True, list(rows))
 
 
 async def _public_tables(conn: AsyncConnection) -> set[str]:
@@ -317,10 +358,7 @@ async def _verify_after(
 ) -> None:
     async with engine.connect() as conn:
         revision = await _current_revision(conn)
-        if revision != TARGET_REVISION:
-            raise RevisionValidationError(
-                f"post-migration revision mismatch: {revision}; expected {TARGET_REVISION}"
-            )
+        require_target_revision(revision)
         await _verify_schema(conn)
         tables = await _public_tables(conn)
         missing_preserved = preserved_tables - tables

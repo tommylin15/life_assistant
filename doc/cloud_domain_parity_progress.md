@@ -1,6 +1,6 @@
 # Cloud Domain Parity — Implementation Progress
 
-最後更新：2026-09-26（Task 8 Alembic metadata bootstrap read-only preflight）
+最後更新：2026-09-27（Task 8 `projects.status` server-default exact diagnosis）
 
 對應設計：`doc/cloud_domain_parity_design.md`
 
@@ -19,7 +19,7 @@
 | 7 | Full backend verification | PASS | PASS | PASS | NOT VERIFIED | NOT VERIFIED |
 | 8 | CI / deployment / runtime acceptance | PASS | PASS | PASS | FAIL | NOT VERIFIED |
 
-Task 8 整體狀態：**PARTIAL**。正式 main CI 已通過；production physical schema 的既有 structural verifier 已可到 exit `33`，但更嚴格的 Alembic metadata bootstrap preflight 在 production 回傳 exit `51`，確認仍存在 server-default contract mismatch，因此目前 **NOT STAMP-READY**。不得標示 DONE。
+Task 8 整體狀態：**PARTIAL**。正式 main CI 已通過；production physical schema 的既有 structural verifier 已可到 exit `33`，但更嚴格的 Alembic metadata bootstrap preflight 已精確定位到 `projects.status` server-default contract mismatch，因此目前 **NOT STAMP-READY**。production 實際 default 是缺失或為其他錯值，尚未取得證據，不得猜測；不得標示 DONE。
 
 ---
 
@@ -266,7 +266,7 @@ Firebase Hosting #158：run `36253850183`。
 
 全部 production DB 檢查均為 catalog read / SELECT 類 read-only preflight。
 
-### Current production state
+### Current production state（Checkpoint 11 時點）
 
 - 七張 0004 target tables：present / VERIFIED。
 - previously repaired `ix_projects_status` / `ix_projects_name`：present + structural exact / PASS / VERIFIED。
@@ -278,7 +278,7 @@ Firebase Hosting #158：run `36253850183`。
 - Cloud Run service current release：SKIPPED / blocked。
 - Task 8：**PARTIAL**。
 
-### 下一個安全 checkpoint
+### 下一個安全 checkpoint（Checkpoint 11 決議）
 
 下一步只做 **server-default mismatch exact diagnosis**：
 
@@ -289,6 +289,137 @@ Firebase Hosting #158：run `36253850183`。
 5. 不做 stamp；
 6. 取得 exact mismatch 後，再另行設計 additive `ALTER COLUMN SET DEFAULT` repair contract 與風險判定；
 7. 真正 metadata bootstrap / stamp 仍需在所有 stronger preflight 項目 PASS 後，另取得使用者明確確認。
+
+---
+
+## Checkpoint 12 — exact server-default mismatch diagnosis
+
+### Scope / safety ruling
+
+本 checkpoint 只把 generic exit `51` 拆到 exact `table.column`，保持所有 production DB 操作為 catalog read / SELECT 類 read-only preflight。
+
+不在本 checkpoint：
+
+- `ALTER COLUMN SET/DROP DEFAULT`；
+- business table/data mutation；
+- `alembic_version` create/update；
+- Alembic stamp；
+- IAM / Service Account 變更；
+- secret rotation。
+
+### TDD RED
+
+- commit `ca567e2ef8e64721d705dad28f400acd7b09d032`：`test: diagnose exact bootstrap default mismatch`。
+- CI #260 run `36276925806`：**如預期 RED**。
+- backend 共 **173 tests**；既有 172 tests PASS，只有新增 exact mapping test 因 `DEFAULT_MISMATCH_EXIT_CODES` 尚未存在而 ERROR。
+- FastAPI import：PASS。
+- Alembic offline chain `0001 -> 0002 -> 0003 -> 0004`：PASS。
+- deployment-scripts：PASS。
+
+### GREEN implementation
+
+- commit `00773abb7eb4508fc5948daed0c0744e293a862c`：`fix: encode exact bootstrap default mismatch`。
+- 以 managed table / column 的既有穩定順序建立 **67 個** exact diagnostic exits。
+- 使用 code ranges：`55–63` + `192–249`。
+- 保留：
+  - `50–54` generic bootstrap classifications；
+  - `64–191` target-table presence bitmap；
+  - unknown/future `(table, column)` fallback 仍回 generic `51`。
+- 本變更只修改 error classifier / mapping；未修改 production catalog query、DDL、DML 或 preflight 判斷順序。
+
+### Formal CI evidence
+
+CI #261 run `36276997510`：**PASS**。
+
+- release commit：`00773abb7eb4508fc5948daed0c0744e293a862c`。
+- Backend full suite：**173/173 PASS**。
+- exact default mapping contract：PASS。
+- FastAPI import：PASS。
+- Alembic offline chain `0001 -> 0002 -> 0003 -> 0004`：PASS。
+- deployment-scripts：PASS。
+- Flutter analyze：PASS。
+- Flutter tests：PASS。
+- Flutter Web build：PASS。
+- branding verification：PASS。
+
+### Production read-only exact diagnosis
+
+Deploy Cloud Run #214：
+
+- run：`36277104933`。
+- release commit：`00773abb7eb4508fc5948daed0c0744e293a862c`。
+- execution：`life-assistant-db-migrate-q5h7p`。
+- task：`life-assistant-db-migrate-q5h7p-task0`。
+- task exit：**214**。
+- Cloud Run execution condition 同樣明確指出 task failed with exit code **214**。
+- Cloud Run backend service deploy：**SKIPPED**。
+- `/health`、`/ready`、unauthenticated API current-release checks：**SKIPPED / NOT VERIFIED**。
+
+本 checkpoint 的固定一對一 mapping：
+
+- exit `214` = **`projects.status` server-default mismatch**。
+
+Alembic revision contract 對 `projects.status` 的期望 server default 為 **`'active'`**。
+
+但 production `projects.status` 的實際 `column_default` 原值仍 **NOT VERIFIED**：Cloud Logging read 繼續回 `PERMISSION_DENIED`，而本 checkpoint 刻意不為除錯新增 IAM。因此目前只能正式判定：
+
+- mismatch location：`projects.status` / **VERIFIED**；
+- expected normalized default：`active` / **VERIFIED from migration contract**；
+- actual production default：**NOT VERIFIED**；
+- mismatch kind（missing expected default vs wrong value）：**NOT VERIFIED**。
+
+不得在缺乏 actual evidence 時假設 production 是 `NULL/no default`。
+
+### Firebase Hosting current-release side evidence
+
+Firebase Hosting #160 run `36277104877`：**PASS**。
+
+- Build Flutter Web：PASS。
+- Firebase Hosting deploy：PASS。
+- Verify Firebase Hosting：PASS。
+
+因此 Checkpoint 11 的 Firebase #158 verification failure 在本 release **未重現**。#158 的 historical exact root cause 仍 NOT VERIFIED；本 checkpoint 不把它改寫成已知 transient root cause。
+
+### Production mutation record — Checkpoint 12
+
+本 checkpoint 對 production：
+
+- server default mutation：**NONE**；
+- business schema mutation：**NONE**；
+- business data mutation：**NONE**；
+- `alembic_version` create/update：**NONE**；
+- stamp：**NONE**；
+- IAM / Service Account changes：**NONE**；
+- secret rotation：**NONE**。
+
+### Current production state
+
+- prior structural verifier contract：PASS to exit-33 gate / VERIFIED。
+- `projects.status` server-default location mismatch：**FAIL / VERIFIED**。
+- `projects.status` expected Alembic default：`active` / VERIFIED。
+- `projects.status` actual production default：**NOT VERIFIED**。
+- remaining server-default columns after first mismatch：**NOT VERIFIED**（preflight fail-fast）。
+- required index exact definitions after defaults stage：NOT VERIFIED in stronger preflight for this run（not reached）。
+- FK semantics after defaults stage：NOT VERIFIED in stronger preflight for this run（not reached）。
+- extra UNIQUE/CHECK/EXCLUDE constraints after defaults stage：NOT VERIFIED in stronger preflight for this run（not reached）。
+- `public.alembic_version`：**missing / VERIFIED**。
+- metadata stamp readiness：**FAIL / NOT READY**。
+- Cloud Run service release：**SKIPPED / blocked**。
+- Task 8：**PARTIAL**。
+
+### 下一個安全 checkpoint
+
+下一步只做 **`projects.status` default mismatch kind 的唯讀診斷**：
+
+1. 將 `projects.status` 的 mismatch 再拆成至少：
+   - expected default missing；
+   - wrong non-null default value；
+2. 不輸出可能含敏感內容的 raw catalog payload；只用穩定 non-sensitive exit classification；
+3. 不執行 `ALTER COLUMN SET/DROP DEFAULT`；
+4. 不建立 / 更新 `alembic_version`；
+5. 不做 stamp；
+6. 取得 mismatch kind 後，再另行設計最小、additive/non-data-changing default repair contract；
+7. stronger preflight 必須一路通過至 exit `50` 才能視為 stamp-ready；真正 Alembic metadata bootstrap / stamp 仍需另取得使用者明確確認。
 
 ---
 

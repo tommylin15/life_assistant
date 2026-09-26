@@ -131,6 +131,7 @@ class _FakeAcceptanceApi implements AcceptanceApi {
     return {'id': id, ...body};
   }
 
+  @override
   Future<Map<String, dynamic>> ensureDriveBridge() async {
     driveEnsureCalls += 1;
     if (driveShouldFail) {

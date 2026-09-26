@@ -210,6 +210,65 @@ class CloudDomainMigrationRunnerTests(unittest.TestCase):
         )
         self.assertLess(max(runner.BASELINE_SCHEMA_MISMATCH_EXIT_CODES.values()), runner.EXIT_UNVERSIONED_TARGETS_BASE)
 
+    def test_projects_index_subtype_exit_mapping_is_stable(self):
+        runner = _load_runner()
+        self.assertEqual(
+            {
+                ("ix_projects_status", "missing"): 42,
+                ("ix_projects_status", "definition"): 43,
+                ("ix_projects_name", "missing"): 44,
+                ("ix_projects_name", "definition"): 45,
+            },
+            runner.PROJECTS_INDEX_MISMATCH_EXIT_CODES,
+        )
+        self.assertLess(max(runner.PROJECTS_INDEX_MISMATCH_EXIT_CODES.values()), runner.EXIT_UNVERSIONED_TARGETS_BASE)
+
+    def test_projects_status_index_missing_has_exact_exit(self):
+        runner = _load_runner()
+        indexes = {
+            "ix_projects_name": "CREATE INDEX ix_projects_name ON public.projects USING btree (name)",
+        }
+        with self.assertRaises(runner.BaselineRequiredIndexMismatchError) as captured:
+            runner.validate_baseline_required_indexes("projects", indexes)
+        self.assertEqual("ix_projects_status", captured.exception.index_name)
+        self.assertEqual("missing", captured.exception.reason)
+        self.assertEqual(42, runner.classify_failure(captured.exception))
+
+    def test_projects_status_index_definition_mismatch_has_exact_exit(self):
+        runner = _load_runner()
+        indexes = {
+            "ix_projects_status": "CREATE INDEX ix_projects_status ON public.projects USING btree (name)",
+            "ix_projects_name": "CREATE INDEX ix_projects_name ON public.projects USING btree (name)",
+        }
+        with self.assertRaises(runner.BaselineRequiredIndexMismatchError) as captured:
+            runner.validate_baseline_required_indexes("projects", indexes)
+        self.assertEqual("ix_projects_status", captured.exception.index_name)
+        self.assertEqual("definition", captured.exception.reason)
+        self.assertEqual(43, runner.classify_failure(captured.exception))
+
+    def test_projects_name_index_missing_has_exact_exit(self):
+        runner = _load_runner()
+        indexes = {
+            "ix_projects_status": "CREATE INDEX ix_projects_status ON public.projects USING btree (status)",
+        }
+        with self.assertRaises(runner.BaselineRequiredIndexMismatchError) as captured:
+            runner.validate_baseline_required_indexes("projects", indexes)
+        self.assertEqual("ix_projects_name", captured.exception.index_name)
+        self.assertEqual("missing", captured.exception.reason)
+        self.assertEqual(44, runner.classify_failure(captured.exception))
+
+    def test_projects_name_index_definition_mismatch_has_exact_exit(self):
+        runner = _load_runner()
+        indexes = {
+            "ix_projects_status": "CREATE INDEX ix_projects_status ON public.projects USING btree (status)",
+            "ix_projects_name": "CREATE INDEX ix_projects_name ON public.projects USING btree (status)",
+        }
+        with self.assertRaises(runner.BaselineRequiredIndexMismatchError) as captured:
+            runner.validate_baseline_required_indexes("projects", indexes)
+        self.assertEqual("ix_projects_name", captured.exception.index_name)
+        self.assertEqual("definition", captured.exception.reason)
+        self.assertEqual(45, runner.classify_failure(captured.exception))
+
     def test_unversioned_baseline_matching_table_shape_passes(self):
         runner = _load_runner()
         runner.validate_baseline_table_shape(

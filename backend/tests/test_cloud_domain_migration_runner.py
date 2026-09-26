@@ -91,6 +91,66 @@ class CloudDomainMigrationRunnerTests(unittest.TestCase):
         runner = _load_runner()
         runner.require_target_revision(runner.TARGET_REVISION)
 
+    def test_unversioned_database_missing_baseline_tables_is_distinct_failure(self):
+        runner = _load_runner()
+        with self.assertRaisesRegex(runner.BaselineTablesMissingError, "missing baseline tables"):
+            runner.validate_unversioned_baseline_tables({"tasks"})
+        self.assertEqual(
+            runner.EXIT_BASELINE_TABLES_MISSING,
+            runner.classify_failure(runner.BaselineTablesMissingError("missing baseline")),
+        )
+
+    def test_unversioned_database_with_target_table_is_precreated_drift(self):
+        runner = _load_runner()
+        tables = set(runner.BASELINE_TABLES) | {"tasks", "notes"}
+        with self.assertRaisesRegex(runner.PrecreatedDriftError, "target tables already exist"):
+            runner.validate_unversioned_baseline_tables(tables)
+
+    def test_unversioned_database_with_baseline_tables_allows_shape_check(self):
+        runner = _load_runner()
+        runner.validate_unversioned_baseline_tables(set(runner.BASELINE_TABLES) | {"tasks"})
+
+    def test_unversioned_baseline_schema_mismatch_is_distinct_failure(self):
+        runner = _load_runner()
+        with self.assertRaisesRegex(runner.BaselineSchemaMismatchError, "baseline schema mismatch"):
+            runner.validate_baseline_table_shape("projects", {}, ())
+        self.assertEqual(
+            runner.EXIT_BASELINE_SCHEMA_MISMATCH,
+            runner.classify_failure(runner.BaselineSchemaMismatchError("schema mismatch")),
+        )
+
+    def test_unversioned_baseline_matching_table_shape_passes(self):
+        runner = _load_runner()
+        runner.validate_baseline_table_shape(
+            "projects",
+            runner.BASELINE_EXPECTED_COLUMNS["projects"],
+            runner.BASELINE_EXPECTED_PRIMARY_KEYS["projects"],
+        )
+
+    def test_unversioned_baseline_missing_required_index_is_schema_mismatch(self):
+        runner = _load_runner()
+        with self.assertRaisesRegex(runner.BaselineSchemaMismatchError, "baseline index mismatch"):
+            runner.validate_baseline_required_indexes("projects", {})
+
+    def test_unversioned_baseline_required_indexes_pass(self):
+        runner = _load_runner()
+        runner.validate_baseline_required_indexes(
+            "projects",
+            {
+                "ix_projects_status": "CREATE INDEX ix_projects_status ON public.projects USING btree (status)",
+                "ix_projects_name": "CREATE INDEX ix_projects_name ON public.projects USING btree (name)",
+            },
+        )
+
+    def test_verified_unversioned_baseline_has_distinct_diagnostic_exit(self):
+        runner = _load_runner()
+        self.assertEqual(
+            runner.EXIT_BASELINE_VERIFIED_UNVERSIONED,
+            runner.classify_failure(
+                runner.BaselineVerifiedWithoutVersionError("baseline verified")
+            ),
+        )
+
     def test_database_failure_has_distinct_process_exit_code(self):
         runner = _load_runner()
         self.assertEqual(

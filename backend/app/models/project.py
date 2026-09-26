@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -9,6 +9,10 @@ from app.db.session import Base
 
 class Project(Base):
     __tablename__ = "projects"
+    __table_args__ = (
+        Index("ix_projects_status", "status"),
+        Index("ix_projects_name", "name"),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36),

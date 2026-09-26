@@ -1,6 +1,6 @@
 # Cloud Domain Parity — Implementation Progress
 
-最後更新：2026-09-26（Task 8 projects required-index drift diagnosis）
+最後更新：2026-09-26（Task 8 exact projects index drift diagnosis）
 
 對應設計：`doc/cloud_domain_parity_design.md`
 
@@ -247,43 +247,48 @@ TDD / CI evidence：
 - deployment-scripts：PASS。
 - Firebase Hosting #139：**PASS**。
 
-### Latest production evidence — `projects` required-index mismatch
-
 Deploy Cloud Run #193：**FAIL**，run ID `36240544928`，release commit `b5bf6ddaf98e43d15f40a0f7a26e516c77889723`。
 
 - Migration execution：`life-assistant-db-migrate-hcx8n`。
 - Migration task：`life-assistant-db-migrate-hcx8n-task0`。
-- Migration task `status.lastAttemptResult.exitCode`：**41**。
-- Cloud Run execution condition 同樣明確指出 task failed with exit code `41`。
-- `41` 的唯一分類：**`projects` required-index mismatch**。
+- Migration task exit：**41** = `projects` required-index mismatch。
+- 因 baseline verifier 依序驗證 `google_connections` → `google_oauth_states` → `execution_logs` → `projects`，可確認前三張 baseline contract PASS，且 `projects` columns/type/nullability/PK PASS。
+
+#### 8. Exact `projects` required-index subtype
+
+為把 exit `41` 再唯讀細分到 exact index 與 mismatch reason，加入固定 mapping：
+
+- `42`：`ix_projects_status` **missing**。
+- `43`：`ix_projects_status` definition mismatch。
+- `44`：`ix_projects_name` **missing**。
+- `45`：`ix_projects_name` definition mismatch。
+
+若 exception 沒有 exact reason，仍保留原 table-level exit `41` 作 backward-compatible fallback；`42–45` 全部低於 `64+bitmap` 診斷區間。
+
+TDD / CI evidence：
+
+- RED commit：`76371e7472e1e3ba18f617dc0dbd0e26a7be62a8`（`test: identify exact projects index drift`）。
+- CI #241 backend：**如預期 RED**；backend 共 147 tests，新增的 5 個 exact-index assertions 因 mapping / `reason` 尚未實作而 ERROR；Alembic offline validation 與 deployment-scripts PASS。
+- GREEN commit：`30f8ac5a70e7e6ec739ab49511c49ec3d75b8f0f`（`fix: classify exact projects index drift`）。
+- CI #242：**PASS**。
+- Backend full suite：**147/147 PASS**。
+- Alembic offline chain：PASS，`0001 -> 0002 -> 0003 -> 0004`。
+- Flutter analyze / tests / Web build / branding verification：PASS。
+- deployment-scripts：PASS。
+- Firebase Hosting #141（run `36242072583`）：**PASS**。
+
+### Latest production evidence — `ix_projects_status` is missing
+
+Deploy Cloud Run #195：**FAIL**，run ID `36242072582`，release commit `30f8ac5a70e7e6ec739ab49511c49ec3d75b8f0f`。
+
+- Migration execution：`life-assistant-db-migrate-94jpj`。
+- Migration task：`life-assistant-db-migrate-94jpj-task0`。
+- Migration task `status.lastAttemptResult.exitCode`：**42**。
+- Cloud Run execution condition 同樣明確指出 task failed with exit code `42`。
+- `42` 的唯一分類：**`ix_projects_status` index missing**。
+- 這不是 definition mismatch：若 index 存在但不符合 `(status)` contract，會回 `43`。
+- 因 required-index validator 固定先檢查 `ix_projects_status` 再檢查 `ix_projects_name`，本次在 status index 即 fail，所以 `ix_projects_name` 狀態仍 **NOT VERIFIED**；不得推論其存在或正確。
 - Logging read 仍 `PERMISSION_DENIED`；未變更 IAM。
-
-因 baseline verifier 的固定執行順序為：
-
-1. `google_connections` shape → required indexes；
-2. `google_oauth_states` shape → required indexes；
-3. `execution_logs` shape → required indexes；
-4. `projects` shape → required indexes；
-
-而 production 最後在 `projects` required-index check 才回 `41`，因此本輪可進一步確認：
-
-- `google_connections` columns/type/nullability/PK：**PASS / VERIFIED**。
-- `google_connections` required indexes：目前 contract 為空集合，因此無額外 required-index failure。
-- `google_oauth_states` columns/type/nullability/PK：**PASS / VERIFIED**。
-- `google_oauth_states` required indexes：**PASS / VERIFIED**。
-- `execution_logs` columns/type/nullability/PK：**PASS / VERIFIED**。
-- `execution_logs` required indexes：**PASS / VERIFIED**。
-- `projects` columns/type/nullability/PK：**PASS / VERIFIED**。
-- `projects` required indexes：**FAIL / VERIFIED**。
-
-目前 `projects` contract 要求：
-
-- `ix_projects_status` definition 含 `(status)`；
-- `ix_projects_name` definition 含 `(name)`。
-
-exit `41` 只證明上述至少一個 required index **missing 或 definition mismatch**；目前尚不能從 exit code 判定究竟是 `ix_projects_status`、`ix_projects_name`，或兩者同時有問題。
-
-因 baseline validation 在 target `0004` schema validation 之前 fail，七張 `0004` target tables 的 **exact schema equivalence 仍 NOT VERIFIED**。
 
 ### Current production state
 
@@ -293,9 +298,9 @@ exit `41` 只證明上述至少一個 required index **missing 或 definition mi
 - `google_oauth_states` baseline shape + required indexes：**PASS / VERIFIED**。
 - `execution_logs` baseline shape + required indexes：**PASS / VERIFIED**。
 - `projects` baseline columns/type/nullability/PK：**PASS / VERIFIED**。
-- `projects` required indexes：**FAIL / VERIFIED**。
-- exact failing projects index：**NOT VERIFIED**。
-- `0004` target schema exact equivalence：**NOT VERIFIED**。
+- `ix_projects_status`：**missing / FAIL / VERIFIED**。
+- `ix_projects_name`：**NOT VERIFIED**（status index 先 fail，尚未執行 name index 判定）。
+- `0004` target schema exact equivalence：**NOT VERIFIED**（baseline required-index gate 尚未通過）。
 
 ### Safety / mutation record
 
@@ -304,7 +309,7 @@ exit `41` 只證明上述至少一個 required index **missing 或 definition mi
 - 未執行 `alembic stamp`。
 - 未建立或修改 `alembic_version`。
 - 未 drop / truncate / recreate production table。
-- 未新增 / 修改 production index。
+- 未 create / drop / alter / reindex production index。
 - 未改 production data。
 - 未增加 Cloud Logging IAM 權限。
 
@@ -322,7 +327,7 @@ exit `41` 只證明上述至少一個 required index **missing 或 definition mi
 
 Task 8 目前：**PARTIAL**，不得標示 DONE。
 
-下一個安全 checkpoint：繼續唯讀細分 `projects` required-index mismatch，至少辨識 `ix_projects_status` 與 `ix_projects_name` 哪一個失敗；如有必要再區分 missing vs definition mismatch。取得 exact index drift 後，才設計 additive repair migration。不得先 stamp 或直接修改 production schema。
+下一個安全 checkpoint：先檢查 revision `20260925_0003` 與目前 ORM / migration contract 中 `projects` index 的來源，設計一個 **additive、idempotent、可稽核** 的 repair migration / reconciliation 路徑；同時必須處理 `ix_projects_name` 仍 NOT VERIFIED 的事實。下一 checkpoint 只做設計與必要的唯讀診斷，不直接修改 production schema，也不先 stamp。
 
 ## 執行規則
 

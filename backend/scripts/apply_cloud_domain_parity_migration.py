@@ -211,6 +211,7 @@ EXIT_UNEXPECTED = 29
 EXIT_BASELINE_TABLES_MISSING = 30
 EXIT_BASELINE_SCHEMA_MISMATCH = 31
 EXIT_BASELINE_VERIFIED_UNVERSIONED = 32
+EXIT_FULL_SCHEMA_VERIFIED_UNVERSIONED = 33
 # Backward-compatible names for earlier evidence/documents.
 EXIT_REVISION = EXIT_REVISION_TABLE_MISSING
 EXIT_CONTRACT = EXIT_REVISION_TABLE_MISSING
@@ -275,6 +276,10 @@ class BaselineVerifiedWithoutVersionError(MigrationContractError):
     """The baseline matches, but Alembic metadata is intentionally still absent."""
 
 
+class FullSchemaVerifiedWithoutVersionError(MigrationContractError):
+    """Revisions 0001-0004 match exactly, but Alembic metadata is absent."""
+
+
 def encode_unversioned_target_tables(tables: set[str]) -> int:
     present = set(tables)
     unknown = present - set(UNVERSIONED_TARGET_TABLE_BITS)
@@ -293,6 +298,8 @@ def classify_failure(exc: BaseException) -> int:
         return EXIT_BASELINE_TABLES_MISSING
     if isinstance(exc, BaselineSchemaMismatchError):
         return EXIT_BASELINE_SCHEMA_MISMATCH
+    if isinstance(exc, FullSchemaVerifiedWithoutVersionError):
+        return EXIT_FULL_SCHEMA_VERIFIED_UNVERSIONED
     if isinstance(exc, BaselineVerifiedWithoutVersionError):
         return EXIT_BASELINE_VERIFIED_UNVERSIONED
     if isinstance(exc, RevisionTableMissingError):
@@ -331,10 +338,11 @@ def require_target_revision(revision: str) -> None:
         )
 
 
-def validate_unversioned_baseline_tables(tables: set[str]) -> None:
+def validate_unversioned_baseline_tables(tables: set[str]) -> bool:
     present = set(tables)
-    target_present = set(TARGET_TABLES) & present
-    if target_present:
+    expected_targets = set(TARGET_TABLES)
+    target_present = expected_targets & present
+    if target_present and target_present != expected_targets:
         raise UnversionedTargetTablesPresentError(target_present)
     missing = set(BASELINE_TABLES) - present
     if missing:
@@ -342,6 +350,7 @@ def validate_unversioned_baseline_tables(tables: set[str]) -> None:
             "missing baseline tables in unversioned database: "
             + ",".join(sorted(missing))
         )
+    return target_present == expected_targets
 
 
 def validate_baseline_table_shape(
@@ -539,8 +548,13 @@ async def _inspect_before(engine) -> tuple[str, set[str], set[str], dict[str, in
     async with engine.connect() as conn:
         tables = await _public_tables(conn)
         if "alembic_version" not in tables:
-            validate_unversioned_baseline_tables(tables)
+            full_target_schema = validate_unversioned_baseline_tables(tables)
             await _verify_unversioned_baseline_schema(conn)
+            if full_target_schema:
+                await _verify_schema(conn)
+                raise FullSchemaVerifiedWithoutVersionError(
+                    "schema through 20260926_0004 verified but alembic_version table is missing"
+                )
             raise BaselineVerifiedWithoutVersionError(
                 "baseline schema verified but alembic_version table is missing"
             )

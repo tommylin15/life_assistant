@@ -9,7 +9,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import config as app_config
 from app.api.activity import router as activity_router
-from app.api.auth import router as auth_router
+from app.api.auth import SESSION_COOKIE, router as auth_router
 from app.api.google_integrations import router as google_integrations_router
 from app.api.google_project import router as google_project_router
 from app.api.habits import router as habits_router
@@ -18,6 +18,7 @@ from app.api.projects import router as projects_router
 from app.api.shopping import router as shopping_router
 from app.api.tasks import router as tasks_router
 from app.api.templates import router as templates_router
+from app.confirmation import CONFIRMATION_HEADER, confirmation_requirement, confirmation_satisfied
 from app.db import session as db_session
 from app.db.session import Base, engine
 from app.errors import (
@@ -49,6 +50,30 @@ async def request_context(request: Request, call_next):
     request.state.request_id = request_id
     token = set_request_id(request_id)
     try:
+        requirement = confirmation_requirement(request.method, request.url.path)
+        authenticated_session = request.cookies.get(SESSION_COOKIE, "").startswith("id:")
+        if (
+            requirement is not None
+            and authenticated_session
+            and not confirmation_satisfied(
+                request.method,
+                request.url.path,
+                request.headers.get(CONFIRMATION_HEADER),
+            )
+        ):
+            response = JSONResponse(
+                status_code=409,
+                content={
+                    "error": {
+                        "code": "confirmation_required",
+                        "message": "Explicit user confirmation is required",
+                        "request_id": request_id,
+                    }
+                },
+            )
+            response.headers["X-Request-ID"] = request_id
+            return response
+
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         return response

@@ -228,6 +228,10 @@ class ApiClient implements AcceptanceApi {
     final encoded = Uri.encodeComponent(eventId);
     final res = await _client.delete(
       _apiUri('/integrations/google/calendar/events/$encoded'),
+      headers: {
+        'X-Life-Assistant-Confirmation':
+            'explicit_user:calendar.delete:$eventId',
+      },
     );
     if (res.statusCode != 204) _check(res.statusCode, res.body);
   }

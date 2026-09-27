@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Run deterministic Google provider failure-path acceptance in dev-test.
+"""Run deterministic Google provider failure and confirmation acceptance in dev-test.
 
 This runner executes the real FastAPI routes and real PostgreSQL execution log
-from the deployed image. Only the outbound Google provider functions are
-replaced with deterministic failures, so the job proves audit behavior without
-requiring or mutating a personal Google account.
+from the deployed image. Only outbound Google provider functions are replaced
+with deterministic stubs, so the job proves audit and destructive-confirmation
+behavior without requiring or mutating a personal Google account.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ ACCEPTANCE_USER = {
     "name": "Google Failure Acceptance",
 }
 TASK_TITLE = f"[ACCEPTANCE TEST] Google failure task {RUN_ID}"
+DELETE_EVENT_ID = f"acceptance-delete-{RUN_ID}"
 
 
 async def _acceptance_user() -> dict:
@@ -79,7 +80,7 @@ async def _verify_activity(client: httpx.AsyncClient) -> None:
     if not isinstance(payload, list):
         raise AssertionError("activity read: expected JSON list")
 
-    expected = {
+    expected_failures = {
         "calendar.create": (
             "failure",
             "http_503",
@@ -96,7 +97,7 @@ async def _verify_activity(client: httpx.AsyncClient) -> None:
             "Drive Bridge ensure partially completed",
         ),
     }
-    for action_type, (status, error_category, summary) in expected.items():
+    for action_type, (status, error_category, summary) in expected_failures.items():
         matches = [
             item
             for item in payload
@@ -130,7 +131,38 @@ async def _verify_activity(client: httpx.AsyncClient) -> None:
                 f"{action_type}: activity evidence missing request/finish metadata"
             )
 
+    delete_matches = [
+        item
+        for item in payload
+        if item.get("action_type") == "calendar.delete"
+        and item.get("provider") == "google"
+        and item.get("entity_id") == DELETE_EVENT_ID
+    ]
+    if len(delete_matches) != 1:
+        raise AssertionError(
+            "calendar.delete: expected exactly one confirmed execution row, "
+            f"found {len(delete_matches)}"
+        )
+    delete_item = delete_matches[0]
+    if delete_item.get("status") != "success":
+        raise AssertionError(
+            "calendar.delete: expected success, got "
+            f"{delete_item.get('status')}"
+        )
+    if delete_item.get("result") != "deleted":
+        raise AssertionError(
+            "calendar.delete: expected result deleted, got "
+            f"{delete_item.get('result')}"
+        )
+    if delete_item.get("error_category") is not None:
+        raise AssertionError("calendar.delete: successful action has error_category")
+    if not delete_item.get("request_id") or not delete_item.get("finished_at"):
+        raise AssertionError(
+            "calendar.delete: activity evidence missing request/finish metadata"
+        )
+
     _record("google_failure_activity_evidence")
+    _record("calendar_delete_confirmation_activity_evidence")
 
 
 async def _verify_no_task_created() -> None:
@@ -189,6 +221,24 @@ async def run_acceptance() -> None:
             return {"id": f"acceptance-root-{RUN_ID}", "name": name}, True
         raise HTTPException(503, "Synthetic Google provider failure")
 
+    delete_provider_calls = 0
+
+    async def successful_delete_provider(
+        _db,
+        _user_sub: str,
+        _scope: str,
+        method: str,
+        url: str,
+        **_kwargs,
+    ):
+        nonlocal delete_provider_calls
+        if method != "DELETE" or DELETE_EVENT_ID not in url:
+            raise AssertionError(
+                f"unexpected confirmed delete provider request: {method} {url}"
+            )
+        delete_provider_calls += 1
+        return httpx.Response(204)
+
     app.dependency_overrides[current_user] = _acceptance_user
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
 
@@ -197,6 +247,7 @@ async def run_acceptance() -> None:
             transport=transport,
             base_url="http://acceptance.local",
             timeout=30.0,
+            cookies={"__session": "id:synthetic-acceptance-session"},
         ) as client:
             google_integrations._request_google = fail_google_provider
 
@@ -231,6 +282,43 @@ async def run_acceptance() -> None:
                     f"drive partial failure expected two ensure calls, got {drive_calls}"
                 )
             _record("drive_partial_success_failure")
+
+            google_integrations._request_google = successful_delete_provider
+            delete_path = (
+                "/api/v1/integrations/google/calendar/events/"
+                f"{DELETE_EVENT_ID}"
+            )
+            response = await client.delete(delete_path)
+            _expect_error(
+                response,
+                409,
+                "confirmation_required",
+                "calendar delete confirmation gate",
+            )
+            if delete_provider_calls != 0:
+                raise AssertionError(
+                    "unconfirmed calendar delete reached Google provider"
+                )
+            _record("calendar_delete_confirmation_required")
+
+            response = await client.delete(
+                delete_path,
+                headers={
+                    "X-Life-Assistant-Confirmation":
+                    f"explicit_user:calendar.delete:{DELETE_EVENT_ID}"
+                },
+            )
+            if response.status_code != 204:
+                raise AssertionError(
+                    "confirmed calendar delete: expected HTTP 204, got "
+                    f"{response.status_code}: {response.text[:500]}"
+                )
+            if delete_provider_calls != 1:
+                raise AssertionError(
+                    "confirmed calendar delete expected one provider call, got "
+                    f"{delete_provider_calls}"
+                )
+            _record("calendar_delete_explicit_confirmation")
 
             await _verify_no_task_created()
             await _verify_activity(client)

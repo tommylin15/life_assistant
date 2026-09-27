@@ -106,7 +106,8 @@ class AcceptanceRunner {
   Future<void> deleteCalendarEventConfirmed(String eventId) async {
     final target = api;
     if (target is ConfirmedCalendarDeleteApi) {
-      await target.deleteCalendarEventConfirmed(eventId);
+      await (target as ConfirmedCalendarDeleteApi)
+          .deleteCalendarEventConfirmed(eventId);
       return;
     }
     await target.deleteCalendarEvent(eventId);

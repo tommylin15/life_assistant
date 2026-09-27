@@ -39,6 +39,14 @@ class _CleanupApi implements AcceptanceApi {
       throw UnimplementedError();
 
   @override
+  Future<Map<String, dynamic>> getCalendarEvents({
+    required DateTime timeMin,
+    required DateTime timeMax,
+    int limit = 1,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
   Future<Map<String, dynamic>> createCalendarEvent(
     Map<String, dynamic> body,
   ) async =>

@@ -15,7 +15,7 @@ Uri _apiUri(String path) {
   return Uri.base.resolve('/api/v1$path');
 }
 
-class ApiClient implements AcceptanceApi {
+class ApiClient implements AcceptanceApi, ConfirmedCalendarDeleteApi {
   final _client = createApiHttpClient();
 
   Future<List<Map<String, dynamic>>> getTasks() async {
@@ -225,6 +225,15 @@ class ApiClient implements AcceptanceApi {
 
   @override
   Future<void> deleteCalendarEvent(String eventId) async {
+    final encoded = Uri.encodeComponent(eventId);
+    final res = await _client.delete(
+      _apiUri('/integrations/google/calendar/events/$encoded'),
+    );
+    if (res.statusCode != 204) _check(res.statusCode, res.body);
+  }
+
+  @override
+  Future<void> deleteCalendarEventConfirmed(String eventId) async {
     final encoded = Uri.encodeComponent(eventId);
     final res = await _client.delete(
       _apiUri('/integrations/google/calendar/events/$encoded'),

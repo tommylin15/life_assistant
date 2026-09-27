@@ -1,6 +1,6 @@
 # 生活助理 App v0.1 — Acceptance Criteria
 
-最後更新：2026-09-27
+最後更新：2026-09-28
 
 > 本文件定義 Phase 1 Platform Release Gate。`[x]` 只代表該條要求層級已有足夠 evidence；Implementation / CI / Deployment PASS 不自動等於 Runtime / Integration PASS。
 
@@ -58,6 +58,8 @@
 - [x] delete API。
 - [x] create/update/delete execution audit baseline。
 - [x] delete capability risk metadata = `destructive_external` / `explicit_user`。
+- [x] Calendar DELETE backend confirmation gate 已實作並部署；confirmation 綁定 `calendar.delete` action + target event id。
+- [x] Flutter client 不再自動宣稱 confirmation；只有 explicit-confirmed path 才送 confirmation header。
 - [x] Acceptance Center 已補 create → update → list/read → delete 驗收流程並部署。
 
 ### Final integration acceptance
@@ -68,7 +70,7 @@
 - [x] 真實帳號 delete PASS。
 - [x] synthetic provider failure → execution evidence runtime PASS。
 - [ ] 真實 provider failure 有 execution evidence。
-- [ ] destructive confirmation enforcement PASS。
+- [x] destructive confirmation enforcement PASS。
 
 ## Gmail
 
@@ -172,7 +174,7 @@ Legacy SQLite 同名能力不等於 Cloud acceptance；上述 `[x]` 依 Cloud Do
 - [ ] destructive/sensitive action final policy gate。
 - [ ] Cloud mutation idempotency policy。
 
-## Release Evidence Snapshot — 2026-09-27
+## Release Evidence Snapshot — 2026-09-28
 
 ### True-account integration checkpoint — 2026-09-26
 
@@ -185,7 +187,7 @@ Legacy SQLite 同名能力不等於 Cloud acceptance；上述 `[x]` 依 Cloud Do
 - 使用者真實帳號驗收：Calendar create/update/delete PASS。
 - 使用者真實帳號驗收：Drive Bridge ensure PASS。
 - Acceptance Center Activity Log evidence PASS；`[ACCEPTANCE TEST]` 測試資料 cleanup PASS。
-- 尚未由本次真實驗收覆蓋：Calendar list/read、真實 provider failure / Drive partial-success、destructive confirmation enforcement。
+- 尚未由本次真實驗收覆蓋：Calendar list/read、真實 provider failure / Drive partial-success；destructive confirmation enforcement 已於 2026-09-28 的 dev-test runtime checkpoint 補齊。
 
 ### Cloud Domain Parity final checkpoint — 2026-09-27
 
@@ -235,13 +237,29 @@ Legacy SQLite 同名能力不等於 Cloud acceptance；上述 `[x]` 依 Cloud Do
 - Cloud Run deploy 仍出現既有非阻塞 `--allow-unauthenticated` IAM policy re-apply warning；revision 仍成功 100% serving，health/ready/401 checks PASS，未做額外 IAM 變更。
 - **Synthetic Google failure / partial-success runtime：DONE / PASS。真實 Google provider failure / partial-success：NOT VERIFIED。**
 
+### Calendar destructive confirmation enforcement checkpoint — 2026-09-28
+
+- Backend enforcement commit：`610ee93c83c1a4ef0929cfee2e937eb6098e34ce`；final explicit-confirmed Flutter client path + analyzer fix release SHA：`afa02e150f64b7204bd070747f298e91bef295fa`。
+- CI #286 / run `36335471982`：PASS；backend / Alembic / deployment scripts / Flutter Analyze / Test / Web build / branding 全 PASS。
+- Firebase Hosting #185 / run `36335593932`：PASS。
+- Cloud Run #239 / run `36335593931`：PASS。
+- PostgreSQL migration execution `life-assistant-db-migrate-lk5v5`：PASS。
+- Cloud Run revision `life-assistant-api-00075-7fg`：100% traffic；`/health` = `{"status":"ok"}`、`/ready` = `{"status":"ok","database":"ok"}`、unauthenticated API 401 protection PASS。
+- Authenticated Cloud Domain acceptance execution `life-assistant-cloud-domain-acceptance-9ggvl`：PASS。
+- Google failure + destructive-confirmation acceptance execution `life-assistant-google-failure-acceptance-9twg6`：PASS。
+- Runtime gate 驗證 Calendar DELETE 未帶 confirmation 時回 `409 confirmation_required` 且 outbound provider call = 0；帶 `explicit_user:calendar.delete:<event_id>` 後 HTTP 204、outbound provider call = 1，並只留下 1 筆 `calendar.delete / success / deleted` activity evidence。
+- Flutter `ApiClient.deleteCalendarEvent()` 不會自動送 confirmation；Acceptance Center 在使用者先確認整體驗收後才走 `deleteCalendarEventConfirmed()` explicit-confirmed path。
+- SQLite success-path execution `life-assistant-sqlite-backfill-acceptance-8hv2l`：PASS；failure-path execution `life-assistant-sqlite-backfill-failure-acceptance-g84n9`：PASS。
+- Cloud Run deploy 仍有既有非阻塞 `--allow-unauthenticated` IAM policy re-apply warning；revision 仍 100% serving，health/ready/401 checks PASS，未做額外 IAM 變更。
+- **Calendar destructive confirmation enforcement：DONE / PASS。此證據不代表所有 destructive/sensitive action 的 final policy gate 已完成。**
+
 ## Phase 1 Status
 
-**PARTIAL**。Cloud target schema/API/runtime parity、SQLite→PostgreSQL migration tooling / synthetic runtime acceptance，以及 Google provider synthetic failure / partial-success runtime acceptance 已完成，但 Phase 1 仍不可標 DONE，主要缺口：
+**PARTIAL**。Cloud target schema/API/runtime parity、SQLite→PostgreSQL migration tooling / synthetic runtime acceptance、Google provider synthetic failure / partial-success runtime acceptance，以及 Calendar destructive confirmation enforcement 已完成，但 Phase 1 仍不可標 DONE，主要缺口：
 
 - Real historical SQLite user-data migration：尚未取得實際 source file，故 NOT VERIFIED。
 - Calendar 真實帳號 read/list 尚未以新版 Acceptance Center 重跑；真實 Google provider failure / Drive partial-success 仍 NOT VERIFIED（synthetic failure-path runtime 已 PASS）。
-- authorization / confirmation / idempotency policy，包含 destructive confirmation enforcement。
+- Backend authorization / minimum-permission、Cloud mutation idempotency，以及其他 destructive/sensitive action final policy gate；Calendar DELETE explicit confirmation 已 PASS。
 - Bridge/MCP Release Gate。
 - Task checklist / 完整 Web UX、Notes search、Attachment strategy 等剩餘 Phase 1 product acceptance。
 

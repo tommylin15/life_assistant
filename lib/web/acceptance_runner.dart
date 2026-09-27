@@ -49,6 +49,10 @@ class AcceptanceRunResult {
   final AcceptanceArtifacts remainingArtifacts;
 }
 
+abstract class ConfirmedCalendarDeleteApi {
+  Future<void> deleteCalendarEventConfirmed(String eventId);
+}
+
 abstract class AcceptanceApi {
   Future<Map<String, dynamic>> getGoogleIntegrationStatus();
 
@@ -98,6 +102,15 @@ class AcceptanceRunner {
   AcceptanceRunner(this.api);
 
   final AcceptanceApi api;
+
+  Future<void> deleteCalendarEventConfirmed(String eventId) async {
+    final target = api;
+    if (target is ConfirmedCalendarDeleteApi) {
+      await target.deleteCalendarEventConfirmed(eventId);
+      return;
+    }
+    await target.deleteCalendarEvent(eventId);
+  }
 
   Future<AcceptanceRunResult> runAll() async {
     final label =
@@ -385,7 +398,7 @@ class AcceptanceRunner {
     }
 
     try {
-      await api.deleteCalendarEvent(eventId);
+      await deleteCalendarEventConfirmed(eventId);
       artifacts.calendarEventIds.remove(eventId);
       expectedActivity.add((actionType: 'calendar.delete', entityId: eventId));
       _add(
@@ -630,7 +643,7 @@ class AcceptanceRunner {
     }
     for (final id in artifacts.calendarEventIds.toList()) {
       try {
-        await api.deleteCalendarEvent(id);
+        await deleteCalendarEventConfirmed(id);
         artifacts.calendarEventIds.remove(id);
       } catch (error) {
         errors.add('Calendar $id: $error');

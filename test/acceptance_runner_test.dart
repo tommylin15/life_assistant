@@ -17,12 +17,14 @@ class _FakeAcceptanceApi implements AcceptanceApi {
   final List<String> deletedTaskIds = [];
   final List<String> deletedCalendarIds = [];
   final List<Map<String, dynamic>> _activity = [];
+  final Map<String, Map<String, dynamic>> _calendarEvents = {};
 
   Map<String, dynamic>? _project;
   var _projectCounter = 0;
   var _calendarCounter = 0;
   var _taskCounter = 0;
   var driveEnsureCalls = 0;
+  var calendarListCalls = 0;
 
   void _log(String actionType, String entityId) {
     _activity.insert(0, {
@@ -68,12 +70,27 @@ class _FakeAcceptanceApi implements AcceptanceApi {
   }
 
   @override
+  Future<Map<String, dynamic>> getCalendarEvents({
+    required DateTime timeMin,
+    required DateTime timeMax,
+    int limit = 1,
+  }) async {
+    calendarListCalls += 1;
+    final events = _calendarEvents.values.take(limit).map((item) {
+      return Map<String, dynamic>.from(item);
+    }).toList();
+    return {'events': events, 'returned': events.length};
+  }
+
+  @override
   Future<Map<String, dynamic>> createCalendarEvent(
     Map<String, dynamic> body,
   ) async {
     final id = 'calendar-${++_calendarCounter}';
+    final event = {'id': id, ...body};
+    _calendarEvents[id] = Map<String, dynamic>.from(event);
     _log('calendar.create', id);
-    return {'id': id, ...body};
+    return event;
   }
 
   @override
@@ -81,13 +98,16 @@ class _FakeAcceptanceApi implements AcceptanceApi {
     String eventId,
     Map<String, dynamic> body,
   ) async {
+    final event = {'id': eventId, ...?_calendarEvents[eventId], ...body};
+    _calendarEvents[eventId] = Map<String, dynamic>.from(event);
     _log('calendar.update', eventId);
-    return {'id': eventId, ...body};
+    return event;
   }
 
   @override
   Future<void> deleteCalendarEvent(String eventId) async {
     deletedCalendarIds.add(eventId);
+    _calendarEvents.remove(eventId);
     _log('calendar.delete', eventId);
   }
 
@@ -127,6 +147,8 @@ class _FakeAcceptanceApi implements AcceptanceApi {
     Map<String, dynamic> body,
   ) async {
     final id = 'calendar-${++_calendarCounter}';
+    final event = {'id': id, ...body};
+    _calendarEvents[id] = Map<String, dynamic>.from(event);
     _log('gmail.to_calendar', id);
     return {'id': id, ...body};
   }
@@ -171,6 +193,7 @@ void main() {
       'project.delete',
       'calendar.create',
       'calendar.update',
+      'calendar.read',
       'calendar.delete',
       'gmail.read',
       'gmail.to_task',
@@ -183,6 +206,7 @@ void main() {
       expect(_check(result, key).status, AcceptanceStatus.pass, reason: key);
     }
 
+    expect(api.calendarListCalls, 1);
     expect(api.driveEnsureCalls, 1);
     expect(api.deletedTaskIds, contains('task-1'));
     expect(api.deletedProjectIds, containsAll(['project-1', 'project-2']));
@@ -206,7 +230,29 @@ void main() {
         reason: key,
       );
     }
+    expect(_check(result, 'calendar.read').status, AcceptanceStatus.pass);
     expect(_check(result, 'cleanup').status, AcceptanceStatus.pass);
+  });
+
+  test('Calendar without authorization is NOT VERIFIED and is not listed', () async {
+    final api = _FakeAcceptanceApi(
+      grantedServices: const ['gmail', 'drive'],
+    );
+    final result = await AcceptanceRunner(api).runAll();
+
+    for (final key in [
+      'calendar.create',
+      'calendar.update',
+      'calendar.read',
+      'calendar.delete',
+    ]) {
+      expect(
+        _check(result, key).status,
+        AcceptanceStatus.notVerified,
+        reason: key,
+      );
+    }
+    expect(api.calendarListCalls, 0);
   });
 
   test('Drive without authorization is NOT VERIFIED and is not called', () async {

@@ -60,6 +60,11 @@ abstract class AcceptanceApi {
   Future<Map<String, dynamic>> getProject(String id);
   Future<void> deleteProject(String id);
 
+  Future<Map<String, dynamic>> getCalendarEvents({
+    required DateTime timeMin,
+    required DateTime timeMax,
+    int limit = 1,
+  });
   Future<Map<String, dynamic>> createCalendarEvent(Map<String, dynamic> body);
   Future<Map<String, dynamic>> updateCalendarEvent(
     String eventId,
@@ -269,18 +274,21 @@ class AcceptanceRunner {
     if (!grantedServices.contains('calendar')) {
       _notVerified(checks, 'calendar.create', 'Calendar 建立', 'Calendar 尚未授權。');
       _notVerified(checks, 'calendar.update', 'Calendar 修改', 'Calendar 尚未授權。');
+      _notVerified(checks, 'calendar.read', 'Calendar 讀取', 'Calendar 尚未授權。');
       _notVerified(checks, 'calendar.delete', 'Calendar 刪除', 'Calendar 尚未授權。');
       return;
     }
 
     final start = DateTime.now().toUtc().add(const Duration(days: 1));
     final end = start.add(const Duration(minutes: 30));
+    final createdSummary = '$label Calendar';
     final updatedSummary = '$label Calendar Updated';
+    var expectedSummary = createdSummary;
     String? eventId;
 
     try {
       final created = await api.createCalendarEvent({
-        'summary': '$label Calendar',
+        'summary': createdSummary,
         'start': start.toIso8601String(),
         'end': end.toIso8601String(),
         'description': '$label automatic calendar acceptance',
@@ -307,6 +315,7 @@ class AcceptanceRunner {
         detail: '建立失敗：$error',
       );
       _notVerified(checks, 'calendar.update', 'Calendar 修改', '前置 Calendar 建立未成功。');
+      _notVerified(checks, 'calendar.read', 'Calendar 讀取', '前置 Calendar 建立未成功。');
       _notVerified(checks, 'calendar.delete', 'Calendar 刪除', '前置 Calendar 建立未成功。');
       return;
     }
@@ -319,6 +328,7 @@ class AcceptanceRunner {
       if (updated['summary'] != updatedSummary) {
         throw StateError('Calendar update response mismatch');
       }
+      expectedSummary = updatedSummary;
       expectedActivity.add((actionType: 'calendar.update', entityId: eventId));
       _add(
         checks,
@@ -334,6 +344,43 @@ class AcceptanceRunner {
         label: 'Calendar 修改',
         status: AcceptanceStatus.fail,
         detail: '修改失敗：$error',
+      );
+    }
+
+    try {
+      final response = await api.getCalendarEvents(
+        timeMin: start.subtract(const Duration(minutes: 5)),
+        timeMax: end.add(const Duration(minutes: 5)),
+        limit: 50,
+      );
+      final events = (response['events'] as List?) ?? const [];
+      Map? matched;
+      for (final item in events) {
+        if (item is Map && item['id']?.toString() == eventId) {
+          matched = item;
+          break;
+        }
+      }
+      if (matched == null) {
+        throw StateError('Calendar list did not return created event');
+      }
+      if (matched['summary']?.toString() != expectedSummary) {
+        throw StateError('Calendar list returned stale or mismatched summary');
+      }
+      _add(
+        checks,
+        key: 'calendar.read',
+        label: 'Calendar 讀取',
+        status: AcceptanceStatus.pass,
+        detail: 'Calendar list 已讀回同一 event，內容符合目前狀態。',
+      );
+    } catch (error) {
+      _add(
+        checks,
+        key: 'calendar.read',
+        label: 'Calendar 讀取',
+        status: AcceptanceStatus.fail,
+        detail: 'Calendar list/read 驗證失敗：$error',
       );
     }
 

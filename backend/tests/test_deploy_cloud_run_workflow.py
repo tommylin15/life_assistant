@@ -60,6 +60,18 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         self.assertIn(backfill_marker, self.text)
         self.assertLess(self.text.index(cloud_marker), self.text.index(backfill_marker))
 
+    def test_sqlite_backfill_failure_acceptance_runs_after_success_acceptance(self):
+        success_marker = "Run SQLite backfill runtime acceptance"
+        failure_marker = "Run SQLite backfill failure-path runtime acceptance"
+        self.assertIn(
+            "BACKFILL_FAILURE_ACCEPTANCE_JOB: life-assistant-sqlite-backfill-failure-acceptance",
+            self.text,
+        )
+        self.assertIn("--args=-m,scripts.run_sqlite_backfill_failure_acceptance", self.text)
+        self.assertIn(success_marker, self.text)
+        self.assertIn(failure_marker, self.text)
+        self.assertLess(self.text.index(success_marker), self.text.index(failure_marker))
+
 
 if __name__ == "__main__":
     unittest.main()

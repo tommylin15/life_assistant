@@ -29,6 +29,7 @@ jobs:
       MIGRATION_JOB: life-assistant-db-migrate
       ACCEPTANCE_JOB: life-assistant-cloud-domain-acceptance
       BACKFILL_ACCEPTANCE_JOB: life-assistant-sqlite-backfill-acceptance
+      BACKFILL_FAILURE_ACCEPTANCE_JOB: life-assistant-sqlite-backfill-failure-acceptance
       GCP_NETWORK: janusai-lake-poc
       GCP_SUBNET: janusai-lake-poc-uscentral1
       DATABASE_HOST: 10.42.0.5
@@ -209,6 +210,30 @@ jobs:
             --image "$SERVICE_IMAGE" \
             --command python \
             --args=-m,scripts.run_sqlite_backfill_acceptance \
+            --network "$GCP_NETWORK" \
+            --subnet "$GCP_SUBNET" \
+            --vpc-egress private-ranges-only \
+            --max-retries 0 \
+            --task-timeout 10m \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
+            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --wait \
+            --quiet
+
+      - name: Run SQLite backfill failure-path runtime acceptance
+        run: |
+          SERVICE_IMAGE="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(spec.template.spec.containers[0].image)')"
+          test -n "$SERVICE_IMAGE"
+
+          gcloud run jobs deploy "$BACKFILL_FAILURE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "$SERVICE_IMAGE" \
+            --command python \
+            --args=-m,scripts.run_sqlite_backfill_failure_acceptance \
             --network "$GCP_NETWORK" \
             --subnet "$GCP_SUBNET" \
             --vpc-egress private-ranges-only \

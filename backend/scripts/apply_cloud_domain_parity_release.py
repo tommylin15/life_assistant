@@ -32,6 +32,21 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 RELEASE_TARGET_REVISION = "20260927_0005"
 EXIT_RELEASE_REVISION = 60
 EXIT_RELEASE_ALEMBIC = 61
+EXIT_RELEASE_MISSING_TABLES = 62
+EXIT_RELEASE_MISSING_TASK_COLUMNS = 63
+EXIT_RELEASE_TARGET_REVISION = 64
+EXIT_RELEASE_UNEXPECTED_PRE_REVISION = 65
+EXIT_RELEASE_VERSION_TABLE = 66
+EXIT_RELEASE_REVISION_ROW_COUNT = 67
+RELEASE_REVISION_EXIT_CODES = {
+    "generic": EXIT_RELEASE_REVISION,
+    "missing_tables": EXIT_RELEASE_MISSING_TABLES,
+    "missing_task_columns": EXIT_RELEASE_MISSING_TASK_COLUMNS,
+    "target_revision": EXIT_RELEASE_TARGET_REVISION,
+    "unexpected_pre_revision": EXIT_RELEASE_UNEXPECTED_PRE_REVISION,
+    "version_table": EXIT_RELEASE_VERSION_TABLE,
+    "revision_row_count": EXIT_RELEASE_REVISION_ROW_COUNT,
+}
 RELEASE_REQUIRED_TABLES = {
     "tasks",
     "checklist_items",
@@ -79,7 +94,9 @@ EXIT_UNEXPECTED_FOREIGN_KEY_TABLE = 255
 
 
 class ReleaseRevisionError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, reason: str = "generic") -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 class ReleaseAlembicError(RuntimeError):
@@ -88,7 +105,7 @@ class ReleaseAlembicError(RuntimeError):
 
 def classify_failure(exc: BaseException) -> int:
     if isinstance(exc, ReleaseRevisionError):
-        return EXIT_RELEASE_REVISION
+        return RELEASE_REVISION_EXIT_CODES.get(exc.reason, EXIT_RELEASE_REVISION)
     if isinstance(exc, ReleaseAlembicError):
         return EXIT_RELEASE_ALEMBIC
     if isinstance(exc, metadata_preflight.MetadataBootstrapApprovalRequiredError):
@@ -129,7 +146,8 @@ async def _current_revision() -> str | None:
             ).scalars().all()
             if len(rows) != 1:
                 raise ReleaseRevisionError(
-                    f"expected one alembic revision row, found {len(rows)}"
+                    f"expected one alembic revision row, found {len(rows)}",
+                    reason="revision_row_count",
                 )
             return str(rows[0])
     finally:
@@ -144,14 +162,18 @@ async def _verify_release_revision() -> None:
                 text("SELECT to_regclass('public.alembic_version') IS NOT NULL")
             )
             if not exists:
-                raise ReleaseRevisionError("release alembic_version table is missing")
+                raise ReleaseRevisionError(
+                    "release alembic_version table is missing",
+                    reason="version_table",
+                )
             rows = (
                 await conn.execute(text("SELECT version_num FROM alembic_version"))
             ).scalars().all()
             if len(rows) != 1 or str(rows[0]) != RELEASE_TARGET_REVISION:
                 actual = str(rows[0]) if len(rows) == 1 else f"row-count:{len(rows)}"
                 raise ReleaseRevisionError(
-                    f"release revision mismatch: {actual}; expected {RELEASE_TARGET_REVISION}"
+                    f"release revision mismatch: {actual}; expected {RELEASE_TARGET_REVISION}",
+                    reason="target_revision",
                 )
             tables = set(
                 str(value)
@@ -167,7 +189,8 @@ async def _verify_release_revision() -> None:
             missing_tables = RELEASE_REQUIRED_TABLES - tables
             if missing_tables:
                 raise ReleaseRevisionError(
-                    "release schema missing tables: " + ",".join(sorted(missing_tables))
+                    "release schema missing tables: " + ",".join(sorted(missing_tables)),
+                    reason="missing_tables",
                 )
             task_columns = set(
                 str(value)
@@ -184,7 +207,8 @@ async def _verify_release_revision() -> None:
             if missing_columns:
                 raise ReleaseRevisionError(
                     "release tasks schema missing columns: "
-                    + ",".join(sorted(missing_columns))
+                    + ",".join(sorted(missing_columns)),
+                    reason="missing_task_columns",
                 )
     finally:
         await engine.dispose()
@@ -242,7 +266,8 @@ async def main() -> None:
         raise ReleaseRevisionError(
             f"unexpected release pre-revision: {current}; expected unversioned, "
             f"{migration.PREVIOUS_REVISION}, {migration.TARGET_REVISION}, or "
-            f"{RELEASE_TARGET_REVISION}"
+            f"{RELEASE_TARGET_REVISION}",
+            reason="unexpected_pre_revision",
         )
 
     await _ensure_historical_0004()

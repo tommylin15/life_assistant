@@ -11,6 +11,18 @@ from app.db.session import Base
 from app.models.execution_log import ExecutionLog  # noqa: F401
 from app.models.google_integration import GoogleConnection, GoogleOAuthState  # noqa: F401
 from app.models.habit import Habit, HabitCompletion  # noqa: F401
+from app.models.migration_support import (  # noqa: F401
+    CalendarEventRef,
+    ChecklistItem,
+    EntityTag,
+    GmailRef,
+    LegacyActivityLog,
+    LegacyAttachment,
+    LegacyKeyValueState,
+    LegacyMigrationRow,
+    Reminder,
+    Tag,
+)
 from app.models.note import Note, NoteLink  # noqa: F401
 from app.models.project import Project  # noqa: F401
 from app.models.shopping import ShoppingItem, ShoppingList  # noqa: F401

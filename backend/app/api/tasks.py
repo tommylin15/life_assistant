@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -18,7 +19,9 @@ async def list_tasks(
     _user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Task).order_by(Task.created_at.desc()))
+    result = await db.execute(
+        select(Task).where(Task.deleted_at.is_(None)).order_by(Task.created_at.desc())
+    )
     return result.scalars().all()
 
 
@@ -62,7 +65,7 @@ async def get_task(
     db: AsyncSession = Depends(get_db),
 ):
     task = await db.get(Task, task_id)
-    if not task:
+    if not task or task.deleted_at is not None:
         raise HTTPException(404, "Task not found")
     return task
 
@@ -75,7 +78,7 @@ async def update_task(
     db: AsyncSession = Depends(get_db),
 ):
     task = await db.get(Task, task_id)
-    if not task:
+    if not task or task.deleted_at is not None:
         raise HTTPException(404, "Task not found")
     execution = await start_execution(
         db,
@@ -89,6 +92,12 @@ async def update_task(
     try:
         for field, value in body.model_dump(exclude_unset=True).items():
             setattr(task, field, value)
+        if "status" in body.model_fields_set:
+            task.completed_at = (
+                datetime.now(timezone.utc)
+                if body.status == TaskStatus.completed
+                else None
+            )
         await db.commit()
         await db.refresh(task)
     except Exception as exc:
@@ -110,7 +119,7 @@ async def complete_task(
     db: AsyncSession = Depends(get_db),
 ):
     task = await db.get(Task, task_id)
-    if not task:
+    if not task or task.deleted_at is not None:
         raise HTTPException(404, "Task not found")
     execution = await start_execution(
         db,
@@ -123,6 +132,7 @@ async def complete_task(
     )
     try:
         task.status = TaskStatus.completed
+        task.completed_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(task)
     except Exception as exc:
@@ -144,7 +154,7 @@ async def delete_task(
     db: AsyncSession = Depends(get_db),
 ):
     task = await db.get(Task, task_id)
-    if not task:
+    if not task or task.deleted_at is not None:
         raise HTTPException(404, "Task not found")
     execution = await start_execution(
         db,

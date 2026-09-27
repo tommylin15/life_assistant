@@ -30,6 +30,7 @@ from app.errors import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
+from app.models import migration_support as _migration_support  # noqa: F401
 
 app = FastAPI(title="Life Assistant API", version="0.1.0", debug=False)
 
@@ -64,8 +65,6 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 @app.on_event("startup")
 async def startup():
     try:
-        # Transitional safety net for additive tables. Schema changes remain
-        # versioned with Alembic and CI validates the migration chain.
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
     except Exception as exc:

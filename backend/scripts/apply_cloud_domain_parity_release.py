@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Release entrypoint for guarded reconciliation and migration verification.
+"""Release entrypoint for guarded schema reconciliation and Alembic upgrade.
 
-The release flow may repair only the previously diagnosed missing projects
-indexes and projects.status server default. If the database is still
-unversioned afterward, targeted read-only diagnostics and the stronger
-metadata-bootstrap preflight run. When that complete physical-schema preflight
-passes, a separately guarded, revision-scoped bootstrap may write only Alembic
-metadata before normal migration verification continues.
+The historical 0004 reconciliation/bootstrap path is preserved for databases
+that still need it. Once 0004 is verified, normal Alembic advances to the
+current additive release head. Already-current databases are a verified no-op.
 """
 
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+import subprocess
 import sys
 
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from app.config import settings
 from scripts import apply_cloud_domain_parity_migration as migration
 from scripts import bootstrap_alembic_metadata as metadata_bootstrap
 from scripts import diagnose_note_links_foreign_keys as note_links_fk_diagnosis
@@ -25,6 +28,24 @@ from scripts.reconcile_projects_status_default import (
     run_reconciliation as run_projects_status_default_reconciliation,
 )
 
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+RELEASE_TARGET_REVISION = "20260927_0005"
+EXIT_RELEASE_REVISION = 60
+EXIT_RELEASE_ALEMBIC = 61
+RELEASE_REQUIRED_TABLES = {
+    "tasks",
+    "checklist_items",
+    "tags",
+    "entity_tags",
+    "reminders",
+    "legacy_attachments",
+    "calendar_event_refs",
+    "gmail_refs",
+    "legacy_activity_logs",
+    "legacy_key_value_state",
+    "legacy_migration_rows",
+}
+RELEASE_REQUIRED_TASK_COLUMNS = {"source_type", "source_ref", "completed_at", "deleted_at"}
 
 NOTE_LINKS_FK_DIAGNOSTIC_EXIT_CODES = {
     "both_missing": 1,
@@ -57,7 +78,19 @@ FOREIGN_KEY_MISMATCH_EXIT_CODES = {
 EXIT_UNEXPECTED_FOREIGN_KEY_TABLE = 255
 
 
+class ReleaseRevisionError(RuntimeError):
+    pass
+
+
+class ReleaseAlembicError(RuntimeError):
+    pass
+
+
 def classify_failure(exc: BaseException) -> int:
+    if isinstance(exc, ReleaseRevisionError):
+        return EXIT_RELEASE_REVISION
+    if isinstance(exc, ReleaseAlembicError):
+        return EXIT_RELEASE_ALEMBIC
     if isinstance(exc, note_links_fk_diagnosis.NoteLinksForeignKeyDiagnosisError):
         return NOTE_LINKS_FK_DIAGNOSTIC_EXIT_CODES.get(
             exc.reason,
@@ -80,7 +113,93 @@ def classify_failure(exc: BaseException) -> int:
     return metadata_preflight.classify_failure(exc)
 
 
-async def main() -> None:
+async def _current_revision() -> str | None:
+    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    try:
+        async with engine.connect() as conn:
+            exists = await conn.scalar(
+                text("SELECT to_regclass('public.alembic_version') IS NOT NULL")
+            )
+            if not exists:
+                return None
+            rows = (
+                await conn.execute(text("SELECT version_num FROM alembic_version"))
+            ).scalars().all()
+            if len(rows) != 1:
+                raise ReleaseRevisionError(
+                    f"expected one alembic revision row, found {len(rows)}"
+                )
+            return str(rows[0])
+    finally:
+        await engine.dispose()
+
+
+async def _verify_release_revision() -> None:
+    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    try:
+        async with engine.connect() as conn:
+            exists = await conn.scalar(
+                text("SELECT to_regclass('public.alembic_version') IS NOT NULL")
+            )
+            if not exists:
+                raise ReleaseRevisionError("release alembic_version table is missing")
+            rows = (
+                await conn.execute(text("SELECT version_num FROM alembic_version"))
+            ).scalars().all()
+            if len(rows) != 1 or str(rows[0]) != RELEASE_TARGET_REVISION:
+                actual = str(rows[0]) if len(rows) == 1 else f"row-count:{len(rows)}"
+                raise ReleaseRevisionError(
+                    f"release revision mismatch: {actual}; expected {RELEASE_TARGET_REVISION}"
+                )
+            tables = set(
+                str(value)
+                for value in (
+                    await conn.execute(
+                        text(
+                            "SELECT tablename FROM pg_catalog.pg_tables "
+                            "WHERE schemaname='public'"
+                        )
+                    )
+                ).scalars().all()
+            )
+            missing_tables = RELEASE_REQUIRED_TABLES - tables
+            if missing_tables:
+                raise ReleaseRevisionError(
+                    "release schema missing tables: " + ",".join(sorted(missing_tables))
+                )
+            task_columns = set(
+                str(value)
+                for value in (
+                    await conn.execute(
+                        text(
+                            "SELECT column_name FROM information_schema.columns "
+                            "WHERE table_schema='public' AND table_name='tasks'"
+                        )
+                    )
+                ).scalars().all()
+            )
+            missing_columns = RELEASE_REQUIRED_TASK_COLUMNS - task_columns
+            if missing_columns:
+                raise ReleaseRevisionError(
+                    "release tasks schema missing columns: "
+                    + ",".join(sorted(missing_columns))
+                )
+    finally:
+        await engine.dispose()
+
+
+def _upgrade_release_head() -> None:
+    try:
+        subprocess.run(
+            ["alembic", "upgrade", RELEASE_TARGET_REVISION],
+            cwd=BACKEND_ROOT,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise ReleaseAlembicError("release Alembic upgrade failed") from exc
+
+
+async def _ensure_historical_0004() -> None:
     repaired_indexes = await run_projects_index_reconciliation()
     print(
         "migration_reconciled_projects_indexes="
@@ -93,8 +212,6 @@ async def main() -> None:
         + ("active" if repaired_status_default else "none")
     )
 
-    # Diagnose the already-observed note_links FK drift before the generic
-    # preflight so Cloud Run task metadata remains useful without log-viewer IAM.
     await note_links_fk_diagnosis.run_diagnosis()
 
     ready_revision = await metadata_preflight.run_preflight()
@@ -105,10 +222,32 @@ async def main() -> None:
             "metadata_bootstrap_applied="
             + (ready_revision if bootstrapped else "already-versioned")
         )
-        # A missing or mismatched workflow approval remains fail-closed as
-        # MetadataBootstrapApprovalRequiredError (exit 50).
 
     await migration.main()
+
+
+async def main() -> None:
+    current = await _current_revision()
+    print(f"release_pre_revision={current or 'unversioned'}")
+
+    if current == RELEASE_TARGET_REVISION:
+        print("release_schema_action=verify-current")
+        await _verify_release_revision()
+        print(f"release_post_revision={RELEASE_TARGET_REVISION}")
+        return
+
+    if current not in {None, migration.PREVIOUS_REVISION, migration.TARGET_REVISION}:
+        raise ReleaseRevisionError(
+            f"unexpected release pre-revision: {current}; expected unversioned, "
+            f"{migration.PREVIOUS_REVISION}, {migration.TARGET_REVISION}, or "
+            f"{RELEASE_TARGET_REVISION}"
+        )
+
+    await _ensure_historical_0004()
+    print(f"release_base_revision={migration.TARGET_REVISION}")
+    _upgrade_release_head()
+    await _verify_release_revision()
+    print(f"release_post_revision={RELEASE_TARGET_REVISION}")
 
 
 if __name__ == "__main__":

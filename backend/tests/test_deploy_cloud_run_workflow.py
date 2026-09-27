@@ -33,7 +33,6 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         diagnostics_marker = "Collect failed migration diagnostics"
         fail_marker = "Fail migration gate"
         deploy_marker = "Deploy backend to Cloud Run"
-
         self.assertIn("id: migration", self.text)
         self.assertIn("continue-on-error: true", self.text)
         self.assertIn(diagnostics_marker, self.text)
@@ -51,6 +50,15 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         self.assertIn("Verify Cloud Run health", self.text)
         self.assertIn("Verify Cloud Run database readiness", self.text)
         self.assertIn("Verify unauthenticated API is application-protected", self.text)
+
+    def test_sqlite_backfill_acceptance_runs_after_cloud_domain_acceptance(self):
+        cloud_marker = "Run authenticated cloud-domain acceptance"
+        backfill_marker = "Run SQLite backfill runtime acceptance"
+        self.assertIn("BACKFILL_ACCEPTANCE_JOB: life-assistant-sqlite-backfill-acceptance", self.text)
+        self.assertIn("--args=-m,scripts.run_sqlite_backfill_acceptance", self.text)
+        self.assertIn(cloud_marker, self.text)
+        self.assertIn(backfill_marker, self.text)
+        self.assertLess(self.text.index(cloud_marker), self.text.index(backfill_marker))
 
 
 if __name__ == "__main__":

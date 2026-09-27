@@ -91,6 +91,8 @@ def classify_failure(exc: BaseException) -> int:
         return EXIT_RELEASE_REVISION
     if isinstance(exc, ReleaseAlembicError):
         return EXIT_RELEASE_ALEMBIC
+    if isinstance(exc, metadata_preflight.MetadataBootstrapApprovalRequiredError):
+        return metadata_preflight.EXIT_METADATA_BOOTSTRAP_APPROVAL_REQUIRED
     if isinstance(exc, note_links_fk_diagnosis.NoteLinksForeignKeyDiagnosisError):
         return NOTE_LINKS_FK_DIAGNOSTIC_EXIT_CODES.get(
             exc.reason,

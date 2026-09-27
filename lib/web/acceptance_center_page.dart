@@ -34,7 +34,7 @@ extension AcceptanceRunnerCleanup on AcceptanceRunner {
     }
     for (final id in remaining.calendarEventIds.toList()) {
       try {
-        await api.deleteCalendarEvent(id);
+        await deleteCalendarEventConfirmed(id);
         remaining.calendarEventIds.remove(id);
       } catch (_) {
         // Keep the id so the UI can report that cleanup is still incomplete.
@@ -156,9 +156,7 @@ class _AcceptanceCenterPageState extends ConsumerState<AcceptanceCenterPage> {
       if (!mounted) return;
       setState(() => _error = '重試清理失敗：$error');
     } finally {
-      if (mounted) {
-        setState(() => _cleaning = false);
-      }
+      if (mounted) setState(() => _cleaning = false);
     }
   }
 

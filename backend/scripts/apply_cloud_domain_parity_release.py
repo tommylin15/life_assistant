@@ -4,8 +4,9 @@
 The release flow may repair only the previously diagnosed missing projects
 indexes and projects.status server default. If the database is still
 unversioned afterward, targeted read-only diagnostics and the stronger
-metadata-bootstrap preflight run. Passing that preflight is intentionally a
-non-zero approval gate: this module contains no metadata write path.
+metadata-bootstrap preflight run. When that complete physical-schema preflight
+passes, a separately guarded, revision-scoped bootstrap may write only Alembic
+metadata before normal migration verification continues.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import asyncio
 import sys
 
 from scripts import apply_cloud_domain_parity_migration as migration
+from scripts import bootstrap_alembic_metadata as metadata_bootstrap
 from scripts import diagnose_note_links_foreign_keys as note_links_fk_diagnosis
 from scripts import preflight_alembic_metadata_bootstrap as metadata_preflight
 from scripts.reconcile_projects_indexes import (
@@ -98,9 +100,13 @@ async def main() -> None:
     ready_revision = await metadata_preflight.run_preflight()
     if ready_revision is not None:
         print(f"metadata_bootstrap_preflight=verified:{ready_revision}")
-        raise metadata_preflight.MetadataBootstrapApprovalRequiredError(
-            ready_revision
+        bootstrapped = await metadata_bootstrap.run_bootstrap()
+        print(
+            "metadata_bootstrap_applied="
+            + (ready_revision if bootstrapped else "already-versioned")
         )
+        # A missing or mismatched workflow approval remains fail-closed as
+        # MetadataBootstrapApprovalRequiredError (exit 50).
 
     await migration.main()
 

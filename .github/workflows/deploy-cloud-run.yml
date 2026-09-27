@@ -36,6 +36,7 @@ jobs:
       DATABASE_SSLMODE: require
       FRONTEND_URL: https://gen-lang-client-0593591102.web.app
       GOOGLE_REDIRECT_URI: https://gen-lang-client-0593591102.web.app/auth/callback
+      ALEMBIC_METADATA_BOOTSTRAP_APPROVED_REVISION: '20260926_0004'
 
     steps:
       - name: Checkout release commit
@@ -68,7 +69,7 @@ jobs:
             --vpc-egress private-ranges-only \
             --max-retries 0 \
             --task-timeout 10m \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,ALEMBIC_METADATA_BOOTSTRAP_APPROVED_REVISION=$ALEMBIC_METADATA_BOOTSTRAP_APPROVED_REVISION" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --wait \
             --quiet

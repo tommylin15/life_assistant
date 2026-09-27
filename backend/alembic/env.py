@@ -50,16 +50,19 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    locked = connection.dialect.name == "postgresql"
-    if locked:
-        connection.execute(text("SELECT pg_advisory_lock(:lock_id)"), {"lock_id": MIGRATION_LOCK_ID})
-    try:
-        context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
-        with context.begin_transaction():
-            context.run_migrations()
-    finally:
-        if locked:
-            connection.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": MIGRATION_LOCK_ID})
+    is_postgresql = connection.dialect.name == "postgresql"
+    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    # The advisory lock must live inside the same transaction Alembic owns.
+    # Executing a session-level lock before context.begin_transaction() makes
+    # SQLAlchemy autobegin a transaction; Alembic can then finish without
+    # committing its revision/DDL, and connection close rolls it back.
+    with context.begin_transaction():
+        if is_postgresql:
+            connection.execute(
+                text("SELECT pg_advisory_xact_lock(:lock_id)"),
+                {"lock_id": MIGRATION_LOCK_ID},
+            )
+        context.run_migrations()
 
 
 async def run_async_migrations() -> None:

@@ -119,13 +119,18 @@
 - [x] Task target schema 存在。
 - [x] Project target schema 存在。
 - [x] Note / Habit / Shopping / Template 必要 target schema 完成並在 dev-test runtime 驗證。
-- [ ] deterministic export。
-- [ ] dev/test import / upsert。
-- [ ] rerun 不重複。
-- [ ] row counts / key relationships / critical fields verification。
-- [ ] failure 不破壞 SQLite source。
-- [ ] success / partial success / failure result evidence。
-- [ ] runtime migration evidence。
+- [x] Checklist / Tags / Reminders / legacy attachment metadata / Calendar ref / Gmail ref / legacy activity / key-value state / migration ledger target schema 完成。
+- [x] deterministic export implementation + synthetic runtime evidence。
+- [x] dev/test import / upsert runtime evidence。
+- [x] rerun 不重複：第二次 import `inserted=0`、全部轉為 idempotent skip。
+- [x] row counts / key relationships / critical fields synthetic runtime verification。
+- [x] failure 不破壞 SQLite source 的 implementation contract；PostgreSQL import 以 transaction 執行。
+- [x] success result / execution-log runtime evidence。
+- [ ] failure execution-log runtime evidence。
+- [x] synthetic dev-test runtime migration evidence。
+- [ ] 真實使用者 historical SQLite source 已定位並完成 backup / migration / verification。
+
+> 詳細證據見 `doc/sqlite_postgres_backfill_progress.md`。目前 migration tooling / synthetic dev-test acceptance 為 PASS；但允許的 Drive root `life_assistantGPT` 尚未找到實際 `life_assistant.db` / backup，因此 **Real historical user-data migration = NOT VERIFIED**，不可宣稱真實歷史資料已搬完。
 
 ## 其他 Cloud Domain
 
@@ -187,17 +192,30 @@ Legacy SQLite 同名能力不等於 Cloud acceptance；上述 `[x]` 依 Cloud Do
 - Authenticated Cloud Domain runtime acceptance execution `life-assistant-cloud-domain-acceptance-55ng2`：PASS。
 - Note / Habit / Shopping / Template persistence、Project relation guard、execution log、exact-ID cleanup：PASS。
 - Cloud Domain Parity Task 1–8：DONE / PASS。
-- Historical SQLite → PostgreSQL user-data backfill：仍為 NOT VERIFIED，為下一個獨立 Phase 1 migration scope。
+
+### SQLite → PostgreSQL synthetic backfill checkpoint — 2026-09-27
+
+- Functional release SHA：`b968b7fa2347bed5db9fab6a75bd6a09c573844d`。
+- CI #279 / run `36308905055`：PASS；backend / Alembic offline chain / backend tests / deployment scripts / Flutter analyze-test-build-branding 全 PASS。
+- Firebase Hosting #178 / run `36309008418`：PASS。
+- Cloud Run #232 / run `36309008422`：PASS。
+- verified database migration：PASS。
+- backend deploy、`/health`、`/ready`、unauthenticated API 401 protection：PASS。
+- authenticated Cloud Domain acceptance：PASS。
+- SQLite backfill synthetic runtime acceptance：PASS。
+- Alembic online migration transaction boundary 已修正：`pg_advisory_xact_lock` 在 `context.begin_transaction()` 內取得，並有 contract test 防 regression。
+- 真實使用者 historical SQLite source：NOT VERIFIED；目前沒有可執行的實際 source file evidence。
 
 ## Phase 1 Status
 
-**PARTIAL**。Cloud target schema/API/runtime parity 已完成，但 Phase 1 仍不可標 DONE，主要缺口：
+**PARTIAL**。Cloud target schema/API/runtime parity 與 SQLite→PostgreSQL migration tooling / synthetic runtime acceptance 已完成，但 Phase 1 仍不可標 DONE，主要缺口：
 
-- Historical SQLite → PostgreSQL deterministic export / import / rerun / verification / runtime migration evidence。
+- Real historical SQLite user-data migration：尚未取得實際 source file，故 NOT VERIFIED。
+- SQLite backfill failure-path runtime audit evidence。
 - Calendar 真實 read/list 與 Google provider failure / partial-success runtime evidence。
 - authorization / confirmation / idempotency policy。
 - Bridge/MCP Release Gate。
-- Task checklist /完整 Web UX、Notes search、Attachment strategy 等剩餘 Phase 1 product acceptance。
+- Task checklist / 完整 Web UX、Notes search、Attachment strategy 等剩餘 Phase 1 product acceptance。
 
 ## Phase 1 不阻塞項目
 

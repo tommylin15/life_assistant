@@ -58,6 +58,7 @@
 - [x] delete API。
 - [x] create/update/delete execution audit baseline。
 - [x] delete capability risk metadata = `destructive_external` / `explicit_user`。
+- [x] Acceptance Center 已補 create → update → list/read → delete 驗收流程並部署。
 
 ### Final integration acceptance
 
@@ -65,6 +66,7 @@
 - [x] 真實帳號 create PASS。
 - [x] 真實帳號 update PASS。
 - [x] 真實帳號 delete PASS。
+- [x] synthetic provider failure → execution evidence runtime PASS。
 - [ ] 真實 provider failure 有 execution evidence。
 - [ ] destructive confirmation enforcement PASS。
 
@@ -85,7 +87,8 @@
 - [x] Gmail → Task PASS。
 - [x] Gmail → Calendar PASS。
 - [x] Gmail → Project PASS。
-- [ ] Gmail provider failure → execution evidence PASS。
+- [x] synthetic Gmail provider failure → execution evidence runtime PASS，且失敗時不建立 Task。
+- [ ] 真實 Gmail provider failure → execution evidence PASS。
 
 ## Google Drive
 
@@ -99,7 +102,8 @@
 ### Final integration acceptance
 
 - [x] 真實帳號 Drive Bridge ensure PASS。
-- [ ] failure / partial-success execution evidence PASS。
+- [x] synthetic root-success / bridge-failure → `partial_success` execution evidence runtime PASS。
+- [ ] 真實 provider failure / partial-success execution evidence PASS。
 
 ## Backend Error / Audit
 
@@ -111,6 +115,7 @@
 - [x] audit finalize failure 有 `audit_finalize_failed`，不包裝成 full success。
 - [x] `/api/v1/activity` authenticated API baseline。
 - [x] 真實 Google mutation success → activity end-to-end runtime PASS。
+- [x] synthetic Google mutation failure / partial-success → activity end-to-end runtime PASS。
 - [ ] 真實 Google mutation failure / partial-success → activity end-to-end runtime PASS。
 
 ## SQLite → PostgreSQL Migration
@@ -210,13 +215,33 @@ Legacy SQLite 同名能力不等於 Cloud acceptance；上述 `[x]` 依 Cloud Do
 - Migration tooling / synthetic runtime：DONE / PASS。
 - 真實使用者 historical SQLite source：NOT VERIFIED；目前沒有可執行的實際 source file evidence。
 
+### Calendar read/list readiness + Google synthetic failure checkpoint — 2026-09-27
+
+- Calendar Acceptance Center implementation commit：`0e5c39a802b93f8c8474031315b4928b8a14cf04`；analyzer follow-up fix：`57c02fa7436f8e3da5b38e2f95591545ef350e7c`。
+- CI #282 / run `36323289613`：PASS；backend / Alembic / deployment scripts / Flutter Analyze / Test / Web build / branding 全 PASS。
+- Firebase Hosting #181 / run `36323402003`：PASS。
+- Cloud Run #235 / run `36323401985`：PASS；migration / deploy / health / ready / 401 / Cloud Domain / SQLite success+failure gates 全 PASS。
+- Calendar Acceptance Center 已能對測試 event 執行 create → update → list/read 同 event ID + current summary → delete；但**尚未由使用者真實 Google 帳號重新執行此新版流程**，故「真實帳號 Calendar read」仍為 NOT VERIFIED。
+- Google synthetic failure gate release SHA：`2ba53d0a2cb7916aaa3f71d4e0727357706fc83c`。
+- CI #283 / run `36328471745`：PASS；backend / deployment scripts / Flutter Analyze / Test / Web build / branding 全 PASS。
+- Firebase Hosting #182 / run `36328601966`：PASS。
+- Cloud Run #236 / run `36328601944`：PASS。
+- PostgreSQL migration execution `life-assistant-db-migrate-lz8zx`：PASS。
+- Cloud Run revision `life-assistant-api-00073-lcb`：100% traffic；`/health` = `{"status":"ok"}`、`/ready` = `{"status":"ok","database":"ok"}`、unauthenticated API 401 protection PASS。
+- Authenticated Cloud Domain acceptance execution `life-assistant-cloud-domain-acceptance-2thsn`：PASS。
+- Google failure-path runtime acceptance execution `life-assistant-google-failure-acceptance-tfdf4`：PASS。
+- 該 runner 使用真實 FastAPI + 真實 PostgreSQL，只替換 outbound Google provider call 做 deterministic failure injection；驗證 Calendar `failure`、Gmail `failure` + no internal Task write、Drive root-success / bridge-failure → `partial_success`、`http_503` error category、`/activity` readback、request/finish metadata 與 exact cleanup。任一 assertion 失敗 runner 即 exit 1；本次 Cloud Run Job 成功完成。
+- SQLite success-path execution `life-assistant-sqlite-backfill-acceptance-cwvwn`：PASS；failure-path execution `life-assistant-sqlite-backfill-failure-acceptance-xgs8m`：PASS。
+- Cloud Run deploy 仍出現既有非阻塞 `--allow-unauthenticated` IAM policy re-apply warning；revision 仍成功 100% serving，health/ready/401 checks PASS，未做額外 IAM 變更。
+- **Synthetic Google failure / partial-success runtime：DONE / PASS。真實 Google provider failure / partial-success：NOT VERIFIED。**
+
 ## Phase 1 Status
 
-**PARTIAL**。Cloud target schema/API/runtime parity 與 SQLite→PostgreSQL migration tooling / synthetic runtime acceptance 已完成，但 Phase 1 仍不可標 DONE，主要缺口：
+**PARTIAL**。Cloud target schema/API/runtime parity、SQLite→PostgreSQL migration tooling / synthetic runtime acceptance，以及 Google provider synthetic failure / partial-success runtime acceptance 已完成，但 Phase 1 仍不可標 DONE，主要缺口：
 
 - Real historical SQLite user-data migration：尚未取得實際 source file，故 NOT VERIFIED。
-- Calendar 真實 read/list 與 Google provider failure / partial-success runtime evidence。
-- authorization / confirmation / idempotency policy。
+- Calendar 真實帳號 read/list 尚未以新版 Acceptance Center 重跑；真實 Google provider failure / Drive partial-success 仍 NOT VERIFIED（synthetic failure-path runtime 已 PASS）。
+- authorization / confirmation / idempotency policy，包含 destructive confirmation enforcement。
 - Bridge/MCP Release Gate。
 - Task checklist / 完整 Web UX、Notes search、Attachment strategy 等剩餘 Phase 1 product acceptance。
 

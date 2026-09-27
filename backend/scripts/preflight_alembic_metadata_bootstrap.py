@@ -273,6 +273,18 @@ def _normalize_index_definition(definition: str) -> str:
     return _SIMPLE_QUOTED_IDENTIFIER.sub(r"\1", normalized)
 
 
+def _normalize_pg_internal_char(value: object) -> str:
+    """Normalize pg_catalog internal \"char\" values across async drivers."""
+
+    if isinstance(value, bytes):
+        return value.decode("ascii")
+    if isinstance(value, bytearray):
+        return bytes(value).decode("ascii")
+    if isinstance(value, memoryview):
+        return value.tobytes().decode("ascii")
+    return str(value)
+
+
 def validate_required_indexes(table: str, actual_index_defs: dict[str, str]) -> None:
     for index_name, expected_definition in EXPECTED_REQUIRED_INDEX_DEFINITIONS[table].items():
         actual_definition = actual_index_defs.get(index_name)
@@ -348,8 +360,8 @@ async def _foreign_key_contracts(
             str(row.local_column),
             str(row.foreign_table),
             str(row.foreign_column),
-            str(row.update_action),
-            str(row.delete_action),
+            _normalize_pg_internal_char(row.update_action),
+            _normalize_pg_internal_char(row.delete_action),
             bool(row.condeferrable),
             bool(row.condeferred),
             bool(row.convalidated),

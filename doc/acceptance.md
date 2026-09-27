@@ -124,13 +124,14 @@
 - [x] dev/test import / upsert runtime evidence。
 - [x] rerun 不重複：第二次 import `inserted=0`、全部轉為 idempotent skip。
 - [x] row counts / key relationships / critical fields synthetic runtime verification。
-- [x] failure 不破壞 SQLite source 的 implementation contract；PostgreSQL import 以 transaction 執行。
+- [x] failure 不破壞 SQLite source：runtime 故障注入後 before/after export 完全一致。
+- [x] PostgreSQL failure transaction rollback runtime evidence：collision 後 Task / migration ledger 無殘留。
 - [x] success result / execution-log runtime evidence。
-- [ ] failure execution-log runtime evidence。
-- [x] synthetic dev-test runtime migration evidence。
+- [x] failure execution-log runtime evidence：`TargetCollisionError` → `failure / failed`。
+- [x] success/failure synthetic dev-test runtime migration evidence與 exact-ID cleanup。
 - [ ] 真實使用者 historical SQLite source 已定位並完成 backup / migration / verification。
 
-> 詳細證據見 `doc/sqlite_postgres_backfill_progress.md`。目前 migration tooling / synthetic dev-test acceptance 為 PASS；但允許的 Drive root `life_assistantGPT` 尚未找到實際 `life_assistant.db` / backup，因此 **Real historical user-data migration = NOT VERIFIED**，不可宣稱真實歷史資料已搬完。
+> 詳細證據見 `doc/sqlite_postgres_backfill_progress.md`。目前 **migration tooling / synthetic dev-test runtime = DONE / PASS**；但允許的 Drive root `life_assistantGPT` 尚未找到實際 `life_assistant.db` / backup，因此 **Real historical user-data migration = NOT VERIFIED**，不可宣稱真實歷史資料已搬完。
 
 ## 其他 Cloud Domain
 
@@ -195,15 +196,18 @@ Legacy SQLite 同名能力不等於 Cloud acceptance；上述 `[x]` 依 Cloud Do
 
 ### SQLite → PostgreSQL synthetic backfill checkpoint — 2026-09-27
 
-- Functional release SHA：`b968b7fa2347bed5db9fab6a75bd6a09c573844d`。
-- CI #279 / run `36308905055`：PASS；backend / Alembic offline chain / backend tests / deployment scripts / Flutter analyze-test-build-branding 全 PASS。
-- Firebase Hosting #178 / run `36309008418`：PASS。
-- Cloud Run #232 / run `36309008422`：PASS。
+- Base migration release SHA：`b968b7fa2347bed5db9fab6a75bd6a09c573844d`。
+- Failure-path acceptance release SHA：`fb59f013bce430c5643b2ebf2f5df7fe8729ddad`。
+- CI #280 / run `36321693983`：PASS；backend / Alembic offline chain / backend tests / deployment scripts / Flutter analyze-test-build-branding 全 PASS。
+- Firebase Hosting #179 / run `36321800021`：PASS。
+- Cloud Run #233 / run `36321800086`：PASS。
 - verified database migration：PASS。
 - backend deploy、`/health`、`/ready`、unauthenticated API 401 protection：PASS。
 - authenticated Cloud Domain acceptance：PASS。
-- SQLite backfill synthetic runtime acceptance：PASS。
+- SQLite backfill success-path runtime acceptance：PASS。
+- SQLite backfill failure-path runtime acceptance：PASS；驗證 source-preservation、transaction rollback、failure audit、exact cleanup。
 - Alembic online migration transaction boundary 已修正：`pg_advisory_xact_lock` 在 `context.begin_transaction()` 內取得，並有 contract test 防 regression。
+- Migration tooling / synthetic runtime：DONE / PASS。
 - 真實使用者 historical SQLite source：NOT VERIFIED；目前沒有可執行的實際 source file evidence。
 
 ## Phase 1 Status
@@ -211,7 +215,6 @@ Legacy SQLite 同名能力不等於 Cloud acceptance；上述 `[x]` 依 Cloud Do
 **PARTIAL**。Cloud target schema/API/runtime parity 與 SQLite→PostgreSQL migration tooling / synthetic runtime acceptance 已完成，但 Phase 1 仍不可標 DONE，主要缺口：
 
 - Real historical SQLite user-data migration：尚未取得實際 source file，故 NOT VERIFIED。
-- SQLite backfill failure-path runtime audit evidence。
 - Calendar 真實 read/list 與 Google provider failure / partial-success runtime evidence。
 - authorization / confirmation / idempotency policy。
 - Bridge/MCP Release Gate。

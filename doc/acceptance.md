@@ -1,6 +1,6 @@
 # 生活助理 App v0.1 — Acceptance Criteria
 
-最後更新：2026-09-26
+最後更新：2026-09-27
 
 > 本文件定義 Phase 1 Platform Release Gate。`[x]` 只代表該條要求層級已有足夠 evidence；Implementation / CI / Deployment PASS 不自動等於 Runtime / Integration PASS。
 
@@ -33,6 +33,7 @@
 - [x] list / create / get / update / delete API。
 - [x] create / update / delete execution audit。
 - [x] delete 有 linked Task 時回 409，避免 orphan。
+- [x] delete guard 已擴充 linked Note / Shopping List reference。
 - [x] `gmail.to_project` capability implementation。
 - [x] CI #154 PASS。
 - [x] Cloud Run #123 deployment / health / ready / 401 verification PASS。
@@ -43,8 +44,9 @@
 - [x] Project persistence / reread runtime PASS。
 - [x] Gmail → Project true-account runtime PASS。
 - [x] Project mutation → `/activity` end-to-end evidence PASS。
+- [x] linked Note / Shopping List Project delete guard runtime PASS。
 
-> migration file 已 CI 驗證；目前 deployment workflow 沒有 production `alembic upgrade` evidence，因此不得把「Alembic production apply」標成 PASS。
+> Cloud Domain Parity final release 已在 GitHub Actions `dev-test` environment 完成 Alembic migration gate 與 Cloud Run runtime acceptance。此證據不代表另有一套未定義的 production environment 已驗證。
 
 ## Google Calendar
 
@@ -116,7 +118,7 @@
 - [x] Legacy SQLite source 保留，未 drop / 清空。
 - [x] Task target schema 存在。
 - [x] Project target schema 存在。
-- [ ] Note / Habit / Shopping / Template 等必要 target schema 完成。
+- [x] Note / Habit / Shopping / Template 必要 target schema 完成並在 dev-test runtime 驗證。
 - [ ] deterministic export。
 - [ ] dev/test import / upsert。
 - [ ] rerun 不重複。
@@ -127,13 +129,14 @@
 
 ## 其他 Cloud Domain
 
-- [ ] Note CRUD / search。
-- [ ] Habit + completion log。
-- [ ] Shopping list/items。
-- [ ] Template API。
+- [x] Note CRUD / links Cloud API + persistence runtime acceptance。
+- [ ] Notes full-text search Cloud implementation（Cloud Domain Parity 設計明確排除於該批次）。
+- [x] Habit + completion log Cloud API + persistence runtime acceptance。
+- [x] Shopping list/items Cloud API + persistence runtime acceptance。
+- [x] Template API + opaque `payload_json` round-trip runtime acceptance。
 - [ ] Attachment central storage/reference strategy。
 
-Legacy SQLite 同名能力不等於 Cloud acceptance。
+Legacy SQLite 同名能力不等於 Cloud acceptance；上述 `[x]` 依 Cloud Domain Parity final runtime evidence 判定。
 
 ## ChatGPT Bridge / MCP
 
@@ -158,7 +161,9 @@ Legacy SQLite 同名能力不等於 Cloud acceptance。
 - [ ] destructive/sensitive action final policy gate。
 - [ ] Cloud mutation idempotency policy。
 
-## Release Evidence Snapshot — 2026-09-26
+## Release Evidence Snapshot — 2026-09-27
+
+### True-account integration checkpoint — 2026-09-26
 
 - Acceptance Center / Drive integration final commit `7f7da43eacce23054c91429bceaf39b536c8a75c`。
 - CI #186：PASS；Flutter Analyze / Test / Build Web / branding verification PASS，13 tests PASS。
@@ -170,16 +175,29 @@ Legacy SQLite 同名能力不等於 Cloud acceptance。
 - 使用者真實帳號驗收：Drive Bridge ensure PASS。
 - Acceptance Center Activity Log evidence PASS；`[ACCEPTANCE TEST]` 測試資料 cleanup PASS。
 - 尚未由本次真實驗收覆蓋：Calendar list/read、真實 provider failure / Drive partial-success、destructive confirmation enforcement。
-- SQLite → PostgreSQL full migration：NOT VERIFIED。
+
+### Cloud Domain Parity final checkpoint — 2026-09-27
+
+- Functional release SHA：`19b56fb0a865b4e5b6260c13a40e04e66ef64676`。
+- CI #275 / run `36289075250`：PASS。
+- Firebase Hosting #174 / run `36289173006`：PASS。
+- Cloud Run #228 / run `36289173011`：PASS。
+- PostgreSQL migration execution `life-assistant-db-migrate-h67ll`：PASS。
+- Cloud Run revision `life-assistant-api-00069-rz7`：100% traffic；`/health`、`/ready`、unauthenticated API 401 protection PASS。
+- Authenticated Cloud Domain runtime acceptance execution `life-assistant-cloud-domain-acceptance-55ng2`：PASS。
+- Note / Habit / Shopping / Template persistence、Project relation guard、execution log、exact-ID cleanup：PASS。
+- Cloud Domain Parity Task 1–8：DONE / PASS。
+- Historical SQLite → PostgreSQL user-data backfill：仍為 NOT VERIFIED，為下一個獨立 Phase 1 migration scope。
 
 ## Phase 1 Status
 
-**PARTIAL**。真實帳號 success-path integration 已跨過主要 gate，但尚不可標 DONE，主要缺口：
+**PARTIAL**。Cloud target schema/API/runtime parity 已完成，但 Phase 1 仍不可標 DONE，主要缺口：
 
+- Historical SQLite → PostgreSQL deterministic export / import / rerun / verification / runtime migration evidence。
 - Calendar 真實 read/list 與 Google provider failure / partial-success runtime evidence。
-- remaining Cloud target schemas + full SQLite migration evidence。
 - authorization / confirmation / idempotency policy。
 - Bridge/MCP Release Gate。
+- Task checklist /完整 Web UX、Notes search、Attachment strategy 等剩餘 Phase 1 product acceptance。
 
 ## Phase 1 不阻塞項目
 

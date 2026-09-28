@@ -39,6 +39,8 @@ ACCEPTANCE_USER = {
 LAST_PASSED_CHECK = "bootstrap"
 FAILURE_EXIT_CODES = {
     "bootstrap": 41,
+    "project_create": 51,
+    "note_a_create": 52,
     "project_delete_guard_note": 42,
     "note_crud_link_persistence": 43,
     "project_delete_guard_shopping": 44,
@@ -204,6 +206,7 @@ async def run_acceptance() -> None:
             project_id = _json(response, "project create")["id"]
             artifacts.project_ids.add(project_id)
             expected_activity.add(("project.create", project_id))
+            _record("project_create")
 
             response = await client.post(
                 "/api/v1/notes",
@@ -213,6 +216,7 @@ async def run_acceptance() -> None:
             note_a = _json(response, "note A create")["id"]
             artifacts.note_ids.add(note_a)
             expected_activity.add(("note.create", note_a))
+            _record("note_a_create")
 
             response = await client.delete(f"/api/v1/projects/{project_id}")
             _expect(response, 409, "project linked-note delete guard")

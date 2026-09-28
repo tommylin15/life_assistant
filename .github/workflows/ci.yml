@@ -117,3 +117,4 @@ jobs:
           bash -n scripts/inspect_postgres_dev.sh
           bash -n scripts/diagnose_db_secret.sh
           bash -n scripts/rotate_google_oauth_secret.sh
+          bash -n .github/scripts/run_cloud_run_job_with_diagnostics.sh

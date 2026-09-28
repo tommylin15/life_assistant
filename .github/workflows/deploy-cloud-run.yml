@@ -245,7 +245,8 @@ jobs:
 
       - name: Run authenticated cloud-domain acceptance
         run: |
-          gcloud run jobs deploy "$ACCEPTANCE_JOB" \
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$ACCEPTANCE_JOB" \
+            gcloud run jobs deploy "$ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --image "${{ steps.backend_image.outputs.ref }}" \
@@ -263,7 +264,8 @@ jobs:
 
       - name: Run action-id idempotency runtime acceptance
         run: |
-          gcloud run jobs deploy "$IDEMPOTENCY_ACCEPTANCE_JOB" \
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$IDEMPOTENCY_ACCEPTANCE_JOB" \
+            gcloud run jobs deploy "$IDEMPOTENCY_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --image "${{ steps.backend_image.outputs.ref }}" \
@@ -281,7 +283,8 @@ jobs:
 
       - name: Run Google provider failure-path runtime acceptance
         run: |
-          gcloud run jobs deploy "$GOOGLE_FAILURE_ACCEPTANCE_JOB" \
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$GOOGLE_FAILURE_ACCEPTANCE_JOB" \
+            gcloud run jobs deploy "$GOOGLE_FAILURE_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --image "${{ steps.backend_image.outputs.ref }}" \
@@ -299,7 +302,8 @@ jobs:
 
       - name: Run SQLite backfill runtime acceptance
         run: |
-          gcloud run jobs deploy "$BACKFILL_ACCEPTANCE_JOB" \
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$BACKFILL_ACCEPTANCE_JOB" \
+            gcloud run jobs deploy "$BACKFILL_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --image "${{ steps.backend_image.outputs.ref }}" \
@@ -317,7 +321,8 @@ jobs:
 
       - name: Run SQLite backfill failure-path runtime acceptance
         run: |
-          gcloud run jobs deploy "$BACKFILL_FAILURE_ACCEPTANCE_JOB" \
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$BACKFILL_FAILURE_ACCEPTANCE_JOB" \
+            gcloud run jobs deploy "$BACKFILL_FAILURE_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --image "${{ steps.backend_image.outputs.ref }}" \

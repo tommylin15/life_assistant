@@ -6,6 +6,7 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "deploy-cloud-run.yml"
 CLEANUP_POLICY = REPO_ROOT / ".github" / "artifact-registry-cleanup-policy.json"
+DIAGNOSTIC_WRAPPER = REPO_ROOT / ".github" / "scripts" / "run_cloud_run_job_with_diagnostics.sh"
 
 
 class DeployCloudRunWorkflowContractTests(unittest.TestCase):
@@ -25,6 +26,16 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         self.assertIn("BUILD_STATUS", self.text)
         self.assertNotIn("--source backend", self.text)
         self.assertEqual(self.text.count(shared_image_ref), 7)
+
+    def test_acceptance_jobs_collect_runtime_diagnostics_on_failure(self):
+        wrapper_call = ".github/scripts/run_cloud_run_job_with_diagnostics.sh"
+        self.assertTrue(DIAGNOSTIC_WRAPPER.is_file())
+        self.assertEqual(self.text.count(wrapper_call), 5)
+        wrapper = DIAGNOSTIC_WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("gcloud run jobs executions list", wrapper)
+        self.assertIn("gcloud run jobs executions tasks list", wrapper)
+        self.assertIn("status.lastAttemptResult.exitCode", wrapper)
+        self.assertIn("gcloud logging read", wrapper)
 
     def test_cleanup_policy_retains_only_latest_shared_backend_image(self):
         policies = json.loads(CLEANUP_POLICY.read_text(encoding="utf-8"))

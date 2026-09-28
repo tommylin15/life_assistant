@@ -39,6 +39,8 @@ class CloudDomainRuntimeAcceptanceContractTests(unittest.TestCase):
             "LAST_PASSED_CHECK",
             "FAILURE_EXIT_CODES",
             '"bootstrap": 41',
+            '"project_create": 51',
+            '"note_a_create": 52',
             '"project_delete_guard_note": 42',
             '"note_crud_link_persistence": 43',
             '"project_delete_guard_shopping": 44',

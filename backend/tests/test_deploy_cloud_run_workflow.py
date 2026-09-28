@@ -51,6 +51,10 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
             self.text.index("Run SQLite backfill failure-path runtime acceptance"),
             self.text.index("Keep only the latest life_assistant image"),
         )
+        self.assertIn(
+            "if: ${{ always() && steps.backend_image.outcome == 'success' }}",
+            self.text,
+        )
 
     def test_runtime_migration_gate_runs_before_service_deploy(self):
         migration_marker = "Apply verified database migration"

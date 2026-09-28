@@ -78,6 +78,7 @@ jobs:
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --tag "$IMAGE_TAG" \
+            --suppress-logs \
             --quiet \
             --format='value(results.images[0].digest)' | tail -n1)"
           test -n "$IMAGE_DIGEST"

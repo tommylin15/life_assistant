@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run action-id idempotency acceptance against the dev-test PostgreSQL database."""
+"""Run action-id idempotency and destructive-policy acceptance in dev-test."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import httpx
 from sqlalchemy import delete, select
 
 from app.api.auth import current_user
+from app.confirmation import CONFIRMATION_HEADER, explicit_confirmation_value
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.execution_log import ExecutionLog
@@ -26,6 +27,7 @@ ACCEPTANCE_USER = {
 }
 ACTION_ID = f"project-create-{RUN_ID}"
 PROJECT_NAME = f"[ACCEPTANCE TEST] Idempotency Project {RUN_ID}"
+POLICY_COOKIE = {"__session": "id:synthetic-acceptance-session"}
 
 
 async def _acceptance_user() -> dict:
@@ -178,6 +180,46 @@ async def run_acceptance() -> None:
             _record("action_id_single_activity_row")
 
             await _verify_database(project_id)
+
+            project_path = f"/api/v1/projects/{project_id}"
+            blocked = await client.delete(project_path, cookies=POLICY_COOKIE)
+            _expect_error(
+                blocked,
+                409,
+                "confirmation_required",
+                "project delete confirmation gate",
+            )
+            _record("project_delete_confirmation_required")
+
+            wrong_target = await client.delete(
+                project_path,
+                cookies=POLICY_COOKIE,
+                headers={
+                    CONFIRMATION_HEADER: explicit_confirmation_value(
+                        "project.delete", "different-project"
+                    )
+                },
+            )
+            _expect_error(
+                wrong_target,
+                409,
+                "confirmation_required",
+                "project delete target-bound confirmation",
+            )
+            _record("project_delete_confirmation_target_bound")
+
+            confirmed = await client.delete(
+                project_path,
+                cookies=POLICY_COOKIE,
+                headers={
+                    CONFIRMATION_HEADER: explicit_confirmation_value(
+                        "project.delete", project_id
+                    )
+                },
+            )
+            _expect(confirmed, 204, "confirmed project delete")
+            _record("project_delete_explicit_confirmation")
+            project_id = None
     except BaseException as exc:
         primary_error = exc
     finally:
@@ -197,6 +239,7 @@ async def run_acceptance() -> None:
     if primary_error is not None:
         raise primary_error
     print("idempotency_runtime_acceptance=PASS", flush=True)
+    print("destructive_policy_runtime_acceptance=PASS", flush=True)
 
 
 def main() -> int:

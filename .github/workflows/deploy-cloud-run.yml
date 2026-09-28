@@ -339,6 +339,7 @@ jobs:
             --quiet
 
       - name: Keep only the latest life_assistant image
+        if: ${{ always() && steps.backend_image.outcome == 'success' }}
         run: |
           gcloud artifacts repositories set-cleanup-policies "$ARTIFACT_REPOSITORY" \
             --project "$GCP_PROJECT_ID" \

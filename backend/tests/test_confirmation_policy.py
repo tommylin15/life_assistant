@@ -37,6 +37,28 @@ class ConfirmationPolicyTests(unittest.TestCase):
             )
         )
 
+    def test_project_delete_requires_action_and_target_bound_confirmation(self):
+        path = "/api/v1/projects/project-123"
+        self.assertEqual(
+            confirmation_requirement("DELETE", path),
+            ("project.delete", "project-123"),
+        )
+        self.assertFalse(confirmation_satisfied("DELETE", path, None))
+        self.assertFalse(
+            confirmation_satisfied(
+                "DELETE",
+                path,
+                explicit_confirmation_value("project.delete", "other-project"),
+            )
+        )
+        self.assertTrue(
+            confirmation_satisfied(
+                "DELETE",
+                path,
+                explicit_confirmation_value("project.delete", "project-123"),
+            )
+        )
+
     def test_non_destructive_requests_do_not_require_confirmation(self):
         self.assertIsNone(
             confirmation_requirement(
@@ -82,6 +104,19 @@ class ConfirmationPolicyTests(unittest.TestCase):
             },
         )
         self.assertEqual(response.headers["X-Request-ID"], "confirmation-required")
+
+    def test_authenticated_project_delete_without_confirmation_is_blocked_before_database(self):
+        response = client.delete(
+            "/api/v1/projects/project-123",
+            cookies={"__session": "id:synthetic-session"},
+            headers={"X-Request-ID": "project-confirmation-required"},
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["error"]["code"], "confirmation_required")
+        self.assertEqual(
+            response.headers["X-Request-ID"],
+            "project-confirmation-required",
+        )
 
     def test_wrong_target_confirmation_is_rejected(self):
         response = client.delete(

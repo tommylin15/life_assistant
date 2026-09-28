@@ -105,7 +105,12 @@ class ApiClient implements AcceptanceApi, ConfirmedCalendarDeleteApi {
   @override
   Future<void> deleteProject(String id) async {
     final encoded = Uri.encodeComponent(id);
-    final res = await _client.delete(_apiUri('/projects/$encoded'));
+    final res = await _client.delete(
+      _apiUri('/projects/$encoded'),
+      headers: {
+        'X-Life-Assistant-Confirmation': 'explicit_user:project.delete:$id',
+      },
+    );
     if (res.statusCode != 204) _check(res.statusCode, res.body);
   }
 

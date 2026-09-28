@@ -12,20 +12,7 @@
 
 `life_assistant` **不是**通用 Agent orchestration 平台；LangGraph、Global Tool Registry、Workflow Registry、Agent Runtime、Agent Worker 與跨系統 multi-tool orchestration 由獨立的 `omniAgent` 專案負責。
 
-v0.1 先把日常生活中的：
-
-- 待辦
-- 行程
-- Gmail 重要事項
-- 提醒
-- 生活專案
-- 習慣／例行事項
-- 採買
-- 筆記／知識庫
-- 附件
-- 執行紀錄
-
-集中到單一介面，並透過明確規則與外部整合增加智慧性。
+v0.1 先把日常生活中的待辦、行程、Gmail 重要事項、提醒、生活專案、習慣／例行事項、採買、筆記／知識庫、附件與執行紀錄集中到單一介面，並透過明確規則與外部整合增加智慧性。
 
 ## 目前 Phase 1 技術方向
 
@@ -55,41 +42,24 @@ PostgreSQL
 - 單人使用優先
 - Android / iOS 封裝延後到 Web/PWA 與 Backend 穩定後
 
-## Release Strategy
+## 現行交付順序
 
-目前採以下順序：
+Phase 1 不再採「所有底層項目全部清零後才開始 UI」。目前正式執行順序以 [`doc/phase1_delivery_order.md`](doc/phase1_delivery_order.md) 為準：
 
-### Phase 1 — Platform Release
+1. 收尾 Cloud mutation idempotency 的 release/runtime evidence。
+2. 收斂 authorization / minimum-permission + destructive/sensitive policy 核心版。
+3. 完成 Checklist Cloud 主線。
+4. 立即進 UI Vertical Slice A：App Shell → Task 完整 UX → Project UX。
+5. 再依序產品化 Notes（同批補 full-text search）→ Habits → Shopping → Calendar → Activity / Integrations。
+6. Bridge/MCP 完整化、真實 provider failure、完整 attachment strategy、真實歷史 SQLite migration 等非直接 UI dependency，不再無限期阻塞主要 UI。
 
-先完成並上線目前 Web / Cloud 主線：
+使用者功能的完成判定採 vertical slice：除了 implementation / tests / CI / deployment / runtime / integration，還必須有 UI entry、可操作 flow，以及 mobile / desktop UX acceptance，才可標示產品層 DONE。
 
-- Flutter Web / PWA
-- FastAPI / Cloud Run
-- PostgreSQL
-- SQLite → PostgreSQL migration
-- Google integrations
-- ChatGPT Bridge Backend / MCP baseline
-- security / logging / observability
+## Phase 1.5 / Phase 2
 
-Phase 1 採 **scope freeze**。可持續做未來功能的研究、UX、schema proposal 與 API contract proposal，但不因新的 Life OS 構想持續擴張第一次上線範圍。
+Phase 1.5 以真實使用觀察首頁、提醒、routine、Gmail / Calendar / Task 轉換與跨頁摩擦；先修正 bug、資料一致性與高摩擦流程，再確認下一階段優先順序。
 
-### Phase 1.5 — Real-use Validation
-
-上線後以真實使用觀察首頁、提醒、routine、Gmail / Calendar / Task 轉換與跨頁摩擦；先修正 bug、資料一致性與高摩擦流程，再確認下一階段優先順序。
-
-### Phase 2 — Product Enhancement
-
-候選方向依序為：
-
-1. Today Cockpit
-2. Attention Model / Focus
-3. Routine Library
-4. Global Capture
-5. Plan
-6. Review
-7. Contextual AI entry points
-
-詳細方向見 [`doc/future_product_enhancements.md`](doc/future_product_enhancements.md)。
+Phase 2 候選方向依序為：Today Cockpit、Attention Model / Focus、Routine Library、Global Capture、Plan、Review、Contextual AI entry points。詳細方向見 [`doc/future_product_enhancements.md`](doc/future_product_enhancements.md)。
 
 ## life_assistant 與 omniAgent 邊界
 
@@ -129,24 +99,19 @@ Phase 1 採 **scope freeze**。可持續做未來功能的研究、UX、schema p
 - 若未來原生 App 需要離線能力，SQLite 可保留為 local/offline cache，但不再作為全系統中央主資料來源。
 - 既有 Google Drive ChatGPT Bridge 可保留作相容或 fallback integration，不代表未來仍以 Drive 檔案交換作唯一 Bridge 方式。
 
-## 文件索引
+## 文件入口
 
-- `doc/spec.md`：產品與功能規格
-- `doc/architecture.md`：技術架構與模組邊界
-- `doc/project_boundary.md`：life_assistant / omniAgent 責任邊界
-- `doc/data_model.md`：PostgreSQL 目標資料模型與 SQLite 遷移對照
-- `doc/migration_spec.md`：SQLite → PostgreSQL 與 schema migration 規格
-- `doc/project_structure.md`：Flutter Web / Backend 模組邊界
-- `doc/acceptance.md`：目前 Phase 1 驗收條件
-- `doc/decisions.md`：目前已確認的重要產品與架構決策
-- `doc/progress.md`：既有實作與驗證進度
-- `doc/todo.md`：目前工作優先順序
-- `doc/wbs.md`：Phase 1 → 1.5 → 2 工作分解
-- `doc/future_product_enhancements.md`：上線後 Life OS / Compass 研究吸收方向
-- `doc/design_system.md`：UI / UX 與設計系統
-- `doc/integrations.md`：Google / Drive / Bridge / MCP 整合
-- `doc/security.md`、`doc/permissions.md`：權限、安全與隱私規格
-- `doc/coding_rules.md`：開發規則與 Definition of Done
+完整文件角色、優先層級與維護規則見 **[`doc/README.md`](doc/README.md)**。
+
+日常開發建議依序查看：
+
+1. [`doc/PROJECT_RULES.md`](doc/PROJECT_RULES.md) — 治理與完成判定
+2. [`doc/phase1_delivery_order.md`](doc/phase1_delivery_order.md) — 目前執行順序
+3. [`doc/acceptance.md`](doc/acceptance.md) — 現況與 evidence
+4. [`doc/release_checklist.md`](doc/release_checklist.md) — Phase 1 release gate
+5. [`doc/decisions.md`](doc/decisions.md) / [`doc/project_boundary.md`](doc/project_boundary.md) — 長期決策與專案邊界
+
+`doc/todo.md` 只保留 active backlog；`doc/progress.md` 只保留進度摘要；`doc/wbs.md` 是 scope decomposition，不代表目前排程。歷史批次與驗收文件保留供追溯，但不得覆蓋較新的 implementation/runtime evidence。
 
 ## Phase 1 成功標準
 
@@ -159,4 +124,4 @@ Phase 1 採 **scope freeze**。可持續做未來功能的研究、UX、schema p
 7. ChatGPT Bridge Backend / MCP 能在不繞過 life_assistant 權限與 validation 的前提下讀取或提出操作。
 8. life_assistant 可獨立完成，不以 omniAgent 的 LangGraph / Agent Runtime 完成為前置條件。
 9. Web/PWA 穩定後，再評估 Android / iOS 原生封裝與 SQLite offline cache。
-10. Today / Focus / Routine Library 等 Phase 2 強化功能**不作為 Phase 1 上線條件**。
+10. Today / Focus / Routine Library 等 Phase 2 強化功能不作為 Phase 1 上線條件。

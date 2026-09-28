@@ -36,6 +36,19 @@ ACCEPTANCE_USER = {
     "name": "Cloud Domain Parity Acceptance",
 }
 
+LAST_PASSED_CHECK = "bootstrap"
+FAILURE_EXIT_CODES = {
+    "bootstrap": 41,
+    "project_delete_guard_note": 42,
+    "note_crud_link_persistence": 43,
+    "project_delete_guard_shopping": 44,
+    "shopping_nested_persistence": 45,
+    "habit_append_history_persistence": 46,
+    "template_opaque_payload_persistence": 47,
+    "project_delete_after_unlink": 48,
+    "execution_log": 49,
+}
+
 
 @dataclass
 class AcceptanceArtifacts:
@@ -71,6 +84,8 @@ def _json(response: httpx.Response, label: str) -> dict:
 
 
 def _record(check: str) -> None:
+    global LAST_PASSED_CHECK
+    LAST_PASSED_CHECK = check
     print(f"acceptance_check={check}:PASS", flush=True)
 
 
@@ -431,4 +446,14 @@ async def run_acceptance() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(run_acceptance())
+    try:
+        asyncio.run(run_acceptance())
+    except BaseException as exc:
+        exit_code = FAILURE_EXIT_CODES.get(LAST_PASSED_CHECK, 50)
+        print(
+            f"acceptance_failure_phase={LAST_PASSED_CHECK}:"
+            f"{type(exc).__name__}:exit_code={exit_code}",
+            file=sys.stderr,
+            flush=True,
+        )
+        raise SystemExit(exit_code) from exc

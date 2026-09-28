@@ -39,6 +39,38 @@ class TaskOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ChecklistItemCreate(BaseModel):
+    title: str = Field(min_length=1)
+    sort_order: int | None = Field(default=None, ge=0)
+
+
+class ChecklistItemUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1)
+    is_done: bool | None = None
+    sort_order: int | None = Field(default=None, ge=0)
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one checklist field must be provided")
+        for field in self.model_fields_set:
+            if getattr(self, field) is None:
+                raise ValueError(f"Checklist {field} cannot be null")
+        return self
+
+
+class ChecklistItemOut(BaseModel):
+    id: str
+    task_id: str
+    title: str
+    is_done: bool
+    sort_order: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=500)
     summary: str | None = Field(default=None, max_length=10000)

@@ -262,6 +262,25 @@ jobs:
             --wait \
             --quiet
 
+      - name: Run checklist cloud runtime acceptance
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$ACCEPTANCE_JOB" \
+            gcloud run jobs deploy "$ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "${{ steps.backend_image.outputs.ref }}" \
+            --command python \
+            --args=-m,scripts.run_checklist_cloud_acceptance \
+            --network "$GCP_NETWORK" \
+            --subnet "$GCP_SUBNET" \
+            --vpc-egress private-ranges-only \
+            --max-retries 0 \
+            --task-timeout 10m \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
+            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --wait \
+            --quiet
+
       - name: Run action-id idempotency runtime acceptance
         run: |
           .github/scripts/run_cloud_run_job_with_diagnostics.sh "$IDEMPOTENCY_ACCEPTANCE_JOB" \

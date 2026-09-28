@@ -32,6 +32,26 @@ class CloudDomainRuntimeAcceptanceContractTests(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, source)
 
+    def test_runner_exposes_phase_exit_codes_without_cloud_logging(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        compile(source, str(SCRIPT), "exec")
+        for required in (
+            "LAST_PASSED_CHECK",
+            "FAILURE_EXIT_CODES",
+            '"bootstrap": 41',
+            '"project_delete_guard_note": 42',
+            '"note_crud_link_persistence": 43',
+            '"project_delete_guard_shopping": 44',
+            '"shopping_nested_persistence": 45',
+            '"habit_append_history_persistence": 46',
+            '"template_opaque_payload_persistence": 47',
+            '"project_delete_after_unlink": 48',
+            '"execution_log": 49',
+            "acceptance_failure_phase=",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, source)
+
     def test_deploy_workflow_runs_acceptance_after_runtime_health(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("ACCEPTANCE_JOB: life-assistant-cloud-domain-acceptance", workflow)

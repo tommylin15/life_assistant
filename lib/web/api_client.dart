@@ -62,6 +62,55 @@ class ApiClient implements AcceptanceApi, ConfirmedCalendarDeleteApi {
     if (res.statusCode != 204) _check(res.statusCode, res.body);
   }
 
+  Future<List<Map<String, dynamic>>> getChecklistItems(String taskId) async {
+    final task = Uri.encodeComponent(taskId);
+    final res = await _client.get(_apiUri('/tasks/$task/checklist'));
+    _check(res.statusCode, res.body);
+    return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createChecklistItem(
+    String taskId,
+    Map<String, dynamic> body, {
+    String? actionId,
+  }) async {
+    final task = Uri.encodeComponent(taskId);
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (actionId != null && actionId.isNotEmpty) {
+      headers['X-Life-Assistant-Action-ID'] = actionId;
+    }
+    final res = await _client.post(
+      _apiUri('/tasks/$task/checklist'),
+      headers: headers,
+      body: jsonEncode(body),
+    );
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateChecklistItem(
+    String taskId,
+    String itemId,
+    Map<String, dynamic> body,
+  ) async {
+    final task = Uri.encodeComponent(taskId);
+    final item = Uri.encodeComponent(itemId);
+    final res = await _client.patch(
+      _apiUri('/tasks/$task/checklist/$item'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<void> deleteChecklistItem(String taskId, String itemId) async {
+    final task = Uri.encodeComponent(taskId);
+    final item = Uri.encodeComponent(itemId);
+    final res = await _client.delete(_apiUri('/tasks/$task/checklist/$item'));
+    if (res.statusCode != 204) _check(res.statusCode, res.body);
+  }
+
   Future<List<Map<String, dynamic>>> getProjects() async {
     final res = await _client.get(_apiUri('/projects'));
     _check(res.statusCode, res.body);

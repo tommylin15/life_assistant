@@ -20,6 +20,9 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
     def test_backend_image_is_built_once_and_reused_for_every_runtime(self):
         shared_image_ref = '--image "${{ steps.backend_image.outputs.ref }}"'
         self.assertEqual(self.text.count("gcloud builds submit backend"), 1)
+        self.assertIn("--async", self.text)
+        self.assertIn('gcloud builds describe "$BUILD_ID"', self.text)
+        self.assertIn("BUILD_STATUS", self.text)
         self.assertNotIn("--source backend", self.text)
         self.assertEqual(self.text.count(shared_image_ref), 7)
 

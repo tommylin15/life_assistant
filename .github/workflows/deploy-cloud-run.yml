@@ -74,15 +74,55 @@ jobs:
         run: |
           IMAGE_BASE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${BACKEND_IMAGE}"
           IMAGE_TAG="${IMAGE_BASE}:${RELEASE_SHA}"
-          IMAGE_DIGEST="$(gcloud builds submit backend \
+          BUILD_ID="$(gcloud builds submit backend \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --tag "$IMAGE_TAG" \
-            --suppress-logs \
+            --async \
             --quiet \
-            --format='value(results.images[0].digest)' | tail -n1)"
+            --format='value(id)' | tail -n1)"
+          test -n "$BUILD_ID"
+
+          BUILD_STATUS=""
+          for attempt in $(seq 1 120); do
+            BUILD_STATUS="$(gcloud builds describe "$BUILD_ID" \
+              --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" \
+              --format='value(status)')"
+            case "$BUILD_STATUS" in
+              SUCCESS)
+                break
+                ;;
+              QUEUED|WORKING|PENDING)
+                ;;
+              FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+                echo "::error::Cloud Build $BUILD_ID failed with status $BUILD_STATUS"
+                gcloud builds describe "$BUILD_ID" \
+                  --project "$GCP_PROJECT_ID" \
+                  --region "$GCP_REGION" \
+                  --format='yaml(id,status,statusDetail,logUrl,results.images)' || true
+                exit 1
+                ;;
+              *)
+                echo "::error::Unexpected Cloud Build status: ${BUILD_STATUS:-empty}"
+                exit 1
+                ;;
+            esac
+
+            if [ "$attempt" -eq 120 ]; then
+              echo "::error::Timed out waiting for Cloud Build $BUILD_ID; last status: ${BUILD_STATUS:-empty}"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          IMAGE_DIGEST="$(gcloud builds describe "$BUILD_ID" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(results.images[0].digest)')"
           test -n "$IMAGE_DIGEST"
           IMAGE_REF="${IMAGE_BASE}@${IMAGE_DIGEST}"
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
           echo "base=$IMAGE_BASE" >> "$GITHUB_OUTPUT"
           echo "tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           echo "digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"

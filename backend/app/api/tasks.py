@@ -2,12 +2,20 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
 from app.db.session import get_db
-from app.models.schemas import TaskCreate, TaskOut, TaskUpdate
+from app.models.migration_support import ChecklistItem
+from app.models.schemas import (
+    ChecklistItemCreate,
+    ChecklistItemOut,
+    ChecklistItemUpdate,
+    TaskCreate,
+    TaskOut,
+    TaskUpdate,
+)
 from app.models.task import Task, TaskStatus
 from app.services.execution_log import fail_execution, finish_execution, start_execution
 from app.services.idempotency import (
@@ -18,6 +26,24 @@ from app.services.idempotency import (
 )
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+async def _require_task(db: AsyncSession, task_id: str) -> Task:
+    task = await db.get(Task, task_id)
+    if not task or task.deleted_at is not None:
+        raise HTTPException(404, "Task not found")
+    return task
+
+
+async def _require_checklist_item(
+    db: AsyncSession,
+    task_id: str,
+    item_id: str,
+) -> ChecklistItem:
+    item = await db.get(ChecklistItem, item_id)
+    if item is None or item.task_id != task_id:
+        raise HTTPException(404, "Checklist item not found")
+    return item
 
 
 @router.get("", response_model=list[TaskOut])
@@ -69,16 +95,157 @@ async def create_task(
     return task
 
 
+@router.get("/{task_id}/checklist", response_model=list[ChecklistItemOut])
+async def list_checklist_items(
+    task_id: str,
+    _user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_task(db, task_id)
+    result = await db.execute(
+        select(ChecklistItem)
+        .where(ChecklistItem.task_id == task_id)
+        .order_by(
+            ChecklistItem.sort_order.asc(),
+            ChecklistItem.created_at.asc(),
+            ChecklistItem.id.asc(),
+        )
+    )
+    return result.scalars().all()
+
+
+@router.post("/{task_id}/checklist", response_model=ChecklistItemOut, status_code=201)
+async def create_checklist_item(
+    task_id: str,
+    body: ChecklistItemCreate,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+    action_id: str | None = Header(default=None, alias=ACTION_ID_HEADER),
+):
+    await _require_task(db, task_id)
+    request_payload = {"task_id": task_id, **body.model_dump(mode="json")}
+    reservation = await reserve_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="checklist_item.create",
+        action_id=action_id,
+        request_payload=request_payload,
+        provider="life_assistant",
+        entity_type="checklist_item",
+        summary="Create checklist item",
+    )
+    if reservation.is_replay:
+        item = await replay_entity(db, reservation, ChecklistItem)
+        if item.task_id != task_id:
+            raise HTTPException(409, "Previous idempotent Checklist result belongs to another Task")
+        return item
+
+    sort_order = body.sort_order
+    if sort_order is None:
+        result = await db.execute(
+            select(func.coalesce(func.max(ChecklistItem.sort_order), -1) + 1).where(
+                ChecklistItem.task_id == task_id
+            )
+        )
+        sort_order = int(result.scalar_one())
+
+    item = ChecklistItem(
+        id=str(uuid.uuid4()),
+        task_id=task_id,
+        title=body.title,
+        is_done=False,
+        sort_order=sort_order,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(item)
+    await commit_reserved_execution(
+        db,
+        reservation,
+        result="created",
+        entity_type="checklist_item",
+        entity_id=item.id,
+        summary="Checklist item created",
+        failure_summary="Create checklist item failed",
+        refresh_entity=item,
+    )
+    return item
+
+
+@router.patch("/{task_id}/checklist/{item_id}", response_model=ChecklistItemOut)
+async def update_checklist_item(
+    task_id: str,
+    item_id: str,
+    body: ChecklistItemUpdate,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_task(db, task_id)
+    item = await _require_checklist_item(db, task_id, item_id)
+    execution = await start_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="checklist_item.update",
+        provider="life_assistant",
+        entity_type="checklist_item",
+        entity_id=item_id,
+        summary="Update checklist item",
+    )
+    try:
+        for field, value in body.model_dump(exclude_unset=True).items():
+            setattr(item, field, value)
+        await db.commit()
+        await db.refresh(item)
+    except Exception as exc:
+        await fail_execution(db, execution, exc, summary="Update checklist item failed")
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="updated",
+        summary="Checklist item updated",
+    )
+    return item
+
+
+@router.delete("/{task_id}/checklist/{item_id}", status_code=204)
+async def delete_checklist_item(
+    task_id: str,
+    item_id: str,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_task(db, task_id)
+    item = await _require_checklist_item(db, task_id, item_id)
+    execution = await start_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="checklist_item.delete",
+        provider="life_assistant",
+        entity_type="checklist_item",
+        entity_id=item_id,
+        summary="Delete checklist item",
+    )
+    try:
+        await db.delete(item)
+        await db.commit()
+    except Exception as exc:
+        await fail_execution(db, execution, exc, summary="Delete checklist item failed")
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="deleted",
+        summary="Checklist item deleted",
+    )
+
+
 @router.get("/{task_id}", response_model=TaskOut)
 async def get_task(
     task_id: str,
     _user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    task = await db.get(Task, task_id)
-    if not task or task.deleted_at is not None:
-        raise HTTPException(404, "Task not found")
-    return task
+    return await _require_task(db, task_id)
 
 
 @router.patch("/{task_id}", response_model=TaskOut)
@@ -88,9 +255,7 @@ async def update_task(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    task = await db.get(Task, task_id)
-    if not task or task.deleted_at is not None:
-        raise HTTPException(404, "Task not found")
+    task = await _require_task(db, task_id)
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -129,9 +294,7 @@ async def complete_task(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    task = await db.get(Task, task_id)
-    if not task or task.deleted_at is not None:
-        raise HTTPException(404, "Task not found")
+    task = await _require_task(db, task_id)
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -164,9 +327,7 @@ async def delete_task(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    task = await db.get(Task, task_id)
-    if not task or task.deleted_at is not None:
-        raise HTTPException(404, "Task not found")
+    task = await _require_task(db, task_id)
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -177,6 +338,7 @@ async def delete_task(
         summary="Delete task",
     )
     try:
+        await db.execute(delete(ChecklistItem).where(ChecklistItem.task_id == task_id))
         await db.delete(task)
         await db.commit()
     except Exception as exc:

@@ -25,6 +25,9 @@ jobs:
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102
       GCP_REGION: us-central1
+      ARTIFACT_REPOSITORY: cloud-run-source-deploy
+      BACKEND_IMAGE: life-assistant-backend
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       CLOUD_RUN_SERVICE: life-assistant-api
       MIGRATION_JOB: life-assistant-db-migrate
       ACCEPTANCE_JOB: life-assistant-cloud-domain-acceptance
@@ -47,7 +50,7 @@ jobs:
       - name: Checkout release commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ env.RELEASE_SHA }}
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -59,6 +62,31 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Verify Artifact Registry repository
+        run: |
+          gcloud artifacts repositories describe "$ARTIFACT_REPOSITORY" \
+            --project "$GCP_PROJECT_ID" \
+            --location "$GCP_REGION" \
+            --format='value(name)' >/dev/null
+
+      - name: Build backend image once
+        id: backend_image
+        run: |
+          IMAGE_BASE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${BACKEND_IMAGE}"
+          IMAGE_TAG="${IMAGE_BASE}:${RELEASE_SHA}"
+          IMAGE_DIGEST="$(gcloud builds submit backend \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --tag "$IMAGE_TAG" \
+            --quiet \
+            --format='value(results.images[0].digest)' | tail -n1)"
+          test -n "$IMAGE_DIGEST"
+          IMAGE_REF="${IMAGE_BASE}@${IMAGE_DIGEST}"
+          echo "base=$IMAGE_BASE" >> "$GITHUB_OUTPUT"
+          echo "tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
+
       - name: Apply verified database migration
         id: migration
         continue-on-error: true
@@ -66,7 +94,7 @@ jobs:
           gcloud run jobs deploy "$MIGRATION_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --source backend \
+            --image "${{ steps.backend_image.outputs.ref }}" \
             --command python \
             --args=-m,scripts.apply_cloud_domain_parity_release \
             --network "$GCP_NETWORK" \
@@ -137,7 +165,7 @@ jobs:
           gcloud run deploy "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --source backend \
+            --image "${{ steps.backend_image.outputs.ref }}" \
             --network "$GCP_NETWORK" \
             --subnet "$GCP_SUBNET" \
             --vpc-egress private-ranges-only \
@@ -176,16 +204,10 @@ jobs:
 
       - name: Run authenticated cloud-domain acceptance
         run: |
-          SERVICE_IMAGE="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --format='value(spec.template.spec.containers[0].image)')"
-          test -n "$SERVICE_IMAGE"
-
           gcloud run jobs deploy "$ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --image "$SERVICE_IMAGE" \
+            --image "${{ steps.backend_image.outputs.ref }}" \
             --command python \
             --args=-m,scripts.run_cloud_domain_parity_acceptance \
             --network "$GCP_NETWORK" \
@@ -200,16 +222,10 @@ jobs:
 
       - name: Run action-id idempotency runtime acceptance
         run: |
-          SERVICE_IMAGE="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --format='value(spec.template.spec.containers[0].image)')"
-          test -n "$SERVICE_IMAGE"
-
           gcloud run jobs deploy "$IDEMPOTENCY_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --image "$SERVICE_IMAGE" \
+            --image "${{ steps.backend_image.outputs.ref }}" \
             --command python \
             --args=-m,scripts.run_idempotency_acceptance \
             --network "$GCP_NETWORK" \
@@ -224,16 +240,10 @@ jobs:
 
       - name: Run Google provider failure-path runtime acceptance
         run: |
-          SERVICE_IMAGE="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --format='value(spec.template.spec.containers[0].image)')"
-          test -n "$SERVICE_IMAGE"
-
           gcloud run jobs deploy "$GOOGLE_FAILURE_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --image "$SERVICE_IMAGE" \
+            --image "${{ steps.backend_image.outputs.ref }}" \
             --command python \
             --args=-m,scripts.run_google_failure_acceptance \
             --network "$GCP_NETWORK" \
@@ -248,16 +258,10 @@ jobs:
 
       - name: Run SQLite backfill runtime acceptance
         run: |
-          SERVICE_IMAGE="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --format='value(spec.template.spec.containers[0].image)')"
-          test -n "$SERVICE_IMAGE"
-
           gcloud run jobs deploy "$BACKFILL_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --image "$SERVICE_IMAGE" \
+            --image "${{ steps.backend_image.outputs.ref }}" \
             --command python \
             --args=-m,scripts.run_sqlite_backfill_acceptance \
             --network "$GCP_NETWORK" \
@@ -272,16 +276,10 @@ jobs:
 
       - name: Run SQLite backfill failure-path runtime acceptance
         run: |
-          SERVICE_IMAGE="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --format='value(spec.template.spec.containers[0].image)')"
-          test -n "$SERVICE_IMAGE"
-
           gcloud run jobs deploy "$BACKFILL_FAILURE_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --image "$SERVICE_IMAGE" \
+            --image "${{ steps.backend_image.outputs.ref }}" \
             --command python \
             --args=-m,scripts.run_sqlite_backfill_failure_acceptance \
             --network "$GCP_NETWORK" \
@@ -292,4 +290,13 @@ jobs:
             --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --wait \
+            --quiet
+
+      - name: Keep only the latest life_assistant image
+        run: |
+          gcloud artifacts repositories set-cleanup-policies "$ARTIFACT_REPOSITORY" \
+            --project "$GCP_PROJECT_ID" \
+            --location "$GCP_REGION" \
+            --policy .github/artifact-registry-cleanup-policy.json \
+            --no-dry-run \
             --quiet

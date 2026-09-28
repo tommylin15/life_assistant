@@ -1,0 +1,22 @@
+[
+  {
+    "name": "delete-life-assistant-images",
+    "action": {"type": "Delete"},
+    "condition": {
+      "tagState": "any",
+      "packageNamePrefixes": [
+        "life-assistant-backend",
+        "life-assistant-api",
+        "life-assistant-db-migrate"
+      ]
+    }
+  },
+  {
+    "name": "keep-latest-life-assistant-backend",
+    "action": {"type": "Keep"},
+    "mostRecentVersions": {
+      "packageNamePrefixes": ["life-assistant-backend"],
+      "keepCount": 1
+    }
+  }
+]

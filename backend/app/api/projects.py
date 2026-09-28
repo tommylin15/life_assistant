@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,12 @@ from app.models.schemas import ProjectCreate, ProjectOut, ProjectUpdate
 from app.models.shopping import ShoppingList
 from app.models.task import Task
 from app.services.execution_log import fail_execution, finish_execution, start_execution
+from app.services.idempotency import (
+    ACTION_ID_HEADER,
+    commit_reserved_execution,
+    replay_entity,
+    reserve_execution,
+)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -23,17 +29,37 @@ async def list_projects(_user: dict = Depends(current_user), db: AsyncSession = 
 
 
 @router.post("", response_model=ProjectOut, status_code=201)
-async def create_project(body: ProjectCreate, user: dict = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    execution = await start_execution(db, user_sub=user["sub"], action_type="project.create", provider="internal", entity_type="project", summary="Create project")
+async def create_project(
+    body: ProjectCreate,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+    action_id: str | None = Header(default=None, alias=ACTION_ID_HEADER),
+):
+    reservation = await reserve_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="project.create",
+        action_id=action_id,
+        request_payload=body.model_dump(mode="json"),
+        provider="internal",
+        entity_type="project",
+        summary="Create project",
+    )
+    if reservation.is_replay:
+        return await replay_entity(db, reservation, Project)
+
     project = Project(id=str(uuid.uuid4()), **body.model_dump())
-    try:
-        db.add(project)
-        await db.commit()
-        await db.refresh(project)
-    except Exception as exc:
-        await fail_execution(db, execution, exc, summary="Project create failed")
-        raise
-    await finish_execution(db, execution, result="created", entity_id=project.id, summary="Project created")
+    db.add(project)
+    await commit_reserved_execution(
+        db,
+        reservation,
+        result="created",
+        entity_type="project",
+        entity_id=project.id,
+        summary="Project created",
+        failure_summary="Project create failed",
+        refresh_entity=project,
+    )
     return project
 
 

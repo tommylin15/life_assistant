@@ -28,6 +28,7 @@ jobs:
       CLOUD_RUN_SERVICE: life-assistant-api
       MIGRATION_JOB: life-assistant-db-migrate
       ACCEPTANCE_JOB: life-assistant-cloud-domain-acceptance
+      IDEMPOTENCY_ACCEPTANCE_JOB: life-assistant-idempotency-acceptance
       GOOGLE_FAILURE_ACCEPTANCE_JOB: life-assistant-google-failure-acceptance
       BACKFILL_ACCEPTANCE_JOB: life-assistant-sqlite-backfill-acceptance
       BACKFILL_FAILURE_ACCEPTANCE_JOB: life-assistant-sqlite-backfill-failure-acceptance
@@ -193,6 +194,30 @@ jobs:
             --max-retries 0 \
             --task-timeout 10m \
             --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI" \
+            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --wait \
+            --quiet
+
+      - name: Run action-id idempotency runtime acceptance
+        run: |
+          SERVICE_IMAGE="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(spec.template.spec.containers[0].image)')"
+          test -n "$SERVICE_IMAGE"
+
+          gcloud run jobs deploy "$IDEMPOTENCY_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "$SERVICE_IMAGE" \
+            --command python \
+            --args=-m,scripts.run_idempotency_acceptance \
+            --network "$GCP_NETWORK" \
+            --subnet "$GCP_SUBNET" \
+            --vpc-egress private-ranges-only \
+            --max-retries 0 \
+            --task-timeout 10m \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --wait \
             --quiet

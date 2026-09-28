@@ -25,12 +25,12 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         self.assertIn('gcloud builds describe "$BUILD_ID"', self.text)
         self.assertIn("BUILD_STATUS", self.text)
         self.assertNotIn("--source backend", self.text)
-        self.assertEqual(self.text.count(shared_image_ref), 7)
+        self.assertEqual(self.text.count(shared_image_ref), 8)
 
     def test_acceptance_jobs_collect_runtime_diagnostics_on_failure(self):
         wrapper_call = ".github/scripts/run_cloud_run_job_with_diagnostics.sh"
         self.assertTrue(DIAGNOSTIC_WRAPPER.is_file())
-        self.assertEqual(self.text.count(wrapper_call), 5)
+        self.assertEqual(self.text.count(wrapper_call), 6)
         wrapper = DIAGNOSTIC_WRAPPER.read_text(encoding="utf-8")
         self.assertIn("gcloud run jobs executions list", wrapper)
         self.assertIn("gcloud run jobs executions tasks list", wrapper)

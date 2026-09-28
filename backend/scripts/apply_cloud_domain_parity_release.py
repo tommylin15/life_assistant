@@ -29,7 +29,8 @@ from scripts.reconcile_projects_status_default import (
 )
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-RELEASE_TARGET_REVISION = "20260927_0005"
+PREVIOUS_RELEASE_REVISION = "20260927_0005"
+RELEASE_TARGET_REVISION = "20260928_0006"
 EXIT_RELEASE_REVISION = 60
 EXIT_RELEASE_ALEMBIC = 61
 EXIT_RELEASE_MISSING_TABLES = 62
@@ -262,16 +263,24 @@ async def main() -> None:
         print(f"release_post_revision={RELEASE_TARGET_REVISION}")
         return
 
-    if current not in {None, migration.PREVIOUS_REVISION, migration.TARGET_REVISION}:
+    historical_revisions = {
+        None,
+        migration.PREVIOUS_REVISION,
+        migration.TARGET_REVISION,
+    }
+    if current in historical_revisions:
+        await _ensure_historical_0004()
+        print(f"release_base_revision={migration.TARGET_REVISION}")
+    elif current == PREVIOUS_RELEASE_REVISION:
+        print(f"release_base_revision={PREVIOUS_RELEASE_REVISION}")
+    else:
         raise ReleaseRevisionError(
             f"unexpected release pre-revision: {current}; expected unversioned, "
-            f"{migration.PREVIOUS_REVISION}, {migration.TARGET_REVISION}, or "
-            f"{RELEASE_TARGET_REVISION}",
+            f"{migration.PREVIOUS_REVISION}, {migration.TARGET_REVISION}, "
+            f"{PREVIOUS_RELEASE_REVISION}, or {RELEASE_TARGET_REVISION}",
             reason="unexpected_pre_revision",
         )
 
-    await _ensure_historical_0004()
-    print(f"release_base_revision={migration.TARGET_REVISION}")
     _upgrade_release_head()
     await _verify_release_revision()
     print(f"release_post_revision={RELEASE_TARGET_REVISION}")

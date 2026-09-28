@@ -1,9 +1,11 @@
 from pathlib import Path
+import json
 import unittest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "deploy-cloud-run.yml"
+CLEANUP_POLICY = REPO_ROOT / ".github" / "artifact-registry-cleanup-policy.json"
 
 
 class DeployCloudRunWorkflowContractTests(unittest.TestCase):
@@ -14,6 +16,27 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
     def test_batch_fast_forward_cannot_skip_backend_release(self):
         self.assertNotIn("git diff --quiet HEAD^ HEAD -- backend", self.text)
         self.assertNotIn("backend_changes.outputs.deploy", self.text)
+
+    def test_backend_image_is_built_once_and_reused_for_every_runtime(self):
+        shared_image_ref = '--image "${{ steps.backend_image.outputs.ref }}"'
+        self.assertEqual(self.text.count("gcloud builds submit backend"), 1)
+        self.assertNotIn("--source backend", self.text)
+        self.assertEqual(self.text.count(shared_image_ref), 7)
+
+    def test_cleanup_policy_retains_only_latest_shared_backend_image(self):
+        policies = json.loads(CLEANUP_POLICY.read_text(encoding="utf-8"))
+        policies_by_name = {policy["name"]: policy for policy in policies}
+        keep = policies_by_name["keep-latest-life-assistant-backend"]
+        self.assertEqual(keep["action"], {"type": "Keep"})
+        self.assertEqual(keep["mostRecentVersions"]["keepCount"], 1)
+        self.assertEqual(
+            keep["mostRecentVersions"]["packageNamePrefixes"],
+            ["life-assistant-backend"],
+        )
+        self.assertLess(
+            self.text.index("Run SQLite backfill failure-path runtime acceptance"),
+            self.text.index("Keep only the latest life_assistant image"),
+        )
 
     def test_runtime_migration_gate_runs_before_service_deploy(self):
         migration_marker = "Apply verified database migration"

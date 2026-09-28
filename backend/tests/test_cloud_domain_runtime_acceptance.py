@@ -37,7 +37,7 @@ class CloudDomainRuntimeAcceptanceContractTests(unittest.TestCase):
         self.assertIn("ACCEPTANCE_JOB: life-assistant-cloud-domain-acceptance", workflow)
         self.assertIn("Run authenticated cloud-domain acceptance", workflow)
         self.assertIn("--args=-m,scripts.run_cloud_domain_parity_acceptance", workflow)
-        self.assertIn("--image \"$SERVICE_IMAGE\"", workflow)
+        self.assertIn('--image "${{ steps.backend_image.outputs.ref }}"', workflow)
         self.assertLess(
             workflow.index("Verify unauthenticated API is application-protected"),
             workflow.index("Run authenticated cloud-domain acceptance"),

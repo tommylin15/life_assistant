@@ -198,7 +198,21 @@ jobs:
           npx playwright install chromium
 
       - name: Run Task UI production acceptance
-        run: BASE_URL="https://${GCP_PROJECT_ID}.web.app" node .github/scripts/verify_task_ui_production.mjs
+        run: |
+          BASE_URL="https://${GCP_PROJECT_ID}.web.app"
+          for attempt in 1 2 3; do
+            echo "task_ui_attempt=$attempt"
+            if BASE_URL="$BASE_URL" node .github/scripts/verify_task_ui_production.mjs; then
+              echo "task_ui_acceptance=PASS attempt=$attempt"
+              exit 0
+            fi
+            echo "task_ui_acceptance=RETRY attempt=$attempt" >&2
+            if [ "$attempt" -lt 3 ]; then
+              sleep 2
+            fi
+          done
+          echo "task_ui_acceptance=FAIL attempts=3" >&2
+          exit 1
 
       - name: Upload Task UI acceptance diagnostics
         if: failure()

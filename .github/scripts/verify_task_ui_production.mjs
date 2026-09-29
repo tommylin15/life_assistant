@@ -311,6 +311,25 @@ async function waitObserved(predicate, label, timeout = 5000) {
   throw new Error(`Acceptance observation timed out: ${label}`);
 }
 
+async function describeSemanticTarget(locator) {
+  return locator
+    .evaluate((element) => ({
+      tag: element.tagName,
+      role: element.getAttribute('role'),
+      aria: element.getAttribute('aria-label'),
+      text: element.textContent?.trim().slice(0, 120) ?? '',
+    }))
+    .catch(() => null);
+}
+
+async function activateSemanticTarget(locator, label) {
+  const info = await describeSemanticTarget(locator);
+  console.log(`task_ui_semantic_target=${label} ${JSON.stringify(info)}`);
+  await locator.evaluate((element) => {
+    element.click();
+  });
+}
+
 async function clickPointerTarget(page, locator, label) {
   const box = await locator.boundingBox();
   assert.ok(box, `${label} had no bounding box`);
@@ -355,74 +374,22 @@ async function clickAlertConfirm(page) {
     if (inside) candidates.push({ button, centerX, centerY });
   }
   candidates.sort((a, b) => b.centerX - a.centerX || b.centerY - a.centerY);
+  assert.ok(candidates.length > 0, 'No semantic buttons found inside active alert');
 
-  if (candidates.length > 0) {
-    console.log(`task_ui_alert_keyboard_candidates=${candidates.length}`);
-    await candidates[0].button.press('Enter').catch(() => {});
-    await page.waitForTimeout(250);
-    if (!(await alert.isVisible().catch(() => false))) return;
-  }
-
-  const clickX = alertBox.x + alertBox.width * 0.79;
-  const clickY = alertBox.y + alertBox.height * 0.76;
-  const beforeTarget = await page
-    .evaluate(
-      ({ x, y }) => {
-        const element = document.elementFromPoint(x, y);
-        return element
-          ? {
-              tag: element.tagName,
-              role: element.getAttribute('role'),
-              aria: element.getAttribute('aria-label'),
-            }
-          : null;
-      },
-      { x: clickX, y: clickY },
-    )
-    .catch(() => null);
-  console.log(`task_ui_alert_hit_before=${JSON.stringify(beforeTarget)}`);
-
-  await page.evaluate(() => {
-    for (const element of document.querySelectorAll('flt-semantics-host, flt-semantics')) {
-      element.dataset.acceptancePointerEvents = element.style.pointerEvents || '';
-      element.style.pointerEvents = 'none';
-    }
-  });
-  try {
-    const afterTarget = await page
-      .evaluate(
-        ({ x, y }) => {
-          const element = document.elementFromPoint(x, y);
-          return element
-            ? {
-                tag: element.tagName,
-                role: element.getAttribute('role'),
-                aria: element.getAttribute('aria-label'),
-              }
-            : null;
-        },
-        { x: clickX, y: clickY },
-      )
-      .catch(() => null);
-    console.log(`task_ui_alert_hit_after=${JSON.stringify(afterTarget)}`);
-    console.log(
-      `task_ui_pointer=alert_canvas_passthrough x=${clickX.toFixed(1)} y=${clickY.toFixed(1)}`,
-    );
-    await page.mouse.click(clickX, clickY);
-    await page.waitForTimeout(300);
-  } finally {
-    await page.evaluate(() => {
-      for (const element of document.querySelectorAll(
-        'flt-semantics-host, flt-semantics[data-acceptance-pointer-events]',
-      )) {
-        element.style.pointerEvents = element.dataset.acceptancePointerEvents || '';
-        delete element.dataset.acceptancePointerEvents;
-      }
-    });
-  }
-
+  console.log(`task_ui_alert_semantic_candidates=${candidates.length}`);
+  await activateSemanticTarget(candidates[0].button, 'alert_confirm_dom_click');
+  await page.waitForTimeout(300);
   if (!(await alert.isVisible().catch(() => false))) return;
-  throw new Error('Alert confirmation did not dismiss after semantic and canvas attempts');
+
+  await candidates[0].button.press('Space').catch(() => {});
+  await page.waitForTimeout(250);
+  if (!(await alert.isVisible().catch(() => false))) return;
+
+  await candidates[0].button.press('Enter').catch(() => {});
+  await page.waitForTimeout(250);
+  if (!(await alert.isVisible().catch(() => false))) return;
+
+  throw new Error('Alert confirmation did not dismiss after semantic activation attempts');
 }
 
 function taskByTitle(title) {
@@ -491,14 +458,17 @@ async function runDesktopAcceptance(context) {
     ({ method, pathname }) => method === 'GET' && pathname.endsWith('/checklist'),
   ).length;
   const addChecklist = await named(page, '新增項目');
-  await clickPointerTarget(page, addChecklist, 'checklist_add');
+  await activateSemanticTarget(addChecklist, 'checklist_add_dom_click');
+  if (!(await observedWithin(() => observed.checklistCreate.length === 1))) {
+    await clickPointerTarget(page, addChecklist, 'checklist_add_pointer_fallback');
+  }
   if (!(await observedWithin(() => observed.checklistCreate.length === 1))) {
     console.log('task_ui_interaction=checklist_add_enter_fallback');
     await checklistInput.press('Enter');
   }
   await waitObserved(
     () => observed.checklistCreate.length === 1,
-    'Checklist POST was not observed after add interactions',
+    'Checklist POST was not observed after semantic activation fallbacks',
   );
   record('checklist_create_request');
   await waitObserved(
@@ -529,7 +499,7 @@ async function runDesktopAcceptance(context) {
   assert.equal(createdItems.at(-1)?.is_done, true);
 
   const deleteChecklist = await named(page, '刪除項目', { last: true });
-  await clickPointerTarget(page, deleteChecklist, 'checklist_delete_open');
+  await activateSemanticTarget(deleteChecklist, 'checklist_delete_open_dom_click');
   await waitNamed(page, '刪除 Checklist 項目？');
   await clickAlertConfirm(page);
   await waitObserved(

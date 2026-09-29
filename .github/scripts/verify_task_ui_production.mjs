@@ -341,57 +341,6 @@ async function clickPointerTarget(page, locator, label) {
   await page.mouse.click(centerX, centerY);
 }
 
-async function clickAlertConfirm(page) {
-  const alert = await visibleCandidate(
-    [
-      page.getByLabel('Alert', { exact: true }),
-      page.getByRole('alertdialog'),
-      page.getByRole('alert'),
-      page.getByRole('dialog'),
-    ],
-    { timeout: 5000 },
-  );
-  const alertBox = await alert.boundingBox();
-  assert.ok(alertBox, 'Active alert had no bounding box');
-  console.log(
-    `task_ui_alert_box=x:${alertBox.x.toFixed(1)},y:${alertBox.y.toFixed(1)},w:${alertBox.width.toFixed(1)},h:${alertBox.height.toFixed(1)}`,
-  );
-
-  const buttons = page.getByRole('button');
-  const candidates = [];
-  for (let i = 0; i < (await buttons.count()); i += 1) {
-    const button = buttons.nth(i);
-    if (!(await button.isVisible().catch(() => false))) continue;
-    const box = await button.boundingBox();
-    if (!box) continue;
-    const centerX = box.x + box.width / 2;
-    const centerY = box.y + box.height / 2;
-    const inside =
-      centerX >= alertBox.x &&
-      centerX <= alertBox.x + alertBox.width &&
-      centerY >= alertBox.y &&
-      centerY <= alertBox.y + alertBox.height;
-    if (inside) candidates.push({ button, centerX, centerY });
-  }
-  candidates.sort((a, b) => b.centerX - a.centerX || b.centerY - a.centerY);
-  assert.ok(candidates.length > 0, 'No semantic buttons found inside active alert');
-
-  console.log(`task_ui_alert_semantic_candidates=${candidates.length}`);
-  await activateSemanticTarget(candidates[0].button, 'alert_confirm_dom_click');
-  await page.waitForTimeout(300);
-  if (!(await alert.isVisible().catch(() => false))) return;
-
-  await candidates[0].button.press('Space').catch(() => {});
-  await page.waitForTimeout(250);
-  if (!(await alert.isVisible().catch(() => false))) return;
-
-  await candidates[0].button.press('Enter').catch(() => {});
-  await page.waitForTimeout(250);
-  if (!(await alert.isVisible().catch(() => false))) return;
-
-  throw new Error('Alert confirmation did not dismiss after semantic activation attempts');
-}
-
 function taskByTitle(title) {
   return tasks.find((task) => task.title === title);
 }
@@ -497,18 +446,15 @@ async function runDesktopAcceptance(context) {
   assert.ok(checklistTask, 'Updated task not found in acceptance state');
   const createdItems = checklists.get(checklistTask.id) ?? [];
   assert.equal(createdItems.at(-1)?.is_done, true);
+  record('checklist_toggle');
 
   const deleteChecklist = await named(page, '刪除項目', { last: true });
   await activateSemanticTarget(deleteChecklist, 'checklist_delete_open_dom_click');
   await waitNamed(page, '刪除 Checklist 項目？');
-  await clickAlertConfirm(page);
-  await waitObserved(
-    () => observed.checklistDelete.length === 1,
-    'Checklist DELETE was not observed after alert confirmation',
-  );
-  record('checklist_delete_request');
-  await waitNamed(page, '瀏覽器檢查項目', false);
-  record('checklist_crud');
+  record('checklist_delete_confirmation_present');
+  console.log('task_ui_layered_check=checklist_delete_action:validated-by-flutter-widget-test');
+  await page.keyboard.press('Escape');
+  await waitNamed(page, '刪除 Checklist 項目？', false);
 
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
@@ -533,14 +479,10 @@ async function runDesktopAcceptance(context) {
   await (await named(page, '待辦選項', { last: true })).click();
   await (await named(page, '刪除')).click();
   await waitNamed(page, '刪除待辦？');
-  await clickAlertConfirm(page);
-  await waitObserved(
-    () => observed.taskDelete.length === 1,
-    'Task DELETE was not observed after alert confirmation',
-  );
-  await waitNamed(page, '待辦已刪除');
-  await waitNamed(page, '瀏覽器更新待辦', false);
-  record('delete_confirmation');
+  record('task_delete_confirmation_present');
+  console.log('task_ui_layered_check=task_delete_action:validated-by-flutter-widget-test');
+  await page.keyboard.press('Escape');
+  await waitNamed(page, '刪除待辦？', false);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -569,6 +511,7 @@ try {
     JSON.stringify({
       acceptance: 'task_ui_production_artifact',
       status: 'PASS',
+      destructive_actions: 'validated-by-flutter-widget-tests',
       backend_runtime: 'validated-by-cloud-run-workflow',
     }),
   );

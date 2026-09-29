@@ -186,6 +186,9 @@ void main() {
     expect(api.createdBody?['status'], 'paused');
     expect(find.text('專案已新增'), findsOneWidget);
 
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.widgetWithText(FilterChip, '暫停'));
     await tester.pumpAndSettle();
     expect(find.text('搬家計畫'), findsOneWidget);

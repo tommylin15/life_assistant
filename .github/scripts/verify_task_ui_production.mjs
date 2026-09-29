@@ -456,8 +456,10 @@ async function runDesktopAcceptance(context) {
   await page.keyboard.press('Escape');
   await waitNamed(page, '刪除 Checklist 項目？', false);
 
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await enableFlutterSemantics(page);
+  await waitNamed(page, '瀏覽器更新待辦');
+  record('return_from_checklist');
 
   const completeControls = page.getByLabel('完成待辦', { exact: true });
   const complete = await visibleCandidate([completeControls], { last: true });

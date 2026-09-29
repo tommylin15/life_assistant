@@ -146,12 +146,12 @@ jobs:
           esac
           if ! grep -Eiq '^location: https://accounts\.google\.com/o/oauth2/v2/auth' "$AUTH_HEADERS"; then
             echo "hosting_check=auth_location:FAIL" >&2
-            cat "$AUTH_HEADERS" >&2
+            cat "$AUTH_HEADERS" >&2 || true
             exit 1
           fi
           if ! grep -Eiq '^set-cookie: __session=' "$AUTH_HEADERS"; then
             echo "hosting_check=auth_cookie:FAIL" >&2
-            cat "$AUTH_HEADERS" >&2
+            cat "$AUTH_HEADERS" >&2 || true
             exit 1
           fi
           echo "hosting_check=auth_redirect:PASS status=$AUTH_STATUS"
@@ -223,6 +223,8 @@ jobs:
           if-no-files-found: ignore
 
       - name: Run Project UI production acceptance
+        id: project_ui_acceptance
+        if: always()
         run: |
           BASE_URL="https://${GCP_PROJECT_ID}.web.app"
           for attempt in 1 2 3; do
@@ -240,7 +242,7 @@ jobs:
           exit 1
 
       - name: Upload Project UI acceptance diagnostics
-        if: failure()
+        if: steps.project_ui_acceptance.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: project-ui-production-acceptance-${{ env.RELEASE_SHA }}

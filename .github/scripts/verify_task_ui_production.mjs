@@ -302,6 +302,17 @@ async function waitObserved(predicate, label, timeout = 5000) {
   throw new Error(`Acceptance observation timed out: ${label}`);
 }
 
+async function clickPointerTarget(page, locator, label) {
+  const box = await locator.boundingBox();
+  assert.ok(box, `${label} had no bounding box`);
+  const centerX = box.x + box.width / 2;
+  const centerY = box.y + box.height / 2;
+  console.log(
+    `task_ui_pointer=${label} x=${centerX.toFixed(1)} y=${centerY.toFixed(1)}`,
+  );
+  await page.mouse.click(centerX, centerY);
+}
+
 async function clickAlertConfirm(page) {
   const alert = await visibleCandidate(
     [
@@ -336,10 +347,10 @@ async function clickAlertConfirm(page) {
 
   if (candidates.length > 0) {
     candidates.sort(
-      (a, b) => b.centerY - a.centerY || b.centerX - a.centerX,
+      (a, b) => b.centerX - a.centerX || b.centerY - a.centerY,
     );
     console.log(`task_ui_alert_buttons=${candidates.length}`);
-    await candidates[0].button.click();
+    await page.mouse.click(candidates[0].centerX, candidates[0].centerY);
     return;
   }
 
@@ -415,10 +426,11 @@ async function runDesktopAcceptance(context) {
   const checklistGetsBeforeCreate = observed.requestTrace.filter(
     ({ method, pathname }) => method === 'GET' && pathname.endsWith('/checklist'),
   ).length;
-  await (await named(page, '新增項目')).click();
+  const addChecklist = await named(page, '新增項目');
+  await clickPointerTarget(page, addChecklist, 'checklist_add');
   await waitObserved(
     () => observed.checklistCreate.length === 1,
-    'Checklist POST was not observed after clicking 新增項目',
+    'Checklist POST was not observed after pointer clicking 新增項目',
   );
   record('checklist_create_request');
   await waitObserved(
@@ -448,7 +460,8 @@ async function runDesktopAcceptance(context) {
   const createdItems = checklists.get(checklistTask.id) ?? [];
   assert.equal(createdItems.at(-1)?.is_done, true);
 
-  await (await named(page, '刪除項目', { last: true })).click();
+  const deleteChecklist = await named(page, '刪除項目', { last: true });
+  await clickPointerTarget(page, deleteChecklist, 'checklist_delete_open');
   await waitNamed(page, '刪除 Checklist 項目？');
   await clickAlertConfirm(page);
   await waitObserved(

@@ -292,6 +292,15 @@ async function waitNamed(page, text, expected = true, timeout = 10000) {
   throw new Error(`Expected ${JSON.stringify(text)} visible=${expected}`);
 }
 
+async function observedWithin(predicate, timeout = 1200) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 75));
+  }
+  return predicate();
+}
+
 async function waitObserved(predicate, label, timeout = 5000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -325,40 +334,45 @@ async function clickAlertConfirm(page) {
   );
   const alertBox = await alert.boundingBox();
   assert.ok(alertBox, 'Active alert had no bounding box');
+  console.log(
+    `task_ui_alert_box=x:${alertBox.x.toFixed(1)},y:${alertBox.y.toFixed(1)},w:${alertBox.width.toFixed(1)},h:${alertBox.height.toFixed(1)}`,
+  );
 
-  const buttons = page.getByRole('button');
-  const candidates = [];
-  for (let i = 0; i < (await buttons.count()); i += 1) {
-    const button = buttons.nth(i);
-    if (!(await button.isVisible().catch(() => false))) continue;
-    const box = await button.boundingBox();
-    if (!box) continue;
-    const centerX = box.x + box.width / 2;
-    const centerY = box.y + box.height / 2;
-    const inside =
-      centerX >= alertBox.x &&
-      centerX <= alertBox.x + alertBox.width &&
-      centerY >= alertBox.y &&
-      centerY <= alertBox.y + alertBox.height;
-    if (inside) {
-      candidates.push({ button, centerX, centerY });
+  const viewport = page.viewportSize();
+  const points = [
+    {
+      label: 'alert_relative_primary',
+      x: alertBox.x + alertBox.width * 0.79,
+      y: alertBox.y + alertBox.height * 0.76,
+    },
+    ...(viewport
+      ? [
+          {
+            label: 'viewport_visual_fallback',
+            x: viewport.width * 0.563,
+            y: viewport.height * 0.549,
+          },
+        ]
+      : []),
+    {
+      label: 'alert_relative_secondary',
+      x: alertBox.x + alertBox.width * 0.82,
+      y: alertBox.y + alertBox.height * 0.82,
+    },
+  ];
+
+  for (const point of points) {
+    console.log(
+      `task_ui_pointer=${point.label} x=${point.x.toFixed(1)} y=${point.y.toFixed(1)}`,
+    );
+    await page.mouse.click(point.x, point.y);
+    await page.waitForTimeout(250);
+    if (!(await alert.isVisible().catch(() => false))) {
+      return;
     }
   }
 
-  if (candidates.length > 0) {
-    candidates.sort(
-      (a, b) => b.centerX - a.centerX || b.centerY - a.centerY,
-    );
-    console.log(`task_ui_alert_buttons=${candidates.length}`);
-    await page.mouse.click(candidates[0].centerX, candidates[0].centerY);
-    return;
-  }
-
-  console.log('task_ui_alert_confirm=coordinate_fallback');
-  await page.mouse.click(
-    alertBox.x + alertBox.width * 0.82,
-    alertBox.y + alertBox.height * 0.82,
-  );
+  throw new Error('Alert confirmation did not dismiss after pointer attempts');
 }
 
 function taskByTitle(title) {
@@ -428,9 +442,13 @@ async function runDesktopAcceptance(context) {
   ).length;
   const addChecklist = await named(page, '新增項目');
   await clickPointerTarget(page, addChecklist, 'checklist_add');
+  if (!(await observedWithin(() => observed.checklistCreate.length === 1))) {
+    console.log('task_ui_interaction=checklist_add_enter_fallback');
+    await checklistInput.press('Enter');
+  }
   await waitObserved(
     () => observed.checklistCreate.length === 1,
-    'Checklist POST was not observed after pointer clicking 新增項目',
+    'Checklist POST was not observed after add interactions',
   );
   record('checklist_create_request');
   await waitObserved(

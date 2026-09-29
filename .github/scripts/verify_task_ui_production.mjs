@@ -338,41 +338,91 @@ async function clickAlertConfirm(page) {
     `task_ui_alert_box=x:${alertBox.x.toFixed(1)},y:${alertBox.y.toFixed(1)},w:${alertBox.width.toFixed(1)},h:${alertBox.height.toFixed(1)}`,
   );
 
-  const viewport = page.viewportSize();
-  const points = [
-    {
-      label: 'alert_relative_primary',
-      x: alertBox.x + alertBox.width * 0.79,
-      y: alertBox.y + alertBox.height * 0.76,
-    },
-    ...(viewport
-      ? [
-          {
-            label: 'viewport_visual_fallback',
-            x: viewport.width * 0.563,
-            y: viewport.height * 0.549,
-          },
-        ]
-      : []),
-    {
-      label: 'alert_relative_secondary',
-      x: alertBox.x + alertBox.width * 0.82,
-      y: alertBox.y + alertBox.height * 0.82,
-    },
-  ];
+  const buttons = page.getByRole('button');
+  const candidates = [];
+  for (let i = 0; i < (await buttons.count()); i += 1) {
+    const button = buttons.nth(i);
+    if (!(await button.isVisible().catch(() => false))) continue;
+    const box = await button.boundingBox();
+    if (!box) continue;
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+    const inside =
+      centerX >= alertBox.x &&
+      centerX <= alertBox.x + alertBox.width &&
+      centerY >= alertBox.y &&
+      centerY <= alertBox.y + alertBox.height;
+    if (inside) candidates.push({ button, centerX, centerY });
+  }
+  candidates.sort((a, b) => b.centerX - a.centerX || b.centerY - a.centerY);
 
-  for (const point of points) {
-    console.log(
-      `task_ui_pointer=${point.label} x=${point.x.toFixed(1)} y=${point.y.toFixed(1)}`,
-    );
-    await page.mouse.click(point.x, point.y);
+  if (candidates.length > 0) {
+    console.log(`task_ui_alert_keyboard_candidates=${candidates.length}`);
+    await candidates[0].button.press('Enter').catch(() => {});
     await page.waitForTimeout(250);
-    if (!(await alert.isVisible().catch(() => false))) {
-      return;
-    }
+    if (!(await alert.isVisible().catch(() => false))) return;
   }
 
-  throw new Error('Alert confirmation did not dismiss after pointer attempts');
+  const clickX = alertBox.x + alertBox.width * 0.79;
+  const clickY = alertBox.y + alertBox.height * 0.76;
+  const beforeTarget = await page
+    .evaluate(
+      ({ x, y }) => {
+        const element = document.elementFromPoint(x, y);
+        return element
+          ? {
+              tag: element.tagName,
+              role: element.getAttribute('role'),
+              aria: element.getAttribute('aria-label'),
+            }
+          : null;
+      },
+      { x: clickX, y: clickY },
+    )
+    .catch(() => null);
+  console.log(`task_ui_alert_hit_before=${JSON.stringify(beforeTarget)}`);
+
+  await page.evaluate(() => {
+    for (const element of document.querySelectorAll('flt-semantics-host, flt-semantics')) {
+      element.dataset.acceptancePointerEvents = element.style.pointerEvents || '';
+      element.style.pointerEvents = 'none';
+    }
+  });
+  try {
+    const afterTarget = await page
+      .evaluate(
+        ({ x, y }) => {
+          const element = document.elementFromPoint(x, y);
+          return element
+            ? {
+                tag: element.tagName,
+                role: element.getAttribute('role'),
+                aria: element.getAttribute('aria-label'),
+              }
+            : null;
+        },
+        { x: clickX, y: clickY },
+      )
+      .catch(() => null);
+    console.log(`task_ui_alert_hit_after=${JSON.stringify(afterTarget)}`);
+    console.log(
+      `task_ui_pointer=alert_canvas_passthrough x=${clickX.toFixed(1)} y=${clickY.toFixed(1)}`,
+    );
+    await page.mouse.click(clickX, clickY);
+    await page.waitForTimeout(300);
+  } finally {
+    await page.evaluate(() => {
+      for (const element of document.querySelectorAll(
+        'flt-semantics-host, flt-semantics[data-acceptance-pointer-events]',
+      )) {
+        element.style.pointerEvents = element.dataset.acceptancePointerEvents || '';
+        delete element.dataset.acceptancePointerEvents;
+      }
+    });
+  }
+
+  if (!(await alert.isVisible().catch(() => false))) return;
+  throw new Error('Alert confirmation did not dismiss after semantic and canvas attempts');
 }
 
 function taskByTitle(title) {

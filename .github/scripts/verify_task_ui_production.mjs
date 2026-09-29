@@ -302,6 +302,54 @@ async function waitObserved(predicate, label, timeout = 5000) {
   throw new Error(`Acceptance observation timed out: ${label}`);
 }
 
+async function clickAlertConfirm(page) {
+  const alert = await visibleCandidate(
+    [
+      page.getByLabel('Alert', { exact: true }),
+      page.getByRole('alertdialog'),
+      page.getByRole('alert'),
+      page.getByRole('dialog'),
+    ],
+    { timeout: 5000 },
+  );
+  const alertBox = await alert.boundingBox();
+  assert.ok(alertBox, 'Active alert had no bounding box');
+
+  const buttons = page.getByRole('button');
+  const candidates = [];
+  for (let i = 0; i < (await buttons.count()); i += 1) {
+    const button = buttons.nth(i);
+    if (!(await button.isVisible().catch(() => false))) continue;
+    const box = await button.boundingBox();
+    if (!box) continue;
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+    const inside =
+      centerX >= alertBox.x &&
+      centerX <= alertBox.x + alertBox.width &&
+      centerY >= alertBox.y &&
+      centerY <= alertBox.y + alertBox.height;
+    if (inside) {
+      candidates.push({ button, centerX, centerY });
+    }
+  }
+
+  if (candidates.length > 0) {
+    candidates.sort(
+      (a, b) => b.centerY - a.centerY || b.centerX - a.centerX,
+    );
+    console.log(`task_ui_alert_buttons=${candidates.length}`);
+    await candidates[0].button.click();
+    return;
+  }
+
+  console.log('task_ui_alert_confirm=coordinate_fallback');
+  await page.mouse.click(
+    alertBox.x + alertBox.width * 0.82,
+    alertBox.y + alertBox.height * 0.82,
+  );
+}
+
 function taskByTitle(title) {
   return tasks.find((task) => task.title === title);
 }
@@ -402,9 +450,13 @@ async function runDesktopAcceptance(context) {
 
   await (await named(page, '刪除項目', { last: true })).click();
   await waitNamed(page, '刪除 Checklist 項目？');
-  await (await named(page, '刪除', { last: true })).click();
+  await clickAlertConfirm(page);
+  await waitObserved(
+    () => observed.checklistDelete.length === 1,
+    'Checklist DELETE was not observed after alert confirmation',
+  );
+  record('checklist_delete_request');
   await waitNamed(page, '瀏覽器檢查項目', false);
-  assert.equal(observed.checklistDelete.length, 1);
   record('checklist_crud');
 
   await page.keyboard.press('Escape');
@@ -430,10 +482,13 @@ async function runDesktopAcceptance(context) {
   await (await named(page, '待辦選項', { last: true })).click();
   await (await named(page, '刪除')).click();
   await waitNamed(page, '刪除待辦？');
-  await (await named(page, '刪除')).click();
+  await clickAlertConfirm(page);
+  await waitObserved(
+    () => observed.taskDelete.length === 1,
+    'Task DELETE was not observed after alert confirmation',
+  );
   await waitNamed(page, '待辦已刪除');
   await waitNamed(page, '瀏覽器更新待辦', false);
-  assert.equal(observed.taskDelete.length, 1);
   record('delete_confirmation');
 
   await page.setViewportSize({ width: 390, height: 844 });

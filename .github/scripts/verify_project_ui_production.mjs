@@ -144,6 +144,10 @@ function exactPattern(text) {
   return new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
 }
 
+function escapedPattern(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function pageDelay(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -231,17 +235,52 @@ async function editorTextboxFromEnd(page, offsetFromEnd) {
 }
 
 async function typeFlutterText(locator, text, label) {
-  await locator.click();
-  await locator.pressSequentially(text, { delay: 15 });
-  await locator.press('Tab');
-  await pageDelay(150);
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await locator.click();
+    await pageDelay(180);
+    await locator.press('Control+A').catch(() => {});
+    await locator.press('Backspace').catch(() => {});
+    await locator.pressSequentially('x', { delay: 20 }).catch(() => {});
+    await locator.press('Backspace').catch(() => {});
+    await pageDelay(100);
+    await locator.pressSequentially(text, { delay: 15 });
+    await locator.press('Tab');
+    await pageDelay(150);
+    const value = await locator.inputValue().catch(() => null);
+    console.log(
+      `project_ui_typed=${label} attempt=${attempt} value=${JSON.stringify(value)}`,
+    );
+    if (value === text) {
+      return;
+    }
+    if (attempt < 3) {
+      await pageDelay(250);
+    }
+  }
   const value = await locator.inputValue().catch(() => null);
-  console.log(`project_ui_typed=${label} value=${JSON.stringify(value)}`);
   assert.equal(value, text, `${label} DOM value did not match typed text`);
 }
 
+async function projectCard(page, projectName) {
+  const pattern = new RegExp(`^${escapedPattern(projectName)}(?:\\n|$)`);
+  return visibleCandidate([page.getByLabel(pattern), page.getByText(pattern)]);
+}
+
+async function openProjectOptions(page, projectName) {
+  const card = await projectCard(page, projectName);
+  const box = await card.boundingBox();
+  assert.ok(box, `Project card ${projectName} had no bounding box`);
+  const x = box.x + box.width - 24;
+  const y = box.y + 24;
+  console.log(
+    `project_ui_pointer=project_options project=${JSON.stringify(projectName)} x=${x.toFixed(1)} y=${y.toFixed(1)}`,
+  );
+  await page.mouse.click(x, y);
+  await named(page, '編輯');
+}
+
 async function isNamedVisible(page, text) {
-  const pattern = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(escapedPattern(text));
   for (const locator of [page.getByLabel(pattern), page.getByText(pattern)]) {
     for (let i = 0; i < (await locator.count()); i += 1) {
       if (await locator.nth(i).isVisible().catch(() => false)) return true;
@@ -267,19 +306,6 @@ async function waitObserved(predicate, label, timeout = 5000) {
   }
   console.error(`project_ui_observed=${JSON.stringify(observed)}`);
   throw new Error(`Acceptance observation timed out: ${label}`);
-}
-
-async function activateSemanticTarget(locator, label) {
-  const info = await locator
-    .evaluate((element) => ({
-      tag: element.tagName,
-      role: element.getAttribute('role'),
-      aria: element.getAttribute('aria-label'),
-      text: element.textContent?.trim().slice(0, 120) ?? '',
-    }))
-    .catch(() => null);
-  console.log(`project_ui_semantic_target=${label} ${JSON.stringify(info)}`);
-  await locator.evaluate((element) => element.click());
 }
 
 function record(check) {
@@ -334,10 +360,9 @@ async function runAcceptance(context) {
   record('create');
 
   await page.waitForTimeout(4200);
-  const projectMenus = page.getByLabel('專案選項', { exact: true });
-  const menu = await visibleCandidate([projectMenus]);
-  await activateSemanticTarget(menu, 'project_options');
-  await (await named(page, '編輯')).click();
+  const createdCard = await projectCard(page, '瀏覽器新增專案');
+  await createdCard.click();
+  await waitNamed(page, '編輯專案');
   const editName = await editorTextboxFromEnd(page, 2);
   await editName.fill('瀏覽器更新專案');
   await (await named(page, '儲存')).click();
@@ -350,9 +375,7 @@ async function runAcceptance(context) {
   record('edit');
 
   await page.waitForTimeout(4200);
-  const menusAfterEdit = page.getByLabel('專案選項', { exact: true });
-  const deleteMenu = await visibleCandidate([menusAfterEdit]);
-  await activateSemanticTarget(deleteMenu, 'project_delete_options');
+  await openProjectOptions(page, '瀏覽器更新專案');
   await (await named(page, '刪除')).click();
   await waitNamed(page, '刪除專案？');
   record('delete_confirmation_present');

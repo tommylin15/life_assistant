@@ -119,3 +119,4 @@ jobs:
           bash -n scripts/rotate_google_oauth_secret.sh
           bash -n .github/scripts/run_cloud_run_job_with_diagnostics.sh
           node --check .github/scripts/verify_task_ui_production.mjs
+          node --check .github/scripts/verify_project_ui_production.mjs

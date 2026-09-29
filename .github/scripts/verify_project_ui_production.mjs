@@ -230,6 +230,16 @@ async function editorTextboxFromEnd(page, offsetFromEnd) {
   return candidate;
 }
 
+async function typeFlutterText(locator, text, label) {
+  await locator.click();
+  await locator.pressSequentially(text, { delay: 15 });
+  await locator.press('Tab');
+  await pageDelay(150);
+  const value = await locator.inputValue().catch(() => null);
+  console.log(`project_ui_typed=${label} value=${JSON.stringify(value)}`);
+  assert.equal(value, text, `${label} DOM value did not match typed text`);
+}
+
 async function isNamedVisible(page, text) {
   const pattern = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   for (const locator of [page.getByLabel(pattern), page.getByText(pattern)]) {
@@ -311,7 +321,7 @@ async function runAcceptance(context) {
   const createSummary = await editorTextboxFromEnd(page, 1);
   await editorTextboxFromEnd(page, 0);
   await createName.fill('瀏覽器新增專案');
-  await createSummary.fill('Project production acceptance');
+  await typeFlutterText(createSummary, 'Project production acceptance', 'create_summary');
   await (await named(page, '儲存')).click();
   await waitObserved(
     () => observed.projectCreate?.name === '瀏覽器新增專案',

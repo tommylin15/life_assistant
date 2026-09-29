@@ -111,10 +111,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check GCP scripts syntax
+      - name: Check deployment acceptance syntax
         run: |
           bash -n scripts/bootstrap_gcp_wif.sh
           bash -n scripts/inspect_postgres_dev.sh
           bash -n scripts/diagnose_db_secret.sh
           bash -n scripts/rotate_google_oauth_secret.sh
           bash -n .github/scripts/run_cloud_run_job_with_diagnostics.sh
+          node --check .github/scripts/verify_task_ui_production.mjs

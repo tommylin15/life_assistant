@@ -156,3 +156,19 @@ jobs:
           grep -Fq '"id": "/life-assistant-v6"' /tmp/manifest-v6.json
           grep -Fq '/icons/life-assistant-192-v8.png' /tmp/manifest-v6.json
           grep -Fq '/icons/life-assistant-512-v8.png' /tmp/manifest-v6.json
+
+      - name: Install production UI acceptance tooling
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Run Task UI production acceptance
+        run: BASE_URL="https://${GCP_PROJECT_ID}.web.app" node .github/scripts/verify_task_ui_production.mjs
+
+      - name: Upload Task UI acceptance diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-ui-production-acceptance-${{ env.RELEASE_SHA }}
+          path: /tmp/task-ui-acceptance.png
+          if-no-files-found: ignore

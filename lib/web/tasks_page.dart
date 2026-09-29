@@ -6,17 +6,10 @@ import 'task_api.dart';
 
 final _taskWorkspaceProvider = FutureProvider<_TaskWorkspace>((ref) async {
   final api = ref.read(taskApiProvider);
-  final results = await Future.wait([
-    api.getTasks(),
-    api.getProjects(),
-  ]);
+  final results = await Future.wait([api.getTasks(), api.getProjects()]);
   return _TaskWorkspace(
-    tasks: (results[0] as List<Map<String, dynamic>>)
-        .map(_TaskView.fromJson)
-        .toList(),
-    projects: (results[1] as List<Map<String, dynamic>>)
-        .map(_ProjectView.fromJson)
-        .toList(),
+    tasks: results[0].map(_TaskView.fromJson).toList(),
+    projects: results[1].map(_ProjectView.fromJson).toList(),
   );
 });
 
@@ -43,7 +36,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
   @override
   Widget build(BuildContext context) {
     final workspace = ref.watch(_taskWorkspaceProvider);
-    final workspaceData = workspace.asData?.value;
+    final data = workspace.asData?.value;
     final wide = MediaQuery.sizeOf(context).width >= 720;
 
     return Scaffold(
@@ -54,9 +47,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: FilledButton.icon(
-                onPressed: workspaceData == null
-                    ? null
-                    : () => _openEditor(workspaceData),
+                onPressed: data == null ? null : () => _openEditor(data),
                 icon: const Icon(Icons.add),
                 label: const Text('新增待辦'),
               ),
@@ -69,25 +60,25 @@ class _TasksPageState extends ConsumerState<TasksPage> {
           error: error,
           onRetry: () => ref.invalidate(_taskWorkspaceProvider),
         ),
-        data: (data) => _buildContent(context, data),
+        data: _buildContent,
       ),
-      floatingActionButton: !wide && workspaceData != null
+      floatingActionButton: !wide && data != null
           ? FloatingActionButton(
               tooltip: '新增待辦',
-              onPressed: () => _openEditor(workspaceData),
+              onPressed: () => _openEditor(data),
               child: const Icon(Icons.add),
             )
           : null,
     );
   }
 
-  Widget _buildContent(BuildContext context, _TaskWorkspace workspace) {
-    final filtered = _visibleTasks(workspace.tasks);
-    final activeCount = workspace.tasks
+  Widget _buildContent(_TaskWorkspace workspace) {
+    final tasks = _visibleTasks(workspace.tasks);
+    final active = workspace.tasks
         .where((task) => !task.isCompleted && !task.isCancelled)
         .length;
-    final todayCount = workspace.tasks.where(_isDueTodayAndOpen).length;
-    final overdueCount = workspace.tasks.where((task) => task.isOverdue).length;
+    final today = workspace.tasks.where(_isDueTodayAndOpen).length;
+    final overdue = workspace.tasks.where((task) => task.isOverdue).length;
 
     return Align(
       alignment: Alignment.topCenter,
@@ -99,9 +90,9 @@ class _TasksPageState extends ConsumerState<TasksPage> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               sliver: SliverToBoxAdapter(
                 child: _TaskOverview(
-                  activeCount: activeCount,
-                  todayCount: todayCount,
-                  overdueCount: overdueCount,
+                  activeCount: active,
+                  todayCount: today,
+                  overdueCount: overdue,
                 ),
               ),
             ),
@@ -109,11 +100,13 @@ class _TasksPageState extends ConsumerState<TasksPage> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               sliver: SliverToBoxAdapter(
                 child: TextField(
-                  onChanged: (value) => setState(() => _query = value.trim()),
                   decoration: const InputDecoration(
                     prefixIcon: Icon(Icons.search),
                     hintText: '搜尋待辦或備註',
                   ),
+                  onChanged: (value) {
+                    setState(() => _query = value.trim());
+                  },
                 ),
               ),
             ),
@@ -134,7 +127,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
                 ),
               ),
             ),
-            if (filtered.isEmpty)
+            if (tasks.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: _TaskEmptyState(
@@ -146,9 +139,9 @@ class _TasksPageState extends ConsumerState<TasksPage> {
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                 sliver: SliverList.builder(
-                  itemCount: filtered.length,
+                  itemCount: tasks.length,
                   itemBuilder: (context, index) {
-                    final task = filtered[index];
+                    final task = tasks[index];
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _TaskCard(
@@ -169,23 +162,29 @@ class _TasksPageState extends ConsumerState<TasksPage> {
     );
   }
 
-  Widget _filterChip(_TaskFilter filter, String label) => Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: FilterChip(
-          label: Text(label),
-          selected: _filter == filter,
-          onSelected: (_) => setState(() => _filter = filter),
-        ),
-      );
+  Widget _filterChip(_TaskFilter filter, String label) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        label: Text(label),
+        selected: _filter == filter,
+        onSelected: (_) {
+          setState(() => _filter = filter);
+        },
+      ),
+    );
+  }
 
-  List<_TaskView> _visibleTasks(List<_TaskView> tasks) {
+  List<_TaskView> _visibleTasks(List<_TaskView> source) {
     final query = _query.toLowerCase();
-    final result = tasks.where((task) {
-      if (query.isNotEmpty &&
-          !task.title.toLowerCase().contains(query) &&
-          !(task.note ?? '').toLowerCase().contains(query)) {
+    final result = source.where((task) {
+      final matchesQuery = query.isEmpty ||
+          task.title.toLowerCase().contains(query) ||
+          (task.note ?? '').toLowerCase().contains(query);
+      if (!matchesQuery) {
         return false;
       }
+
       switch (_filter) {
         case _TaskFilter.open:
           return !task.isCompleted && !task.isCancelled;
@@ -193,7 +192,9 @@ class _TasksPageState extends ConsumerState<TasksPage> {
           return _isDueTodayAndOpen(task);
         case _TaskFilter.upcoming:
           final due = task.dueAt?.toLocal();
-          if (due == null || task.isCompleted || task.isCancelled) return false;
+          if (due == null || task.isCompleted || task.isCancelled) {
+            return false;
+          }
           return due.isAfter(_endOfToday());
         case _TaskFilter.completed:
           return task.isCompleted;
@@ -203,12 +204,16 @@ class _TasksPageState extends ConsumerState<TasksPage> {
     }).toList();
 
     result.sort((a, b) {
-      if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
+      if (a.isCompleted != b.isCompleted) {
+        return a.isCompleted ? 1 : -1;
+      }
       final aDue = a.dueAt?.toLocal();
       final bDue = b.dueAt?.toLocal();
       if (aDue != null && bDue != null) {
-        final compare = aDue.compareTo(bDue);
-        if (compare != 0) return compare;
+        final byDue = aDue.compareTo(bDue);
+        if (byDue != 0) {
+          return byDue;
+        }
       } else if (aDue != null) {
         return -1;
       } else if (bDue != null) {
@@ -220,9 +225,13 @@ class _TasksPageState extends ConsumerState<TasksPage> {
   }
 
   bool _isDueTodayAndOpen(_TaskView task) {
-    if (task.isCompleted || task.isCancelled) return false;
+    if (task.isCompleted || task.isCancelled) {
+      return false;
+    }
     final due = task.dueAt?.toLocal();
-    if (due == null) return false;
+    if (due == null) {
+      return false;
+    }
     final now = DateTime.now();
     return due.year == now.year && due.month == now.month && due.day == now.day;
   }
@@ -257,7 +266,9 @@ class _TasksPageState extends ConsumerState<TasksPage> {
         projects: workspace.projects,
       ),
     );
-    if (result == null || !mounted) return;
+    if (result == null || !mounted) {
+      return;
+    }
 
     try {
       final api = ref.read(taskApiProvider);
@@ -267,11 +278,12 @@ class _TasksPageState extends ConsumerState<TasksPage> {
         await api.updateTask(task.id, result.updateBody);
       }
       ref.invalidate(_taskWorkspaceProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(task == null ? '待辦已新增' : '待辦已更新')),
-        );
+      if (!mounted) {
+        return;
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(task == null ? '待辦已新增' : '待辦已更新')),
+      );
     } catch (error) {
       _showError(error);
     }
@@ -311,23 +323,28 @@ class _TasksPageState extends ConsumerState<TasksPage> {
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true || !mounted) {
+      return;
+    }
 
     try {
       await ref.read(taskApiProvider).deleteTask(task.id);
       ref.invalidate(_taskWorkspaceProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('待辦已刪除')),
-        );
+      if (!mounted) {
+        return;
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('待辦已刪除')),
+      );
     } catch (error) {
       _showError(error);
     }
   }
 
   void _showError(Object error) {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('操作失敗：$error')),
     );
@@ -347,7 +364,7 @@ class _TaskOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final errorColor = overdueCount > 0 ? Theme.of(context).colorScheme.error : null;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -357,11 +374,7 @@ class _TaskOverview extends StatelessWidget {
           children: [
             _OverviewMetric(label: '進行中', value: activeCount),
             _OverviewMetric(label: '今天', value: todayCount),
-            _OverviewMetric(
-              label: '逾期',
-              value: overdueCount,
-              emphasis: overdueCount > 0 ? theme.colorScheme.error : null,
-            ),
+            _OverviewMetric(label: '逾期', value: overdueCount, color: errorColor),
           ],
         ),
       ),
@@ -373,30 +386,30 @@ class _OverviewMetric extends StatelessWidget {
   const _OverviewMetric({
     required this.label,
     required this.value,
-    this.emphasis,
+    this.color,
   });
 
   final String label;
   final int value;
-  final Color? emphasis;
+  final Color? color;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 110,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$value',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: emphasis,
-                  ),
-            ),
-            const SizedBox(height: 2),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      );
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 110,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$value',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: color),
+          ),
+          const SizedBox(height: 2),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
 }
 
 class _TaskCard extends StatelessWidget {
@@ -446,8 +459,9 @@ class _TaskCard extends StatelessWidget {
                       Text(
                         task.title,
                         style: theme.textTheme.bodyLarge?.copyWith(
-                          decoration:
-                              task.isCompleted ? TextDecoration.lineThrough : null,
+                          decoration: task.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
                           color: muted
                               ? theme.colorScheme.onSurface.withValues(alpha: 0.58)
                               : null,
@@ -467,7 +481,6 @@ class _TaskCard extends StatelessWidget {
                       Wrap(
                         spacing: 6,
                         runSpacing: 6,
-                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           _MetaChip(
                             icon: Icons.circle_outlined,
@@ -643,7 +656,7 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _priority,
+                      initialValue: _priority,
                       decoration: const InputDecoration(labelText: '優先度'),
                       items: const [
                         DropdownMenuItem(value: 'low', child: Text('低')),
@@ -651,7 +664,9 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
                         DropdownMenuItem(value: 'high', child: Text('高')),
                       ],
                       onChanged: (value) {
-                        if (value != null) setState(() => _priority = value);
+                        if (value != null) {
+                          setState(() => _priority = value);
+                        }
                       },
                     ),
                   ),
@@ -659,7 +674,7 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _status,
+                        initialValue: _status,
                         decoration: const InputDecoration(labelText: '狀態'),
                         items: const [
                           DropdownMenuItem(value: 'pending', child: Text('待處理')),
@@ -676,7 +691,9 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
                           DropdownMenuItem(value: 'cancelled', child: Text('已取消')),
                         ],
                         onChanged: (value) {
-                          if (value != null) setState(() => _status = value);
+                          if (value != null) {
+                            setState(() => _status = value);
+                          }
                         },
                       ),
                     ),
@@ -685,29 +702,35 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _projectId,
+                initialValue: _projectId,
                 decoration: const InputDecoration(labelText: '專案'),
                 items: [
-                  const DropdownMenuItem<String>(
-                    value: '',
-                    child: Text('無專案'),
-                  ),
+                  const DropdownMenuItem(value: '', child: Text('無專案')),
                   for (final project in widget.projects)
-                    DropdownMenuItem<String>(
+                    DropdownMenuItem(
                       value: project.id,
                       child: Text(project.name),
                     ),
                 ],
                 onChanged: (value) {
-                  if (value != null) setState(() => _projectId = value);
+                  if (value != null) {
+                    setState(() => _projectId = value);
+                  }
                 },
               ),
               const SizedBox(height: 12),
               _DateTimeField(
                 label: '到期時間',
                 value: _dueAt,
-                onPick: () => _pickDateTime(_dueAt, (value) => _dueAt = value),
-                onClear: _dueAt == null ? null : () => setState(() => _dueAt = null),
+                onPick: () => _pickDateTime(
+                  _dueAt,
+                  (value) => _dueAt = value,
+                ),
+                onClear: _dueAt == null
+                    ? null
+                    : () {
+                        setState(() => _dueAt = null);
+                      },
               ),
               const SizedBox(height: 8),
               _DateTimeField(
@@ -719,7 +742,9 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
                 ),
                 onClear: _reminderAt == null
                     ? null
-                    : () => setState(() => _reminderAt = null),
+                    : () {
+                        setState(() => _reminderAt = null);
+                      },
               ),
             ],
           ),
@@ -741,7 +766,7 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
 
   Future<void> _pickDateTime(
     DateTime? current,
-    ValueChanged<DateTime> setValue,
+    ValueChanged<DateTime> apply,
   ) async {
     final now = DateTime.now();
     final initial = current ?? now;
@@ -751,14 +776,18 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 10),
     );
-    if (date == null || !mounted) return;
+    if (date == null || !mounted) {
+      return;
+    }
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(initial),
     );
-    if (time == null || !mounted) return;
+    if (time == null || !mounted) {
+      return;
+    }
     setState(() {
-      setValue(DateTime(date.year, date.month, date.day, time.hour, time.minute));
+      apply(DateTime(date.year, date.month, date.day, time.hour, time.minute));
     });
   }
 
@@ -799,30 +828,31 @@ class _DateTimeField extends StatelessWidget {
   final VoidCallback? onClear;
 
   @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: onPick,
-              icon: const Icon(Icons.event_outlined),
-              label: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  value == null
-                      ? '$label：未設定'
-                      : '$label：${DateFormat('yyyy/M/d HH:mm').format(value!)}',
-                ),
-              ),
+  Widget build(BuildContext context) {
+    final display = value == null
+        ? '$label：未設定'
+        : '$label：${DateFormat('yyyy/M/d HH:mm').format(value!)}';
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onPick,
+            icon: const Icon(Icons.event_outlined),
+            label: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(display),
             ),
           ),
-          if (onClear != null)
-            IconButton(
-              tooltip: '清除$label',
-              onPressed: onClear,
-              icon: const Icon(Icons.close),
-            ),
-        ],
-      );
+        ),
+        if (onClear != null)
+          IconButton(
+            tooltip: '清除$label',
+            onPressed: onClear,
+            icon: const Icon(Icons.close),
+          ),
+      ],
+    );
+  }
 }
 
 class _ChecklistSheet extends ConsumerStatefulWidget {
@@ -877,47 +907,51 @@ class _ChecklistSheetState extends ConsumerState<_ChecklistSheet> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) => _TaskErrorState(
                 error: error,
-                onRetry: () => ref.invalidate(_checklistProvider(widget.task.id)),
+                onRetry: () =>
+                    ref.invalidate(_checklistProvider(widget.task.id)),
               ),
-              data: (items) => items.isEmpty
-                  ? const Center(child: Text('還沒有 Checklist 項目'))
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-                      itemCount: items.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (_, index) {
-                        final item = items[index];
-                        return ListTile(
-                          leading: Checkbox(
-                            value: item.isDone,
-                            onChanged: (value) => _setDone(item, value ?? false),
+              data: (items) {
+                if (items.isEmpty) {
+                  return const Center(child: Text('還沒有 Checklist 項目'));
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const Divider(),
+                  itemBuilder: (_, index) {
+                    final item = items[index];
+                    return ListTile(
+                      leading: Checkbox(
+                        value: item.isDone,
+                        onChanged: (value) => _setDone(item, value ?? false),
+                      ),
+                      title: Text(
+                        item.title,
+                        style: item.isDone
+                            ? const TextStyle(
+                                decoration: TextDecoration.lineThrough,
+                              )
+                            : null,
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: '編輯項目',
+                            onPressed: () => _editItem(item),
+                            icon: const Icon(Icons.edit_outlined),
                           ),
-                          title: Text(
-                            item.title,
-                            style: item.isDone
-                                ? const TextStyle(
-                                    decoration: TextDecoration.lineThrough,
-                                  )
-                                : null,
+                          IconButton(
+                            tooltip: '刪除項目',
+                            onPressed: () => _deleteItem(item),
+                            icon: const Icon(Icons.delete_outline),
                           ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: '編輯項目',
-                                onPressed: () => _editItem(item),
-                                icon: const Icon(Icons.edit_outlined),
-                              ),
-                              IconButton(
-                                tooltip: '刪除項目',
-                                onPressed: () => _deleteItem(item),
-                                icon: const Icon(Icons.delete_outline),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],
@@ -927,7 +961,9 @@ class _ChecklistSheetState extends ConsumerState<_ChecklistSheet> {
 
   Future<void> _addItem() async {
     final title = _newItem.text.trim();
-    if (title.isEmpty) return;
+    if (title.isEmpty) {
+      return;
+    }
     try {
       await ref.read(taskApiProvider).createChecklistItem(
         widget.task.id,
@@ -940,12 +976,12 @@ class _ChecklistSheetState extends ConsumerState<_ChecklistSheet> {
     }
   }
 
-  Future<void> _setDone(_ChecklistItem item, bool isDone) async {
+  Future<void> _setDone(_ChecklistItem item, bool value) async {
     try {
       await ref.read(taskApiProvider).updateChecklistItem(
         widget.task.id,
         item.id,
-        {'is_done': isDone},
+        {'is_done': value},
       );
       ref.invalidate(_checklistProvider(widget.task.id));
     } catch (error) {
@@ -973,7 +1009,9 @@ class _ChecklistSheetState extends ConsumerState<_ChecklistSheet> {
       ),
     );
     controller.dispose();
-    if (title == null || title.isEmpty || !mounted) return;
+    if (title == null || title.isEmpty || !mounted) {
+      return;
+    }
     try {
       await ref.read(taskApiProvider).updateChecklistItem(
         widget.task.id,
@@ -1008,7 +1046,9 @@ class _ChecklistSheetState extends ConsumerState<_ChecklistSheet> {
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true || !mounted) {
+      return;
+    }
     try {
       await ref
           .read(taskApiProvider)
@@ -1020,7 +1060,9 @@ class _ChecklistSheetState extends ConsumerState<_ChecklistSheet> {
   }
 
   void _showError(Object error) {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('操作失敗：$error')),
     );
@@ -1034,31 +1076,33 @@ class _TaskErrorState extends StatelessWidget {
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off_outlined, size: 44),
-              const SizedBox(height: 12),
-              const Text('待辦載入失敗'),
-              const SizedBox(height: 4),
-              Text(
-                '$error',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('重試'),
-              ),
-            ],
-          ),
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined, size: 44),
+            const SizedBox(height: 12),
+            const Text('待辦載入失敗'),
+            const SizedBox(height: 4),
+            Text(
+              '$error',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('重試'),
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _TaskEmptyState extends StatelessWidget {
@@ -1068,33 +1112,35 @@ class _TaskEmptyState extends StatelessWidget {
   final VoidCallback onCreate;
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.task_alt, size: 48),
-              const SizedBox(height: 12),
-              Text(
-                hasAnyTasks ? '這個篩選條件沒有待辦' : '還沒有待辦',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                hasAnyTasks ? '切換篩選條件，或新增一個待辦。' : '先建立第一個待辦。',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: onCreate,
-                icon: const Icon(Icons.add),
-                label: const Text('新增待辦'),
-              ),
-            ],
-          ),
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.task_alt, size: 48),
+            const SizedBox(height: 12),
+            Text(
+              hasAnyTasks ? '這個篩選條件沒有待辦' : '還沒有待辦',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              hasAnyTasks ? '切換篩選條件，或新增一個待辦。' : '先建立第一個待辦。',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onCreate,
+              icon: const Icon(Icons.add),
+              label: const Text('新增待辦'),
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _TaskWorkspace {
@@ -1104,9 +1150,13 @@ class _TaskWorkspace {
   final List<_ProjectView> projects;
 
   String? projectName(String? id) {
-    if (id == null) return null;
+    if (id == null) {
+      return null;
+    }
     for (final project in projects) {
-      if (project.id == id) return project.name;
+      if (project.id == id) {
+        return project.name;
+      }
     }
     return null;
   }
@@ -1124,16 +1174,18 @@ class _TaskView {
     required this.projectId,
   });
 
-  factory _TaskView.fromJson(Map<String, dynamic> json) => _TaskView(
-        id: json['id']?.toString() ?? '',
-        title: json['title']?.toString() ?? '',
-        note: json['note']?.toString(),
-        status: json['status']?.toString() ?? 'pending',
-        priority: json['priority']?.toString() ?? 'normal',
-        dueAt: DateTime.tryParse(json['due_at']?.toString() ?? ''),
-        reminderAt: DateTime.tryParse(json['reminder_at']?.toString() ?? ''),
-        projectId: json['project_id']?.toString(),
-      );
+  factory _TaskView.fromJson(Map<String, dynamic> json) {
+    return _TaskView(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      note: json['note']?.toString(),
+      status: json['status']?.toString() ?? 'pending',
+      priority: json['priority']?.toString() ?? 'normal',
+      dueAt: DateTime.tryParse(json['due_at']?.toString() ?? ''),
+      reminderAt: DateTime.tryParse(json['reminder_at']?.toString() ?? ''),
+      projectId: json['project_id']?.toString(),
+    );
+  }
 
   final String id;
   final String title;
@@ -1146,8 +1198,12 @@ class _TaskView {
 
   bool get isCompleted => status == 'completed';
   bool get isCancelled => status == 'cancelled';
-  bool get isOverdue =>
-      dueAt != null && !isCompleted && !isCancelled && dueAt!.isBefore(DateTime.now());
+  bool get isOverdue {
+    return dueAt != null &&
+        !isCompleted &&
+        !isCancelled &&
+        dueAt!.isBefore(DateTime.now());
+  }
 
   int get priorityRank => switch (priority) {
         'high' => 3,
@@ -1175,10 +1231,12 @@ class _TaskView {
 class _ProjectView {
   const _ProjectView({required this.id, required this.name});
 
-  factory _ProjectView.fromJson(Map<String, dynamic> json) => _ProjectView(
-        id: json['id']?.toString() ?? '',
-        name: json['name']?.toString() ?? '',
-      );
+  factory _ProjectView.fromJson(Map<String, dynamic> json) {
+    return _ProjectView(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+    );
+  }
 
   final String id;
   final String name;
@@ -1191,11 +1249,13 @@ class _ChecklistItem {
     required this.isDone,
   });
 
-  factory _ChecklistItem.fromJson(Map<String, dynamic> json) => _ChecklistItem(
-        id: json['id']?.toString() ?? '',
-        title: json['title']?.toString() ?? '',
-        isDone: json['is_done'] == true,
-      );
+  factory _ChecklistItem.fromJson(Map<String, dynamic> json) {
+    return _ChecklistItem(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      isDone: json['is_done'] == true,
+    );
+  }
 
   final String id;
   final String title;

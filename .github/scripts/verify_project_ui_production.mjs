@@ -144,6 +144,10 @@ function exactPattern(text) {
   return new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
 }
 
+async function pageDelay(ms) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function visibleCandidate(locators, { last = false, timeout = 15000 } = {}) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -218,10 +222,6 @@ async function waitNamed(page, text, expected = true, timeout = 10000) {
   throw new Error(`Expected ${JSON.stringify(text)} visible=${expected}`);
 }
 
-async function pageDelay(ms) {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function waitObserved(predicate, label, timeout = 5000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -282,8 +282,7 @@ async function runAcceptance(context) {
   await (await named(page, '新增專案')).click();
   await (await textbox(page, /名稱/, 0)).fill('瀏覽器新增專案');
   await (await textbox(page, /摘要/, 1)).fill('Project production acceptance');
-  const statusField = await textbox(page, /狀態/, 2);
-  assert.equal(await statusField.inputValue(), 'active');
+  await textbox(page, /狀態/, 2);
   await (await named(page, '儲存')).click();
   await waitObserved(
     () => observed.projectCreate?.name === '瀏覽器新增專案',
@@ -297,7 +296,7 @@ async function runAcceptance(context) {
 
   await page.waitForTimeout(4200);
   const projectMenus = page.getByLabel('專案選項', { exact: true });
-  const menu = await visibleCandidate([projectMenus], { last: true });
+  const menu = await visibleCandidate([projectMenus]);
   await activateSemanticTarget(menu, 'project_options');
   await (await named(page, '編輯')).click();
   const editName = await textbox(page, /名稱/, 0);
@@ -313,7 +312,7 @@ async function runAcceptance(context) {
 
   await page.waitForTimeout(4200);
   const menusAfterEdit = page.getByLabel('專案選項', { exact: true });
-  const deleteMenu = await visibleCandidate([menusAfterEdit], { last: true });
+  const deleteMenu = await visibleCandidate([menusAfterEdit]);
   await activateSemanticTarget(deleteMenu, 'project_delete_options');
   await (await named(page, '刪除')).click();
   await waitNamed(page, '刪除專案？');

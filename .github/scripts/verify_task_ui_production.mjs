@@ -373,6 +373,8 @@ async function runDesktopAcceptance(context) {
   assert.equal(createdItems.at(-1)?.is_done, true);
 
   await (await named(page, '刪除項目', { last: true })).click();
+  await waitNamed(page, '刪除 Checklist 項目？');
+  await (await named(page, '刪除', { last: true })).click();
   await waitNamed(page, '瀏覽器檢查項目', false);
   assert.equal(observed.checklistDelete.length, 1);
   record('checklist_crud');

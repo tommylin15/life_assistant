@@ -8,6 +8,7 @@ import 'app_shell.dart';
 import 'auth_state.dart';
 import 'integrations_page.dart';
 import 'login_page.dart';
+import 'projects_page.dart';
 import 'tasks_page.dart';
 
 final _router = GoRouter(
@@ -39,14 +40,7 @@ final _router = GoRouter(
             icon: Icons.calendar_month_outlined,
           ),
         ),
-        GoRoute(
-          path: '/projects',
-          builder: (_, __) => const _SectionPlaceholderPage(
-            title: '專案',
-            message: '專案內容準備中',
-            icon: Icons.folder_outlined,
-          ),
-        ),
+        GoRoute(path: '/projects', builder: (_, __) => const ProjectsPage()),
         GoRoute(path: '/more', builder: (_, __) => const _MorePage()),
       ],
     ),

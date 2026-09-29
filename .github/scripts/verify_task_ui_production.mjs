@@ -352,7 +352,7 @@ async function runDesktopAcceptance(context) {
   await (await named(page, 'Checklist')).click();
   const checklistInput = await textbox(page, /新增 Checklist 項目/, 0);
   await checklistInput.fill('瀏覽器檢查項目');
-  await checklistInput.press('Enter');
+  await (await named(page, '新增項目')).click();
   await waitNamed(page, '瀏覽器檢查項目');
   assert.equal(observed.checklistCreate.length, 1);
 

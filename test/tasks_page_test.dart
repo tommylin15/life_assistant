@@ -317,7 +317,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.updatedTaskBodies.last['status'], 'pending');
 
-    await tester.tap(find.text('進行中'));
+    await tester.tap(find.widgetWithText(FilterChip, '進行中'));
     await tester.pumpAndSettle();
     expect(find.text('完成驗收待辦'), findsOneWidget);
 

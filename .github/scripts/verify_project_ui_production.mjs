@@ -203,6 +203,33 @@ async function textbox(page, name, fallbackIndex = 0) {
   }
 }
 
+async function editorTextboxFromEnd(page, offsetFromEnd) {
+  const textboxes = page.getByRole('textbox');
+  const visible = [];
+  for (let i = 0; i < (await textboxes.count()); i += 1) {
+    const candidate = textboxes.nth(i);
+    if (await candidate.isVisible().catch(() => false)) {
+      visible.push(candidate);
+    }
+  }
+  const index = visible.length - 1 - offsetFromEnd;
+  if (index < 0) {
+    throw new Error(`Project editor textbox not found at offset ${offsetFromEnd}`);
+  }
+  const candidate = visible[index];
+  const info = await candidate
+    .evaluate((element) => ({
+      role: element.getAttribute('role'),
+      aria: element.getAttribute('aria-label'),
+      tag: element.tagName,
+    }))
+    .catch(() => null);
+  console.log(
+    `project_ui_editor_textbox=offset:${offsetFromEnd} ${JSON.stringify(info)}`,
+  );
+  return candidate;
+}
+
 async function isNamedVisible(page, text) {
   const pattern = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   for (const locator of [page.getByLabel(pattern), page.getByText(pattern)]) {
@@ -280,9 +307,11 @@ async function runAcceptance(context) {
   record('status_filters');
 
   await (await named(page, '新增專案')).click();
-  await (await textbox(page, /名稱/, 0)).fill('瀏覽器新增專案');
-  await (await textbox(page, /摘要/, 1)).fill('Project production acceptance');
-  await textbox(page, /狀態/, 2);
+  const createName = await editorTextboxFromEnd(page, 2);
+  const createSummary = await editorTextboxFromEnd(page, 1);
+  await editorTextboxFromEnd(page, 0);
+  await createName.fill('瀏覽器新增專案');
+  await createSummary.fill('Project production acceptance');
   await (await named(page, '儲存')).click();
   await waitObserved(
     () => observed.projectCreate?.name === '瀏覽器新增專案',
@@ -299,7 +328,7 @@ async function runAcceptance(context) {
   const menu = await visibleCandidate([projectMenus]);
   await activateSemanticTarget(menu, 'project_options');
   await (await named(page, '編輯')).click();
-  const editName = await textbox(page, /名稱/, 0);
+  const editName = await editorTextboxFromEnd(page, 2);
   await editName.fill('瀏覽器更新專案');
   await (await named(page, '儲存')).click();
   await waitObserved(

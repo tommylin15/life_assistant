@@ -95,21 +95,44 @@ jobs:
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
             "$BASE_URL/" >/dev/null
+          echo "hosting_check=root:PASS"
 
-          REMOTE_RELEASE="$(curl --fail --silent --show-error \
-            --retry 5 --retry-delay 5 --retry-all-errors \
-            "$BASE_URL/release.txt")"
-          test "$REMOTE_RELEASE" = "$RELEASE_SHA"
+          REMOTE_RELEASE=""
+          for attempt in $(seq 1 12); do
+            REMOTE_RELEASE="$(curl --fail --silent --show-error \
+              --retry 2 --retry-delay 1 --retry-all-errors \
+              -H 'Cache-Control: no-cache' \
+              "$BASE_URL/release.txt?release=$RELEASE_SHA&attempt=$attempt" || true)"
+            if [ "$REMOTE_RELEASE" = "$RELEASE_SHA" ]; then
+              echo "release_check=PASS attempt=$attempt sha=$REMOTE_RELEASE"
+              break
+            fi
+            echo "release_check=WAIT attempt=$attempt expected=$RELEASE_SHA actual=${REMOTE_RELEASE:-<unavailable>}"
+            sleep 5
+          done
+          if [ "$REMOTE_RELEASE" != "$RELEASE_SHA" ]; then
+            echo "release_check=FAIL expected=$RELEASE_SHA actual=${REMOTE_RELEASE:-<unavailable>}" >&2
+            exit 1
+          fi
 
           CACHE_CONTROL="$(curl --silent --show-error --head "$BASE_URL/index.html" | tr -d '\r' | grep -i '^cache-control:' || true)"
-          echo "$CACHE_CONTROL" | grep -Eiq 'no-cache|no-store|must-revalidate'
+          if ! echo "$CACHE_CONTROL" | grep -Eiq 'no-cache|no-store|must-revalidate'; then
+            echo "hosting_check=cache_control:FAIL actual=${CACHE_CONTROL:-<missing>}" >&2
+            exit 1
+          fi
+          echo "hosting_check=cache_control:PASS value=$CACHE_CONTROL"
 
           API_STATUS="$(curl --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \
             --output /tmp/tasks-body \
             --write-out '%{http_code}' \
             "$BASE_URL/api/v1/tasks")"
-          test "$API_STATUS" = "401"
+          if [ "$API_STATUS" != "401" ]; then
+            echo "hosting_check=api_unauthenticated:FAIL status=$API_STATUS" >&2
+            cat /tmp/tasks-body >&2 || true
+            exit 1
+          fi
+          echo "hosting_check=api_unauthenticated:PASS status=$API_STATUS"
 
           AUTH_HEADERS="$(mktemp)"
           AUTH_STATUS="$(curl --silent --show-error \
@@ -119,10 +142,19 @@ jobs:
             "$BASE_URL/auth/login")"
           case "$AUTH_STATUS" in
             302|303|307|308) ;;
-            *) echo "Unexpected auth status: $AUTH_STATUS" >&2; exit 1 ;;
+            *) echo "hosting_check=auth_redirect:FAIL status=$AUTH_STATUS" >&2; exit 1 ;;
           esac
-          grep -Eiq '^location: https://accounts\.google\.com/o/oauth2/v2/auth' "$AUTH_HEADERS"
-          grep -Eiq '^set-cookie: __session=' "$AUTH_HEADERS"
+          if ! grep -Eiq '^location: https://accounts\.google\.com/o/oauth2/v2/auth' "$AUTH_HEADERS"; then
+            echo "hosting_check=auth_location:FAIL" >&2
+            cat "$AUTH_HEADERS" >&2
+            exit 1
+          fi
+          if ! grep -Eiq '^set-cookie: __session=' "$AUTH_HEADERS"; then
+            echo "hosting_check=auth_cookie:FAIL" >&2
+            cat "$AUTH_HEADERS" >&2
+            exit 1
+          fi
+          echo "hosting_check=auth_redirect:PASS status=$AUTH_STATUS"
 
           ICON_HEADERS="$(mktemp)"
           curl --fail --silent --show-error \
@@ -132,6 +164,7 @@ jobs:
             "$BASE_URL/icons/life-assistant-192-v8.png"
           grep -Eiq '^content-type: image/png' "$ICON_HEADERS"
           test "$(sha256sum /tmp/life-assistant-192-v8.png | awk '{print $1}')" = "$EXPECTED_ICON_SHA"
+          echo "hosting_check=icon:PASS"
 
           HERO_HEADERS="$(mktemp)"
           curl --fail --silent --show-error \
@@ -141,6 +174,7 @@ jobs:
             "$BASE_URL/branding/life-assistant-hero-v8.png"
           grep -Eiq '^content-type: image/png' "$HERO_HEADERS"
           test "$(sha256sum /tmp/life-assistant-hero-v8.png | awk '{print $1}')" = "$EXPECTED_HERO_SHA"
+          echo "hosting_check=hero:PASS"
 
           python - <<'PY'
           from PIL import Image
@@ -156,6 +190,7 @@ jobs:
           grep -Fq '"id": "/life-assistant-v6"' /tmp/manifest-v6.json
           grep -Fq '/icons/life-assistant-192-v8.png' /tmp/manifest-v6.json
           grep -Fq '/icons/life-assistant-512-v8.png' /tmp/manifest-v6.json
+          echo "hosting_check=manifest:PASS"
 
       - name: Install production UI acceptance tooling
         run: |

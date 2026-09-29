@@ -54,6 +54,7 @@ const observed = {
   checklistCreate: [],
   checklistUpdate: [],
   checklistDelete: [],
+  requestTrace: [],
 };
 
 function bodyOf(request) {
@@ -81,6 +82,7 @@ async function installApiMocks(page) {
     const request = route.request();
     const method = request.method();
     const { pathname } = new URL(request.url());
+    observed.requestTrace.push({ method, pathname });
 
     if (pathname === '/api/v1/projects' && method === 'GET') {
       return fulfillJson(route, 200, projects);
@@ -290,6 +292,16 @@ async function waitNamed(page, text, expected = true, timeout = 10000) {
   throw new Error(`Expected ${JSON.stringify(text)} visible=${expected}`);
 }
 
+async function waitObserved(predicate, label, timeout = 5000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  console.error(`task_ui_observed=${JSON.stringify(observed)}`);
+  throw new Error(`Acceptance observation timed out: ${label}`);
+}
+
 function taskByTitle(title) {
   return tasks.find((task) => task.title === title);
 }
@@ -352,7 +364,23 @@ async function runDesktopAcceptance(context) {
   await (await named(page, 'Checklist')).click();
   const checklistInput = await textbox(page, /新增 Checklist 項目/, 0);
   await checklistInput.fill('瀏覽器檢查項目');
+  const checklistGetsBeforeCreate = observed.requestTrace.filter(
+    ({ method, pathname }) => method === 'GET' && pathname.endsWith('/checklist'),
+  ).length;
   await (await named(page, '新增項目')).click();
+  await waitObserved(
+    () => observed.checklistCreate.length === 1,
+    'Checklist POST was not observed after clicking 新增項目',
+  );
+  record('checklist_create_request');
+  await waitObserved(
+    () =>
+      observed.requestTrace.filter(
+        ({ method, pathname }) => method === 'GET' && pathname.endsWith('/checklist'),
+      ).length > checklistGetsBeforeCreate,
+    'Checklist provider refresh GET was not observed after POST',
+  );
+  record('checklist_refresh_request');
   await waitNamed(page, '瀏覽器檢查項目');
   assert.equal(observed.checklistCreate.length, 1);
 
@@ -439,6 +467,7 @@ try {
     }),
   );
 } catch (error) {
+  console.error(`task_ui_observed=${JSON.stringify(observed)}`);
   const pages = context.pages();
   const page = pages.at(-1);
   if (page) {

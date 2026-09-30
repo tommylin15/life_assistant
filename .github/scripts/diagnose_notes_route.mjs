@@ -6,11 +6,16 @@ if (!baseUrl) throw new Error('BASE_URL is required');
 async function inspectRoute(context, path) {
   const page = await context.newPage();
   const label = path.replaceAll('/', '_') || '_root';
+
   page.on('console', (message) => {
-    console.log(`notes_route_console=${label}:${message.type()}:${message.text()}`);
+    console.log(
+      `notes_route_console=${label}:${message.type()}:${message.text()}`,
+    );
   });
   page.on('pageerror', (error) => {
-    console.error(`notes_route_pageerror=${label}:${error.stack ?? error.message}`);
+    console.error(
+      `notes_route_pageerror=${label}:${error.stack ?? error.message}`,
+    );
   });
   page.on('requestfailed', (request) => {
     console.error(
@@ -36,12 +41,17 @@ async function inspectRoute(context, path) {
 
   let flutterAttached = false;
   try {
-    await page.waitForSelector('flutter-view', { state: 'attached', timeout: 15000 });
+    await page.waitForSelector('flutter-view', {
+      state: 'attached',
+      timeout: 15000,
+    });
     flutterAttached = true;
   } catch (_) {
-    // Diagnostics below deliberately preserve the page rather than masking the failure.
+    // Preserve the page below so diagnostics explain why Flutter did not start.
   }
-  console.log(`notes_route_flutter_view=${label}:${flutterAttached ? 'ATTACHED' : 'MISSING'}`);
+  console.log(
+    `notes_route_flutter_view=${label}:${flutterAttached ? 'ATTACHED' : 'MISSING'}`,
+  );
 
   if (!flutterAttached) {
     const scripts = await page.locator('script[src]').evaluateAll((elements) =>
@@ -51,18 +61,26 @@ async function inspectRoute(context, path) {
     console.error(`notes_route_scripts=${label}:${JSON.stringify(scripts)}`);
     console.error(`notes_route_html=${label}:${JSON.stringify(html)}`);
   }
+
   await page.close();
   return flutterAttached;
 }
 
 const browser = await chromium.launch({ headless: true });
 try {
-  const context = await browser.newContext({ serviceWorkers: 'block' });
+  const context = await browser.newContext({
+    serviceWorkers: 'block',
+    locale: 'zh-TW',
+    timezoneId: 'Asia/Taipei',
+  });
   const tasksAttached = await inspectRoute(context, '/tasks');
   const notesAttached = await inspectRoute(context, '/more/notes');
   console.log(
     `notes_route_diagnostic=${JSON.stringify({ tasksAttached, notesAttached })}`,
   );
+  if (!tasksAttached || !notesAttached) {
+    throw new Error('Flutter did not attach on every production route');
+  }
 } finally {
   await browser.close();
 }

@@ -244,6 +244,44 @@ async function textbox(page, label, fallbackIndex = 0) {
   }
 }
 
+async function editorTextboxFromEnd(page, offsetFromEnd, timeout = 5000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const textboxes = page.getByRole('textbox');
+    const visibleTextboxes = [];
+    for (let index = 0; index < (await textboxes.count()); index += 1) {
+      const candidate = textboxes.nth(index);
+      if (await candidate.isVisible().catch(() => false)) {
+        visibleTextboxes.push(candidate);
+      }
+    }
+    const index = visibleTextboxes.length - 1 - offsetFromEnd;
+    if (index >= 0) {
+      const candidate = visibleTextboxes[index];
+      const info = await candidate
+        .evaluate((element) => ({
+          tag: element.tagName,
+          role: element.getAttribute('role'),
+          aria: element.getAttribute('aria-label'),
+        }))
+        .catch(() => null);
+      console.log(
+        `notes_ui_editor_textbox=offset:${offsetFromEnd} ${JSON.stringify(info)}`,
+      );
+      return candidate;
+    }
+    await pageDelay(120);
+  }
+  throw new Error(`Notes editor textbox not found at offset ${offsetFromEnd}`);
+}
+
+async function fillVerified(locator, value, label) {
+  await locator.fill(value);
+  const actual = await locator.inputValue();
+  console.log(`notes_ui_editor_value=${label} ${JSON.stringify(actual)}`);
+  assert.equal(actual, value, `${label} DOM value did not match filled value`);
+}
+
 async function waitObserved(predicate, label) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     if (predicate()) return;
@@ -281,10 +319,16 @@ async function desktop(context) {
   await named(page, /驗收被連結筆記/);
 
   await (await named(page, '新增筆記')).click();
-  await (await textbox(page, /標題/)).fill('瀏覽器新增筆記');
-  await (await textbox(page, /標籤/)).fill('驗收, Markdown, 驗收');
-  await (await textbox(page, /Markdown 內容/)).fill(
+  const editorTitle = await editorTextboxFromEnd(page, 3);
+  await editorTextboxFromEnd(page, 2);
+  const editorTags = await editorTextboxFromEnd(page, 1);
+  const editorBody = await editorTextboxFromEnd(page, 0);
+  await fillVerified(editorTitle, '瀏覽器新增筆記', 'title');
+  await fillVerified(editorTags, '驗收, Markdown, 驗收', 'tags');
+  await fillVerified(
+    editorBody,
     '# 瀏覽器 Markdown\n**正式驗收**',
+    'body',
   );
   await (await named(page, '預覽')).click();
   await named(page, /瀏覽器 Markdown/);
@@ -359,8 +403,8 @@ async function mobile(context) {
   await semantics(page);
   await named(page, /驗收主筆記/);
   await (await named(page, '新增筆記')).click();
-  await textbox(page, /標題/);
-  await textbox(page, /Markdown 內容/);
+  await editorTextboxFromEnd(page, 3);
+  await editorTextboxFromEnd(page, 0);
   assert.deepEqual(overflow, []);
   pass('mobile_editor');
   await page.close();

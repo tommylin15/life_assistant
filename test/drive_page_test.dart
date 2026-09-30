@@ -83,10 +83,9 @@ class _FakeDriveApi implements DriveApi {
 }
 
 class _FakePicker implements GoogleDrivePicker {
-  _FakePicker({this.fileIds = const [], this.folderId});
+  _FakePicker({this.fileIds = const []});
 
   final List<String> fileIds;
-  final String? folderId;
   String? passedFolderId;
   bool? passedAllowMultiple;
   final List<String> openedUrls = [];
@@ -99,7 +98,7 @@ class _FakePicker implements GoogleDrivePicker {
   }
 
   @override
-  Future<String?> pickFolder() async => folderId;
+  Future<String?> pickFolder() async => null;
 
   @override
   Future<void> openUrl(String url) async {

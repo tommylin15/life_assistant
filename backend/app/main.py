@@ -31,6 +31,7 @@ from app.errors import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
+from app.models import drive as _drive_models  # noqa: F401
 from app.models import migration_support as _migration_support  # noqa: F401
 
 app = FastAPI(title="Life Assistant API", version="0.1.0", debug=False)

@@ -15,6 +15,7 @@ from app.models.drive import (
 )
 from app.models.drive_schemas import DriveWorkspaceCreate
 from app.models.migration_support import EntityTag
+from app.models.project import Project
 from app.services.google_drive_files import (
     GOOGLE_FOLDER_MIME,
     get_drive_file_metadata,
@@ -166,6 +167,73 @@ async def refresh_document(
     await db.commit()
     await db.refresh(document)
     return document
+
+
+async def attach_document_to_projects(
+    db: AsyncSession,
+    owner_sub: str,
+    document_id: str,
+    project_ids: list[str],
+) -> list[ProjectDriveDocument]:
+    document = await get_owned_document(db, owner_sub, document_id)
+    unique_project_ids = list(dict.fromkeys(project_ids))
+    if not unique_project_ids:
+        raise HTTPException(422, "At least one project is required")
+
+    project_result = await db.execute(
+        select(Project).where(Project.id.in_(unique_project_ids))
+    )
+    projects = project_result.scalars().all()
+    found_project_ids = {project.id for project in projects}
+    if found_project_ids != set(unique_project_ids):
+        raise HTTPException(404, "Project not found")
+
+    existing_result = await db.execute(
+        select(ProjectDriveDocument).where(
+            ProjectDriveDocument.drive_document_id == document.id,
+            ProjectDriveDocument.project_id.in_(unique_project_ids),
+        )
+    )
+    existing_links = existing_result.scalars().all()
+    by_project = {link.project_id: link for link in existing_links}
+
+    for project_id in unique_project_ids:
+        if project_id in by_project:
+            continue
+        link = ProjectDriveDocument(
+            project_id=project_id,
+            drive_document_id=document.id,
+        )
+        db.add(link)
+        by_project[project_id] = link
+
+    await db.commit()
+    return [by_project[project_id] for project_id in unique_project_ids]
+
+
+async def detach_document_from_project(
+    db: AsyncSession,
+    owner_sub: str,
+    document_id: str,
+    project_id: str,
+) -> None:
+    document = await get_owned_document(db, owner_sub, document_id)
+    relation_result = await db.execute(
+        select(ProjectDriveDocument).where(
+            ProjectDriveDocument.project_id == project_id,
+            ProjectDriveDocument.drive_document_id == document.id,
+        )
+    )
+    if relation_result.scalar_one_or_none() is None:
+        return
+
+    await db.execute(
+        delete(ProjectDriveDocument).where(
+            ProjectDriveDocument.project_id == project_id,
+            ProjectDriveDocument.drive_document_id == document.id,
+        )
+    )
+    await db.commit()
 
 
 async def unregister_document(

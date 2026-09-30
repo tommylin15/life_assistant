@@ -5,6 +5,7 @@ import 'package:life_assistant/app/theme/app_theme.dart';
 import 'package:life_assistant/web/drive_api.dart';
 import 'package:life_assistant/web/drive_page.dart';
 import 'package:life_assistant/web/google_drive_picker.dart';
+import 'package:life_assistant/web/project_api.dart';
 
 class _FakeDriveApi implements DriveApi {
   _FakeDriveApi({List<DriveDocument>? documents, List<DriveWorkspace>? workspaces})
@@ -82,6 +83,37 @@ class _FakeDriveApi implements DriveApi {
   }
 }
 
+class _FakeProjectApi implements ProjectApi {
+  _FakeProjectApi({List<Map<String, dynamic>>? projects})
+      : projects = projects ?? [];
+
+  final List<Map<String, dynamic>> projects;
+
+  @override
+  Future<List<Map<String, dynamic>>> getProjects() async => projects;
+
+  @override
+  Future<List<Map<String, dynamic>>> getTasks() async => const [];
+
+  @override
+  Future<Map<String, dynamic>> createProject(Map<String, dynamic> body) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateProject(
+    String id,
+    Map<String, dynamic> body,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteProject(String id) {
+    throw UnimplementedError();
+  }
+}
+
 class _FakePicker implements GoogleDrivePicker {
   _FakePicker({this.fileIds = const []});
 
@@ -124,16 +156,27 @@ DriveWorkspace _workspace() => const DriveWorkspace(
       isDefault: true,
     );
 
+Map<String, dynamic> _project(String id, String name) => {
+      'id': id,
+      'name': name,
+      'summary': null,
+      'status': 'active',
+      'created_at': '2026-09-30T08:00:00Z',
+      'updated_at': '2026-09-30T08:00:00Z',
+    };
+
 Future<void> _pump(
   WidgetTester tester,
   DriveApi api,
-  GoogleDrivePicker picker,
-) async {
+  GoogleDrivePicker picker, {
+  ProjectApi? projectApi,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         driveApiProvider.overrideWithValue(api),
         googleDrivePickerProvider.overrideWithValue(picker),
+        if (projectApi != null) projectApiProvider.overrideWithValue(projectApi),
       ],
       child: MaterialApp(theme: AppTheme.light, home: const DrivePage()),
     ),
@@ -142,14 +185,19 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('lists registered files and keeps later-slice actions disabled',
+  testWidgets('lists registered files and only later Note import stays disabled',
       (tester) async {
     final api = _FakeDriveApi(
       documents: [_document('d1', '年度預算'), _document('d2', '會議紀錄')],
       workspaces: [_workspace()],
     );
     final picker = _FakePicker();
-    await _pump(tester, api, picker);
+    await _pump(
+      tester,
+      api,
+      picker,
+      projectApi: _FakeProjectApi(projects: [_project('p1', '家庭財務')]),
+    );
 
     expect(find.text('年度預算'), findsOneWidget);
     expect(find.text('會議紀錄'), findsOneWidget);
@@ -163,8 +211,29 @@ void main() {
     final importNote = tester.widget<TextButton>(
       find.widgetWithText(TextButton, '轉入 Notes').first,
     );
-    expect(addProject.onPressed, isNull);
+    expect(addProject.onPressed, isNotNull);
     expect(importNote.onPressed, isNull);
+  });
+
+  testWidgets('add to project dialog supports multiple project selection',
+      (tester) async {
+    final api = _FakeDriveApi(documents: [_document('d1', '年度預算')]);
+    await _pump(
+      tester,
+      api,
+      _FakePicker(),
+      projectApi: _FakeProjectApi(
+        projects: [_project('p1', '家庭財務'), _project('p2', '裝修')],
+      ),
+    );
+
+    await tester.tap(find.widgetWithText(TextButton, '加入專案'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('加入專案'), findsWidgets);
+    expect(find.text('家庭財務'), findsOneWidget);
+    expect(find.text('裝修'), findsOneWidget);
+    expect(find.byType(Checkbox), findsNWidgets(2));
   });
 
   testWidgets('adds picker-selected files into active workspace and opens source',
@@ -205,8 +274,6 @@ void main() {
     expect(find.text('年度預算'), findsOneWidget);
     expect(find.text('會議紀錄'), findsNothing);
 
-    // Unmount the first DrivePage so Flutter cannot preserve its State when
-    // the empty-state fixture is mounted with a different provider override.
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
 

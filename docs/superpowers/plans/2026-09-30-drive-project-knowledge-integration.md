@@ -4,9 +4,9 @@
 
 **Goal:** Build the approved least-privilege Google Drive workspace, Project relationship, one-time Note import, shared Tag, and AI-assisted related-Note workflow end-to-end in the current Flutter Web + FastAPI + PostgreSQL application.
 
-**Architecture:** Keep `drive.file` and use Google Picker as the only new-file grant boundary. Persist only app-owned Drive metadata/relationships in PostgreSQL, reuse the existing Tag vocabulary, keep Note imports independent from Drive after creation, and place AI behind a provider-agnostic enrichment interface whose failure never rolls back core Drive/Project operations.
+**Architecture:** Keep `drive.file` and use Google Picker as the only new-file grant boundary. The backend never sends its stored Google OAuth access/refresh token to Flutter; instead it returns only Picker-safe public configuration, and the browser obtains a separate short-lived Google Identity Services token scoped exactly to `drive.file` for Picker use. PostgreSQL remains the source of truth for app-owned Drive metadata/relationships, Note imports remain independent snapshots, and AI stays behind a provider-agnostic non-blocking enrichment interface.
 
-**Tech Stack:** Flutter 3.47.3 Web, Riverpod, GoRouter, FastAPI 0.115, SQLAlchemy 2.0 async, PostgreSQL, Alembic, httpx, Google Drive API + Google Picker API, OpenAI Responses API adapter behind an internal enrichment interface, GitHub Actions, Firebase Hosting, Cloud Run.
+**Tech Stack:** Flutter Web / Dart 3.13, Riverpod, GoRouter, FastAPI, SQLAlchemy async, PostgreSQL, Alembic, httpx, Google Drive API + Google Picker API + Google Identity Services, optional OpenAI Responses API adapter behind an internal enrichment interface, GitHub Actions, Firebase Hosting, Cloud Run.
 
 **Spec:** `docs/superpowers/specs/2026-09-30-drive-project-knowledge-integration-design.md`
 
@@ -14,24 +14,32 @@
 
 - Work directly on `main`; no feature branch or PR is required by project governance.
 - Keep Google Drive authorization at `https://www.googleapis.com/auth/drive.file`; do not add `drive.readonly`.
-- A configured workspace folder is logical organization only; it does not imply recursive access to existing children.
+- Google Picker is the explicit file-selection/grant boundary. A configured workspace folder is logical organization only and never means recursive access to existing children.
+- The backend Google token may contain several already-approved service scopes; **never return that token or the refresh token to the browser**.
+- Picker obtains its own in-memory, short-lived browser token through Google Identity Services with scope exactly `https://www.googleapis.com/auth/drive.file`.
+- Backend Picker configuration may expose only the Web OAuth client ID, restricted Picker API key, app ID/project number, and the fixed `drive.file` scope. It must never expose `GOOGLE_CLIENT_SECRET` or stored tokens.
+- Selected Google file IDs are sent to the backend; the backend re-fetches metadata/content using its server-side Drive authorization and remains the authority on whether a selected file is readable.
 - Original Google Drive files remain the provider source of truth; no v1 API may rename, move, or delete them.
 - Drive -> Note is a one-time snapshot import; no automatic or bidirectional sync.
 - Drive document -> Project is many-to-many.
 - Reuse `tags` / `entity_tags` with `entity_type="drive_document"`; do not create a second Tag system.
 - Intelligent organization mode is fixed to: automatic Tags, related-Note suggestions requiring explicit user acceptance, and no automatic Note linking.
-- AI enrichment is provider-agnostic at the domain boundary and non-blocking for core operations.
-- `Allow document content to be sent for AI analysis` must be an explicit persisted user setting; default is OFF.
+- `Allow document content to be sent for AI analysis` is a persisted explicit user setting and defaults to OFF.
+- AI enrichment is provider-agnostic and non-blocking. Project attachment commits before enrichment; enrichment failure never rolls back a successful Project relationship.
+- AI candidate retrieval caps at 20 Notes; user-visible related-Note suggestions default to 5.
+- `AI_ENRICHMENT_PROVIDER=disabled` is a supported production mode. Do not assume any production model credential exists.
+- Adding/changing a production AI secret is a separate high-risk deployment action and requires explicit confirmation under project governance when applicable.
 - Existing authorization, execution logging, confirmation, and idempotency conventions apply to new mutations.
-- Delivery status remains `PARTIAL` until implementation, tests, CI, deployment, runtime, and integration evidence are all sufficient for `DONE`.
+- Removing workspaces, internal document registrations, Tags, or app relationships must never delete the provider file.
+- Delivery status remains `PARTIAL` until implementation, tests, CI, deployment, runtime, and integration evidence are sufficient for `DONE`.
 
 ## Review Focus
 
-- **Cross-user Drive isolation:** a signed-in user must never list, mutate, enrich, or obtain picker credentials for another user's Drive workspace/document; Tasks 2, 4, 5, and 7 pin `user_sub` filtering.
-- **Repeated Picker selection:** selecting/registering the same Google file repeatedly or into multiple workspaces must upsert one `drive_documents` row and create only unique relationship rows; Task 2 pins this.
-- **AI disabled/unavailable:** Project attachment must remain successful and return enrichment `skipped`/`failed` without rollback; Task 7 pins this.
-- **Unsupported text extraction:** unsupported files remain attachable/openable, but Drive -> Note import returns `drive_text_unavailable` and creates no Note; Task 5 pins this.
-- **Provider access lost later:** refresh/open/import attempts surface the current Google authorization/provider error and never present an old Note snapshot as current Drive content; Tasks 2 and 5 pin this.
+- **Cross-user Drive isolation:** user A must never list, mutate, enrich, or relate user B’s workspace/document; Tasks 2, 4, 5, 6, and 7 pin `owner_sub`/`user_sub` filtering.
+- **Picker token minimization and account mismatch:** Picker uses a separate browser `drive.file` token only; selected IDs are still verified by the backend, and an ID inaccessible to the signed-in backend Google account fails cleanly instead of being registered; Tasks 2 and 3 pin this.
+- **Repeated Picker selection:** selecting the same Google file repeatedly or into multiple workspaces keeps one provider record per `(owner_sub, google_file_id)` and unique relationship rows; Task 2 pins this.
+- **Unsupported text extraction:** unsupported binary files remain attachable/openable but Drive -> Note returns `drive_text_unavailable` and creates no Note; Task 5 pins this.
+- **AI disabled/unavailable:** core Project attachment remains committed and returns enrichment `skipped|partial|failed` without rollback; Task 7 pins this.
 
 ---
 
@@ -41,45 +49,51 @@
 
 - Create `backend/app/models/drive.py` — Drive workspace/document/relationship/settings/enrichment persistence models.
 - Create `backend/app/models/drive_schemas.py` — Pydantic request/response types for Drive APIs.
-- Create `backend/app/services/google_drive_files.py` — Google Drive token-backed metadata/text/picker-session adapter.
+- Create `backend/app/services/google_api.py` — shared authenticated Google HTTP request helper extracted from the current Google integrations router.
+- Create `backend/app/services/google_drive_files.py` — Drive metadata/readable-text adapter; no provider mutations.
+- Create `backend/app/services/tag_service.py` — generic EntityTag operations reused by Notes and Drive documents.
 - Create `backend/app/services/drive_documents.py` — workspace/document registry and relationship business rules.
-- Create `backend/app/services/drive_enrichment.py` — deterministic candidate retrieval, fingerprinting, Tag normalization, enrichment orchestration.
-- Create `backend/app/services/ai_enrichment.py` — provider-neutral protocol + disabled/OpenAI provider adapters.
-- Create `backend/app/api/drive.py` — Drive workspace/document/settings/import/enrichment endpoints.
-- Modify `backend/app/api/projects.py` — Project <-> Drive-document endpoints and project delete guard.
-- Modify `backend/app/api/notes.py` — Note <-> Drive-document read/manual relationship endpoints.
-- Modify `backend/app/main.py` — register the Drive router.
-- Modify `backend/app/config.py` — Google Picker + AI enrichment configuration.
-- Modify `backend/alembic/env.py` — import Drive models for migration metadata.
+- Create `backend/app/services/ai_enrichment.py` — provider-neutral protocol + disabled/OpenAI adapter.
+- Create `backend/app/services/drive_enrichment.py` — deterministic candidates, fingerprint/cache, Tag application, suggestion persistence, partial-success orchestration.
+- Create `backend/app/api/drive.py` — `/api/v1/drive/*` application endpoints.
+- Modify `backend/app/api/google_integrations.py` — consume extracted `google_api` helper without changing Gmail/Calendar/Bridge behavior.
+- Modify `backend/app/api/projects.py` — Project delete guard for Drive relationships.
+- Modify `backend/app/api/notes.py` — reuse generic Tag service and clean Note-Drive relationships on Note deletion.
+- Modify `backend/app/main.py` — register Drive router/model metadata.
+- Modify `backend/app/config.py`, `backend/.env.example` — Picker/AI configuration.
+- Modify `backend/alembic/env.py` — import Drive models for migration metadata if required by current Alembic pattern.
 - Create `backend/alembic/versions/20260930_0008_drive_project_knowledge.py` — additive schema migration.
 
 ### Flutter Web
 
-- Create `lib/web/drive_api.dart` — typed HTTP boundary for Drive APIs.
-- Create `lib/web/drive_picker.dart`, `lib/web/drive_picker_web.dart`, `lib/web/drive_picker_stub.dart` — conditional Google Picker bridge.
-- Create `lib/web/drive_page.dart` — selected-document list, search, document actions.
+- Create `lib/web/drive_api.dart` — HTTP boundary for Drive APIs.
+- Create `lib/web/google_drive_picker.dart`, `lib/web/google_drive_picker_web.dart`, `lib/web/google_drive_picker_stub.dart` — testable Picker abstraction.
+- Create `lib/web/drive_page.dart` — registered selected-document manager.
 - Create `lib/web/drive_settings_page.dart` — workspace + intelligent-organization settings.
-- Modify `lib/web/web_app.dart` — `/more/drive` and `/more/drive/settings` routes and More entry.
-- Modify `lib/web/projects_page.dart` — related Drive documents section and attach/detach flow.
-- Modify `lib/web/notes_page.dart` — source/related Drive document section.
+- Create `web/google_drive_picker_bridge.js` — minimal Picker + Google Identity Services bridge.
+- Modify `web/index.html` — load the bridge/scripts required by the Web-only implementation.
+- Modify `lib/web/api_client.dart`, `lib/web/web_app.dart` — API plumbing, `/more/drive`, `/more/drive/settings`, More entry.
+- Modify `lib/web/projects_page.dart`, `lib/web/project_api.dart` — related Drive documents.
+- Modify `lib/web/notes_page.dart`, `lib/web/note_api.dart` — source/related Drive documents.
 
 ### Tests / Acceptance
 
 - Create `backend/tests/test_drive_models.py`
 - Create `backend/tests/test_drive_migration.py`
-- Create `backend/tests/test_drive_api.py`
+- Create `backend/tests/test_tag_service.py`
+- Create `backend/tests/test_google_api_service.py`
 - Create `backend/tests/test_google_drive_files.py`
+- Create `backend/tests/test_drive_api.py`
 - Create `backend/tests/test_project_drive_documents.py`
 - Create `backend/tests/test_drive_note_import.py`
 - Create `backend/tests/test_drive_tags.py`
 - Create `backend/tests/test_drive_enrichment.py`
 - Create `test/drive_page_test.dart`
 - Create `test/drive_settings_page_test.dart`
-- Modify `test/projects_page_test.dart`
-- Modify `test/notes_page_test.dart`
+- Modify `test/projects_page_test.dart`, `test/notes_page_test.dart`, `test/web_app_shell_test.dart`
 - Create `.github/scripts/verify_drive_knowledge_production.mjs`
 - Create `.github/workflows/drive-knowledge-runtime-acceptance.yml`
-- Modify `.github/workflows/ci.yml` to syntax-check the new acceptance script.
+- Modify existing CI/deploy workflows only where the new test/config path requires it.
 
 ---
 
@@ -88,165 +102,163 @@
 **Files:**
 - Create: `backend/app/models/drive.py`
 - Create: `backend/app/models/drive_schemas.py`
-- Modify: `backend/alembic/env.py`
+- Modify: `backend/alembic/env.py` if required by current metadata-import pattern
 - Create: `backend/alembic/versions/20260930_0008_drive_project_knowledge.py`
-- Create: `backend/tests/test_drive_models.py`
-- Create: `backend/tests/test_drive_migration.py`
+- Modify: `backend/app/main.py`
+- Test: `backend/tests/test_drive_models.py`
+- Test: `backend/tests/test_drive_migration.py`
 
 **Interfaces:**
-- Consumes existing `Base`, `Project`, `Note`, `Tag` / `EntityTag`, and current Google `user_sub` identity.
-- Produces model classes: `DriveWorkspace`, `DriveDocument`, `DriveWorkspaceDocument`, `ProjectDriveDocument`, `NoteDriveDocument`, `DriveSettings`, `DriveDocumentEnrichmentRun`, `DriveNoteLinkSuggestion`.
-- Produces schema types: `DriveWorkspaceCreate`, `DriveWorkspaceUpdate`, `DriveWorkspaceOut`, `DriveDocumentOut`, `DriveSettingsOut`, `DriveSettingsUpdate`, `DriveNoteLinkSuggestionOut`, `PickerSessionOut`.
+- Consumes existing `Base`, `Project`, `Note`, `Tag` / `EntityTag`, and authenticated Google `user["sub"]` identity.
+- Produces ORM classes `DriveWorkspace`, `DriveDocument`, `DriveWorkspaceDocument`, `ProjectDriveDocument`, `NoteDriveDocument`, `DriveAiSettings`, `DriveDocumentEnrichmentRun`, `DriveNoteLinkSuggestion`.
+- Produces migration revision `20260930_0008`, revising `20260930_0007`.
 
 - [ ] **Step 1: Write failing model tests**
 
-Assert `DriveWorkspace.user_sub` and `DriveDocument.user_sub` exist; `(user_sub, google_folder_id)` and `(user_sub, google_file_id)` are unique; Project/workspace relationship tables have composite uniqueness; `NoteDriveDocument.relation_type` supports `source_import|related`; `DriveSettings` defaults are `auto_tags_enabled=True`, `suggest_notes_enabled=True`, `allow_ai_content=False`, `max_note_suggestions=5`.
+Assert `owner_sub` is required on workspaces/documents/settings; `(owner_sub, google_folder_id)` and `(owner_sub, google_file_id)` are unique; relationship tables use composite uniqueness; `DriveAiSettings` defaults are `auto_tags=True`, `suggest_related_notes=True`, `allow_content_analysis=False`, `max_related_notes=5`; relation values are validated at schema/service boundaries as `source_import|related` and `manual|ai_accepted|import`.
 
-- [ ] **Step 2: Write failing migration test**
+- [ ] **Step 2: Write failing migration tests**
 
-Assert revision `20260930_0008` has down revision `20260930_0007`, creates the eight tables above, adds FKs to `projects.id`, `notes.id`, and `drive_documents.id`, and does not alter `google_connections.scopes`.
+Assert `down_revision == "20260930_0007"`, all eight tables are created, relationship FKs point to existing Project/Note tables, and one active default workspace per owner is enforced with a PostgreSQL partial unique index. Assert no existing Google OAuth scope/token column is widened or rewritten.
 
-- [ ] **Step 3: Run focused tests and verify RED**
+- [ ] **Step 3: Run tests and verify RED**
 
 ```bash
 cd backend
-python -m unittest tests.test_drive_models tests.test_drive_migration -v
+pytest -q tests/test_drive_models.py tests/test_drive_migration.py
 ```
 
 Expected: FAIL because Drive models/migration do not exist.
 
-- [ ] **Step 4: Implement the models and migration**
+- [ ] **Step 4: Implement models and additive migration**
 
-Use string UUID PKs consistent with the repository. Persist `user_sub` on `DriveWorkspace`, `DriveDocument`, and `DriveSettings`. Migration is additive only; no destructive rewrite.
+Use `String(36)` UUID storage to match the current domain. New Drive records are user-scoped; association rows reference the scoped document/workspace records. No destructive migration or data rewrite.
 
-- [ ] **Step 5: Verify GREEN and migration SQL**
+- [ ] **Step 5: Register model metadata and verify GREEN**
 
 ```bash
-python -m unittest tests.test_drive_models tests.test_drive_migration -v
+cd backend
+pytest -q tests/test_drive_models.py tests/test_drive_migration.py tests/test_alembic_metadata_bootstrap_apply.py tests/test_cloud_domain_models.py
 alembic upgrade head --sql > /tmp/drive-knowledge.sql
 ```
 
-Expected: PASS and generated SQL contains additive DDL only.
+Expected: PASS and SQL contains additive DDL only.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/app/models/drive.py backend/app/models/drive_schemas.py backend/alembic/env.py backend/alembic/versions/20260930_0008_drive_project_knowledge.py backend/tests/test_drive_models.py backend/tests/test_drive_migration.py
+git add backend/app/models/drive.py backend/app/models/drive_schemas.py backend/app/main.py backend/alembic/env.py backend/alembic/versions/20260930_0008_drive_project_knowledge.py backend/tests/test_drive_models.py backend/tests/test_drive_migration.py
 git commit -m "feat: add drive knowledge data model"
 ```
 
-### Task 2: Google Drive adapter, picker session, workspace/document/settings API
+### Task 2: Shared Google request helper, Drive adapter, Picker config, workspace/document registry
 
 **Files:**
+- Create: `backend/app/services/google_api.py`
 - Create: `backend/app/services/google_drive_files.py`
 - Create: `backend/app/services/drive_documents.py`
 - Create: `backend/app/api/drive.py`
-- Modify: `backend/app/config.py`
-- Modify: `backend/app/main.py`
-- Create: `backend/tests/test_google_drive_files.py`
-- Create: `backend/tests/test_drive_api.py`
+- Modify: `backend/app/api/google_integrations.py`
+- Modify: `backend/app/config.py`, `backend/.env.example`, `backend/app/main.py`
+- Test: `backend/tests/test_google_api_service.py`
+- Test: `backend/tests/test_google_drive_files.py`
+- Test: `backend/tests/test_drive_api.py`
+- Regression: existing `backend/tests/test_google_integrations.py`
 
 **Interfaces:**
-- Consumes `get_access_token(db, user_sub, SERVICE_SCOPES["drive"][0])` from `google_oauth.py` and Task 1 models/schemas.
-- Produces:
-  - `DriveFileMetadata(id: str, name: str, mime_type: str, web_view_link: str | None, modified_at: datetime | None)`.
-  - `async get_drive_file_metadata(db, user_sub: str, google_file_id: str) -> DriveFileMetadata`.
-  - `async get_drive_text(db, user_sub: str, google_file_id: str, mime_type: str) -> str | None`.
-  - `async get_picker_session(db, user_sub: str) -> PickerSessionOut`.
-- Produces API routes:
+- Produces `async request_google(db, user_sub, scope, method, url, **kwargs) -> httpx.Response` with the current Google retry/error behavior moved out of the integrations router.
+- Produces `DriveFileMetadata(id, name, mime_type, web_view_link, modified_at, parents)` and `DriveTextResult(supported, text, source_mime_type)`.
+- Produces `async get_drive_file_metadata(db, user_sub, google_file_id) -> DriveFileMetadata` and `async read_drive_text(...) -> DriveTextResult`.
+- Produces `GET /api/v1/drive/picker-config` -> `PickerConfigOut(client_id, developer_key, app_id, scope)` where scope is exactly `drive.file`; **no OAuth token fields exist**.
+- Produces workspace/settings/document registry endpoints:
   - `GET/POST /api/v1/drive/workspaces`
   - `PATCH/DELETE /api/v1/drive/workspaces/{workspace_id}`
-  - `GET/PUT /api/v1/drive/settings`
-  - `GET /api/v1/drive/picker-session`
-  - `POST /api/v1/drive/documents/register`
+  - `GET/PUT /api/v1/drive/ai-settings`
   - `GET /api/v1/drive/documents?q=&workspace_id=`
+  - `POST /api/v1/drive/documents/register`
   - `POST /api/v1/drive/documents/{document_id}/refresh`
+  - `DELETE /api/v1/drive/documents/{document_id}`
 
-- [ ] **Step 1: Write failing Google adapter tests**
+- [ ] **Step 1: Write failing shared-Google-request regression tests**
 
-Mock `httpx.AsyncClient` and assert Drive metadata calls use the current bearer token and minimum fields; Google Docs export as `text/plain`, Google Sheets as `text/csv` (first sheet, matching provider export semantics), Google Slides as `text/plain`, stored `text/*` files download as text, unsupported binary MIME types return `None`, and 401/403 provider responses surface a stable provider error.
+Pin current behavior: refresh once on `401`; repeated `401/403` -> stable permission/reauthorization error; network failure -> `503`; other provider error -> `502`.
 
-- [ ] **Step 2: Write failing API tests for isolation/idempotency/settings**
+- [ ] **Step 2: Extract `request_google` and migrate existing Google integrations calls**
 
-Cover: user A cannot list/mutate user B workspace/document/settings; workspace creation verifies selected ID is a Google Drive folder; duplicate workspace folder resolves to one row; repeated registration of the same file keeps one `DriveDocument`; the same file may link to multiple workspaces; settings default exactly to Task 1 values; deleting a workspace never calls Google delete.
+Public Gmail/Calendar/Drive Bridge behavior must not change.
 
-Also pin cleanup semantics: removing a workspace prunes an unreferenced `DriveDocument` registration only when it has no remaining workspace, Project, or Note relationship; otherwise the document record remains.
+- [ ] **Step 3: Write failing Drive read tests**
 
-- [ ] **Step 3: Run focused tests and verify RED**
+Pin supported v1 extraction: Google Docs `text/plain`, Sheets `text/csv` (first-sheet semantics), Slides `text/plain`, stored `text/*`/JSON/CSV/Markdown as bounded text; PDF/Office binary/images/audio/video/unknown -> `supported=False` with no fabricated text. Metadata must capture only required provider identity/view fields, not persist permission lists.
+
+- [ ] **Step 4: Write failing Picker config security tests**
+
+Assert authenticated endpoint returns exactly client ID, developer key, app ID, and fixed `drive.file` scope. Assert response contains no `client_secret`, `access_token`, `refresh_token`, Gmail scope, or Calendar scope. Missing Picker config returns a stable configuration error.
+
+- [ ] **Step 5: Write failing workspace/settings/registration tests**
+
+Cover user isolation, folder MIME verification, one default workspace per owner, duplicate folder/file idempotency, same file in multiple workspaces, registered-metadata search only, settings defaults, and repeated file registration. Selected file metadata is always re-fetched by backend; never trust Picker-provided name/URL. A file ID inaccessible to the backend’s signed-in Drive authorization fails registration.
+
+- [ ] **Step 6: Implement Drive backend**
+
+Add Picker config settings `google_picker_developer_key`, `google_picker_app_id`; reuse existing `google_client_id` as public Web client ID. `POST /documents/register` accepts 1..100 unique `google_file_ids` plus optional workspace ID, re-fetches metadata, then upserts `(owner_sub, google_file_id)` and associations. Search never calls unrestricted Google Drive search.
+
+- [ ] **Step 7: Add internal unregister guard**
+
+`DELETE /drive/documents/{id}` requires target-bound explicit confirmation. Return `409` while any workspace/Project/Note relationship references the document. Allowed deletion cleans app-owned Tags/suggestions/enrichment metadata only and never invokes Google file deletion.
+
+- [ ] **Step 8: Verify GREEN**
 
 ```bash
 cd backend
-python -m unittest tests.test_google_drive_files tests.test_drive_api -v
-```
-
-Expected: FAIL.
-
-- [ ] **Step 4: Implement config and adapter**
-
-Add `google_picker_developer_key` and `google_picker_app_id`. `PickerSessionOut` contains `access_token`, `expires_at`, `developer_key`, `app_id`; endpoint responses set `Cache-Control: no-store`. Never log OAuth access tokens.
-
-- [ ] **Step 5: Implement registry/settings service and Drive router**
-
-`POST /drive/documents/register` accepts `google_file_ids: list[str]` plus optional `workspace_id`; fetch metadata before upsert, scope by `current_user["sub"]`, and create unique relationships. Search only PostgreSQL-registered documents; never implement unrestricted Drive search.
-
-- [ ] **Step 6: Verify GREEN and import**
-
-```bash
-python -m unittest tests.test_google_drive_files tests.test_drive_api -v
+pytest -q tests/test_google_api_service.py tests/test_google_drive_files.py tests/test_drive_api.py tests/test_google_integrations.py
 python -c "from app.main import app; print('OK')"
 ```
 
 Expected: PASS / `OK`.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add backend/app/services/google_drive_files.py backend/app/services/drive_documents.py backend/app/api/drive.py backend/app/config.py backend/app/main.py backend/tests/test_google_drive_files.py backend/tests/test_drive_api.py
-git commit -m "feat: add drive workspace registry api"
+git add backend/app/services/google_api.py backend/app/services/google_drive_files.py backend/app/services/drive_documents.py backend/app/api/drive.py backend/app/api/google_integrations.py backend/app/config.py backend/.env.example backend/app/main.py backend/tests/test_google_api_service.py backend/tests/test_google_drive_files.py backend/tests/test_drive_api.py
+git commit -m "feat: add drive workspace registry backend"
 ```
 
-### Task 3: Google Picker bridge and Drive/settings Web UI
+### Task 3: Google Identity Services Picker bridge and Drive/settings Web UI
 
 **Files:**
-- Create: `lib/web/drive_api.dart`
-- Create: `lib/web/drive_picker.dart`
-- Create: `lib/web/drive_picker_web.dart`
-- Create: `lib/web/drive_picker_stub.dart`
-- Create: `lib/web/drive_page.dart`
-- Create: `lib/web/drive_settings_page.dart`
-- Modify: `lib/web/web_app.dart`
-- Create: `test/drive_page_test.dart`
-- Create: `test/drive_settings_page_test.dart`
-- Modify: `test/web_app_shell_test.dart`
+- Create: `web/google_drive_picker_bridge.js`
+- Modify: `web/index.html`
+- Create: `lib/web/google_drive_picker.dart`, `lib/web/google_drive_picker_web.dart`, `lib/web/google_drive_picker_stub.dart`
+- Create: `lib/web/drive_api.dart`, `lib/web/drive_page.dart`, `lib/web/drive_settings_page.dart`
+- Modify: `lib/web/api_client.dart`, `lib/web/web_app.dart`
+- Test: `test/drive_page_test.dart`, `test/drive_settings_page_test.dart`, `test/web_app_shell_test.dart`
 
 **Interfaces:**
-- Consumes Task 2 APIs.
-- Produces `DriveApi` methods: `getWorkspaces`, `createWorkspace`, `updateWorkspace`, `deleteWorkspace`, `getSettings`, `updateSettings`, `getPickerSession`, `registerDocuments`, `getDocuments`, `refreshDocument`.
-- Produces `Future<List<String>> pickDriveItems(PickerSession session, {required bool folders, bool multiSelect = true})`; Web implementation invokes Google Picker, stub throws `UnsupportedError`.
+- `GoogleDrivePicker.pickFiles({String? folderId, bool allowMultiple = true}) -> Future<List<String>>` returns provider IDs only.
+- `GoogleDrivePicker.pickFolder() -> Future<String?>` returns one folder ID.
+- `DriveApi.getPickerConfig()` returns `clientId/developerKey/appId/scope`; no token.
+- Routes `/more/drive` and `/more/drive/settings`; More adds `Google Drive`.
 
-- [ ] **Step 1: Write failing route/page tests**
+- [ ] **Step 1: Write failing Picker abstraction tests**
 
-Assert `More` contains `Google Drive`; `/more/drive` renders registered documents, search, `開啟`, `加入專案`, `轉入 Notes`, and `更多`; empty state says only selected/authorized files appear. At this slice, `加入專案` and `轉入 Notes` render disabled until Tasks 4/5 activate them.
+Widget tests inject a fake picker; no real Google script/OAuth opens under `flutter test`.
 
-- [ ] **Step 2: Write failing settings tests**
+- [ ] **Step 2: Implement Web bridge with separate browser token**
 
-Assert multiple workspaces render independently; add workspace invokes `pickDriveItems(... folders: true)` then `createWorkspace`; enable/default/remove actions call API; settings explain folder selection is not recursive authorization; persisted AI switches render from Task 2 settings.
+Load Google Identity Services + Picker. Call `google.accounts.oauth2.initTokenClient` with the returned client ID and scope exactly `https://www.googleapis.com/auth/drive.file`; hold the returned access token only in memory, then pass it to `PickerBuilder.setOAuthToken`. Use the returned restricted developer key/app ID. Never read, receive, persist, or reuse the backend’s stored Google token. Cancellation returns no IDs and causes no mutation.
 
-- [ ] **Step 3: Run Flutter tests and verify RED**
+- [ ] **Step 3: Implement file/folder Picker modes**
 
-```bash
-flutter test test/drive_page_test.dart test/drive_settings_page_test.dart test/web_app_shell_test.dart
-```
+File mode uses list-oriented Docs view and optional multi-select. Folder mode allows folder selection and single-select. Return selected IDs only. Where supported, give GIS the current signed-in account as a hint; backend access verification remains authoritative if the Picker account differs.
 
-Expected: FAIL.
+- [ ] **Step 4: Write failing Drive/settings widget tests**
 
-- [ ] **Step 4: Implement `DriveApi` and Picker bridge**
+Cover registered document search, `Open`, disabled-until-ready `Add to Project`/`Convert to Note`, workspace filters, empty state explaining selected-only scope, reauthorization/provider errors, multiple workspace CRUD, default workspace, AI setting defaults, and explicit text that workspace folders are not recursively indexed.
 
-For file mode use `DocsView` list mode and optional `MULTISELECT_ENABLED`. For folder mode use `DocsView.setIncludeFolders(true)` plus `setSelectFolderEnabled(true)` and single-select. Set OAuth token/developer key/app ID from `PickerSession`. Cancellation returns an empty list and causes no mutation.
+- [ ] **Step 5: Implement pages/routes and registration flow**
 
-- [ ] **Step 5: Implement pages/routes**
-
-Use `/more/drive` and `/more/drive/settings`. `Add Drive files` opens file Picker then registers IDs; workspace creation opens folder Picker. Drive document search remains app-metadata search only.
+`Add Drive files` -> Picker -> send IDs to backend -> render backend-returned metadata. Workspace add -> folder Picker -> backend verifies folder metadata. Open uses the Google-provided web view link through existing browser navigation.
 
 - [ ] **Step 6: Verify GREEN, analyze, build**
 
@@ -261,124 +273,96 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add lib/web/drive_api.dart lib/web/drive_picker.dart lib/web/drive_picker_web.dart lib/web/drive_picker_stub.dart lib/web/drive_page.dart lib/web/drive_settings_page.dart lib/web/web_app.dart test/drive_page_test.dart test/drive_settings_page_test.dart test/web_app_shell_test.dart
-git commit -m "feat: add drive workspace web ui"
+git add web/google_drive_picker_bridge.js web/index.html lib/web/google_drive_picker.dart lib/web/google_drive_picker_web.dart lib/web/google_drive_picker_stub.dart lib/web/drive_api.dart lib/web/drive_page.dart lib/web/drive_settings_page.dart lib/web/api_client.dart lib/web/web_app.dart test/drive_page_test.dart test/drive_settings_page_test.dart test/web_app_shell_test.dart
+git commit -m "feat: add drive picker workspace ui"
 ```
 
 ### Task 4: Project <-> Drive-document relationships and Project UI
 
 **Files:**
-- Modify: `backend/app/api/projects.py`
-- Modify: `backend/app/services/drive_documents.py`
-- Modify: `backend/app/models/drive_schemas.py`
-- Create: `backend/tests/test_project_drive_documents.py`
-- Modify: `lib/web/drive_api.dart`
-- Modify: `lib/web/drive_page.dart`
-- Modify: `lib/web/projects_page.dart`
-- Modify: `test/drive_page_test.dart`
-- Modify: `test/projects_page_test.dart`
+- Modify: `backend/app/api/drive.py`, `backend/app/api/projects.py`, `backend/app/services/drive_documents.py`, `backend/app/models/drive_schemas.py`
+- Test: `backend/tests/test_project_drive_documents.py`, regression `backend/tests/test_projects.py`
+- Modify: `lib/web/drive_api.dart`, `lib/web/drive_page.dart`, `lib/web/project_api.dart`, `lib/web/projects_page.dart`
+- Modify: `test/drive_page_test.dart`, `test/projects_page_test.dart`
 
 **Interfaces:**
-- Consumes Task 1 `ProjectDriveDocument` and Task 2 document ownership helpers.
-- Produces routes:
-  - `GET /api/v1/projects/{project_id}/drive-documents`
-  - `POST /api/v1/projects/{project_id}/drive-documents` body `{drive_document_id}`
-  - `DELETE /api/v1/projects/{project_id}/drive-documents/{drive_document_id}`
-- Produces Flutter `DriveApi.getProjectDocuments`, `attachDocumentToProject`, `detachDocumentFromProject`.
+- Schema `DriveProjectLinksCreate(project_ids: list[str])`, 1..100 unique IDs.
+- Endpoints:
+  - `GET /api/v1/drive/project-documents`
+  - `POST /api/v1/drive/documents/{document_id}/projects`
+  - `DELETE /api/v1/drive/documents/{document_id}/projects/{project_id}`
+- Flutter supports multi-Project attach and single Project detach.
 
-- [ ] **Step 1: Write failing backend tests**
+- [ ] **Step 1: Write failing backend relationship tests**
 
-Assert one document can attach to two Projects, repeated attachment is idempotent, detach affects only one Project, user cannot attach another user's Drive document, and deleting a Project with Drive relationships returns 409 until detached.
+Assert one document links to multiple Projects; repeated bulk attach is idempotent; unknown Project -> `404`; cross-user document is not linkable; detach affects only the specified Project and never unregisters/deletes the provider file.
 
-- [ ] **Step 2: Run backend test and verify RED**
+- [ ] **Step 2: Write failing Project delete guard**
 
-```bash
-cd backend
-python -m unittest tests.test_project_drive_documents -v
-```
+A Project with `ProjectDriveDocument` returns `409 "Project has linked Drive documents"`, matching current linked task/note/shopping safety.
 
-Expected: FAIL.
+- [ ] **Step 3: Implement backend relations and commit before enrichment exists**
 
-- [ ] **Step 3: Implement backend relationships**
+Use existing execution logging/idempotency conventions. No AI call in this task.
 
-Use existing execution logging and action-id idempotency conventions. Detach changes only PostgreSQL relationship state and never calls Google Drive.
+- [ ] **Step 4: Write failing Project/Drive widget tests**
 
-- [ ] **Step 4: Write failing Flutter tests**
+Drive `Add to Project` supports multi-select. Project renders `關聯文件` with file name/type and actions `在 Drive 開啟`, `相關筆記`, `解除關聯`.
 
-Assert Project workspace renders `關聯文件` with name/type and actions `在 Drive 開啟`, `相關筆記`, `解除關聯`; attach flow selects a registered document; Drive page `加入專案` is now enabled and supports multi-Project selection.
-
-- [ ] **Step 5: Implement UI/API methods**
-
-Do not require Tags in this slice; Task 6 adds Tag rendering after the Tag endpoint exists.
-
-- [ ] **Step 6: Verify GREEN**
+- [ ] **Step 5: Implement UI and verify GREEN**
 
 ```bash
-cd backend && python -m unittest tests.test_project_drive_documents -v
+cd backend && pytest -q tests/test_project_drive_documents.py tests/test_projects.py
 cd .. && flutter test test/drive_page_test.dart test/projects_page_test.dart
 ```
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add backend/app/api/projects.py backend/app/services/drive_documents.py backend/app/models/drive_schemas.py backend/tests/test_project_drive_documents.py lib/web/drive_api.dart lib/web/drive_page.dart lib/web/projects_page.dart test/drive_page_test.dart test/projects_page_test.dart
+git add backend/app/api/drive.py backend/app/api/projects.py backend/app/services/drive_documents.py backend/app/models/drive_schemas.py backend/tests/test_project_drive_documents.py backend/tests/test_projects.py lib/web/drive_api.dart lib/web/drive_page.dart lib/web/project_api.dart lib/web/projects_page.dart test/drive_page_test.dart test/projects_page_test.dart
 git commit -m "feat: link drive documents to projects"
 ```
 
-### Task 5: One-time Drive -> Note import and bidirectional discoverability
+### Task 5: One-time Drive -> Note import and Note/Drive discoverability
 
 **Files:**
-- Modify: `backend/app/api/drive.py`
-- Modify: `backend/app/api/notes.py`
-- Modify: `backend/app/services/drive_documents.py`
-- Modify: `backend/app/models/drive_schemas.py`
-- Create: `backend/tests/test_drive_note_import.py`
-- Modify: `lib/web/drive_api.dart`
-- Modify: `lib/web/drive_page.dart`
-- Modify: `lib/web/notes_page.dart`
-- Modify: `test/drive_page_test.dart`
-- Modify: `test/notes_page_test.dart`
+- Modify: `backend/app/api/drive.py`, `backend/app/api/notes.py`, `backend/app/services/drive_documents.py`, `backend/app/models/drive_schemas.py`
+- Test: `backend/tests/test_drive_note_import.py`, regression `backend/tests/test_notes.py`
+- Modify: `lib/web/drive_api.dart`, `lib/web/drive_page.dart`, `lib/web/note_api.dart`, `lib/web/notes_page.dart`
+- Modify: `test/drive_page_test.dart`, `test/notes_page_test.dart`
 
 **Interfaces:**
-- Produces routes:
-  - `POST /api/v1/drive/documents/{document_id}/notes/import` body `{title?: str, project_id?: str, tags: list[str]}`.
-  - `GET /api/v1/drive/documents/{document_id}/notes`.
-  - `POST /api/v1/drive/documents/{document_id}/notes/{note_id}` for manual `related` relation.
-  - `DELETE /api/v1/drive/documents/{document_id}/notes/{note_id}`.
-  - `GET /api/v1/notes/{note_id}/drive-documents`.
-- Produces Flutter `DriveApi.importDocumentAsNote`, `getDocumentNotes`, `linkDocumentNote`, `unlinkDocumentNote`, `getNoteDriveDocuments`.
+- `POST /api/v1/drive/documents/{document_id}/note-import` with optional title/project and Tags.
+- `GET/POST/DELETE` Drive-document <-> Note related relationship endpoints.
+- `GET /api/v1/drive/notes/{note_id}/documents` for reverse discoverability.
+- `source_import/import` for snapshot source; `related/manual` for manual relationship.
 
-- [ ] **Step 1: Write failing import tests**
+- [ ] **Step 1: Write failing supported import tests**
 
-Assert Google Docs/Sheets/Slides/readable text produce an independent Note body snapshot and `source_import` relation; changing mocked provider content later does not mutate the Note; unsupported MIME returns machine code `drive_text_unavailable` and creates no Note; provider 403/reauthorization error is surfaced rather than replaced by stale imported text.
+Readable content creates a normal independent Note, optional `project_id`, requested Tags, and `source_import` relationship. Omitted title defaults to provider filename. Later provider content changes do not mutate the Note.
 
-- [ ] **Step 2: Write failing relationship tests**
+- [ ] **Step 2: Write failing unsupported/provider-error tests**
 
-Assert manual `related` relation is unique, visible from both Note and Drive routes, and unlink never deletes Note or Drive document. Scope all document-side operations by `user_sub`.
+Unsupported binary -> stable `422 drive_text_unavailable`, no Note/relationship, Drive document stays registered/openable. Lost provider access surfaces the current Google error; never present an old Note snapshot as current Drive content.
 
-- [ ] **Step 3: Run backend tests and verify RED**
+- [ ] **Step 3: Write failing manual relationship tests**
 
-```bash
-cd backend
-python -m unittest tests.test_drive_note_import -v
-```
+Manual related relation is unique and visible from both directions; unlink deletes only the relationship. Cross-user Drive document relationship requests fail.
 
-Expected: FAIL.
+- [ ] **Step 4: Implement import/relationship APIs and Note deletion cleanup**
 
-- [ ] **Step 4: Implement import/relationship APIs**
+Note deletion cleans its `NoteDriveDocument` rows along with existing NoteLink/EntityTag cleanup. Execution summaries never contain document/Note body text.
 
-Create the Note with current Notes semantics, apply requested Note Tags using existing Note Tag behavior, then persist `NoteDriveDocument(relation_type="source_import", relation_origin="import")`. Manual links use `related/manual`.
+- [ ] **Step 5: Write failing Flutter import/source tests and implement UI**
 
-- [ ] **Step 5: Write failing Flutter tests**
+`Convert to Note` becomes active; dialog supports title, Project, Tags; imported Note displays `來源：Google Drive` + `開啟原始文件`; related Drive files are separately labeled.
 
-Assert Drive `轉入 Notes` now enables, opens title/Project/Tag inputs, and saved Note shows `來源：Google Drive` + `開啟原始 Drive 文件`; existing Note UI can show related Drive docs.
-
-- [ ] **Step 6: Implement UI and verify GREEN**
+- [ ] **Step 6: Verify GREEN**
 
 ```bash
-cd backend && python -m unittest tests.test_drive_note_import -v
+cd backend && pytest -q tests/test_drive_note_import.py tests/test_notes.py
 cd .. && flutter test test/drive_page_test.dart test/notes_page_test.dart
 ```
 
@@ -387,53 +371,43 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add backend/app/api/drive.py backend/app/api/notes.py backend/app/services/drive_documents.py backend/app/models/drive_schemas.py backend/tests/test_drive_note_import.py lib/web/drive_api.dart lib/web/drive_page.dart lib/web/notes_page.dart test/drive_page_test.dart test/notes_page_test.dart
+git add backend/app/api/drive.py backend/app/api/notes.py backend/app/services/drive_documents.py backend/app/models/drive_schemas.py backend/tests/test_drive_note_import.py backend/tests/test_notes.py lib/web/drive_api.dart lib/web/drive_page.dart lib/web/note_api.dart lib/web/notes_page.dart test/drive_page_test.dart test/notes_page_test.dart
 git commit -m "feat: import drive documents into notes"
 ```
 
-### Task 6: Shared Drive-document Tags
+### Task 6: Generic Tag service and Drive-document Tags
 
 **Files:**
-- Modify: `backend/app/api/drive.py`
-- Modify: `backend/app/services/drive_documents.py`
-- Create: `backend/tests/test_drive_tags.py`
-- Modify: `lib/web/drive_api.dart`
-- Modify: `lib/web/drive_page.dart`
-- Modify: `lib/web/projects_page.dart`
-- Modify: `test/drive_page_test.dart`
-- Modify: `test/projects_page_test.dart`
+- Create: `backend/app/services/tag_service.py`
+- Modify: `backend/app/api/notes.py`, `backend/app/api/drive.py`
+- Test: `backend/tests/test_tag_service.py`, `backend/tests/test_drive_tags.py`, regression `backend/tests/test_notes.py`
+- Modify: `lib/web/drive_api.dart`, `lib/web/drive_page.dart`, `lib/web/projects_page.dart`
+- Modify: `test/drive_page_test.dart`, `test/projects_page_test.dart`
 
 **Interfaces:**
-- Produces routes:
-  - `GET /api/v1/drive/documents/{document_id}/tags`
-  - `PUT /api/v1/drive/documents/{document_id}/tags` body `{tags: list[str]}`.
-- Reuses case-insensitive Tag lookup with `EntityTag(entity_type="drive_document", entity_id=document_id, tag_id=...)`.
+- `list_entity_tags`, `replace_entity_tags`, `add_entity_tags` mutate/read generic `Tag`/`EntityTag`; transaction ownership remains with caller.
+- Drive endpoints `GET/PUT /api/v1/drive/documents/{document_id}/tags`.
 
-- [ ] **Step 1: Write failing Tag tests**
+- [ ] **Step 1: Write failing generic Tag tests**
 
-Assert Drive documents reuse existing `Tag` rows case-insensitively, duplicate inputs normalize to one relationship, replacing Drive Tags does not mutate Note Tags, and user A cannot tag user B document.
+Pin case-insensitive Tag reuse, de-duplication, replace semantics, additive merge, and the invariant that additive AI behavior never removes existing user Tags.
 
-- [ ] **Step 2: Run RED**
+- [ ] **Step 2: Implement Tag service and refactor Notes Tag endpoints without changing their contract**
 
-```bash
-cd backend
-python -m unittest tests.test_drive_tags -v
-```
+Use `flush()` when creating a Tag ID; service does not commit.
 
-Expected: FAIL.
+- [ ] **Step 3: Write failing Drive Tag tests**
 
-- [ ] **Step 3: Implement Drive Tag endpoints/service**
+Drive uses `entity_type="drive_document"`; replacing Drive Tags cannot mutate Note Tags; user isolation applies.
 
-Extract a small shared Tag helper only if required to avoid direct copy of Note Tag lookup/replace logic; do not refactor unrelated Tag behavior.
+- [ ] **Step 4: Implement Drive Tag endpoints/UI rendering/editing**
 
-- [ ] **Step 4: Write failing Flutter Tag tests**
+Project related-document rows and Drive cards render the shared Tag vocabulary.
 
-Assert Drive cards and Project related-document rows render Tags and manual edit works.
-
-- [ ] **Step 5: Implement UI and verify GREEN**
+- [ ] **Step 5: Verify GREEN**
 
 ```bash
-cd backend && python -m unittest tests.test_drive_tags -v
+cd backend && pytest -q tests/test_tag_service.py tests/test_drive_tags.py tests/test_notes.py
 cd .. && flutter test test/drive_page_test.dart test/projects_page_test.dart test/notes_page_test.dart
 ```
 
@@ -442,132 +416,92 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/app/api/drive.py backend/app/services/drive_documents.py backend/tests/test_drive_tags.py lib/web/drive_api.dart lib/web/drive_page.dart lib/web/projects_page.dart test/drive_page_test.dart test/projects_page_test.dart
-git commit -m "feat: add tags to drive documents"
+git add backend/app/services/tag_service.py backend/app/api/notes.py backend/app/api/drive.py backend/tests/test_tag_service.py backend/tests/test_drive_tags.py backend/tests/test_notes.py lib/web/drive_api.dart lib/web/drive_page.dart lib/web/projects_page.dart test/drive_page_test.dart test/projects_page_test.dart
+git commit -m "feat: share tags with drive documents"
 ```
 
-### Task 7: Provider-agnostic AI enrichment, caching, and suggestion API
+### Task 7: Provider-agnostic AI enrichment, cache, and Note suggestions
 
 **Files:**
-- Create: `backend/app/services/ai_enrichment.py`
-- Create: `backend/app/services/drive_enrichment.py`
-- Modify: `backend/app/api/drive.py`
-- Modify: `backend/app/services/drive_documents.py`
-- Modify: `backend/app/config.py`
-- Modify: `backend/app/models/drive_schemas.py`
-- Create: `backend/tests/test_drive_enrichment.py`
+- Create: `backend/app/services/ai_enrichment.py`, `backend/app/services/drive_enrichment.py`
+- Modify: `backend/app/config.py`, `backend/.env.example`, `backend/app/models/drive_schemas.py`, `backend/app/api/drive.py`
+- Test: `backend/tests/test_drive_enrichment.py`, regression `backend/tests/test_project_drive_documents.py`, `backend/tests/test_drive_tags.py`
 
 **Interfaces:**
-- Consumes registered Drive document, extracted text, selected Project context, existing Tag vocabulary, Notes FTS, Task 6 Tag mutation, and Task 5 Note-document relation.
-- Produces provider protocol:
-  - `async suggest_tags(context: DocumentContext) -> list[TagSuggestion]`.
-  - `async rank_related_notes(context: DocumentContext, candidates: list[NoteCandidate], limit: int) -> list[RelatedNoteSuggestion]`.
-- Produces adapters:
-  - `DisabledAIEnrichmentProvider`.
-  - `OpenAIResponsesEnrichmentProvider` using `httpx` + strict Structured Outputs; provider request details stay only in `ai_enrichment.py`.
-- Produces config: `ai_enrichment_provider` (`disabled|openai`, default `disabled`), `ai_enrichment_model` (required when provider=`openai`), `ai_enrichment_api_key` (required when provider=`openai`), `ai_enrichment_base_url` default `https://api.openai.com/v1`.
-- Fixed v1 scoring/cost constants: `AUTO_TAG_CONFIDENCE_THRESHOLD=0.80`, `RELATED_NOTE_CONFIDENCE_THRESHOLD=0.60`, `MAX_DOCUMENT_CONTEXT_CHARS=12000`, `MAX_NOTE_SNIPPET_CHARS=800`, deterministic candidate cap `20`.
-- Produces routes:
-  - `POST /api/v1/drive/documents/{document_id}/enrich` with optional `{reanalyze: bool}`.
-  - `GET /api/v1/drive/documents/{document_id}/enrichment`.
-  - `GET /api/v1/drive/documents/{document_id}/suggestions`.
-  - `POST /api/v1/drive/suggestions/{suggestion_id}/decision` body `{decision: "accepted"|"rejected"}`.
+- Provider protocol:
+  - `suggest_tags(context) -> list[TagSuggestion]`
+  - `rank_related_notes(context, candidates) -> list[RelatedNoteSuggestion]`
+- Adapters: `DisabledAiEnrichmentProvider`, `OpenAIResponsesEnrichmentProvider`.
+- Config: `AI_ENRICHMENT_PROVIDER=disabled|openai` default `disabled`; `AI_ENRICHMENT_MODEL` required only for OpenAI; `OPENAI_API_KEY` required only for OpenAI; configurable base URL.
+- Fixed v1 bounds: candidate cap 20; max displayed setting 1..20/default 5; document context max 12,000 chars; candidate Note snippet max 800 chars; Tag auto-apply threshold 0.80; related-Note suggestion threshold 0.60.
+- Endpoints: run/read enrichment; list suggestions; accept/reject suggestion.
 
 - [ ] **Step 1: Write failing privacy/settings tests**
 
-Assert `allow_ai_content=False` prevents any provider call; max suggestions rejects outside `1..10`; user-scoped settings cannot affect another user; the prompt/request payload never includes Google OAuth tokens or permission objects.
+When content consent is OFF or provider is disabled, no model call occurs. Provider request may include only required document title/MIME/bounded extracted text, relevant Project context, existing Tag vocabulary, and bounded candidate Note fields. It must not include OAuth tokens, Drive permission lists, unrelated Notes/Projects, or DB dumps.
 
-- [ ] **Step 2: Write failing retrieval/fingerprint/bounds tests**
+- [ ] **Step 2: Write failing deterministic retrieval/fingerprint tests**
 
-Assert candidate retrieval prioritizes same Project/shared Tags/FTS and caps at 20; document context truncates to 12000 chars and candidate snippets to 800; fingerprint changes when analyzed content/settings/model contract changes; unchanged successful fingerprint reuses results; `reanalyze=true` bypasses reuse.
+Candidates use same Project/shared Tags/Note FTS/keyword overlap, de-duplicate, cap at 20. Fingerprint changes with analyzed content/provider modified metadata, relevant settings/model contract, Tag vocabulary input, and candidate identity/update timestamps. Matching successful fingerprint reuses results; explicit reanalyze bypasses reuse.
 
 - [ ] **Step 3: Write failing provider/partial-success tests**
 
-Mock OpenAI Responses API and assert structured Tag/rerank results parse; only Tags >=0.80 auto-apply; related Note suggestions below 0.60 are discarded; provider timeout/failure leaves durable Project relationship intact and produces `failed|partial` enrichment state.
+Mock OpenAI Responses API with strict structured output. No model name is hardcoded. Only Tag suggestions >=0.80 auto-apply additively. Related Note suggestions <0.60 are discarded. Provider timeout/failure creates `partial|failed` enrichment evidence but leaves already-committed Project relationships intact.
 
 - [ ] **Step 4: Write failing suggestion-decision tests**
 
-Assert `pending` suggestions are non-authoritative; `accepted` creates/ensures `NoteDriveDocument(relation_type="related", relation_origin="ai_accepted")`; `rejected` creates none; repeated decision is idempotent; cross-user suggestion access is denied.
+Pending is non-authoritative. Accept idempotently ensures `related/ai_accepted`; reject creates none. Contradictory decision after final decision -> `409`. Cross-user access fails.
 
-- [ ] **Step 5: Run RED**
+- [ ] **Step 5: Implement provider and orchestration**
 
-```bash
-cd backend
-python -m unittest tests.test_drive_enrichment -v
-```
+Use two narrow model calls (Tags and rerank), no agent/tool loop. Persist fingerprint/provider/model/status/suggestions and short reasons only, not a full source-content duplicate.
 
-Expected: FAIL.
+- [ ] **Step 6: Integrate enrichment after Project attachment commit**
 
-- [ ] **Step 6: Implement provider abstraction/orchestration**
+Core relation commits first. Enrichment executes in a guarded second phase only when enabled/consented. API/UI can report core `PASS` plus enrichment `SKIPPED/PARTIAL/FAIL` separately.
 
-Use two narrow strict-schema model calls (Tags, rerank), no tools/agent loop. Persist suggestions/status/provider/model/fingerprint only, not a full duplicate of source content.
-
-- [ ] **Step 7: Wire enrichment after Project relationship commit**
-
-When settings allow it, run enrichment only after Project link persistence succeeds. Catch extraction/provider/model errors and return core success plus `partial|failed|skipped` enrichment state without rollback.
-
-- [ ] **Step 8: Verify GREEN**
+- [ ] **Step 7: Verify GREEN**
 
 ```bash
 cd backend
-python -m unittest tests.test_drive_enrichment tests.test_project_drive_documents tests.test_drive_tags -v
+pytest -q tests/test_drive_enrichment.py tests/test_project_drive_documents.py tests/test_drive_tags.py
 ```
 
-Expected: PASS.
+Expected: PASS with zero real model calls.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add backend/app/services/ai_enrichment.py backend/app/services/drive_enrichment.py backend/app/api/drive.py backend/app/services/drive_documents.py backend/app/config.py backend/app/models/drive_schemas.py backend/tests/test_drive_enrichment.py
-git commit -m "feat: add drive ai enrichment"
+git add backend/app/services/ai_enrichment.py backend/app/services/drive_enrichment.py backend/app/config.py backend/.env.example backend/app/models/drive_schemas.py backend/app/api/drive.py backend/tests/test_drive_enrichment.py backend/tests/test_project_drive_documents.py backend/tests/test_drive_tags.py
+git commit -m "feat: add drive knowledge enrichment"
 ```
 
 ### Task 8: Intelligent-organization review UI
 
 **Files:**
-- Modify: `lib/web/drive_api.dart`
-- Modify: `lib/web/drive_settings_page.dart`
-- Modify: `lib/web/drive_page.dart`
-- Modify: `lib/web/projects_page.dart`
-- Modify: `lib/web/notes_page.dart`
-- Modify: `test/drive_settings_page_test.dart`
-- Modify: `test/drive_page_test.dart`
-- Modify: `test/projects_page_test.dart`
-- Modify: `test/notes_page_test.dart`
+- Modify: `lib/web/drive_api.dart`, `lib/web/drive_settings_page.dart`, `lib/web/drive_page.dart`, `lib/web/projects_page.dart`, `lib/web/notes_page.dart`, `lib/web/api_client.dart`
+- Modify: `test/drive_settings_page_test.dart`, `test/drive_page_test.dart`, `test/projects_page_test.dart`, `test/notes_page_test.dart`
 
 **Interfaces:**
-- Consumes Task 7 enrichment/suggestion endpoints and Task 2 persisted settings.
-- Produces `DriveApi.runEnrichment`, `getEnrichment`, `getSuggestions`, `decideSuggestion`.
+- DriveApi: run/read enrichment, list suggestions, decide suggestion, manual related-Note link.
 
-- [ ] **Step 1: Write failing first-use/privacy UI tests**
+- [ ] **Step 1: Write failing consent/settings tests**
 
-When `auto_tags_enabled`/`suggest_notes_enabled` are ON but `allow_ai_content` is OFF, first intelligent-enrichment attempt shows a consent explanation with two choices: enable AI content analysis, or continue core Project attachment without AI. No content is sent before consent.
+If automatic Tag/suggestion switches are ON but content consent is OFF, first AI attempt explains the consent choice: enable content analysis or continue core operation without AI. No model request occurs before consent. Settings expose automatic Tags, Note suggestions, content-analysis consent, max suggestions default 5, reanalyze/status.
 
-- [ ] **Step 2: Write failing settings UI tests**
+- [ ] **Step 2: Write failing suggestion review tests**
 
-Assert switches for `自動智能 Tag`, `建議相關 Notes`, `允許將文件內容送交 AI 分析`; max suggestions defaults 5 and supports `1..10`; `重新分析` is available; AI-disabled state explicitly says manual Tags/links remain usable.
+Show at most configured suggestions with Note title/confidence/reason. `接受` creates the authoritative relationship; `略過/拒絕` does not. No automatic-accept control exists.
 
-- [ ] **Step 3: Write failing suggestion-review tests**
+- [ ] **Step 3: Write failing manual fallback and partial-status tests**
 
-Assert at most configured suggestions render with Note title, confidence, reason; pending suggestions expose `接受`/`略過`; accepted relation appears from both Note and Drive views; no UI auto-accepts high-confidence links.
+With AI disabled, users can still edit Tags and manually relate a Note. Project attach with AI failure still renders the document and a separate `智能整理未完成` state.
 
-- [ ] **Step 4: Write failing partial-status test**
+- [ ] **Step 4: Implement dialogs/status/UI**
 
-Project attach with `enrichment_status=failed` still renders the related document and non-blocking `智能整理未完成` status.
+Accepted AI links and manual links use the same authoritative relation display; origin remains metadata. Core success and enrichment status are visually separate.
 
-- [ ] **Step 5: Run RED**
-
-```bash
-flutter test test/drive_settings_page_test.dart test/drive_page_test.dart test/projects_page_test.dart test/notes_page_test.dart
-```
-
-Expected: FAIL.
-
-- [ ] **Step 6: Implement intelligent-organization UI**
-
-Keep core success and enrichment state visually separate. Accepted AI relationships reuse the same related-document UI as manual relationships; origin is metadata, not a separate knowledge silo.
-
-- [ ] **Step 7: Verify GREEN/full Flutter suite**
+- [ ] **Step 5: Verify GREEN/full Flutter suite**
 
 ```bash
 flutter test
@@ -577,75 +511,72 @@ flutter build web --target=lib/main_web.dart
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add lib/web/drive_api.dart lib/web/drive_settings_page.dart lib/web/drive_page.dart lib/web/projects_page.dart lib/web/notes_page.dart test/drive_settings_page_test.dart test/drive_page_test.dart test/projects_page_test.dart test/notes_page_test.dart
+git add lib/web/drive_api.dart lib/web/drive_settings_page.dart lib/web/drive_page.dart lib/web/projects_page.dart lib/web/notes_page.dart lib/web/api_client.dart test/drive_settings_page_test.dart test/drive_page_test.dart test/projects_page_test.dart test/notes_page_test.dart
 git commit -m "feat: add drive intelligent organization ui"
 ```
 
-### Task 9: CI, deployment wiring, production runtime acceptance, checkpoint
+### Task 9: CI, deployment, production-like acceptance, and checkpoint
 
 **Files:**
 - Create: `.github/scripts/verify_drive_knowledge_production.mjs`
 - Create: `.github/workflows/drive-knowledge-runtime-acceptance.yml`
-- Modify: `.github/workflows/ci.yml`
-- Modify: `.github/workflows/deploy-cloud-run.yml` only for non-destructive new Picker/AI runtime config.
-- Modify: `.github/workflows/deploy-firebase-hosting.yml` only if Web build requires public Picker configuration.
-- Update Drive long-lived checkpoint under allowed `life_assistantGPT` root after runtime evidence exists.
+- Modify: `.github/workflows/ci.yml` only if broad current test jobs do not already cover the new suites.
+- Modify: `.github/workflows/deploy-cloud-run.yml` for non-destructive new Picker/AI runtime config only.
+- Modify: `.github/workflows/deploy-firebase-hosting.yml` only if Web build/script handling requires it.
+- Create: `backend/tests/test_drive_runtime_acceptance.py` if existing workflow style uses a Python runtime probe.
+- Update long-lived `life_assistantGPT` checkpoint only after runtime evidence exists.
 
 **Interfaces:**
-- Consumes all Tasks 1-8 and the existing GitHub Actions deployment path.
-- Produces repeatable evidence for registration, multi-Project links, Note import, Tags, AI suggestion acceptance, and AI-failure non-rollback.
+- Production-like acceptance uses a deliberately Picker-selected test file; it never scans whole Drive.
+- Completion matrix remains Implementation / Tests / CI / Deployment / Runtime / Integration.
 
-- [ ] **Step 1: Write production acceptance script**
-
-Script fails unless a dedicated explicitly selected test file proves: authenticated settings access, registered document, multi-Project relationship, detach-without-provider-delete, supported one-time Note import, source-link readback, Tag readback, suggestion pending-before-accept, accepted relation visible, and AI-failure/non-blocking behavior when failure fixture is enabled.
-
-- [ ] **Step 2: Add runtime workflow and CI syntax check**
-
-Add `node --check .github/scripts/verify_drive_knowledge_production.mjs` to CI. Runtime workflow must report live AI provider `NOT VERIFIED` when `AI_ENRICHMENT_PROVIDER=disabled` or credentials/model are absent; mocked provider tests remain separate evidence.
-
-- [ ] **Step 3: Run complete local verification**
+- [ ] **Step 1: Run full local/static suites before workflow edits**
 
 ```bash
+cd backend && pytest -q
+cd .. && flutter test
 flutter analyze --no-fatal-infos
-flutter test
 flutter build web --target=lib/main_web.dart
-cd backend
-python -c "from app.main import app; print('OK')"
-alembic upgrade head --sql > /tmp/life-assistant-migrations.sql
-python -m unittest discover -s tests -v
-cd ..
-node --check .github/scripts/verify_drive_knowledge_production.mjs
 ```
 
-Expected: all PASS.
+Expected: PASS.
+
+- [ ] **Step 2: Add CI/runtime acceptance**
+
+Acceptance proves: authenticated workspace/settings; browser Picker config contains no token; Picker-selected file can be registered/read by backend; one file links to multiple Projects; detach does not delete provider file; readable file imports once to independent Note; source link returns to Drive; Tags work; AI suggestions remain pending until acceptance; AI failure does not rollback core link. Runtime workflow records live AI provider as `NOT VERIFIED` when provider is disabled or credentials/model are absent.
+
+- [ ] **Step 3: Wire deployment configuration safely**
+
+Cloud/Web config supplies public Web OAuth client ID, Picker API key, and app ID/project number. The Picker API key must be Google API/referrer restricted and is never treated as a substitute for OAuth. No client secret or backend token is compiled into the Web app. AI stays `disabled` unless an approved provider configuration exists; do not rotate/add production secrets without the required explicit confirmation.
 
 - [ ] **Step 4: Commit acceptance/deployment wiring**
 
 ```bash
-git add .github/scripts/verify_drive_knowledge_production.mjs .github/workflows/drive-knowledge-runtime-acceptance.yml .github/workflows/ci.yml .github/workflows/deploy-cloud-run.yml .github/workflows/deploy-firebase-hosting.yml
+git add .github/scripts/verify_drive_knowledge_production.mjs .github/workflows/drive-knowledge-runtime-acceptance.yml .github/workflows/ci.yml .github/workflows/deploy-cloud-run.yml .github/workflows/deploy-firebase-hosting.yml backend/tests/test_drive_runtime_acceptance.py
 git commit -m "test: add drive knowledge production acceptance"
 ```
 
-- [ ] **Step 5: Verify GitHub Actions and deployments from `main`**
+- [ ] **Step 5: Follow main -> Actions -> deployment and verify exact SHA**
 
-Required evidence: CI PASS, Cloud Run deployment PASS, Firebase Hosting deployment PASS, Alembic migration application PASS. CI alone is not DONE.
+Record CI run IDs, Cloud Run/Firebase deployment runs/revisions, migration evidence, and deployed commit SHA. CI green alone is not completion.
 
-- [ ] **Step 6: Run authenticated production/runtime acceptance**
+- [ ] **Step 6: Execute authenticated runtime/integration acceptance**
 
-Record per layer:
+Use a real explicitly selected test file. If browser Picker selects an account/file the backend server-side Drive token cannot read, report Integration FAIL and fix within the `drive.file` least-privilege design; do not broaden scope to `drive.readonly` as a workaround.
 
-- Implementation: PASS/FAIL
-- Tests: PASS/FAIL
-- CI: PASS/FAIL
-- Deployment: PASS/FAIL
-- Runtime: PASS/FAIL/NOT VERIFIED
-- Integration: PASS/FAIL/NOT VERIFIED
+- [ ] **Step 7: Record completion matrix and Drive checkpoint**
 
-If live model credentials/config are absent, AI live-provider integration remains `NOT VERIFIED`; do not hide that behind mocked tests.
+```text
+Implementation: PASS / FAIL / NOT VERIFIED
+Tests:          PASS / FAIL / NOT VERIFIED
+CI:             PASS / FAIL / NOT VERIFIED
+Deployment:     PASS / FAIL / NOT VERIFIED
+Runtime:        PASS / FAIL / NOT VERIFIED
+Integration:    PASS / FAIL / NOT VERIFIED
+Overall:        DONE / PARTIAL
+```
 
-- [ ] **Step 7: Write final checkpoint to Drive**
-
-Under `life_assistantGPT`, update/create long-lived acceptance progress with commit SHA, workflow run IDs, deployment revisions/URLs, runtime evidence, remaining `NOT VERIFIED` items, and overall `DONE` or `PARTIAL` according to governance.
+Update the allowed `life_assistantGPT` long-lived progress/checkpoint with exact commit SHA, workflow IDs, deployment revisions, evidence, known limitations, and any GitHub-vs-Drive differences. Documentation completion never upgrades an unverified runtime layer.

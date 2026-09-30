@@ -74,6 +74,47 @@ class DriveDocumentsRegister(BaseModel):
         return normalized
 
 
+class DriveProjectLinksCreate(BaseModel):
+    project_ids: list[str] = Field(min_length=1, max_length=100)
+
+    @field_validator("project_ids")
+    @classmethod
+    def normalize_project_ids(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in values:
+            value = raw.strip()
+            if not value:
+                raise ValueError("Project id cannot be empty")
+            if len(value) > 36:
+                raise ValueError("Project id is too long")
+            if value in seen:
+                continue
+            seen.add(value)
+            normalized.append(value)
+        if not normalized:
+            raise ValueError("At least one project id is required")
+        return normalized
+
+
+class DriveProjectLinkOut(BaseModel):
+    project_id: str
+    drive_document_id: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DriveProjectDocumentOut(BaseModel):
+    project_id: str
+    drive_document_id: str
+    google_file_id: str
+    name: str
+    mime_type: str
+    web_view_link: str | None
+    provider_modified_at: datetime | None
+
+
 class DriveAiSettingsOut(BaseModel):
     auto_tags: bool = True
     suggest_related_notes: bool = True

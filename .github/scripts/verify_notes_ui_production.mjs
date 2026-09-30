@@ -168,8 +168,13 @@ async function mockApi(page) {
 async function semantics(page) {
   await page.waitForSelector('flutter-view', { timeout: 30000 });
   const placeholder = page.locator('flt-semantics-placeholder');
-  if (await placeholder.count()) {
+  if ((await placeholder.count()) > 0) {
     await placeholder.first().evaluate((element) => element.click());
+  } else {
+    const enable = page.getByLabel('Enable accessibility', { exact: true });
+    if ((await enable.count()) > 0) {
+      await enable.first().evaluate((element) => element.click());
+    }
   }
   await page.waitForTimeout(300);
 }

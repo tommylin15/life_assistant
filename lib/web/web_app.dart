@@ -8,6 +8,7 @@ import 'app_shell.dart';
 import 'auth_state.dart';
 import 'integrations_page.dart';
 import 'login_page.dart';
+import 'notes_page.dart';
 import 'projects_page.dart';
 import 'tasks_page.dart';
 
@@ -41,6 +42,10 @@ final _router = GoRouter(
           ),
         ),
         GoRoute(path: '/projects', builder: (_, __) => const ProjectsPage()),
+        GoRoute(
+          path: '/more/notes',
+          builder: (_, __) => const NotesPage(),
+        ),
         GoRoute(path: '/more', builder: (_, __) => const _MorePage()),
       ],
     ),
@@ -130,6 +135,13 @@ class _MorePage extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: [
+            ListTile(
+              leading: const Icon(Icons.description_outlined),
+              title: const Text('筆記'),
+              subtitle: const Text('Markdown、搜尋、標籤與雙向連結'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/more/notes'),
+            ),
             ListTile(
               leading: const Icon(Icons.hub_outlined),
               title: const Text('Google 整合'),

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.task import TaskPriority, TaskStatus
 
@@ -139,6 +139,32 @@ class NoteOut(BaseModel):
 
 class NoteLinkCreate(BaseModel):
     target_note_id: str
+
+
+class NoteTagsReplace(BaseModel):
+    tags: list[str] = Field(default_factory=list, max_length=50)
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, tags: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in tags:
+            name = raw.strip()
+            if not name:
+                raise ValueError("Note tag cannot be empty")
+            if len(name) > 255:
+                raise ValueError("Note tag is too long")
+            key = name.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(name)
+        return normalized
+
+
+class NoteTagsOut(BaseModel):
+    tags: list[str]
 
 
 class HabitCreate(BaseModel):

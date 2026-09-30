@@ -207,31 +207,35 @@ async function textbox(page, name, fallbackIndex = 0) {
   }
 }
 
-async function editorTextboxFromEnd(page, offsetFromEnd) {
-  const textboxes = page.getByRole('textbox');
-  const visible = [];
-  for (let i = 0; i < (await textboxes.count()); i += 1) {
-    const candidate = textboxes.nth(i);
-    if (await candidate.isVisible().catch(() => false)) {
-      visible.push(candidate);
+async function editorTextboxFromEnd(page, offsetFromEnd, timeout = 5000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const textboxes = page.getByRole('textbox');
+    const visible = [];
+    for (let i = 0; i < (await textboxes.count()); i += 1) {
+      const candidate = textboxes.nth(i);
+      if (await candidate.isVisible().catch(() => false)) {
+        visible.push(candidate);
+      }
     }
+    const index = visible.length - 1 - offsetFromEnd;
+    if (index >= 0) {
+      const candidate = visible[index];
+      const info = await candidate
+        .evaluate((element) => ({
+          role: element.getAttribute('role'),
+          aria: element.getAttribute('aria-label'),
+          tag: element.tagName,
+        }))
+        .catch(() => null);
+      console.log(
+        `project_ui_editor_textbox=offset:${offsetFromEnd} ${JSON.stringify(info)}`,
+      );
+      return candidate;
+    }
+    await pageDelay(120);
   }
-  const index = visible.length - 1 - offsetFromEnd;
-  if (index < 0) {
-    throw new Error(`Project editor textbox not found at offset ${offsetFromEnd}`);
-  }
-  const candidate = visible[index];
-  const info = await candidate
-    .evaluate((element) => ({
-      role: element.getAttribute('role'),
-      aria: element.getAttribute('aria-label'),
-      tag: element.tagName,
-    }))
-    .catch(() => null);
-  console.log(
-    `project_ui_editor_textbox=offset:${offsetFromEnd} ${JSON.stringify(info)}`,
-  );
-  return candidate;
+  throw new Error(`Project editor textbox not found at offset ${offsetFromEnd}`);
 }
 
 async function typeFlutterText(locator, text, label) {
@@ -262,7 +266,7 @@ async function typeFlutterText(locator, text, label) {
 }
 
 async function projectCard(page, projectName) {
-  const pattern = new RegExp(`^${escapedPattern(projectName)}(?:\\n|$)`);
+  const pattern = new RegExp(`^${escapedPattern(projectName)}(?:\n|$)`);
   return visibleCandidate([page.getByLabel(pattern), page.getByText(pattern)]);
 }
 

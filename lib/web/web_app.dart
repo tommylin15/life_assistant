@@ -6,6 +6,8 @@ import '../app/theme/app_theme.dart';
 import 'acceptance_center_page.dart';
 import 'app_shell.dart';
 import 'auth_state.dart';
+import 'drive_page.dart';
+import 'drive_settings_page.dart';
 import 'integrations_page.dart';
 import 'login_page.dart';
 import 'notes_page.dart';
@@ -45,6 +47,14 @@ final _router = GoRouter(
         GoRoute(
           path: '/more/notes',
           builder: (_, __) => const NotesPage(),
+        ),
+        GoRoute(
+          path: '/more/drive',
+          builder: (_, __) => const DrivePage(),
+        ),
+        GoRoute(
+          path: '/more/drive/settings',
+          builder: (_, __) => const DriveSettingsPage(),
         ),
         GoRoute(path: '/more', builder: (_, __) => const _MorePage()),
       ],
@@ -141,6 +151,13 @@ class _MorePage extends StatelessWidget {
               subtitle: const Text('Markdown、搜尋、標籤與雙向連結'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.go('/more/notes'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add_to_drive_outlined),
+              title: const Text('Google Drive'),
+              subtitle: const Text('工作區、已選文件、Notes 與專案關聯'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/more/drive'),
             ),
             ListTile(
               leading: const Icon(Icons.hub_outlined),

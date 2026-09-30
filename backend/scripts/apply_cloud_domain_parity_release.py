@@ -29,8 +29,9 @@ from scripts.reconcile_projects_status_default import (
 )
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-PREVIOUS_RELEASE_REVISION = "20260927_0005"
-RELEASE_TARGET_REVISION = "20260928_0006"
+PREVIOUS_RELEASE_REVISION = "20260928_0006"
+LEGACY_DIRECT_RELEASE_REVISIONS = {"20260927_0005"}
+RELEASE_TARGET_REVISION = "20260930_0007"
 EXIT_RELEASE_REVISION = 60
 EXIT_RELEASE_ALEMBIC = 61
 EXIT_RELEASE_MISSING_TABLES = 62
@@ -271,13 +272,16 @@ async def main() -> None:
     if current in historical_revisions:
         await _ensure_historical_0004()
         print(f"release_base_revision={migration.TARGET_REVISION}")
-    elif current == PREVIOUS_RELEASE_REVISION:
-        print(f"release_base_revision={PREVIOUS_RELEASE_REVISION}")
+    elif current == PREVIOUS_RELEASE_REVISION or current in LEGACY_DIRECT_RELEASE_REVISIONS:
+        print(f"release_base_revision={current}")
     else:
+        accepted_direct = ", ".join(
+            sorted({PREVIOUS_RELEASE_REVISION, *LEGACY_DIRECT_RELEASE_REVISIONS})
+        )
         raise ReleaseRevisionError(
             f"unexpected release pre-revision: {current}; expected unversioned, "
             f"{migration.PREVIOUS_REVISION}, {migration.TARGET_REVISION}, "
-            f"{PREVIOUS_RELEASE_REVISION}, or {RELEASE_TARGET_REVISION}",
+            f"one of [{accepted_direct}], or {RELEASE_TARGET_REVISION}",
             reason="unexpected_pre_revision",
         )
 

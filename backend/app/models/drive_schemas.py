@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class DriveWorkspaceCreate(BaseModel):
@@ -17,6 +17,9 @@ class DriveWorkspaceUpdate(BaseModel):
     def require_change(self):
         if not self.model_fields_set:
             raise ValueError("At least one Drive workspace field must be provided")
+        for field in self.model_fields_set:
+            if getattr(self, field) is None:
+                raise ValueError(f"Drive workspace {field} cannot be null")
         return self
 
 
@@ -47,6 +50,30 @@ class DriveDocumentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class DriveDocumentsRegister(BaseModel):
+    google_file_ids: list[str] = Field(min_length=1, max_length=100)
+    workspace_id: str | None = None
+
+    @field_validator("google_file_ids")
+    @classmethod
+    def normalize_ids(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in values:
+            value = raw.strip()
+            if not value:
+                raise ValueError("Google file id cannot be empty")
+            if len(value) > 255:
+                raise ValueError("Google file id is too long")
+            if value in seen:
+                continue
+            seen.add(value)
+            normalized.append(value)
+        if not normalized:
+            raise ValueError("At least one Google file id is required")
+        return normalized
+
+
 class DriveAiSettingsOut(BaseModel):
     auto_tags: bool = True
     suggest_related_notes: bool = True
@@ -61,6 +88,13 @@ class DriveAiSettingsUpdate(BaseModel):
     suggest_related_notes: bool | None = None
     allow_content_analysis: bool | None = None
     max_related_notes: int | None = Field(default=None, ge=1, le=10)
+
+    @model_validator(mode="after")
+    def require_non_null_changes(self):
+        for field in self.model_fields_set:
+            if getattr(self, field) is None:
+                raise ValueError(f"Drive AI setting {field} cannot be null")
+        return self
 
 
 class DriveNoteLinkSuggestionOut(BaseModel):

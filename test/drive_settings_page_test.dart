@@ -7,10 +7,9 @@ import 'package:life_assistant/web/drive_settings_page.dart';
 import 'package:life_assistant/web/google_drive_picker.dart';
 
 class _FakeDriveApi implements DriveApi {
-  _FakeDriveApi({
-    List<DriveWorkspace>? workspaces,
-    this.settings = const DriveAiSettings(),
-  }) : workspaces = workspaces ?? [];
+  _FakeDriveApi({List<DriveWorkspace>? workspaces})
+      : workspaces = workspaces ?? [],
+        settings = const DriveAiSettings();
 
   final List<DriveWorkspace> workspaces;
   DriveAiSettings settings;

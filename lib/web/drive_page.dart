@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'drive_api.dart';
 import 'google_drive_picker.dart';
+import 'project_api.dart';
 
 class DrivePage extends ConsumerStatefulWidget {
   const DrivePage({super.key});
@@ -117,6 +118,81 @@ class _DrivePageState extends ConsumerState<DrivePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('已加入 ${ids.length} 份 Drive 文件')),
+      );
+    } catch (error) {
+      _showError(error);
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
+  Future<void> _addToProjects(DriveDocument document) async {
+    if (_mutating) return;
+    try {
+      final projects = await ref.read(projectApiProvider).getProjects();
+      if (!mounted) return;
+      if (projects.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('目前沒有可關聯的專案')),
+        );
+        return;
+      }
+
+      final selected = <String>{};
+      final projectIds = await showDialog<Set<String>>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('加入專案'),
+            content: SizedBox(
+              width: 420,
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final project in projects)
+                    CheckboxListTile(
+                      value: selected.contains(project['id']),
+                      title: Text(project['name'] as String? ?? '未命名專案'),
+                      onChanged: (checked) {
+                        final id = project['id'] as String?;
+                        if (id == null) return;
+                        setDialogState(() {
+                          if (checked == true) {
+                            selected.add(id);
+                          } else {
+                            selected.remove(id);
+                          }
+                        });
+                      },
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: selected.isEmpty
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(Set.of(selected)),
+                child: const Text('加入'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (projectIds == null || projectIds.isEmpty || !mounted) return;
+
+      setState(() => _mutating = true);
+      await ref.read(driveApiProvider).attachDocumentToProjects(
+            document.id,
+            projectIds.toList(),
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已將「${document.name}」加入 ${projectIds.length} 個專案')),
       );
     } catch (error) {
       _showError(error);
@@ -298,7 +374,7 @@ class _DrivePageState extends ConsumerState<DrivePage> {
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
         itemCount: _documents.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) => _documentCard(_documents[index]),
       ),
     );
@@ -366,7 +442,10 @@ class _DrivePageState extends ConsumerState<DrivePage> {
                       : () => _openDocument(document),
                   child: const Text('開啟'),
                 ),
-                const TextButton(onPressed: null, child: Text('加入專案')),
+                TextButton(
+                  onPressed: _mutating ? null : () => _addToProjects(document),
+                  child: const Text('加入專案'),
+                ),
                 const TextButton(onPressed: null, child: Text('轉入 Notes')),
               ],
             ),

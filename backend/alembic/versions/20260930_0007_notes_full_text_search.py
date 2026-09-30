@@ -33,4 +33,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(f"DROP INDEX IF EXISTS {INDEX_NAME}")
+    op.execute("DROP INDEX IF EXISTS ix_notes_full_text_search")

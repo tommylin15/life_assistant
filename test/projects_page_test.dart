@@ -74,11 +74,19 @@ class _FakeDriveApi implements DriveApi {
   final List<Map<String, dynamic>> projectDocuments;
   final List<(String, String)> detached = [];
 
+  @override
   Future<List<Map<String, dynamic>>> getProjectDocuments({String? projectId}) async =>
       projectDocuments
           .where((item) => projectId == null || item['project_id'] == projectId)
           .toList();
 
+  @override
+  Future<void> attachDocumentToProjects(
+    String documentId,
+    List<String> projectIds,
+  ) async {}
+
+  @override
   Future<void> detachDocumentFromProject(String documentId, String projectId) async {
     detached.add((documentId, projectId));
     projectDocuments.removeWhere(
@@ -373,7 +381,7 @@ void main() {
   testWidgets('surfaces Drive document delete guard', (tester) async {
     final api = _FakeProjectApi(
       projects: [_project(id: 'p1', name: 'Drive 受保護專案')],
-      deleteError: Exception('Project has linked Drive documents'),
+      deleteBlockedKind: ProjectLinkKind.driveDocuments,
     );
     await _pumpProjectsPage(tester, api);
 

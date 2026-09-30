@@ -219,12 +219,29 @@ async function named(page, text, { last = false } = {}) {
   throw new Error(`named not found: ${text}`);
 }
 
-async function textbox(page, label) {
+async function textbox(page, label, fallbackIndex = 0) {
   const pattern = label instanceof RegExp ? label : new RegExp(esc(label));
-  return visible([
-    page.getByRole('textbox', { name: pattern }),
-    page.getByLabel(pattern),
-  ]);
+  try {
+    return await visible(
+      [
+        page.getByRole('textbox', { name: pattern }),
+        page.getByLabel(pattern),
+      ],
+      3000,
+    );
+  } catch (_) {
+    const textboxes = page.getByRole('textbox');
+    const count = await textboxes.count();
+    let seen = 0;
+    for (let index = 0; index < count; index += 1) {
+      const candidate = textboxes.nth(index);
+      if (await candidate.isVisible().catch(() => false)) {
+        if (seen === fallbackIndex) return candidate;
+        seen += 1;
+      }
+    }
+    throw new Error(`Textbox not found: ${label}`);
+  }
 }
 
 async function waitObserved(predicate, label) {

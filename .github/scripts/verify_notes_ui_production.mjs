@@ -258,7 +258,8 @@ async function desktop(context) {
     'search query',
   );
   pass('server_search');
-  await search.fill('');
+  const resetSearch = await textbox(page, /搜尋筆記標題或內容/);
+  await resetSearch.fill('');
   await (await named(page, '搜尋')).click();
   await named(page, /驗收被連結筆記/);
 

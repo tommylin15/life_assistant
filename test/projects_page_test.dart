@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:life_assistant/app/theme/app_theme.dart';
+import 'package:life_assistant/web/drive_api.dart';
+import 'package:life_assistant/web/google_drive_picker.dart';
 import 'package:life_assistant/web/project_api.dart';
 import 'package:life_assistant/web/projects_page.dart';
 
@@ -10,12 +12,14 @@ class _FakeProjectApi implements ProjectApi {
     List<Map<String, dynamic>>? projects,
     List<Map<String, dynamic>>? tasks,
     this.deleteBlockedKind,
+    this.deleteError,
   })  : projects = projects ?? [],
         tasks = tasks ?? [];
 
   final List<Map<String, dynamic>> projects;
   final List<Map<String, dynamic>> tasks;
   ProjectLinkKind? deleteBlockedKind;
+  Object? deleteError;
   Map<String, dynamic>? createdBody;
   final List<Map<String, dynamic>> updatedBodies = [];
   final List<String> deletedIds = [];
@@ -35,6 +39,7 @@ class _FakeProjectApi implements ProjectApi {
 
   @override
   Future<void> deleteProject(String id) async {
+    if (deleteError case final error?) throw error;
     final kind = deleteBlockedKind;
     if (kind != null) {
       throw ProjectDeleteBlockedException(kind);
@@ -59,6 +64,84 @@ class _FakeProjectApi implements ProjectApi {
     project.addAll(body);
     project['updated_at'] = '2026-09-29T11:00:00Z';
     return project;
+  }
+}
+
+class _FakeDriveApi implements DriveApi {
+  _FakeDriveApi({List<Map<String, dynamic>>? projectDocuments})
+      : projectDocuments = projectDocuments ?? [];
+
+  final List<Map<String, dynamic>> projectDocuments;
+  final List<(String, String)> detached = [];
+
+  Future<List<Map<String, dynamic>>> getProjectDocuments({String? projectId}) async =>
+      projectDocuments
+          .where((item) => projectId == null || item['project_id'] == projectId)
+          .toList();
+
+  Future<void> detachDocumentFromProject(String documentId, String projectId) async {
+    detached.add((documentId, projectId));
+    projectDocuments.removeWhere(
+      (item) =>
+          item['drive_document_id'] == documentId && item['project_id'] == projectId,
+    );
+  }
+
+  @override
+  Future<PickerConfig> getPickerConfig() => throw UnimplementedError();
+
+  @override
+  Future<List<DriveWorkspace>> getWorkspaces() async => const [];
+
+  @override
+  Future<DriveWorkspace> createWorkspace(String googleFolderId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<DriveWorkspace> updateWorkspace(
+    String id,
+    Map<String, dynamic> body,
+  ) =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> deleteWorkspace(String id) => throw UnimplementedError();
+
+  @override
+  Future<DriveAiSettings> getAiSettings() async => const DriveAiSettings();
+
+  @override
+  Future<DriveAiSettings> updateAiSettings(Map<String, dynamic> body) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<DriveDocument>> getDocuments({String? q, String? workspaceId}) async =>
+      const [];
+
+  @override
+  Future<List<DriveDocument>> registerDocuments(
+    List<String> googleFileIds, {
+    String? workspaceId,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<DriveDocument> refreshDocument(String id) => throw UnimplementedError();
+}
+
+class _FakePicker implements GoogleDrivePicker {
+  final List<String> openedUrls = [];
+
+  @override
+  Future<List<String>> pickFiles({String? folderId, bool allowMultiple = true}) async =>
+      const [];
+
+  @override
+  Future<String?> pickFolder() async => null;
+
+  @override
+  Future<void> openUrl(String url) async {
+    openedUrls.add(url);
   }
 }
 
@@ -91,10 +174,27 @@ Map<String, dynamic> _task({
       'due_at': null,
     };
 
+Map<String, dynamic> _driveProjectDocument({
+  required String projectId,
+  required String documentId,
+  required String name,
+}) =>
+    {
+      'project_id': projectId,
+      'drive_document_id': documentId,
+      'google_file_id': 'google-$documentId',
+      'name': name,
+      'mime_type': 'application/vnd.google-apps.document',
+      'web_view_link': 'https://docs.google.com/document/d/google-$documentId/edit',
+      'provider_modified_at': '2026-09-30T08:00:00Z',
+    };
+
 Future<void> _pumpProjectsPage(
   WidgetTester tester,
-  _FakeProjectApi api,
-) async {
+  _FakeProjectApi api, {
+  _FakeDriveApi? driveApi,
+  _FakePicker? picker,
+}) async {
   tester.view.physicalSize = const Size(1200, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -102,7 +202,11 @@ Future<void> _pumpProjectsPage(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [projectApiProvider.overrideWithValue(api)],
+      overrides: [
+        projectApiProvider.overrideWithValue(api),
+        if (driveApi != null) driveApiProvider.overrideWithValue(driveApi),
+        if (picker != null) googleDrivePickerProvider.overrideWithValue(picker),
+      ],
       child: MaterialApp(theme: AppTheme.light, home: const ProjectsPage()),
     ),
   );
@@ -157,6 +261,43 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('舊專案'), findsOneWidget);
+  });
+
+  testWidgets('renders related Drive documents and supports open and detach',
+      (tester) async {
+    final driveApi = _FakeDriveApi(
+      projectDocuments: [
+        _driveProjectDocument(
+          projectId: 'p1',
+          documentId: 'd1',
+          name: '年度預算',
+        ),
+      ],
+    );
+    final picker = _FakePicker();
+    await _pumpProjectsPage(
+      tester,
+      _FakeProjectApi(projects: [_project(id: 'p1', name: '家庭財務')]),
+      driveApi: driveApi,
+      picker: picker,
+    );
+
+    expect(find.text('關聯文件'), findsOneWidget);
+    expect(find.text('年度預算'), findsOneWidget);
+    expect(find.text('在 Drive 開啟'), findsOneWidget);
+    expect(find.text('相關筆記'), findsOneWidget);
+    expect(find.text('解除關聯'), findsOneWidget);
+
+    await tester.tap(find.text('在 Drive 開啟'));
+    await tester.pump();
+    expect(
+      picker.openedUrls,
+      ['https://docs.google.com/document/d/google-d1/edit'],
+    );
+
+    await tester.tap(find.text('解除關聯'));
+    await tester.pumpAndSettle();
+    expect(driveApi.detached, [('d1', 'p1')]);
   });
 
   testWidgets('creates and edits a project without inventing status enums',
@@ -227,6 +368,24 @@ void main() {
     expect(api.deletedIds, isEmpty);
     expect(find.textContaining('仍有關聯待辦'), findsOneWidget);
     expect(find.text('受保護專案'), findsOneWidget);
+  });
+
+  testWidgets('surfaces Drive document delete guard', (tester) async {
+    final api = _FakeProjectApi(
+      projects: [_project(id: 'p1', name: 'Drive 受保護專案')],
+      deleteError: Exception('Project has linked Drive documents'),
+    );
+    await _pumpProjectsPage(tester, api);
+
+    await tester.tap(find.byTooltip('專案選項'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('刪除'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '刪除'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('關聯 Drive 文件'), findsOneWidget);
+    expect(find.text('Drive 受保護專案'), findsOneWidget);
   });
 
   testWidgets('deletes an unlinked project after explicit confirmation',

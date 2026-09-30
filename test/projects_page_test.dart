@@ -12,14 +12,12 @@ class _FakeProjectApi implements ProjectApi {
     List<Map<String, dynamic>>? projects,
     List<Map<String, dynamic>>? tasks,
     this.deleteBlockedKind,
-    this.deleteError,
   })  : projects = projects ?? [],
         tasks = tasks ?? [];
 
   final List<Map<String, dynamic>> projects;
   final List<Map<String, dynamic>> tasks;
   ProjectLinkKind? deleteBlockedKind;
-  Object? deleteError;
   Map<String, dynamic>? createdBody;
   final List<Map<String, dynamic>> updatedBodies = [];
   final List<String> deletedIds = [];
@@ -39,7 +37,6 @@ class _FakeProjectApi implements ProjectApi {
 
   @override
   Future<void> deleteProject(String id) async {
-    if (deleteError case final error?) throw error;
     final kind = deleteBlockedKind;
     if (kind != null) {
       throw ProjectDeleteBlockedException(kind);

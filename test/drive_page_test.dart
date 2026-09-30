@@ -205,6 +205,11 @@ void main() {
     expect(find.text('年度預算'), findsOneWidget);
     expect(find.text('會議紀錄'), findsNothing);
 
+    // Unmount the first DrivePage so Flutter cannot preserve its State when
+    // the empty-state fixture is mounted with a different provider override.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
     final emptyApi = _FakeDriveApi();
     await _pump(tester, emptyApi, _FakePicker());
     expect(find.textContaining('只會顯示你透過 Google Picker'), findsOneWidget);

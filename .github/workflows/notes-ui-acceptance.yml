@@ -33,12 +33,27 @@ jobs:
           node-version: '22'
 
       - name: Validate acceptance script syntax
-        run: node --check .github/scripts/verify_notes_ui_production.mjs
+        run: |
+          node --check .github/scripts/verify_notes_ui_production.mjs
+          node --check .github/scripts/diagnose_notes_route.mjs
 
       - name: Install production UI acceptance tooling
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install chromium
+
+      - name: Diagnose deployed Notes route
+        run: |
+          BASE_URL="https://${GCP_PROJECT_ID}.web.app"
+          curl --fail --silent --show-error \
+            --dump-header /tmp/notes-route.headers \
+            --output /tmp/notes-route.html \
+            "$BASE_URL/more/notes?notes_route=$RELEASE_SHA"
+          echo "notes_route_headers_begin"
+          cat /tmp/notes-route.headers
+          echo "notes_route_headers_end"
+          grep -Fq '<title>生活助理</title>' /tmp/notes-route.html
+          BASE_URL="$BASE_URL" node .github/scripts/diagnose_notes_route.mjs
 
       - name: Verify deployed release and Notes UI
         run: |

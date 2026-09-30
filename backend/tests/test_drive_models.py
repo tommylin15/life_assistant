@@ -10,6 +10,10 @@ class DriveModelContractTests(unittest.TestCase):
         self.assertIsNotNone(importlib.util.find_spec("app.models.drive"))
         return importlib.import_module("app.models.drive")
 
+    def _schemas(self):
+        self.assertIsNotNone(importlib.util.find_spec("app.models.drive_schemas"))
+        return importlib.import_module("app.models.drive_schemas")
+
     def test_drive_model_module_exists(self):
         self.assertIsNotNone(importlib.util.find_spec("app.models.drive"))
 
@@ -82,6 +86,30 @@ class DriveModelContractTests(unittest.TestCase):
         self.assertIsNotNone(
             default_indexes[0].dialect_options["postgresql"].get("where")
         )
+
+    def test_task1_schema_contract_exists_and_ai_defaults_match(self):
+        schemas = self._schemas()
+        for name in (
+            "DriveWorkspaceCreate",
+            "DriveWorkspaceUpdate",
+            "DriveWorkspaceOut",
+            "DriveDocumentOut",
+            "DriveAiSettingsOut",
+            "DriveAiSettingsUpdate",
+            "DriveNoteLinkSuggestionOut",
+            "PickerConfigOut",
+        ):
+            self.assertTrue(hasattr(schemas, name), name)
+
+        update = schemas.DriveAiSettingsUpdate()
+        self.assertEqual(update.model_dump(), {})
+        out = schemas.DriveAiSettingsOut(
+            auto_tags=True,
+            suggest_related_notes=True,
+            allow_content_analysis=False,
+            max_related_notes=5,
+        )
+        self.assertEqual(out.max_related_notes, 5)
 
 
 if __name__ == "__main__":

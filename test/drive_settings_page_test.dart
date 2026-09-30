@@ -98,6 +98,22 @@ class _FakeDriveApi implements DriveApi {
 
   @override
   Future<DriveDocument> refreshDocument(String id) => throw UnimplementedError();
+
+  @override
+  Future<List<Map<String, dynamic>>> getProjectDocuments({String? projectId}) async =>
+      const [];
+
+  @override
+  Future<void> attachDocumentToProjects(
+    String documentId,
+    List<String> projectIds,
+  ) async {}
+
+  @override
+  Future<void> detachDocumentFromProject(
+    String documentId,
+    String projectId,
+  ) async {}
 }
 
 class _FakePicker implements GoogleDrivePicker {

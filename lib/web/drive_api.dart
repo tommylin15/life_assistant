@@ -184,6 +184,21 @@ abstract class DriveApi {
     String? workspaceId,
   });
   Future<DriveDocument> refreshDocument(String id);
+
+  Future<List<Map<String, dynamic>>> getProjectDocuments({String? projectId}) =>
+      throw UnimplementedError();
+
+  Future<void> attachDocumentToProjects(
+    String documentId,
+    List<String> projectIds,
+  ) =>
+      throw UnimplementedError();
+
+  Future<void> detachDocumentFromProject(
+    String documentId,
+    String projectId,
+  ) =>
+      throw UnimplementedError();
 }
 
 class HttpDriveApi implements DriveApi {
@@ -315,6 +330,46 @@ class HttpDriveApi implements DriveApi {
     return DriveDocument.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getProjectDocuments({String? projectId}) async {
+    final params = <String, String>{};
+    if (projectId != null && projectId.isNotEmpty) params['project_id'] = projectId;
+    final response = await _client.get(
+      _driveUri(
+        '/drive/project-documents',
+        queryParameters: params.isEmpty ? null : params,
+      ),
+    );
+    _check(response.statusCode, response.body);
+    return (jsonDecode(response.body) as List).cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<void> attachDocumentToProjects(
+    String documentId,
+    List<String> projectIds,
+  ) async {
+    final response = await _client.post(
+      _driveUri('/drive/documents/${Uri.encodeComponent(documentId)}/projects'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'project_ids': projectIds}),
+    );
+    _check(response.statusCode, response.body);
+  }
+
+  @override
+  Future<void> detachDocumentFromProject(
+    String documentId,
+    String projectId,
+  ) async {
+    final response = await _client.delete(
+      _driveUri(
+        '/drive/documents/${Uri.encodeComponent(documentId)}/projects/${Uri.encodeComponent(projectId)}',
+      ),
+    );
+    if (response.statusCode != 204) _check(response.statusCode, response.body);
   }
 }
 

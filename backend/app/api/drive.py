@@ -12,24 +12,31 @@ from app.models.drive import (
     DriveDocument,
     DriveWorkspace,
     DriveWorkspaceDocument,
+    ProjectDriveDocument,
 )
 from app.models.drive_schemas import (
     DriveAiSettingsOut,
     DriveAiSettingsUpdate,
     DriveDocumentOut,
     DriveDocumentsRegister,
+    DriveProjectDocumentOut,
+    DriveProjectLinkOut,
+    DriveProjectLinksCreate,
     DriveWorkspaceCreate,
     DriveWorkspaceOut,
     DriveWorkspaceUpdate,
     PickerConfigOut,
 )
 from app.services.drive_documents import (
+    attach_document_to_projects,
     create_workspace,
+    detach_document_from_project,
     get_owned_workspace,
     refresh_document,
     register_documents,
     unregister_document,
 )
+from app.services.execution_log import fail_execution, finish_execution, start_execution
 from app.services.google_oauth import SERVICE_SCOPES
 
 router = APIRouter(prefix="/drive", tags=["drive"])
@@ -195,6 +202,112 @@ async def refresh_drive_document(
     db: AsyncSession = Depends(get_db),
 ):
     return await refresh_document(db, user["sub"], document_id)
+
+
+@router.get("/project-documents", response_model=list[DriveProjectDocumentOut])
+async def list_project_drive_documents(
+    project_id: str | None = Query(default=None),
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    statement = (
+        select(ProjectDriveDocument, DriveDocument)
+        .join(
+            DriveDocument,
+            DriveDocument.id == ProjectDriveDocument.drive_document_id,
+        )
+        .where(DriveDocument.owner_sub == user["sub"])
+    )
+    if project_id:
+        statement = statement.where(ProjectDriveDocument.project_id == project_id)
+    result = await db.execute(
+        statement.order_by(ProjectDriveDocument.created_at.desc())
+    )
+    return [
+        DriveProjectDocumentOut(
+            project_id=relation.project_id,
+            drive_document_id=document.id,
+            google_file_id=document.google_file_id,
+            name=document.name,
+            mime_type=document.mime_type,
+            web_view_link=document.web_view_link,
+            provider_modified_at=document.provider_modified_at,
+        )
+        for relation, document in result.all()
+    ]
+
+
+@router.post(
+    "/documents/{document_id}/projects",
+    response_model=list[DriveProjectLinkOut],
+)
+async def attach_drive_document_to_projects(
+    document_id: str,
+    body: DriveProjectLinksCreate,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    execution = await start_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="drive.project.attach",
+        provider="internal",
+        entity_type="drive_document",
+        entity_id=document_id,
+        summary="Attach Drive document to projects",
+    )
+    try:
+        links = await attach_document_to_projects(
+            db,
+            user["sub"],
+            document_id,
+            body.project_ids,
+        )
+    except Exception as exc:
+        await fail_execution(db, execution, exc, summary="Drive project attach failed")
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="attached",
+        summary="Drive document attached to projects",
+    )
+    return links
+
+
+@router.delete("/documents/{document_id}/projects/{project_id}", status_code=204)
+async def detach_drive_document_from_project(
+    document_id: str,
+    project_id: str,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    execution = await start_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="drive.project.detach",
+        provider="internal",
+        entity_type="drive_document",
+        entity_id=document_id,
+        summary="Detach Drive document from project",
+    )
+    try:
+        await detach_document_from_project(
+            db,
+            user["sub"],
+            document_id,
+            project_id,
+        )
+    except Exception as exc:
+        await fail_execution(db, execution, exc, summary="Drive project detach failed")
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="detached",
+        summary="Drive document detached from project",
+    )
+    return Response(status_code=204)
 
 
 @router.delete("/documents/{document_id}", status_code=204)

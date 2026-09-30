@@ -30,10 +30,16 @@ async def request_google(
 
     if response.status_code == 401:
         token = await get_access_token(db, user_sub, scope, force_refresh=True)
-        headers.update(_auth_headers(token))
+        retry_headers = dict(headers)
+        retry_headers.update(_auth_headers(token))
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.request(method, url, headers=headers, **kwargs)
+                response = await client.request(
+                    method,
+                    url,
+                    headers=retry_headers,
+                    **kwargs,
+                )
         except httpx.HTTPError as exc:
             raise HTTPException(503, "Google API unavailable") from exc
 

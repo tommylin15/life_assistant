@@ -38,6 +38,15 @@ class ReleaseRevisionDiagnosticsTests(unittest.TestCase):
         heads = ScriptDirectory.from_config(config).get_heads()
         self.assertEqual([release.RELEASE_TARGET_REVISION], heads)
 
+    def test_release_revision_window_advances_without_dropping_supported_legacy_heads(self):
+        self.assertEqual("20260930_0008", release.RELEASE_TARGET_REVISION)
+        self.assertEqual("20260930_0007", release.PREVIOUS_RELEASE_REVISION)
+        self.assertTrue(
+            {"20260927_0005", "20260928_0006"}.issubset(
+                release.LEGACY_DIRECT_RELEASE_REVISIONS
+            )
+        )
+
 
 class ReleaseAdvanceTests(unittest.IsolatedAsyncioTestCase):
     async def test_current_previous_release_advances_without_historical_reconciliation(self):
@@ -45,7 +54,7 @@ class ReleaseAdvanceTests(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 release,
                 "_current_revision",
-                AsyncMock(return_value="20260927_0005"),
+                AsyncMock(return_value="20260930_0007"),
             ),
             patch.object(
                 release,

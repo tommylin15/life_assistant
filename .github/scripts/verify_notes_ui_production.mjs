@@ -236,6 +236,7 @@ async function waitObserved(predicate, label) {
 }
 
 const pass = (name) => console.log(`notes_ui_check=${name}:PASS`);
+const stage = (name) => console.log(`notes_ui_stage=${name}`);
 
 async function desktop(context) {
   const page = await context.newPage();
@@ -243,8 +244,10 @@ async function desktop(context) {
   await mockApi(page);
   await page.goto(`${baseUrl}/more/notes`, { waitUntil: 'domcontentloaded' });
   await semantics(page);
-  await named(page, '驗收主筆記');
-  await named(page, '旅行專案');
+  stage('list_note');
+  await named(page, /驗收主筆記/);
+  stage('list_project');
+  await named(page, /旅行專案/);
   pass('list');
 
   const search = await textbox(page, /搜尋筆記標題或內容/);
@@ -257,7 +260,7 @@ async function desktop(context) {
   pass('server_search');
   await search.fill('');
   await (await named(page, '搜尋')).click();
-  await named(page, '驗收被連結筆記');
+  await named(page, /驗收被連結筆記/);
 
   await (await named(page, '新增筆記')).click();
   await (await textbox(page, /標題/)).fill('瀏覽器新增筆記');
@@ -266,7 +269,7 @@ async function desktop(context) {
     '# 瀏覽器 Markdown\n**正式驗收**',
   );
   await (await named(page, '預覽')).click();
-  await named(page, '瀏覽器 Markdown');
+  await named(page, /瀏覽器 Markdown/);
   pass('markdown_preview');
   await (await named(page, '儲存')).click();
   await waitObserved(
@@ -277,7 +280,7 @@ async function desktop(context) {
     () => observed.tags.some((entry) => entry.values.join('|') === '驗收|Markdown'),
     'tags',
   );
-  await named(page, '筆記已新增');
+  await named(page, /筆記已新增/);
   pass('create_tags');
 
   await pageDelay(4200);
@@ -285,7 +288,7 @@ async function desktop(context) {
   await (await named(page, '雙向連結')).click();
   const selector = await named(page, /連結另一則筆記/);
   await selector.click();
-  await (await named(page, '驗收被連結筆記', { last: true })).click();
+  await (await named(page, /驗收被連結筆記/, { last: true })).click();
   await (await named(page, '新增雙向連結')).click();
   const created = notes.find((note) => note.title === '瀏覽器新增筆記');
   assert.ok(created);
@@ -310,7 +313,7 @@ async function desktop(context) {
 
   await (await named(page, '筆記選項')).click();
   await (await named(page, '刪除')).click();
-  await named(page, '刪除筆記？');
+  await named(page, /刪除筆記？/);
   await (await named(page, '刪除', { last: true })).click();
   await waitObserved(
     () => observed.deletes.some((entry) => entry.id === created.id),
@@ -336,7 +339,7 @@ async function mobile(context) {
   });
   await page.goto(`${baseUrl}/more/notes`, { waitUntil: 'domcontentloaded' });
   await semantics(page);
-  await named(page, '驗收主筆記');
+  await named(page, /驗收主筆記/);
   await (await named(page, '新增筆記')).click();
   await textbox(page, /標題/);
   await textbox(page, /Markdown 內容/);

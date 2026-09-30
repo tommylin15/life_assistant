@@ -344,6 +344,8 @@ class Settings(BaseSettings):
     database_url: str = DEFAULT_DATABASE_URL
     google_client_id: str = ""
     google_client_secret: str = ""
+    google_picker_developer_key: str = ""
+    google_picker_app_id: str = ""
     google_redirect_uri: str = "http://localhost:8081/auth/callback"
     frontend_url: str = "http://localhost:5000"
 

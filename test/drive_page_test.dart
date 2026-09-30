@@ -18,6 +18,8 @@ class _FakeDriveApi implements DriveApi {
   String? registeredWorkspaceId;
   String? lastQuery;
   String? lastWorkspaceFilter;
+  String? attachedDocumentId;
+  List<String>? attachedProjectIds;
 
   @override
   Future<PickerConfig> getPickerConfig() async => const PickerConfig(
@@ -81,6 +83,25 @@ class _FakeDriveApi implements DriveApi {
   Future<DriveDocument> refreshDocument(String id) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> getProjectDocuments({String? projectId}) async =>
+      const [];
+
+  @override
+  Future<void> attachDocumentToProjects(
+    String documentId,
+    List<String> projectIds,
+  ) async {
+    attachedDocumentId = documentId;
+    attachedProjectIds = List.of(projectIds);
+  }
+
+  @override
+  Future<void> detachDocumentFromProject(
+    String documentId,
+    String projectId,
+  ) async {}
 }
 
 class _FakeProjectApi implements ProjectApi {
@@ -234,6 +255,15 @@ void main() {
     expect(find.text('家庭財務'), findsOneWidget);
     expect(find.text('裝修'), findsOneWidget);
     expect(find.byType(Checkbox), findsNWidgets(2));
+
+    await tester.tap(find.text('家庭財務'));
+    await tester.tap(find.text('裝修'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '加入'));
+    await tester.pumpAndSettle();
+
+    expect(api.attachedDocumentId, 'd1');
+    expect(api.attachedProjectIds, ['p1', 'p2']);
   });
 
   testWidgets('adds picker-selected files into active workspace and opens source',

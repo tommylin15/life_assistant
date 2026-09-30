@@ -2,14 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'drive_api.dart';
+import 'google_drive_picker.dart';
 import 'project_api.dart';
 
 final _projectWorkspaceProvider = FutureProvider<_ProjectWorkspace>((ref) async {
-  final api = ref.read(projectApiProvider);
-  final results = await Future.wait([api.getProjects(), api.getTasks()]);
+  final projectApi = ref.read(projectApiProvider);
+  final driveApi = ref.read(driveApiProvider);
+  final projects = await projectApi.getProjects();
+  final tasks = await projectApi.getTasks();
+  final driveDocuments = await driveApi.getProjectDocuments();
   return _ProjectWorkspace(
-    projects: results[0].map(_ProjectView.fromJson).toList(),
-    tasks: results[1].map(_LinkedTaskView.fromJson).toList(),
+    projects: projects.map(_ProjectView.fromJson).toList(),
+    tasks: tasks.map(_LinkedTaskView.fromJson).toList(),
+    driveDocuments:
+        driveDocuments.map(_DriveProjectDocumentView.fromJson).toList(),
   );
 });
 
@@ -95,9 +102,7 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage> {
                     prefixIcon: Icon(Icons.search),
                     hintText: '搜尋專案、摘要或待辦',
                   ),
-                  onChanged: (value) {
-                    setState(() => _query = value.trim());
-                  },
+                  onChanged: (value) => setState(() => _query = value.trim()),
                 ),
               ),
             ),
@@ -118,9 +123,8 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage> {
                                     : _statusLabel(status),
                               ),
                               selected: _statusFilter == status,
-                              onSelected: (_) {
-                                setState(() => _statusFilter = status);
-                              },
+                              onSelected: (_) =>
+                                  setState(() => _statusFilter = status),
                             ),
                           ),
                         )
@@ -149,8 +153,11 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage> {
                       child: _ProjectCard(
                         project: project,
                         openTasks: workspace.openTasks(project.id),
+                        driveDocuments: workspace.driveDocumentsFor(project.id),
                         onEdit: () => _openEditor(project: project),
                         onDelete: () => _deleteProject(project),
+                        onOpenDrive: _openDriveDocument,
+                        onDetachDrive: _detachDriveDocument,
                       ),
                     );
                   },
@@ -178,16 +185,19 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage> {
       if (_statusFilter != '__all__' && project.status != _statusFilter) {
         return false;
       }
-      if (query.isEmpty) {
-        return true;
-      }
+      if (query.isEmpty) return true;
       if (project.name.toLowerCase().contains(query) ||
           (project.summary ?? '').toLowerCase().contains(query)) {
         return true;
       }
-      return workspace
+      if (workspace
           .openTasks(project.id)
-          .any((task) => task.title.toLowerCase().contains(query));
+          .any((task) => task.title.toLowerCase().contains(query))) {
+        return true;
+      }
+      return workspace
+          .driveDocumentsFor(project.id)
+          .any((document) => document.name.toLowerCase().contains(query));
     }).toList();
 
     result.sort((a, b) {
@@ -210,9 +220,7 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage> {
       context: context,
       builder: (_) => _ProjectEditorDialog(project: project),
     );
-    if (result == null || !mounted) {
-      return;
-    }
+    if (result == null || !mounted) return;
 
     try {
       final api = ref.read(projectApiProvider);
@@ -231,13 +239,42 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage> {
     }
   }
 
+  Future<void> _openDriveDocument(_DriveProjectDocumentView document) async {
+    final link = document.webViewLink;
+    if (link == null || link.isEmpty) {
+      _showError('Google Drive 未提供可開啟連結');
+      return;
+    }
+    try {
+      await ref.read(googleDrivePickerProvider).openUrl(link);
+    } catch (error) {
+      _showError(error);
+    }
+  }
+
+  Future<void> _detachDriveDocument(_DriveProjectDocumentView document) async {
+    try {
+      await ref.read(driveApiProvider).detachDocumentFromProject(
+            document.driveDocumentId,
+            document.projectId,
+          );
+      ref.invalidate(_projectWorkspaceProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已解除「${document.name}」的專案關聯')),
+      );
+    } catch (error) {
+      _showError(error);
+    }
+  }
+
   Future<void> _deleteProject(_ProjectView project) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('刪除專案？'),
         content: Text(
-          '確定要刪除「${project.name}」？若專案仍有關聯待辦、筆記或購物清單，系統會阻擋刪除。',
+          '確定要刪除「${project.name}」？若專案仍有關聯待辦、筆記、購物清單或 Drive 文件，系統會阻擋刪除。',
         ),
         actions: [
           TextButton(
@@ -255,9 +292,7 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage> {
         ],
       ),
     );
-    if (confirmed != true || !mounted) {
-      return;
-    }
+    if (confirmed != true || !mounted) return;
 
     try {
       await ref.read(projectApiProvider).deleteProject(project.id);
@@ -296,22 +331,20 @@ class _ProjectOverview extends StatelessWidget {
   final int openTaskCount;
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 20,
-          runSpacing: 12,
-          children: [
-            _ProjectMetric(label: '進行中專案', value: activeCount),
-            _ProjectMetric(label: '有未完成待辦', value: withOpenTasksCount),
-            _ProjectMetric(label: '未完成待辦', value: openTaskCount),
-          ],
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Wrap(
+            spacing: 20,
+            runSpacing: 12,
+            children: [
+              _ProjectMetric(label: '進行中專案', value: activeCount),
+              _ProjectMetric(label: '有未完成待辦', value: withOpenTasksCount),
+              _ProjectMetric(label: '未完成待辦', value: openTaskCount),
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      );
 }
 
 class _ProjectMetric extends StatelessWidget {
@@ -321,33 +354,37 @@ class _ProjectMetric extends StatelessWidget {
   final int value;
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 130,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('$value', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 2),
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => SizedBox(
+        width: 130,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$value', style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 2),
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      );
 }
 
 class _ProjectCard extends StatelessWidget {
   const _ProjectCard({
     required this.project,
     required this.openTasks,
+    required this.driveDocuments,
     required this.onEdit,
     required this.onDelete,
+    required this.onOpenDrive,
+    required this.onDetachDrive,
   });
 
   final _ProjectView project;
   final List<_LinkedTaskView> openTasks;
+  final List<_DriveProjectDocumentView> driveDocuments;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final ValueChanged<_DriveProjectDocumentView> onOpenDrive;
+  final ValueChanged<_DriveProjectDocumentView> onDetachDrive;
 
   @override
   Widget build(BuildContext context) {
@@ -355,107 +392,166 @@ class _ProjectCard extends StatelessWidget {
     final updated = project.updatedAt?.toLocal();
 
     return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onEdit,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap: onEdit,
+                    child: Text(
                       project.name,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    if ((project.summary ?? '').trim().isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        project.summary!.trim(),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ],
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        _ProjectMetaChip(
-                          icon: Icons.circle_outlined,
-                          label: _statusLabel(project.status),
-                        ),
-                        _ProjectMetaChip(
-                          icon: Icons.task_alt_outlined,
-                          label: '未完成待辦 ${openTasks.length}',
-                        ),
-                        if (updated != null)
-                          _ProjectMetaChip(
-                            icon: Icons.update,
-                            label: '更新 ${DateFormat('M/d HH:mm').format(updated)}',
-                          ),
-                      ],
+                  ),
+                  if ((project.summary ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      project.summary!.trim(),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium,
                     ),
-                    if (openTasks.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text('近期未完成待辦', style: theme.textTheme.labelMedium),
-                      const SizedBox(height: 4),
-                      for (final task in openTasks.take(3))
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 2),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Padding(
-                                padding: EdgeInsets.only(top: 7),
-                                child: Icon(Icons.circle, size: 5),
-                              ),
-                              const SizedBox(width: 7),
-                              Expanded(
-                                child: Text(
-                                  task.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                              ),
-                            ],
-                          ),
+                  ],
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _ProjectMetaChip(
+                        icon: Icons.circle_outlined,
+                        label: _statusLabel(project.status),
+                      ),
+                      _ProjectMetaChip(
+                        icon: Icons.task_alt_outlined,
+                        label: '未完成待辦 ${openTasks.length}',
+                      ),
+                      if (driveDocuments.isNotEmpty)
+                        _ProjectMetaChip(
+                          icon: Icons.add_to_drive_outlined,
+                          label: '關聯文件 ${driveDocuments.length}',
                         ),
-                      if (openTasks.length > 3)
-                        Text(
-                          '另有 ${openTasks.length - 3} 項',
-                          style: theme.textTheme.labelSmall,
+                      if (updated != null)
+                        _ProjectMetaChip(
+                          icon: Icons.update,
+                          label: '更新 ${DateFormat('M/d HH:mm').format(updated)}',
                         ),
                     ],
+                  ),
+                  if (openTasks.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text('近期未完成待辦', style: theme.textTheme.labelMedium),
+                    const SizedBox(height: 4),
+                    for (final task in openTasks.take(3))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 7),
+                              child: Icon(Icons.circle, size: 5),
+                            ),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: Text(
+                                task.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (openTasks.length > 3)
+                      Text(
+                        '另有 ${openTasks.length - 3} 項',
+                        style: theme.textTheme.labelSmall,
+                      ),
                   ],
-                ),
-              ),
-              PopupMenuButton<String>(
-                tooltip: '專案選項',
-                onSelected: (value) {
-                  switch (value) {
-                    case 'edit':
-                      onEdit();
-                      break;
-                    case 'delete':
-                      onDelete();
-                      break;
-                  }
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: Text('編輯')),
-                  PopupMenuItem(value: 'delete', child: Text('刪除')),
+                  if (driveDocuments.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text('關聯文件', style: theme.textTheme.labelMedium),
+                    const SizedBox(height: 4),
+                    for (final document in driveDocuments)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: theme.dividerColor),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 8, 8, 6),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.description_outlined, size: 18),
+                                    const SizedBox(width: 7),
+                                    Expanded(
+                                      child: Text(
+                                        document.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Wrap(
+                                  spacing: 2,
+                                  children: [
+                                    TextButton(
+                                      onPressed: document.webViewLink == null
+                                          ? null
+                                          : () => onOpenDrive(document),
+                                      child: const Text('在 Drive 開啟'),
+                                    ),
+                                    const TextButton(
+                                      onPressed: null,
+                                      child: Text('相關筆記'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => onDetachDrive(document),
+                                      child: const Text('解除關聯'),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ],
               ),
-            ],
-          ),
+            ),
+            PopupMenuButton<String>(
+              tooltip: '專案選項',
+              onSelected: (value) {
+                switch (value) {
+                  case 'edit':
+                    onEdit();
+                    break;
+                  case 'delete':
+                    onDelete();
+                    break;
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'edit', child: Text('編輯')),
+                PopupMenuItem(value: 'delete', child: Text('刪除')),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -614,10 +710,15 @@ class _ProjectEditorResult {
 }
 
 class _ProjectWorkspace {
-  const _ProjectWorkspace({required this.projects, required this.tasks});
+  const _ProjectWorkspace({
+    required this.projects,
+    required this.tasks,
+    required this.driveDocuments,
+  });
 
   final List<_ProjectView> projects;
   final List<_LinkedTaskView> tasks;
+  final List<_DriveProjectDocumentView> driveDocuments;
 
   List<_LinkedTaskView> openTasks(String projectId) {
     final result = tasks
@@ -633,6 +734,9 @@ class _ProjectWorkspace {
     });
     return result;
   }
+
+  List<_DriveProjectDocumentView> driveDocumentsFor(String projectId) =>
+      driveDocuments.where((document) => document.projectId == projectId).toList();
 }
 
 class _ProjectView {
@@ -645,16 +749,14 @@ class _ProjectView {
     required this.updatedAt,
   });
 
-  factory _ProjectView.fromJson(Map<String, dynamic> json) {
-    return _ProjectView(
-      id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      summary: json['summary'] as String?,
-      status: json['status'] as String? ?? 'active',
-      createdAt: _parseDate(json['created_at']),
-      updatedAt: _parseDate(json['updated_at']),
-    );
-  }
+  factory _ProjectView.fromJson(Map<String, dynamic> json) => _ProjectView(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        summary: json['summary'] as String?,
+        status: json['status'] as String? ?? 'active',
+        createdAt: _parseDate(json['created_at']),
+        updatedAt: _parseDate(json['updated_at']),
+      );
 
   final String id;
   final String name;
@@ -673,15 +775,13 @@ class _LinkedTaskView {
     required this.dueAt,
   });
 
-  factory _LinkedTaskView.fromJson(Map<String, dynamic> json) {
-    return _LinkedTaskView(
-      id: json['id'] as String? ?? '',
-      title: json['title'] as String? ?? '',
-      status: json['status'] as String? ?? 'pending',
-      projectId: json['project_id'] as String?,
-      dueAt: _parseDate(json['due_at']),
-    );
-  }
+  factory _LinkedTaskView.fromJson(Map<String, dynamic> json) => _LinkedTaskView(
+        id: json['id'] as String? ?? '',
+        title: json['title'] as String? ?? '',
+        status: json['status'] as String? ?? 'pending',
+        projectId: json['project_id'] as String?,
+        dueAt: _parseDate(json['due_at']),
+      );
 
   final String id;
   final String title;
@@ -690,6 +790,31 @@ class _LinkedTaskView {
   final DateTime? dueAt;
 
   bool get isOpen => status != 'completed' && status != 'cancelled';
+}
+
+class _DriveProjectDocumentView {
+  const _DriveProjectDocumentView({
+    required this.projectId,
+    required this.driveDocumentId,
+    required this.name,
+    required this.mimeType,
+    required this.webViewLink,
+  });
+
+  factory _DriveProjectDocumentView.fromJson(Map<String, dynamic> json) =>
+      _DriveProjectDocumentView(
+        projectId: json['project_id'] as String? ?? '',
+        driveDocumentId: json['drive_document_id'] as String? ?? '',
+        name: json['name'] as String? ?? 'Google Drive 文件',
+        mimeType: json['mime_type'] as String? ?? 'application/octet-stream',
+        webViewLink: json['web_view_link'] as String?,
+      );
+
+  final String projectId;
+  final String driveDocumentId;
+  final String name;
+  final String mimeType;
+  final String? webViewLink;
 }
 
 class _ProjectEmptyState extends StatelessWidget {
@@ -702,41 +827,39 @@ class _ProjectEmptyState extends StatelessWidget {
   final VoidCallback onCreate;
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.folder_open_outlined,
-              size: 48,
-              color: Theme.of(context).colorScheme.secondary,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              hasAnyProjects ? '沒有符合條件的專案' : '還沒有專案',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              hasAnyProjects ? '調整搜尋或狀態篩選。' : '建立一個專案，把相關待辦集中起來。',
-              textAlign: TextAlign.center,
-            ),
-            if (!hasAnyProjects) ...[
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: onCreate,
-                icon: const Icon(Icons.add),
-                label: const Text('新增專案'),
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.folder_open_outlined,
+                size: 48,
+                color: Theme.of(context).colorScheme.secondary,
               ),
+              const SizedBox(height: 12),
+              Text(
+                hasAnyProjects ? '沒有符合條件的專案' : '還沒有專案',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                hasAnyProjects ? '調整搜尋或狀態篩選。' : '建立一個專案，把相關待辦集中起來。',
+                textAlign: TextAlign.center,
+              ),
+              if (!hasAnyProjects) ...[
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: onCreate,
+                  icon: const Icon(Icons.add),
+                  label: const Text('新增專案'),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
-      ),
-    );
-  }
+      );
 }
 
 class _ProjectErrorState extends StatelessWidget {
@@ -746,33 +869,31 @@ class _ProjectErrorState extends StatelessWidget {
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.cloud_off_outlined,
-              size: 48,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            const SizedBox(height: 12),
-            Text('無法載入專案', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 6),
-            Text('$error', textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('重試'),
-            ),
-          ],
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.cloud_off_outlined,
+                size: 48,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: 12),
+              Text('無法載入專案', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 6),
+              Text('$error', textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('重試'),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      );
 }
 
 DateTime? _parseDate(dynamic value) {

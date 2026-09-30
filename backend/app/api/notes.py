@@ -51,11 +51,12 @@ async def list_notes(
     if query:
         ts_query = func.plainto_tsquery(_SEARCH_CONFIG, query)
         rank = func.ts_rank_cd(_SEARCH_VECTOR, ts_query)
+        lowered_query = query.casefold()
         statement = statement.where(
             or_(
                 _SEARCH_VECTOR.op("@@")(ts_query),
-                Note.title.icontains(query, autoescape=True),
-                Note.body.icontains(query, autoescape=True),
+                func.lower(Note.title).contains(lowered_query, autoescape=True),
+                func.lower(Note.body).contains(lowered_query, autoescape=True),
             )
         ).order_by(rank.desc(), Note.updated_at.desc())
     else:

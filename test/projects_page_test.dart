@@ -209,7 +209,7 @@ Future<void> _pumpProjectsPage(
     ProviderScope(
       overrides: [
         projectApiProvider.overrideWithValue(api),
-        if (driveApi != null) driveApiProvider.overrideWithValue(driveApi),
+        driveApiProvider.overrideWithValue(driveApi ?? _FakeDriveApi()),
         if (picker != null) googleDrivePickerProvider.overrideWithValue(picker),
       ],
       child: MaterialApp(theme: AppTheme.light, home: const ProjectsPage()),

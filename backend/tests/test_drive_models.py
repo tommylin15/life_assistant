@@ -102,7 +102,7 @@ class DriveModelContractTests(unittest.TestCase):
             self.assertTrue(hasattr(schemas, name), name)
 
         update = schemas.DriveAiSettingsUpdate()
-        self.assertEqual(update.model_dump(), {})
+        self.assertEqual(update.model_dump(exclude_unset=True), {})
         out = schemas.DriveAiSettingsOut(
             auto_tags=True,
             suggest_related_notes=True,

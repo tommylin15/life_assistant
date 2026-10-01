@@ -115,6 +115,64 @@ class DriveProjectDocumentOut(BaseModel):
     provider_modified_at: datetime | None
 
 
+class DriveNoteImportCreate(BaseModel):
+    title: str | None = Field(default=None, max_length=500)
+    project_id: str | None = Field(default=None, max_length=36)
+    tags: list[str] = Field(default_factory=list, max_length=50)
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in values:
+            value = raw.strip()
+            if not value:
+                raise ValueError("Drive note tag cannot be empty")
+            if len(value) > 255:
+                raise ValueError("Drive note tag is too long")
+            key = value.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(value)
+        return normalized
+
+
+class DriveNoteRelationOut(BaseModel):
+    note_id: str
+    drive_document_id: str
+    relation_type: str
+    relation_origin: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DriveRelatedNoteOut(BaseModel):
+    note_id: str
+    drive_document_id: str
+    relation_type: str
+    relation_origin: str
+    title: str | None
+    body: str | None
+    project_id: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DriveNoteDocumentOut(BaseModel):
+    note_id: str
+    drive_document_id: str
+    relation_type: str
+    relation_origin: str
+    google_file_id: str
+    name: str
+    mime_type: str
+    web_view_link: str | None
+    provider_modified_at: datetime | None
+
+
 class DriveAiSettingsOut(BaseModel):
     auto_tags: bool = True
     suggest_related_notes: bool = True

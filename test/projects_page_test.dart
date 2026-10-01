@@ -202,6 +202,7 @@ Map<String, dynamic> _driveProjectDocument({
   required String projectId,
   required String documentId,
   required String name,
+  List<String> tags = const [],
 }) =>
     {
       'project_id': projectId,
@@ -211,6 +212,7 @@ Map<String, dynamic> _driveProjectDocument({
       'mime_type': 'application/vnd.google-apps.document',
       'web_view_link': 'https://docs.google.com/document/d/google-$documentId/edit',
       'provider_modified_at': '2026-09-30T08:00:00Z',
+      'tags': tags,
     };
 
 Future<void> _pumpProjectsPage(
@@ -287,7 +289,7 @@ void main() {
     expect(find.text('舊專案'), findsOneWidget);
   });
 
-  testWidgets('renders related Drive documents and supports open and detach',
+  testWidgets('renders related Drive documents, shared tags, open and detach',
       (tester) async {
     final driveApi = _FakeDriveApi(
       projectDocuments: [
@@ -295,6 +297,7 @@ void main() {
           projectId: 'p1',
           documentId: 'd1',
           name: '年度預算',
+          tags: const ['預算', '重要'],
         ),
       ],
     );
@@ -308,6 +311,8 @@ void main() {
 
     expect(find.text('關聯文件'), findsOneWidget);
     expect(find.text('年度預算'), findsOneWidget);
+    expect(find.text('預算'), findsOneWidget);
+    expect(find.text('重要'), findsOneWidget);
     expect(find.text('在 Drive 開啟'), findsOneWidget);
     expect(find.text('相關筆記'), findsOneWidget);
     expect(find.text('解除關聯'), findsOneWidget);

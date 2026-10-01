@@ -27,6 +27,8 @@ from app.models.drive_schemas import (
     DriveProjectLinkOut,
     DriveProjectLinksCreate,
     DriveRelatedNoteOut,
+    DriveTagsOut,
+    DriveTagsReplace,
     DriveWorkspaceCreate,
     DriveWorkspaceOut,
     DriveWorkspaceUpdate,
@@ -38,6 +40,7 @@ from app.services.drive_documents import (
     attach_document_to_projects,
     create_workspace,
     detach_document_from_project,
+    get_owned_document,
     get_owned_workspace,
     import_document_to_note,
     link_document_to_note,
@@ -48,6 +51,7 @@ from app.services.drive_documents import (
 )
 from app.services.execution_log import fail_execution, finish_execution, start_execution
 from app.services.google_oauth import SERVICE_SCOPES
+from app.services.tag_service import list_entity_tags, replace_entity_tags
 
 router = APIRouter(prefix="/drive", tags=["drive"])
 
@@ -212,6 +216,55 @@ async def refresh_drive_document(
     db: AsyncSession = Depends(get_db),
 ):
     return await refresh_document(db, user["sub"], document_id)
+
+
+@router.get("/documents/{document_id}/tags", response_model=DriveTagsOut)
+async def list_drive_document_tags(
+    document_id: str,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await get_owned_document(db, user["sub"], document_id)
+    return DriveTagsOut(
+        tags=await list_entity_tags(db, "drive_document", document_id)
+    )
+
+
+@router.put("/documents/{document_id}/tags", response_model=DriveTagsOut)
+async def replace_drive_document_tags(
+    document_id: str,
+    body: DriveTagsReplace,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await get_owned_document(db, user["sub"], document_id)
+    execution = await start_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="drive.tags.replace",
+        provider="life_assistant",
+        entity_type="drive_document",
+        entity_id=document_id,
+        summary="Replace Drive document tags",
+    )
+    try:
+        tags = await replace_entity_tags(
+            db,
+            "drive_document",
+            document_id,
+            body.tags,
+        )
+        await db.commit()
+    except Exception as exc:
+        await fail_execution(db, execution, exc, summary="Replace Drive document tags failed")
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="updated",
+        summary="Drive document tags replaced",
+    )
+    return DriveTagsOut(tags=tags)
 
 
 @router.get("/project-documents", response_model=list[DriveProjectDocumentOut])

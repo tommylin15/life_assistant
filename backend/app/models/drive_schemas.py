@@ -95,8 +95,8 @@ class DriveDocumentListOut(BaseModel):
     returned: int
 
 
-class PickerSessionOut(BaseModel):
-    access_token: str
-    expires_at: datetime | None
+class PickerConfigOut(BaseModel):
+    client_id: str
     developer_key: str
     app_id: str
+    scope: str

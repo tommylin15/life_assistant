@@ -271,6 +271,33 @@ async function textbox(page, name, fallbackIndex = 0) {
   }
 }
 
+async function typeFlutterText(locator, text, label) {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await locator.click();
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    await locator.press('Control+A').catch(() => {});
+    await locator.press('Backspace').catch(() => {});
+    await locator.pressSequentially('x', { delay: 20 }).catch(() => {});
+    await locator.press('Backspace').catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await locator.pressSequentially(text, { delay: 15 });
+    await locator.press('Tab');
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const value = await locator.inputValue().catch(() => null);
+    console.log(
+      `task_ui_typed=${label} attempt=${attempt} value=${JSON.stringify(value)}`,
+    );
+    if (value === text) {
+      return;
+    }
+    if (attempt < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  const value = await locator.inputValue().catch(() => null);
+  assert.equal(value, text, `${label} DOM value did not match typed text`);
+}
+
 async function isNamedVisible(page, text) {
   const pattern = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const candidates = [page.getByLabel(pattern), page.getByText(pattern)];
@@ -402,7 +429,7 @@ async function runDesktopAcceptance(context) {
   await (await named(page, '待辦選項', { last: true })).click();
   await (await named(page, 'Checklist')).click();
   const checklistInput = await textbox(page, /新增 Checklist 項目/, 0);
-  await checklistInput.fill('瀏覽器檢查項目');
+  await typeFlutterText(checklistInput, '瀏覽器檢查項目', 'checklist_new_item');
   const checklistGetsBeforeCreate = observed.requestTrace.filter(
     ({ method, pathname }) => method === 'GET' && pathname.endsWith('/checklist'),
   ).length;

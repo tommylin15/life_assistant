@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
+from app.config import settings
 from app.db.session import get_db
 from app.models.drive import DriveDocument, DriveWorkspace
 from app.models.drive_schemas import (
@@ -14,12 +15,11 @@ from app.models.drive_schemas import (
     DriveWorkspaceCreate,
     DriveWorkspaceOut,
     DriveWorkspaceUpdate,
-    PickerSessionOut,
+    PickerConfigOut,
 )
-from app.models.google_integration import GoogleConnection
 from app.services import drive_documents
 from app.services.execution_log import fail_execution
-from app.services.google_oauth import SERVICE_SCOPES, get_access_token
+from app.services.google_oauth import SERVICE_SCOPES
 from app.services.idempotency import (
     ACTION_ID_HEADER,
     commit_reserved_execution,
@@ -186,29 +186,24 @@ async def delete_drive_workspace(
     return Response(status_code=204)
 
 
-@router.get("/picker-session", response_model=PickerSessionOut)
-async def get_picker_session(
+@router.get("/picker-config", response_model=PickerConfigOut)
+async def get_picker_config(
     response: Response,
     user: dict = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
 ):
+    del user
+    client_id = settings.google_client_id.strip()
     developer_key = os.environ.get("GOOGLE_PICKER_DEVELOPER_KEY", "").strip()
     app_id = os.environ.get("GOOGLE_PICKER_APP_ID", "").strip()
-    if not developer_key or not app_id:
+    if not client_id or not developer_key or not app_id:
         raise HTTPException(503, "Google Picker is not configured")
 
-    access_token = await get_access_token(
-        db,
-        user["sub"],
-        SERVICE_SCOPES["drive"][0],
-    )
-    connection = await db.get(GoogleConnection, user["sub"])
     response.headers["Cache-Control"] = "no-store"
-    return PickerSessionOut(
-        access_token=access_token,
-        expires_at=connection.access_token_expires_at if connection else None,
+    return PickerConfigOut(
+        client_id=client_id,
         developer_key=developer_key,
         app_id=app_id,
+        scope=SERVICE_SCOPES["drive"][0],
     )
 
 

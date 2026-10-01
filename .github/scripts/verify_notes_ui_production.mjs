@@ -347,7 +347,7 @@ async function desktop(context) {
   const editorBody = await editorTextboxFromEnd(page, 0);
   const expectedBody = '# 瀏覽器 Markdown\n**正式驗收**';
   await fillVerified(editorTitle, '瀏覽器新增筆記', 'title');
-  await fillVerified(editorTags, '驗收, Markdown, 驗收', 'tags');
+  await typeFlutterText(editorTags, '驗收, Markdown, 驗收', 'tags');
   await typeFlutterText(editorBody, expectedBody, 'body');
   console.log('notes_ui_editor_value=body verified_by=keyboard_preview_and_create_payload');
   await (await named(page, '預覽')).click();

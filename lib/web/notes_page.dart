@@ -217,16 +217,16 @@ class _NotesPageState extends ConsumerState<NotesPage> {
   Future<void> _delete(_Note note) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('刪除筆記？'),
         content: Text('確定要刪除「${note.displayTitle}」？這個動作需要明確確認。'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('刪除'),
           ),
         ],

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
 from app.db.session import get_db
+from app.models.drive import NoteDriveDocument
 from app.models.migration_support import EntityTag, Tag
 from app.models.note import Note, NoteLink
 from app.models.schemas import (
@@ -178,6 +179,9 @@ async def delete_note(
                 EntityTag.entity_type == "note",
                 EntityTag.entity_id == note_id,
             )
+        )
+        await db.execute(
+            delete(NoteDriveDocument).where(NoteDriveDocument.note_id == note_id)
         )
         await db.delete(note)
         await db.commit()

@@ -3,14 +3,28 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'google_drive_picker.dart';
 import 'note_api.dart';
 
 final _notesProvider = FutureProvider.family<_Workspace, String>((ref, query) async {
   final api = ref.read(noteApiProvider);
   final values = await Future.wait([api.getNotes(query: query), api.getProjects()]);
+  final notes = values[0].map(_Note.fromJson).toList();
+  final driveDocumentsByNote = <String, List<_DriveDocumentRef>>{};
+  await Future.wait(
+    notes.map((note) async {
+      try {
+        final raw = await api.getNoteDriveDocuments(note.id);
+        driveDocumentsByNote[note.id] = raw.map(_DriveDocumentRef.fromJson).toList();
+      } catch (_) {
+        driveDocumentsByNote[note.id] = const [];
+      }
+    }),
+  );
   return _Workspace(
-    notes: values[0].map(_Note.fromJson).toList(),
+    notes: notes,
     projects: values[1].map(_Project.fromJson).toList(),
+    driveDocumentsByNote: driveDocumentsByNote,
   );
 });
 
@@ -123,34 +137,42 @@ class _NotesPageState extends ConsumerState<NotesPage> {
                     itemCount: workspace.notes.length,
                     itemBuilder: (_, index) {
                       final note = workspace.notes[index];
+                      final driveDocuments = workspace.driveDocuments(note.id);
                       return Card(
-                        child: ListTile(
-                          onTap: () => _edit(workspace, note: note),
-                          leading: const Icon(Icons.description_outlined),
-                          title: Text(note.displayTitle),
-                          subtitle: Text(
-                            [
-                              if (note.body.trim().isNotEmpty) _plain(note.body),
-                              if (workspace.projectName(note.projectId) case final name?) name,
-                              if (note.updatedAt case final updated?)
-                                '更新 ${DateFormat('M/d HH:mm').format(updated.toLocal())}',
-                            ].join('\n'),
-                            maxLines: 4,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: PopupMenuButton<String>(
-                            tooltip: '筆記選項',
-                            onSelected: (action) {
-                              if (action == 'edit') _edit(workspace, note: note);
-                              if (action == 'links') _links(workspace, note);
-                              if (action == 'delete') _delete(note);
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'edit', child: Text('編輯')),
-                              PopupMenuItem(value: 'links', child: Text('雙向連結')),
-                              PopupMenuItem(value: 'delete', child: Text('刪除')),
-                            ],
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            ListTile(
+                              onTap: () => _edit(workspace, note: note),
+                              leading: const Icon(Icons.description_outlined),
+                              title: Text(note.displayTitle),
+                              subtitle: Text(
+                                [
+                                  if (note.body.trim().isNotEmpty) _plain(note.body),
+                                  if (workspace.projectName(note.projectId) case final name?) name,
+                                  if (note.updatedAt case final updated?)
+                                    '更新 ${DateFormat('M/d HH:mm').format(updated.toLocal())}',
+                                ].join('\n'),
+                                maxLines: 4,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: PopupMenuButton<String>(
+                                tooltip: '筆記選項',
+                                onSelected: (action) {
+                                  if (action == 'edit') _edit(workspace, note: note);
+                                  if (action == 'links') _links(workspace, note);
+                                  if (action == 'delete') _delete(note);
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(value: 'edit', child: Text('編輯')),
+                                  PopupMenuItem(value: 'links', child: Text('雙向連結')),
+                                  PopupMenuItem(value: 'delete', child: Text('刪除')),
+                                ],
+                              ),
+                            ),
+                            for (final document in driveDocuments)
+                              _driveDocumentRow(document),
+                          ],
                         ),
                       );
                     },
@@ -160,6 +182,58 @@ class _NotesPageState extends ConsumerState<NotesPage> {
           ),
         ),
       );
+
+  Widget _driveDocumentRow(_DriveDocumentRef document) {
+    final isSource = document.relationType == 'source_import';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Icon(
+                Icons.add_to_drive_outlined,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              Text(
+                isSource ? '來源：Google Drive' : '關聯 Drive 文件',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Text(document.name),
+              TextButton(
+                onPressed: document.webViewLink == null
+                    ? null
+                    : () => _openDriveDocument(document),
+                child: Text(isSource ? '開啟原始文件' : '在 Drive 開啟'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openDriveDocument(_DriveDocumentRef document) async {
+    final link = document.webViewLink;
+    if (link == null || link.isEmpty) {
+      _message('Google Drive 未提供可開啟連結');
+      return;
+    }
+    try {
+      await ref.read(googleDrivePickerProvider).openUrl(link);
+    } catch (error) {
+      _message('開啟 Drive 文件失敗：$error');
+    }
+  }
 
   void _applySearch() => setState(() => _query = _search.text.trim());
 
@@ -552,9 +626,14 @@ class _LinksDialogState extends ConsumerState<_LinksDialog> {
 }
 
 class _Workspace {
-  const _Workspace({required this.notes, required this.projects});
+  const _Workspace({
+    required this.notes,
+    required this.projects,
+    required this.driveDocumentsByNote,
+  });
   final List<_Note> notes;
   final List<_Project> projects;
+  final Map<String, List<_DriveDocumentRef>> driveDocumentsByNote;
 
   String? projectName(String? id) {
     if (id == null) return null;
@@ -563,6 +642,9 @@ class _Workspace {
     }
     return '未知專案';
   }
+
+  List<_DriveDocumentRef> driveDocuments(String noteId) =>
+      driveDocumentsByNote[noteId] ?? const [];
 }
 
 class _Note {
@@ -587,6 +669,28 @@ class _Note {
   final DateTime? updatedAt;
   String get displayTitle =>
       (title?.trim().isNotEmpty ?? false) ? title!.trim() : '未命名筆記';
+}
+
+class _DriveDocumentRef {
+  const _DriveDocumentRef({
+    required this.name,
+    required this.relationType,
+    required this.relationOrigin,
+    required this.webViewLink,
+  });
+
+  factory _DriveDocumentRef.fromJson(Map<String, dynamic> json) =>
+      _DriveDocumentRef(
+        name: json['name']?.toString() ?? 'Google Drive 文件',
+        relationType: json['relation_type']?.toString() ?? 'related',
+        relationOrigin: json['relation_origin']?.toString() ?? 'manual',
+        webViewLink: json['web_view_link']?.toString(),
+      );
+
+  final String name;
+  final String relationType;
+  final String relationOrigin;
+  final String? webViewLink;
 }
 
 class _Project {

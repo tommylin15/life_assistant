@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import current_user
 from app.db.session import get_db
 from app.models.drive import NoteDriveDocument
-from app.models.migration_support import EntityTag, Tag
+from app.models.migration_support import EntityTag
 from app.models.note import Note, NoteLink
 from app.models.schemas import (
     NoteCreate,
@@ -18,6 +18,7 @@ from app.models.schemas import (
     NoteUpdate,
 )
 from app.services.execution_log import fail_execution, finish_execution, start_execution
+from app.services.tag_service import list_entity_tags, replace_entity_tags
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
@@ -205,17 +206,7 @@ async def list_note_tags(
     note = await db.get(Note, note_id)
     if not note:
         raise HTTPException(404, "Note not found")
-
-    result = await db.execute(
-        select(Tag.name)
-        .join(EntityTag, EntityTag.tag_id == Tag.id)
-        .where(
-            EntityTag.entity_type == "note",
-            EntityTag.entity_id == note_id,
-        )
-        .order_by(func.lower(Tag.name))
-    )
-    return NoteTagsOut(tags=list(result.scalars().all()))
+    return NoteTagsOut(tags=await list_entity_tags(db, "note", note_id))
 
 
 @router.put("/{note_id}/tags", response_model=NoteTagsOut)
@@ -239,22 +230,7 @@ async def replace_note_tags(
         summary="Replace note tags",
     )
     try:
-        await db.execute(
-            delete(EntityTag).where(
-                EntityTag.entity_type == "note",
-                EntityTag.entity_id == note_id,
-            )
-        )
-        for name in body.tags:
-            result = await db.execute(
-                select(Tag).where(func.lower(Tag.name) == name.casefold()).limit(1)
-            )
-            tag = result.scalar_one_or_none()
-            if tag is None:
-                tag = Tag(id=str(uuid.uuid4()), name=name)
-                db.add(tag)
-                await db.flush()
-            db.add(EntityTag(entity_type="note", entity_id=note_id, tag_id=tag.id))
+        tags = await replace_entity_tags(db, "note", note_id, body.tags)
         await db.commit()
     except Exception as exc:
         await fail_execution(db, execution, exc, summary="Replace note tags failed")
@@ -266,7 +242,7 @@ async def replace_note_tags(
         result="updated",
         summary="Note tags replaced",
     )
-    return NoteTagsOut(tags=body.tags)
+    return NoteTagsOut(tags=tags)
 
 
 @router.get("/{note_id}/links", response_model=list[NoteOut])

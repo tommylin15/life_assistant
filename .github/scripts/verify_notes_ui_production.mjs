@@ -282,6 +282,29 @@ async function fillVerified(locator, value, label) {
   assert.equal(actual, value, `${label} DOM value did not match filled value`);
 }
 
+async function typeFlutterText(locator, value, label) {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await locator.click();
+    await pageDelay(180);
+    await locator.press('Control+A').catch(() => {});
+    await locator.press('Backspace').catch(() => {});
+    await locator.pressSequentially('x', { delay: 20 }).catch(() => {});
+    await locator.press('Backspace').catch(() => {});
+    await pageDelay(100);
+    await locator.pressSequentially(value, { delay: 15 });
+    await locator.press('Tab');
+    await pageDelay(150);
+    const actual = await locator.inputValue().catch(() => null);
+    console.log(
+      `notes_ui_typed=${label} attempt=${attempt} value=${JSON.stringify(actual)}`,
+    );
+    if (actual === value) return;
+    if (attempt < 3) await pageDelay(250);
+  }
+  const actual = await locator.inputValue().catch(() => null);
+  assert.equal(actual, value, `${label} DOM value did not match typed text`);
+}
+
 async function waitObserved(predicate, label) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     if (predicate()) return;
@@ -325,8 +348,8 @@ async function desktop(context) {
   const expectedBody = '# 瀏覽器 Markdown\n**正式驗收**';
   await fillVerified(editorTitle, '瀏覽器新增筆記', 'title');
   await fillVerified(editorTags, '驗收, Markdown, 驗收', 'tags');
-  await editorBody.fill(expectedBody);
-  console.log('notes_ui_editor_value=body verified_by=markdown_preview_and_create_payload');
+  await typeFlutterText(editorBody, expectedBody, 'body');
+  console.log('notes_ui_editor_value=body verified_by=keyboard_preview_and_create_payload');
   await (await named(page, '預覽')).click();
   await named(page, /瀏覽器 Markdown/);
   await named(page, /正式驗收/);

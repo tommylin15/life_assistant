@@ -20,6 +20,8 @@ class _FakeDriveApi implements DriveApi {
   String? lastWorkspaceFilter;
   String? attachedDocumentId;
   List<String>? attachedProjectIds;
+  String? importedDocumentId;
+  Map<String, dynamic>? importedBody;
 
   @override
   Future<PickerConfig> getPickerConfig() async => const PickerConfig(
@@ -102,6 +104,22 @@ class _FakeDriveApi implements DriveApi {
     String documentId,
     String projectId,
   ) async {}
+
+  Future<Map<String, dynamic>> importDocumentToNote(
+    String documentId,
+    Map<String, dynamic> body,
+  ) async {
+    importedDocumentId = documentId;
+    importedBody = Map<String, dynamic>.from(body);
+    return {
+      'id': 'note-imported',
+      'title': body['title'],
+      'body': 'snapshot',
+      'project_id': body['project_id'],
+      'created_at': '2026-10-01T00:00:00Z',
+      'updated_at': '2026-10-01T00:00:00Z',
+    };
+  }
 }
 
 class _FakeProjectApi implements ProjectApi {
@@ -206,7 +224,7 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('lists registered files and only later Note import stays disabled',
+  testWidgets('lists registered files and enables project and Note actions',
       (tester) async {
     final api = _FakeDriveApi(
       documents: [_document('d1', '年度預算'), _document('d2', '會議紀錄')],
@@ -233,7 +251,46 @@ void main() {
       find.widgetWithText(TextButton, '轉入 Notes').first,
     );
     expect(addProject.onPressed, isNotNull);
-    expect(importNote.onPressed, isNull);
+    expect(importNote.onPressed, isNotNull);
+  });
+
+  testWidgets('imports Drive snapshot into Note with title project and tags',
+      (tester) async {
+    final api = _FakeDriveApi(documents: [_document('d1', '年度預算')]);
+    await _pump(
+      tester,
+      api,
+      _FakePicker(),
+      projectApi: _FakeProjectApi(projects: [_project('p1', '家庭財務')]),
+    );
+
+    await tester.tap(find.widgetWithText(TextButton, '轉入 Notes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('轉入 Notes'), findsWidgets);
+    expect(find.byKey(const ValueKey('drive-note-title-field')), findsOneWidget);
+    expect(find.byKey(const ValueKey('drive-note-project-field')), findsOneWidget);
+    expect(find.byKey(const ValueKey('drive-note-tags-field')), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('drive-note-title-field')),
+      '2027 年度預算',
+    );
+    await tester.tap(find.byKey(const ValueKey('drive-note-project-field')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('家庭財務').last);
+    await tester.enterText(
+      find.byKey(const ValueKey('drive-note-tags-field')),
+      '預算, 重要, 預算',
+    );
+    await tester.tap(find.byKey(const ValueKey('drive-note-import-button')));
+    await tester.pumpAndSettle();
+
+    expect(api.importedDocumentId, 'd1');
+    expect(api.importedBody?['title'], '2027 年度預算');
+    expect(api.importedBody?['project_id'], 'p1');
+    expect(api.importedBody?['tags'], ['預算', '重要']);
+    expect(find.textContaining('已轉入 Notes'), findsOneWidget);
   });
 
   testWidgets('add to project dialog supports multiple project selection',

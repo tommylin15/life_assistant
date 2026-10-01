@@ -32,6 +32,28 @@ ACCEPTANCE_USER = {
     "name": "Project Drive Runtime Acceptance",
 }
 
+STAGE_EXIT_CODES = {
+    "seed_drive_document": 21,
+    "project_create": 22,
+    "list_empty_before_attach": 23,
+    "attach": 24,
+    "attach_replay": 25,
+    "repeat_attach": 26,
+    "list_after_attach": 27,
+    "project_delete_guard": 28,
+    "detach": 29,
+    "list_empty_after_detach": 30,
+    "project_delete_after_detach": 31,
+    "cleanup": 32,
+}
+
+
+class AcceptanceStageError(RuntimeError):
+    def __init__(self, stage: str, cause: BaseException) -> None:
+        super().__init__(f"{stage}: {type(cause).__name__}: {cause}")
+        self.stage = stage
+        self.cause = cause
+
 
 async def _acceptance_user() -> dict:
     return dict(ACCEPTANCE_USER)
@@ -130,17 +152,19 @@ async def run_acceptance() -> None:
     google_file_id = f"acceptance-drive-file-{run_id}"
     project_id: str | None = None
     primary_error: BaseException | None = None
-
-    await _seed_drive_document(document_id, google_file_id, label)
-    app.dependency_overrides[current_user] = _acceptance_user
-    transport = httpx.ASGITransport(app=app)
+    stage = "seed_drive_document"
 
     try:
+        await _seed_drive_document(document_id, google_file_id, label)
+        app.dependency_overrides[current_user] = _acceptance_user
+        transport = httpx.ASGITransport(app=app)
+
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://acceptance.local",
             timeout=30.0,
         ) as client:
+            stage = "project_create"
             response = await client.post(
                 "/api/v1/projects",
                 json={"name": f"{label} Project", "summary": label, "status": "active"},
@@ -150,6 +174,7 @@ async def run_acceptance() -> None:
             project_id = str(_json_object(response, "Project create")["id"])
             _record("project_create")
 
+            stage = "list_empty_before_attach"
             response = await client.get(
                 "/api/v1/drive/project-documents",
                 params={"project_id": project_id},
@@ -160,6 +185,7 @@ async def run_acceptance() -> None:
                 raise AssertionError("Project Drive list was not empty before attach")
             _record("list_empty_before_attach")
 
+            stage = "attach"
             attach_headers = {
                 ACTION_ID_HEADER: f"project-drive-attach-{run_id}",
             }
@@ -175,6 +201,7 @@ async def run_acceptance() -> None:
             _record("attach")
 
             # Exact action-id replay must remain safe.
+            stage = "attach_replay"
             response = await client.post(
                 f"/api/v1/drive/documents/{document_id}/projects",
                 json={"project_ids": [project_id, project_id]},
@@ -184,6 +211,7 @@ async def run_acceptance() -> None:
 
             # A second logical attach with a fresh action id must also remain
             # relation-idempotent because the join table has a composite PK.
+            stage = "repeat_attach"
             response = await client.post(
                 f"/api/v1/drive/documents/{document_id}/projects",
                 json={"project_ids": [project_id]},
@@ -193,6 +221,7 @@ async def run_acceptance() -> None:
             await _verify_relation_count(project_id, document_id, 1)
             _record("repeat_attach_idempotent")
 
+            stage = "list_after_attach"
             response = await client.get(
                 "/api/v1/drive/project-documents",
                 params={"project_id": project_id},
@@ -204,6 +233,7 @@ async def run_acceptance() -> None:
                 raise AssertionError("Attached Drive document was not returned exactly once")
             _record("list_after_attach")
 
+            stage = "project_delete_guard"
             project_confirmation = explicit_confirmation_value("project.delete", project_id)
             response = await client.delete(
                 f"/api/v1/projects/{project_id}",
@@ -215,6 +245,7 @@ async def run_acceptance() -> None:
                 raise AssertionError(f"Unexpected Project delete guard detail: {detail!r}")
             _record("project_delete_guard")
 
+            stage = "detach"
             detach_target = f"{document_id}:{project_id}"
             response = await client.delete(
                 f"/api/v1/drive/documents/{document_id}/projects/{project_id}",
@@ -231,6 +262,7 @@ async def run_acceptance() -> None:
             await _verify_document_survives(document_id)
             _record("detach_preserves_drive_document")
 
+            stage = "list_empty_after_detach"
             response = await client.get(
                 "/api/v1/drive/project-documents",
                 params={"project_id": project_id},
@@ -241,6 +273,7 @@ async def run_acceptance() -> None:
                 raise AssertionError("Project Drive list was not empty after detach")
             _record("list_empty_after_detach")
 
+            stage = "project_delete_after_detach"
             response = await client.delete(
                 f"/api/v1/projects/{project_id}",
                 headers={CONFIRMATION_HEADER: project_confirmation},
@@ -250,7 +283,7 @@ async def run_acceptance() -> None:
             _record("project_delete_after_detach_preserves_document")
 
     except BaseException as exc:
-        primary_error = exc
+        primary_error = AcceptanceStageError(stage, exc)
     finally:
         app.dependency_overrides.pop(current_user, None)
         try:
@@ -258,7 +291,7 @@ async def run_acceptance() -> None:
             _record("cleanup")
         except BaseException as cleanup_error:
             if primary_error is None:
-                raise
+                raise AcceptanceStageError("cleanup", cleanup_error) from cleanup_error
             print(
                 f"project_drive_runtime_cleanup_error={type(cleanup_error).__name__}:"
                 f"{cleanup_error}",
@@ -274,9 +307,16 @@ async def run_acceptance() -> None:
 def main() -> int:
     try:
         asyncio.run(run_acceptance())
+    except AcceptanceStageError as exc:
+        print(
+            f"project_drive_runtime_acceptance=FAIL stage={exc.stage} "
+            f"error={type(exc.cause).__name__}:{exc.cause}",
+            flush=True,
+        )
+        return STAGE_EXIT_CODES[exc.stage]
     except BaseException as exc:
         print(
-            f"project_drive_runtime_acceptance=FAIL "
+            f"project_drive_runtime_acceptance=FAIL stage=unknown "
             f"error={type(exc).__name__}:{exc}",
             flush=True,
         )

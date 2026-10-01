@@ -44,6 +44,29 @@ class ProjectDriveRuntimeAcceptanceContractTests(unittest.TestCase):
         self.assertIn("delete(DriveDocument)", source)
         self.assertIn("delete(Project)", source)
 
+    def test_stage_exit_codes_are_unique_and_cover_runtime_path(self):
+        expected = {
+            "seed_drive_document",
+            "project_create",
+            "list_empty_before_attach",
+            "attach",
+            "attach_replay",
+            "repeat_attach",
+            "list_after_attach",
+            "project_delete_guard",
+            "detach",
+            "list_empty_after_detach",
+            "project_delete_after_detach",
+            "cleanup",
+        }
+        self.assertEqual(set(acceptance.STAGE_EXIT_CODES), expected)
+        codes = list(acceptance.STAGE_EXIT_CODES.values())
+        self.assertEqual(len(codes), len(set(codes)))
+        self.assertTrue(all(20 < code < 126 for code in codes))
+        source = inspect.getsource(acceptance)
+        self.assertIn("stage={exc.stage}", source)
+        self.assertIn("return STAGE_EXIT_CODES[exc.stage]", source)
+
 
 if __name__ == "__main__":
     unittest.main()

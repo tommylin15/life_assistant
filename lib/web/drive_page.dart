@@ -201,6 +201,41 @@ class _DrivePageState extends ConsumerState<DrivePage> {
     }
   }
 
+  Future<void> _importToNote(DriveDocument document) async {
+    if (_mutating) return;
+    try {
+      final projects = await ref.read(projectApiProvider).getProjects();
+      if (!mounted) return;
+      final result = await showDialog<_DriveNoteImportResult>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _DriveNoteImportDialog(
+          document: document,
+          projects: projects,
+        ),
+      );
+      if (result == null || !mounted) return;
+
+      setState(() => _mutating = true);
+      await ref.read(driveApiProvider).importDocumentToNote(
+        document.id,
+        {
+          'title': result.title,
+          'project_id': result.projectId,
+          'tags': result.tags,
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('「${document.name}」已轉入 Notes')),
+      );
+    } catch (error) {
+      _showError(error);
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
   Future<void> _openDocument(DriveDocument document) async {
     final link = document.webViewLink;
     if (link == null || link.isEmpty) {
@@ -446,7 +481,10 @@ class _DrivePageState extends ConsumerState<DrivePage> {
                   onPressed: _mutating ? null : () => _addToProjects(document),
                   child: const Text('加入專案'),
                 ),
-                const TextButton(onPressed: null, child: Text('轉入 Notes')),
+                TextButton(
+                  onPressed: _mutating ? null : () => _importToNote(document),
+                  child: const Text('轉入 Notes'),
+                ),
               ],
             ),
           ],
@@ -454,6 +492,132 @@ class _DrivePageState extends ConsumerState<DrivePage> {
       ),
     );
   }
+}
+
+class _DriveNoteImportDialog extends StatefulWidget {
+  const _DriveNoteImportDialog({
+    required this.document,
+    required this.projects,
+  });
+
+  final DriveDocument document;
+  final List<Map<String, dynamic>> projects;
+
+  @override
+  State<_DriveNoteImportDialog> createState() => _DriveNoteImportDialogState();
+}
+
+class _DriveNoteImportDialogState extends State<_DriveNoteImportDialog> {
+  late final TextEditingController _title;
+  final _tags = TextEditingController();
+  String? _projectId;
+
+  @override
+  void initState() {
+    super.initState();
+    _title = TextEditingController(text: widget.document.name);
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _tags.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('轉入 Notes'),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                key: const ValueKey('drive-note-title-field'),
+                controller: _title,
+                decoration: const InputDecoration(labelText: '標題'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: const ValueKey('drive-note-project-field'),
+                initialValue: _projectId ?? '',
+                decoration: const InputDecoration(labelText: '專案'),
+                items: [
+                  const DropdownMenuItem(
+                    value: '',
+                    child: Text('不指定專案'),
+                  ),
+                  for (final project in widget.projects)
+                    DropdownMenuItem(
+                      value: project['id']?.toString() ?? '',
+                      child: Text(project['name']?.toString() ?? '未命名專案'),
+                    ),
+                ],
+                onChanged: (value) => setState(() {
+                  _projectId = value == null || value.isEmpty ? null : value;
+                }),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('drive-note-tags-field'),
+                controller: _tags,
+                decoration: const InputDecoration(
+                  labelText: '標籤',
+                  hintText: '用逗號分隔',
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                '會把目前可讀內容一次性匯入 Note；之後 Note 與 Drive 原檔不會自動同步。',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            key: const ValueKey('drive-note-import-button'),
+            onPressed: _submit,
+            child: const Text('轉入'),
+          ),
+        ],
+      );
+
+  void _submit() {
+    final title = _title.text.trim();
+    if (title.isEmpty) return;
+    final tags = <String>[];
+    final seen = <String>{};
+    for (final raw in _tags.text.split(',')) {
+      final tag = raw.trim();
+      if (tag.isEmpty) continue;
+      if (seen.add(tag.toLowerCase())) tags.add(tag);
+    }
+    Navigator.pop(
+      context,
+      _DriveNoteImportResult(
+        title: title,
+        projectId: _projectId,
+        tags: tags,
+      ),
+    );
+  }
+}
+
+class _DriveNoteImportResult {
+  const _DriveNoteImportResult({
+    required this.title,
+    required this.projectId,
+    required this.tags,
+  });
+
+  final String title;
+  final String? projectId;
+  final List<String> tags;
 }
 
 IconData _fileIcon(String mimeType) {

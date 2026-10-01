@@ -128,6 +128,7 @@ class ProjectDeleteGuardTests(unittest.IsolatedAsyncioTestCase):
             self._linked_result(None),
             self._linked_result(None),
             self._linked_result(None),
+            self._linked_result(None),
         ]
 
         with (
@@ -137,7 +138,7 @@ class ProjectDeleteGuardTests(unittest.IsolatedAsyncioTestCase):
         ):
             await delete_project("project-1", {"sub": "u"}, db)
 
-        self.assertEqual(db.execute.await_count, 3)
+        self.assertEqual(db.execute.await_count, 4)
         start.assert_awaited_once()
         db.delete.assert_awaited_once_with(project)
         db.commit.assert_awaited_once()

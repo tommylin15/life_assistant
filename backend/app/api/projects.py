@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
 from app.db.session import get_db
+from app.models.drive import ProjectDriveDocument
 from app.models.note import Note
 from app.models.project import Project
 from app.models.schemas import ProjectCreate, ProjectOut, ProjectUpdate
@@ -108,6 +109,14 @@ async def delete_project(project_id: str, user: dict = Depends(current_user), db
     linked_shopping_result = await db.execute(select(ShoppingList.id).where(ShoppingList.project_id == project_id).limit(1))
     if linked_shopping_result.scalar_one_or_none() is not None:
         raise HTTPException(409, "Project has linked shopping lists")
+
+    linked_drive_result = await db.execute(
+        select(ProjectDriveDocument.drive_document_id)
+        .where(ProjectDriveDocument.project_id == project_id)
+        .limit(1)
+    )
+    if linked_drive_result.scalar_one_or_none() is not None:
+        raise HTTPException(409, "Project has linked Drive documents")
 
     execution = await start_execution(db, user_sub=user["sub"], action_type="project.delete", provider="internal", entity_type="project", entity_id=project_id, summary="Delete project")
     try:

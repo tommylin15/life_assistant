@@ -13,7 +13,7 @@ abstract class ProjectApi {
   Future<void> deleteProject(String id);
 }
 
-enum ProjectLinkKind { tasks, notes, shoppingLists }
+enum ProjectLinkKind { tasks, notes, shoppingLists, driveDocuments }
 
 class ProjectDeleteBlockedException implements Exception {
   const ProjectDeleteBlockedException(this.kind);
@@ -28,6 +28,8 @@ class ProjectDeleteBlockedException implements Exception {
         return '這個專案仍有關聯筆記，請先移除筆記的專案關聯後再刪除。';
       case ProjectLinkKind.shoppingLists:
         return '這個專案仍有關聯購物清單，請先移除購物清單的專案關聯後再刪除。';
+      case ProjectLinkKind.driveDocuments:
+        return '這個專案仍有關聯 Drive 文件，請先解除 Drive 文件的專案關聯後再刪除。';
     }
   }
 
@@ -58,6 +60,9 @@ class ApiClientProjectApi implements ProjectApi {
       }
       if (message.contains('Project has linked shopping lists')) {
         throw const ProjectDeleteBlockedException(ProjectLinkKind.shoppingLists);
+      }
+      if (message.contains('Project has linked Drive documents')) {
+        throw const ProjectDeleteBlockedException(ProjectLinkKind.driveDocuments);
       }
       rethrow;
     }

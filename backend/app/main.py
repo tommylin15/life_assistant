@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app import config as app_config
 from app.api.activity import router as activity_router
 from app.api.auth import SESSION_COOKIE, router as auth_router
+from app.api.drive import router as drive_router
 from app.api.google_integrations import router as google_integrations_router
 from app.api.google_project import router as google_project_router
 from app.api.habits import router as habits_router
@@ -31,6 +32,7 @@ from app.errors import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
+from app.models import drive as _drive_models  # noqa: F401
 from app.models import migration_support as _migration_support  # noqa: F401
 
 app = FastAPI(title="Life Assistant API", version="0.1.0", debug=False)
@@ -135,6 +137,7 @@ app.include_router(notes_router, prefix="/api/v1")
 app.include_router(habits_router, prefix="/api/v1")
 app.include_router(shopping_router, prefix="/api/v1")
 app.include_router(templates_router, prefix="/api/v1")
+app.include_router(drive_router, prefix="/api/v1")
 app.include_router(google_integrations_router, prefix="/api/v1")
 app.include_router(google_project_router, prefix="/api/v1")
 app.include_router(activity_router, prefix="/api/v1")

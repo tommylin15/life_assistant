@@ -28,6 +28,9 @@ abstract class NoteApi {
   Future<List<Map<String, dynamic>>> getNoteLinks(String id);
   Future<void> linkNote(String id, String targetId);
   Future<void> unlinkNote(String id, String targetId);
+
+  Future<List<Map<String, dynamic>>> getNoteDriveDocuments(String id) =>
+      throw UnimplementedError();
 }
 
 class HttpNoteApi implements NoteApi {
@@ -151,6 +154,14 @@ class HttpNoteApi implements NoteApi {
     if (res.statusCode != 204) {
       _check(res.statusCode, res.body);
     }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getNoteDriveDocuments(String id) async {
+    final encoded = Uri.encodeComponent(id);
+    final res = await _client.get(_noteApiUri('/drive/notes/$encoded/documents'));
+    _check(res.statusCode, res.body);
+    return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
   }
 }
 

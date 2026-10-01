@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:life_assistant/web/app_shell.dart';
@@ -59,5 +61,12 @@ void main() {
       find.byType(NavigationRail),
     );
     expect(navigationRail.selectedIndex, 3);
+  });
+
+  test('web app registers Drive routes and More entry', () {
+    final source = File('lib/web/web_app.dart').readAsStringSync();
+    expect(source, contains("path: '/more/drive'"));
+    expect(source, contains("path: '/more/drive/settings'"));
+    expect(source, contains("title: const Text('Google Drive')"));
   });
 }

@@ -105,6 +105,7 @@ class _FakeDriveApi implements DriveApi {
     String projectId,
   ) async {}
 
+  @override
   Future<Map<String, dynamic>> importDocumentToNote(
     String documentId,
     Map<String, dynamic> body,
@@ -120,6 +121,19 @@ class _FakeDriveApi implements DriveApi {
       'updated_at': '2026-10-01T00:00:00Z',
     };
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> getDocumentNotes(String documentId) async =>
+      const [];
+
+  @override
+  Future<void> linkDocumentToNote(String documentId, String noteId) async {}
+
+  @override
+  Future<void> unlinkDocumentFromNote(String documentId, String noteId) async {}
+
+  @override
+  Future<List<Map<String, dynamic>>> getNoteDocuments(String noteId) async => const [];
 }
 
 class _FakeProjectApi implements ProjectApi {

@@ -118,6 +118,28 @@ class ProjectDeleteGuardTests(unittest.IsolatedAsyncioTestCase):
         start.assert_not_awaited()
         db.delete.assert_not_awaited()
 
+    async def test_delete_rejects_linked_drive_document_before_starting_execution(self):
+        from app.api.projects import delete_project
+
+        db = AsyncMock()
+        db.get.return_value = self._project()
+        db.execute.side_effect = [
+            self._linked_result(None),
+            self._linked_result(None),
+            self._linked_result(None),
+            self._linked_result("drive-document-1"),
+        ]
+
+        with patch("app.api.projects.start_execution", new=AsyncMock()) as start:
+            with self.assertRaises(HTTPException) as ctx:
+                await delete_project("project-1", {"sub": "u"}, db)
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "Project has linked Drive documents")
+        self.assertEqual(db.execute.await_count, 4)
+        start.assert_not_awaited()
+        db.delete.assert_not_awaited()
+
     async def test_delete_without_linked_entities_keeps_existing_delete_path(self):
         from app.api.projects import delete_project
 
@@ -125,6 +147,7 @@ class ProjectDeleteGuardTests(unittest.IsolatedAsyncioTestCase):
         db = AsyncMock()
         db.get.return_value = project
         db.execute.side_effect = [
+            self._linked_result(None),
             self._linked_result(None),
             self._linked_result(None),
             self._linked_result(None),
@@ -137,7 +160,7 @@ class ProjectDeleteGuardTests(unittest.IsolatedAsyncioTestCase):
         ):
             await delete_project("project-1", {"sub": "u"}, db)
 
-        self.assertEqual(db.execute.await_count, 3)
+        self.assertEqual(db.execute.await_count, 4)
         start.assert_awaited_once()
         db.delete.assert_awaited_once_with(project)
         db.commit.assert_awaited_once()

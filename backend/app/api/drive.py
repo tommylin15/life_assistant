@@ -12,6 +12,8 @@ from app.models.drive_schemas import (
     DriveDocumentOut,
     DriveDocumentRegister,
     DriveDocumentRegisterOut,
+    DriveProjectLinksCreate,
+    DriveProjectLinksOut,
     DriveWorkspaceCreate,
     DriveWorkspaceOut,
     DriveWorkspaceUpdate,
@@ -278,6 +280,135 @@ async def list_drive_documents(
         workspace_id=workspace_id,
     )
     return DriveDocumentListOut(documents=documents, returned=len(documents))
+
+
+@router.get("/project-documents", response_model=DriveDocumentListOut)
+async def list_drive_project_documents(
+    project_id: str = Query(min_length=1, max_length=36),
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    documents = await drive_documents.list_project_documents(
+        db,
+        user["sub"],
+        project_id,
+    )
+    return DriveDocumentListOut(documents=documents, returned=len(documents))
+
+
+@router.post("/documents/{document_id}/projects", response_model=DriveProjectLinksOut)
+async def attach_drive_document_projects(
+    document_id: str,
+    body: DriveProjectLinksCreate,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+    action_id: str | None = Header(default=None, alias=ACTION_ID_HEADER),
+):
+    payload = {
+        "document_id": document_id,
+        "project_ids": body.project_ids,
+    }
+    reservation = await reserve_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="drive.document.projects.attach",
+        action_id=action_id,
+        request_payload=payload,
+        provider="internal",
+        entity_type="drive_document",
+        entity_id=document_id,
+        summary="Attach Drive document to Projects",
+    )
+    if reservation.is_replay:
+        return DriveProjectLinksOut(
+            project_ids=body.project_ids,
+            returned=len(body.project_ids),
+        )
+
+    try:
+        project_ids = await drive_documents.attach_document_projects(
+            db,
+            user["sub"],
+            document_id,
+            body.project_ids,
+        )
+    except Exception as exc:
+        await fail_execution(
+            db,
+            reservation.execution,
+            exc,
+            summary="Drive document Project attachment failed",
+        )
+        raise
+
+    await commit_reserved_execution(
+        db,
+        reservation,
+        result="attached",
+        entity_type="drive_document",
+        entity_id=document_id,
+        summary=f"Attached Drive document to {len(project_ids)} Project(s)",
+        failure_summary="Drive document Project attachment failed",
+    )
+    return DriveProjectLinksOut(project_ids=project_ids, returned=len(project_ids))
+
+
+@router.delete("/documents/{document_id}/projects/{project_id}", status_code=204)
+async def detach_drive_document_project(
+    document_id: str,
+    project_id: str,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+    action_id: str | None = Header(default=None, alias=ACTION_ID_HEADER),
+):
+    payload = {
+        "document_id": document_id,
+        "project_id": project_id,
+    }
+    reservation = await reserve_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="drive.document.project.detach",
+        action_id=action_id,
+        request_payload=payload,
+        provider="internal",
+        entity_type="drive_document",
+        entity_id=document_id,
+        summary="Detach Drive document from Project",
+    )
+    if reservation.is_replay:
+        return Response(status_code=204)
+
+    try:
+        removed = await drive_documents.detach_document_project(
+            db,
+            user["sub"],
+            document_id,
+            project_id,
+        )
+    except Exception as exc:
+        await fail_execution(
+            db,
+            reservation.execution,
+            exc,
+            summary="Drive document Project detach failed",
+        )
+        raise
+
+    await commit_reserved_execution(
+        db,
+        reservation,
+        result="detached" if removed else "already_absent",
+        entity_type="drive_document",
+        entity_id=document_id,
+        summary=(
+            "Drive document detached from Project"
+            if removed
+            else "Drive document Project relation already absent"
+        ),
+        failure_summary="Drive document Project detach failed",
+    )
+    return Response(status_code=204)
 
 
 @router.post("/documents/{document_id}/refresh", response_model=DriveDocumentOut)

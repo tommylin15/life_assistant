@@ -4,7 +4,13 @@ from fastapi import HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.drive import DriveDocument, DriveWorkspace, DriveWorkspaceDocument
+from app.models.drive import (
+    DriveDocument,
+    DriveWorkspace,
+    DriveWorkspaceDocument,
+    ProjectDriveDocument,
+)
+from app.models.project import Project
 from app.services.google_drive_files import get_drive_file_metadata
 
 
@@ -255,3 +261,81 @@ async def refresh_document(
     document.web_view_link = metadata.web_view_link
     document.modified_at = metadata.modified_at
     return document
+
+
+async def _require_project(db: AsyncSession, project_id: str) -> Project:
+    project = await db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(404, "Project not found")
+    return project
+
+
+async def list_project_documents(
+    db: AsyncSession,
+    user_sub: str,
+    project_id: str,
+) -> list[DriveDocument]:
+    await _require_project(db, project_id)
+    result = await db.execute(
+        select(DriveDocument)
+        .join(
+            ProjectDriveDocument,
+            ProjectDriveDocument.drive_document_id == DriveDocument.id,
+        )
+        .where(
+            ProjectDriveDocument.project_id == project_id,
+            DriveDocument.user_sub == user_sub,
+        )
+        .order_by(DriveDocument.updated_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def attach_document_projects(
+    db: AsyncSession,
+    user_sub: str,
+    document_id: str,
+    project_ids: list[str],
+) -> list[str]:
+    document = await get_document(db, user_sub, document_id)
+
+    for project_id in project_ids:
+        await _require_project(db, project_id)
+
+    for project_id in project_ids:
+        relation = await db.get(
+            ProjectDriveDocument,
+            {
+                "project_id": project_id,
+                "drive_document_id": document.id,
+            },
+        )
+        if relation is None:
+            db.add(
+                ProjectDriveDocument(
+                    project_id=project_id,
+                    drive_document_id=document.id,
+                )
+            )
+    return project_ids
+
+
+async def detach_document_project(
+    db: AsyncSession,
+    user_sub: str,
+    document_id: str,
+    project_id: str,
+) -> bool:
+    document = await get_document(db, user_sub, document_id)
+    await _require_project(db, project_id)
+    relation = await db.get(
+        ProjectDriveDocument,
+        {
+            "project_id": project_id,
+            "drive_document_id": document.id,
+        },
+    )
+    if relation is None:
+        return False
+    await db.delete(relation)
+    return True

@@ -95,6 +95,34 @@ class DriveDocumentListOut(BaseModel):
     returned: int
 
 
+class DriveProjectLinksCreate(BaseModel):
+    project_ids: list[str] = Field(min_length=1, max_length=100)
+
+    @field_validator("project_ids")
+    @classmethod
+    def normalize_project_ids(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in values:
+            value = raw.strip()
+            if not value:
+                raise ValueError("Project ID cannot be blank")
+            if len(value) > 36:
+                raise ValueError("Project ID is too long")
+            if value in seen:
+                continue
+            seen.add(value)
+            normalized.append(value)
+        if not normalized:
+            raise ValueError("At least one Project ID is required")
+        return normalized
+
+
+class DriveProjectLinksOut(BaseModel):
+    project_ids: list[str]
+    returned: int
+
+
 class PickerConfigOut(BaseModel):
     client_id: str
     developer_key: str

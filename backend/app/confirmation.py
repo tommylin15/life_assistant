@@ -6,6 +6,7 @@ CALENDAR_DELETE_PATH_PREFIX = "/api/v1/integrations/google/calendar/events/"
 PROJECT_DELETE_PATH_PREFIX = "/api/v1/projects/"
 NOTE_DELETE_PATH_PREFIX = "/api/v1/notes/"
 DRIVE_WORKSPACE_DELETE_PATH_PREFIX = "/api/v1/drive/workspaces/"
+DRIVE_DOCUMENT_PATH_PREFIX = "/api/v1/drive/documents/"
 
 _DESTRUCTIVE_DELETE_RULES = (
     (CALENDAR_DELETE_PATH_PREFIX, "calendar.delete"),
@@ -30,11 +31,30 @@ def _single_path_target(path: str, prefix: str) -> str | None:
     return target_id
 
 
+def _drive_project_detach_target(path: str) -> str | None:
+    if not path.startswith(DRIVE_DOCUMENT_PATH_PREFIX):
+        return None
+    remainder = path[len(DRIVE_DOCUMENT_PATH_PREFIX) :]
+    parts = remainder.split("/")
+    if len(parts) != 3 or parts[1] != "projects":
+        return None
+    document_id = unquote(parts[0]).strip()
+    project_id = unquote(parts[2]).strip()
+    if not document_id or not project_id or "/" in document_id or "/" in project_id:
+        return None
+    return f"{document_id}:{project_id}"
+
+
 def confirmation_requirement(method: str, path: str) -> tuple[str, str] | None:
     """Return the destructive action/target that requires explicit confirmation."""
 
     if method.upper() != "DELETE":
         return None
+
+    drive_project_target = _drive_project_detach_target(path)
+    if drive_project_target is not None:
+        return ("drive.document.project.detach", drive_project_target)
+
     for prefix, action_type in _DESTRUCTIVE_DELETE_RULES:
         target_id = _single_path_target(path, prefix)
         if target_id is not None:

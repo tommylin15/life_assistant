@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:life_assistant/app/theme/app_theme.dart';
+import 'package:life_assistant/web/google_drive_picker.dart';
 import 'package:life_assistant/web/note_api.dart';
 import 'package:life_assistant/web/notes_page.dart';
 
@@ -9,12 +10,15 @@ class _FakeNoteApi implements NoteApi {
   _FakeNoteApi({
     List<Map<String, dynamic>>? notes,
     List<Map<String, dynamic>>? projects,
+    Map<String, List<Map<String, dynamic>>>? driveDocuments,
     this.failTagReplace = false,
   })  : notes = notes ?? [],
-        projects = projects ?? [];
+        projects = projects ?? [],
+        driveDocuments = driveDocuments ?? {};
 
   final List<Map<String, dynamic>> notes;
   final List<Map<String, dynamic>> projects;
+  final Map<String, List<Map<String, dynamic>>> driveDocuments;
   final bool failTagReplace;
   final Map<String, List<String>> tags = {};
   final Map<String, List<String>> links = {};
@@ -40,6 +44,7 @@ class _FakeNoteApi implements NoteApi {
     notes.removeWhere((note) => note['id'] == id);
     tags.remove(id);
     links.remove(id);
+    driveDocuments.remove(id);
     for (final values in links.values) {
       values.remove(id);
     }
@@ -62,6 +67,9 @@ class _FakeNoteApi implements NoteApi {
       return title.contains(normalized) || body.contains(normalized);
     }).toList();
   }
+
+  Future<List<Map<String, dynamic>>> getNoteDriveDocuments(String id) async =>
+      List<Map<String, dynamic>>.from(driveDocuments[id] ?? const []);
 
   @override
   Future<List<String>> getNoteTags(String id) async =>
@@ -101,6 +109,22 @@ class _FakeNoteApi implements NoteApi {
   }
 }
 
+class _FakePicker implements GoogleDrivePicker {
+  final List<String> openedUrls = [];
+
+  @override
+  Future<List<String>> pickFiles({String? folderId, bool allowMultiple = true}) async =>
+      const [];
+
+  @override
+  Future<String?> pickFolder() async => null;
+
+  @override
+  Future<void> openUrl(String url) async {
+    openedUrls.add(url);
+  }
+}
+
 Map<String, dynamic> _note({
   required String id,
   required String title,
@@ -116,10 +140,27 @@ Map<String, dynamic> _note({
       'updated_at': '2026-09-30T01:00:00Z',
     };
 
+Map<String, dynamic> _driveSource({
+  required String noteId,
+  required String name,
+}) =>
+    {
+      'note_id': noteId,
+      'drive_document_id': 'd1',
+      'relation_type': 'source_import',
+      'relation_origin': 'import',
+      'google_file_id': 'google-1',
+      'name': name,
+      'mime_type': 'application/vnd.google-apps.document',
+      'web_view_link': 'https://docs.google.com/document/d/google-1/edit',
+      'provider_modified_at': '2026-09-30T01:00:00Z',
+    };
+
 Future<void> _pumpNotesPage(
   WidgetTester tester,
   _FakeNoteApi api, {
   Size size = const Size(1200, 900),
+  _FakePicker? picker,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -128,7 +169,10 @@ Future<void> _pumpNotesPage(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [noteApiProvider.overrideWithValue(api)],
+      overrides: [
+        noteApiProvider.overrideWithValue(api),
+        if (picker != null) googleDrivePickerProvider.overrideWithValue(picker),
+      ],
       child: MaterialApp(theme: AppTheme.light, home: const NotesPage()),
     ),
   );
@@ -159,6 +203,28 @@ void main() {
     expect(find.text('日本旅行'), findsOneWidget);
     expect(find.text('工作紀錄'), findsNothing);
     expect(find.textContaining('1 筆'), findsOneWidget);
+  });
+
+  testWidgets('shows imported Drive source and opens original document', (tester) async {
+    final picker = _FakePicker();
+    final api = _FakeNoteApi(
+      notes: [_note(id: 'n1', title: '年度規劃', body: 'snapshot')],
+      driveDocuments: {
+        'n1': [_driveSource(noteId: 'n1', name: '年度規劃原檔')],
+      },
+    );
+    await _pumpNotesPage(tester, api, picker: picker);
+
+    expect(find.text('來源：Google Drive'), findsOneWidget);
+    expect(find.text('年度規劃原檔'), findsOneWidget);
+    expect(find.text('開啟原始文件'), findsOneWidget);
+
+    await tester.tap(find.text('開啟原始文件'));
+    await tester.pump();
+    expect(
+      picker.openedUrls,
+      ['https://docs.google.com/document/d/google-1/edit'],
+    );
   });
 
   testWidgets('creates markdown note and normalizes tags', (tester) async {

@@ -22,6 +22,8 @@ class _FakeDriveApi implements DriveApi {
   List<String>? attachedProjectIds;
   String? importedDocumentId;
   Map<String, dynamic>? importedBody;
+  String? taggedDocumentId;
+  List<String>? replacedTags;
 
   @override
   Future<PickerConfig> getPickerConfig() async => const PickerConfig(
@@ -134,6 +136,29 @@ class _FakeDriveApi implements DriveApi {
 
   @override
   Future<List<Map<String, dynamic>>> getNoteDocuments(String noteId) async => const [];
+
+  Future<List<String>> replaceDocumentTags(
+    String documentId,
+    List<String> tags,
+  ) async {
+    taggedDocumentId = documentId;
+    replacedTags = List.of(tags);
+    final index = documents.indexWhere((document) => document.id == documentId);
+    if (index >= 0) {
+      final old = documents[index];
+      documents[index] = DriveDocument(
+        id: old.id,
+        googleFileId: old.googleFileId,
+        name: old.name,
+        mimeType: old.mimeType,
+        webViewLink: old.webViewLink,
+        providerModifiedAt: old.providerModifiedAt,
+        lastMetadataRefreshAt: old.lastMetadataRefreshAt,
+        tags: tags,
+      );
+    }
+    return List.of(tags);
+  }
 }
 
 class _FakeProjectApi implements ProjectApi {
@@ -191,13 +216,19 @@ class _FakePicker implements GoogleDrivePicker {
   }
 }
 
-DriveDocument _document(String id, String name) => DriveDocument(
+DriveDocument _document(
+  String id,
+  String name, {
+  List<String> tags = const [],
+}) =>
+    DriveDocument(
       id: id,
       googleFileId: 'g-$id',
       name: name,
       mimeType: 'application/vnd.google-apps.document',
       webViewLink: 'https://docs.google.com/document/d/g-$id/edit',
       providerModifiedAt: DateTime.utc(2026, 9, 30, 10),
+      tags: tags,
     );
 
 DriveWorkspace _workspace() => const DriveWorkspace(
@@ -266,6 +297,31 @@ void main() {
     );
     expect(addProject.onPressed, isNotNull);
     expect(importNote.onPressed, isNotNull);
+  });
+
+  testWidgets('renders and edits shared Drive document tags', (tester) async {
+    final api = _FakeDriveApi(
+      documents: [_document('d1', '年度預算', tags: const ['預算', '重要'])],
+    );
+    await _pump(tester, api, _FakePicker());
+
+    expect(find.text('預算'), findsOneWidget);
+    expect(find.text('重要'), findsOneWidget);
+    expect(find.text('編輯標籤'), findsOneWidget);
+
+    await tester.tap(find.text('編輯標籤'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('drive-tags-field')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('drive-tags-field')),
+      '預算, Finance, 預算',
+    );
+    await tester.tap(find.byKey(const ValueKey('drive-tags-save-button')));
+    await tester.pumpAndSettle();
+
+    expect(api.taggedDocumentId, 'd1');
+    expect(api.replacedTags, ['預算', 'Finance']);
+    expect(find.text('Finance'), findsOneWidget);
   });
 
   testWidgets('imports Drive snapshot into Note with title project and tags',

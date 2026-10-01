@@ -197,7 +197,7 @@ async function visible(locators, timeout = 12000) {
   throw new Error('visible locator not found');
 }
 
-async function named(page, text, { last = false } = {}) {
+async function named(page, text, { last = false, timeout = 12000 } = {}) {
   const pattern =
     text instanceof RegExp ? text : new RegExp(`^${esc(text)}$`);
   const candidates = [
@@ -207,14 +207,18 @@ async function named(page, text, { last = false } = {}) {
     page.getByLabel(pattern),
     page.getByText(pattern),
   ];
-  if (!last) return visible(candidates);
-  for (const locator of candidates) {
-    const count = await locator.count();
-    for (let index = count - 1; index >= 0; index -= 1) {
-      if (await locator.nth(index).isVisible().catch(() => false)) {
-        return locator.nth(index);
+  if (!last) return visible(candidates, timeout);
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    for (const locator of candidates) {
+      const count = await locator.count();
+      for (let index = count - 1; index >= 0; index -= 1) {
+        if (await locator.nth(index).isVisible().catch(() => false)) {
+          return locator.nth(index);
+        }
       }
     }
+    await pageDelay(120);
   }
   throw new Error(`named not found: ${text}`);
 }

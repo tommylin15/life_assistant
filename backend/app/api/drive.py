@@ -12,6 +12,7 @@ from app.models.drive import (
     DriveDocument,
     DriveWorkspace,
     DriveWorkspaceDocument,
+    NoteDriveDocument,
     ProjectDriveDocument,
 )
 from app.models.drive_schemas import (
@@ -19,21 +20,30 @@ from app.models.drive_schemas import (
     DriveAiSettingsUpdate,
     DriveDocumentOut,
     DriveDocumentsRegister,
+    DriveNoteDocumentOut,
+    DriveNoteImportCreate,
+    DriveNoteRelationOut,
     DriveProjectDocumentOut,
     DriveProjectLinkOut,
     DriveProjectLinksCreate,
+    DriveRelatedNoteOut,
     DriveWorkspaceCreate,
     DriveWorkspaceOut,
     DriveWorkspaceUpdate,
     PickerConfigOut,
 )
+from app.models.note import Note
+from app.models.schemas import NoteOut
 from app.services.drive_documents import (
     attach_document_to_projects,
     create_workspace,
     detach_document_from_project,
     get_owned_workspace,
+    import_document_to_note,
+    link_document_to_note,
     refresh_document,
     register_documents,
+    unlink_document_from_note,
     unregister_document,
 )
 from app.services.execution_log import fail_execution, finish_execution, start_execution
@@ -308,6 +318,191 @@ async def detach_drive_document_from_project(
         summary="Drive document detached from project",
     )
     return Response(status_code=204)
+
+
+@router.post(
+    "/documents/{document_id}/note-import",
+    response_model=NoteOut,
+    status_code=201,
+)
+async def import_drive_document_to_note(
+    document_id: str,
+    body: DriveNoteImportCreate,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    execution = await start_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="drive.note.import",
+        provider="internal",
+        entity_type="drive_document",
+        entity_id=document_id,
+        summary="Import Drive document to note",
+    )
+    try:
+        note = await import_document_to_note(
+            db,
+            user["sub"],
+            document_id,
+            title=body.title,
+            project_id=body.project_id,
+            tags=body.tags,
+        )
+    except Exception as exc:
+        await fail_execution(db, execution, exc, summary="Drive note import failed")
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="imported",
+        entity_id=note.id,
+        summary="Drive document imported to note",
+    )
+    return note
+
+
+@router.get(
+    "/documents/{document_id}/notes",
+    response_model=list[DriveRelatedNoteOut],
+)
+async def list_drive_document_notes(
+    document_id: str,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(NoteDriveDocument, Note)
+        .join(Note, Note.id == NoteDriveDocument.note_id)
+        .join(DriveDocument, DriveDocument.id == NoteDriveDocument.drive_document_id)
+        .where(
+            NoteDriveDocument.drive_document_id == document_id,
+            DriveDocument.owner_sub == user["sub"],
+        )
+        .order_by(NoteDriveDocument.created_at.desc())
+    )
+    return [
+        DriveRelatedNoteOut(
+            note_id=note.id,
+            drive_document_id=relation.drive_document_id,
+            relation_type=relation.relation_type,
+            relation_origin=relation.relation_origin,
+            title=note.title,
+            body=note.body,
+            project_id=note.project_id,
+            created_at=note.created_at,
+            updated_at=note.updated_at,
+        )
+        for relation, note in result.all()
+    ]
+
+
+@router.post(
+    "/documents/{document_id}/notes/{note_id}",
+    response_model=DriveNoteRelationOut,
+    status_code=201,
+)
+async def link_drive_document_to_note(
+    document_id: str,
+    note_id: str,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    execution = await start_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="drive.note.link",
+        provider="internal",
+        entity_type="drive_document",
+        entity_id=document_id,
+        summary="Link Drive document to note",
+    )
+    try:
+        relation = await link_document_to_note(
+            db,
+            user["sub"],
+            document_id,
+            note_id,
+        )
+    except Exception as exc:
+        await fail_execution(db, execution, exc, summary="Drive note link failed")
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="linked",
+        summary="Drive document linked to note",
+    )
+    return relation
+
+
+@router.delete("/documents/{document_id}/notes/{note_id}", status_code=204)
+async def unlink_drive_document_from_note(
+    document_id: str,
+    note_id: str,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    execution = await start_execution(
+        db,
+        user_sub=user["sub"],
+        action_type="drive.note.unlink",
+        provider="internal",
+        entity_type="drive_document",
+        entity_id=document_id,
+        summary="Unlink Drive document from note",
+    )
+    try:
+        await unlink_document_from_note(
+            db,
+            user["sub"],
+            document_id,
+            note_id,
+        )
+    except Exception as exc:
+        await fail_execution(db, execution, exc, summary="Drive note unlink failed")
+        raise
+    await finish_execution(
+        db,
+        execution,
+        result="unlinked",
+        summary="Drive document unlinked from note",
+    )
+    return Response(status_code=204)
+
+
+@router.get("/notes/{note_id}/documents", response_model=list[DriveNoteDocumentOut])
+async def list_note_drive_documents(
+    note_id: str,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    note = await db.get(Note, note_id)
+    if note is None:
+        raise HTTPException(404, "Note not found")
+    result = await db.execute(
+        select(NoteDriveDocument, DriveDocument)
+        .join(DriveDocument, DriveDocument.id == NoteDriveDocument.drive_document_id)
+        .where(
+            NoteDriveDocument.note_id == note_id,
+            DriveDocument.owner_sub == user["sub"],
+        )
+        .order_by(NoteDriveDocument.created_at.desc())
+    )
+    return [
+        DriveNoteDocumentOut(
+            note_id=relation.note_id,
+            drive_document_id=document.id,
+            relation_type=relation.relation_type,
+            relation_origin=relation.relation_origin,
+            google_file_id=document.google_file_id,
+            name=document.name,
+            mime_type=document.mime_type,
+            web_view_link=document.web_view_link,
+            provider_modified_at=document.provider_modified_at,
+        )
+        for relation, document in result.all()
+    ]
 
 
 @router.delete("/documents/{document_id}", status_code=204)

@@ -319,8 +319,7 @@ async function desktop(context) {
   await named(page, /驗收被連結筆記/);
 
   await (await named(page, '新增筆記')).click();
-  const editorTitle = await editorTextboxFromEnd(page, 3);
-  await editorTextboxFromEnd(page, 2);
+  const editorTitle = await editorTextboxFromEnd(page, 2);
   const editorTags = await editorTextboxFromEnd(page, 1);
   const editorBody = await editorTextboxFromEnd(page, 0);
   await fillVerified(editorTitle, '瀏覽器新增筆記', 'title');
@@ -403,7 +402,7 @@ async function mobile(context) {
   await semantics(page);
   await named(page, /驗收主筆記/);
   await (await named(page, '新增筆記')).click();
-  await editorTextboxFromEnd(page, 3);
+  await editorTextboxFromEnd(page, 2);
   await editorTextboxFromEnd(page, 0);
   assert.deepEqual(overflow, []);
   pass('mobile_editor');

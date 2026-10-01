@@ -1,0 +1,102 @@
+from datetime import datetime
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+class DriveWorkspaceCreate(BaseModel):
+    google_folder_id: str = Field(min_length=1, max_length=255)
+    name: str = Field(min_length=1, max_length=500)
+
+    @field_validator("google_folder_id", "name")
+    @classmethod
+    def strip_required_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Drive workspace values cannot be blank")
+        return normalized
+
+
+class DriveWorkspaceUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=500)
+    is_enabled: bool | None = None
+    is_default: bool | None = None
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one Drive workspace field must be provided")
+        for field in self.model_fields_set:
+            if getattr(self, field) is None:
+                raise ValueError(f"Drive workspace {field} cannot be null")
+        if "name" in self.model_fields_set and self.name is not None:
+            self.name = self.name.strip()
+            if not self.name:
+                raise ValueError("Drive workspace name cannot be blank")
+        return self
+
+
+class DriveWorkspaceOut(BaseModel):
+    id: str
+    google_folder_id: str
+    name: str
+    is_enabled: bool
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DriveDocumentRegister(BaseModel):
+    google_file_ids: list[str] = Field(min_length=1, max_length=50)
+    workspace_id: str | None = Field(default=None, min_length=1, max_length=36)
+
+    @field_validator("google_file_ids")
+    @classmethod
+    def normalize_file_ids(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in values:
+            value = raw.strip()
+            if not value:
+                raise ValueError("Google file ID cannot be blank")
+            if len(value) > 255:
+                raise ValueError("Google file ID is too long")
+            if value in seen:
+                continue
+            seen.add(value)
+            normalized.append(value)
+        if not normalized:
+            raise ValueError("At least one Google file ID is required")
+        return normalized
+
+
+class DriveDocumentOut(BaseModel):
+    id: str
+    google_file_id: str
+    name: str
+    mime_type: str
+    web_view_link: str | None
+    modified_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DriveDocumentRegisterOut(BaseModel):
+    documents: list[DriveDocumentOut]
+    returned: int
+
+
+class DriveDocumentListOut(BaseModel):
+    documents: list[DriveDocumentOut]
+    returned: int
+
+
+class PickerSessionOut(BaseModel):
+    access_token: str
+    expires_at: datetime | None
+    developer_key: str
+    app_id: str

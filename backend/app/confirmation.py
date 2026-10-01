@@ -5,11 +5,13 @@ CONFIRMATION_HEADER = "X-Life-Assistant-Confirmation"
 CALENDAR_DELETE_PATH_PREFIX = "/api/v1/integrations/google/calendar/events/"
 PROJECT_DELETE_PATH_PREFIX = "/api/v1/projects/"
 NOTE_DELETE_PATH_PREFIX = "/api/v1/notes/"
+DRIVE_WORKSPACE_DELETE_PATH_PREFIX = "/api/v1/drive/workspaces/"
 
 _DESTRUCTIVE_DELETE_RULES = (
     (CALENDAR_DELETE_PATH_PREFIX, "calendar.delete"),
     (PROJECT_DELETE_PATH_PREFIX, "project.delete"),
     (NOTE_DELETE_PATH_PREFIX, "note.delete"),
+    (DRIVE_WORKSPACE_DELETE_PATH_PREFIX, "drive.workspace.delete"),
 )
 
 

@@ -322,20 +322,24 @@ async function desktop(context) {
   const editorTitle = await editorTextboxFromEnd(page, 2);
   const editorTags = await editorTextboxFromEnd(page, 1);
   const editorBody = await editorTextboxFromEnd(page, 0);
+  const expectedBody = '# 瀏覽器 Markdown\n**正式驗收**';
   await fillVerified(editorTitle, '瀏覽器新增筆記', 'title');
   await fillVerified(editorTags, '驗收, Markdown, 驗收', 'tags');
-  await fillVerified(
-    editorBody,
-    '# 瀏覽器 Markdown\n**正式驗收**',
-    'body',
-  );
+  await editorBody.fill(expectedBody);
+  console.log('notes_ui_editor_value=body verified_by=markdown_preview_and_create_payload');
   await (await named(page, '預覽')).click();
   await named(page, /瀏覽器 Markdown/);
+  await named(page, /正式驗收/);
   pass('markdown_preview');
   await (await named(page, '儲存')).click();
   await waitObserved(
     () => observed.create?.title === '瀏覽器新增筆記',
     'create',
+  );
+  assert.equal(
+    observed.create?.body,
+    expectedBody,
+    'created note body did not match the editor body',
   );
   await waitObserved(
     () => observed.tags.some((entry) => entry.values.join('|') === '驗收|Markdown'),

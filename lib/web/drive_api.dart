@@ -199,6 +199,24 @@ abstract class DriveApi {
     String projectId,
   ) =>
       throw UnimplementedError();
+
+  Future<Map<String, dynamic>> importDocumentToNote(
+    String documentId,
+    Map<String, dynamic> body,
+  ) =>
+      throw UnimplementedError();
+
+  Future<List<Map<String, dynamic>>> getDocumentNotes(String documentId) =>
+      throw UnimplementedError();
+
+  Future<void> linkDocumentToNote(String documentId, String noteId) =>
+      throw UnimplementedError();
+
+  Future<void> unlinkDocumentFromNote(String documentId, String noteId) =>
+      throw UnimplementedError();
+
+  Future<List<Map<String, dynamic>>> getNoteDocuments(String noteId) =>
+      throw UnimplementedError();
 }
 
 class HttpDriveApi implements DriveApi {
@@ -370,6 +388,58 @@ class HttpDriveApi implements DriveApi {
       ),
     );
     if (response.statusCode != 204) _check(response.statusCode, response.body);
+  }
+
+  @override
+  Future<Map<String, dynamic>> importDocumentToNote(
+    String documentId,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await _client.post(
+      _driveUri('/drive/documents/${Uri.encodeComponent(documentId)}/note-import'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _check(response.statusCode, response.body);
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getDocumentNotes(String documentId) async {
+    final response = await _client.get(
+      _driveUri('/drive/documents/${Uri.encodeComponent(documentId)}/notes'),
+    );
+    _check(response.statusCode, response.body);
+    return (jsonDecode(response.body) as List).cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<void> linkDocumentToNote(String documentId, String noteId) async {
+    final response = await _client.post(
+      _driveUri(
+        '/drive/documents/${Uri.encodeComponent(documentId)}/notes/${Uri.encodeComponent(noteId)}',
+      ),
+    );
+    _check(response.statusCode, response.body);
+  }
+
+  @override
+  Future<void> unlinkDocumentFromNote(String documentId, String noteId) async {
+    final response = await _client.delete(
+      _driveUri(
+        '/drive/documents/${Uri.encodeComponent(documentId)}/notes/${Uri.encodeComponent(noteId)}',
+      ),
+    );
+    if (response.statusCode != 204) _check(response.statusCode, response.body);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getNoteDocuments(String noteId) async {
+    final response = await _client.get(
+      _driveUri('/drive/notes/${Uri.encodeComponent(noteId)}/documents'),
+    );
+    _check(response.statusCode, response.body);
+    return (jsonDecode(response.body) as List).cast<Map<String, dynamic>>();
   }
 }
 

@@ -173,6 +173,32 @@ class DriveNoteDocumentOut(BaseModel):
     provider_modified_at: datetime | None
 
 
+class DriveTagsReplace(BaseModel):
+    tags: list[str] = Field(default_factory=list, max_length=50)
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in values:
+            value = raw.strip()
+            if not value:
+                raise ValueError("Drive document tag cannot be empty")
+            if len(value) > 255:
+                raise ValueError("Drive document tag is too long")
+            key = value.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(value)
+        return normalized
+
+
+class DriveTagsOut(BaseModel):
+    tags: list[str]
+
+
 class DriveAiSettingsOut(BaseModel):
     auto_tags: bool = True
     suggest_related_notes: bool = True

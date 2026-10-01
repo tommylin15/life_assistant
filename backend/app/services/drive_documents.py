@@ -1,7 +1,8 @@
+import uuid
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.drive import (
@@ -14,11 +15,13 @@ from app.models.drive import (
     ProjectDriveDocument,
 )
 from app.models.drive_schemas import DriveWorkspaceCreate
-from app.models.migration_support import EntityTag
+from app.models.migration_support import EntityTag, Tag
+from app.models.note import Note
 from app.models.project import Project
 from app.services.google_drive_files import (
     GOOGLE_FOLDER_MIME,
     get_drive_file_metadata,
+    read_drive_text,
 )
 
 
@@ -231,6 +234,132 @@ async def detach_document_from_project(
         delete(ProjectDriveDocument).where(
             ProjectDriveDocument.project_id == project_id,
             ProjectDriveDocument.drive_document_id == document.id,
+        )
+    )
+    await db.commit()
+
+
+async def import_document_to_note(
+    db: AsyncSession,
+    owner_sub: str,
+    document_id: str,
+    *,
+    title: str | None = None,
+    project_id: str | None = None,
+    tags: list[str] | None = None,
+) -> Note:
+    document = await get_owned_document(db, owner_sub, document_id)
+    text_result = await read_drive_text(
+        db,
+        owner_sub,
+        document.google_file_id,
+        document.mime_type,
+    )
+    if not text_result.supported or text_result.text is None:
+        raise HTTPException(422, "drive_text_unavailable")
+
+    note = Note(
+        id=str(uuid.uuid4()),
+        title=(title.strip() if title is not None else document.name),
+        body=text_result.text,
+        project_id=project_id,
+    )
+    db.add(note)
+    db.add(
+        NoteDriveDocument(
+            note_id=note.id,
+            drive_document_id=document.id,
+            relation_type="source_import",
+            relation_origin="import",
+        )
+    )
+
+    normalized_tags: list[str] = []
+    seen: set[str] = set()
+    for raw in tags or []:
+        name = raw.strip()
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized_tags.append(name)
+
+    for name in normalized_tags:
+        tag_result = await db.execute(
+            select(Tag).where(func.lower(Tag.name) == name.casefold()).limit(1)
+        )
+        tag = tag_result.scalar_one_or_none()
+        if tag is None:
+            tag = Tag(id=str(uuid.uuid4()), name=name)
+            db.add(tag)
+        db.add(EntityTag(entity_type="note", entity_id=note.id, tag_id=tag.id))
+
+    await db.commit()
+    await db.refresh(note)
+    return note
+
+
+async def link_document_to_note(
+    db: AsyncSession,
+    owner_sub: str,
+    document_id: str,
+    note_id: str,
+) -> NoteDriveDocument:
+    document = await get_owned_document(db, owner_sub, document_id)
+    note = await db.get(Note, note_id)
+    if note is None:
+        raise HTTPException(404, "Note not found")
+
+    existing_result = await db.execute(
+        select(NoteDriveDocument).where(
+            NoteDriveDocument.note_id == note.id,
+            NoteDriveDocument.drive_document_id == document.id,
+            NoteDriveDocument.relation_type == "related",
+        )
+    )
+    existing = existing_result.scalar_one_or_none()
+    if existing is not None:
+        return existing
+
+    relation = NoteDriveDocument(
+        note_id=note.id,
+        drive_document_id=document.id,
+        relation_type="related",
+        relation_origin="manual",
+    )
+    db.add(relation)
+    await db.commit()
+    return relation
+
+
+async def unlink_document_from_note(
+    db: AsyncSession,
+    owner_sub: str,
+    document_id: str,
+    note_id: str,
+) -> None:
+    document = await get_owned_document(db, owner_sub, document_id)
+    note = await db.get(Note, note_id)
+    if note is None:
+        raise HTTPException(404, "Note not found")
+
+    existing_result = await db.execute(
+        select(NoteDriveDocument).where(
+            NoteDriveDocument.note_id == note.id,
+            NoteDriveDocument.drive_document_id == document.id,
+            NoteDriveDocument.relation_type == "related",
+        )
+    )
+    if existing_result.scalar_one_or_none() is None:
+        return
+
+    await db.execute(
+        delete(NoteDriveDocument).where(
+            NoteDriveDocument.note_id == note.id,
+            NoteDriveDocument.drive_document_id == document.id,
+            NoteDriveDocument.relation_type == "related",
         )
     )
     await db.commit()

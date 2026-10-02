@@ -18,16 +18,16 @@
 
 ### 目前總覽
 
-- **Completed packages：1 / 11**
-- **Closure progress：9.1%**
-- **Current package：#2 — 全專案 Design System / UI Style Checkpoint**
-- **Current state：IN PROGRESS — read-only design audit / direction checkpoint**
-- **Next checkpoint：#2 DONE 後 = 2/11 = 18.2%**
+- **Completed packages：2 / 11**
+- **Closure progress：18.2%**
+- **Current package：#3 — Task 7 — provider-agnostic AI enrichment**
+- **Current state：NOT VERIFIED — READY NEXT（NOT STARTED）**
+- **Next checkpoint：#3 DONE 後 = 3/11 = 27.3%**
 
 | # | 工作包 | 狀態 | DONE 條件 / 目前 gate |
 |---|---|---|---|
 | 1 | 完成 Task 6 — Drive / Notes 共用 Tag | ✅ DONE | Notes production UI E2E GREEN（含雙向 link/unlink）；Project↔Drive Runtime Acceptance #12 GREEN；release SHA `9a540a55baaf32a33e7376cab4183f998f596685`；CI #450、Cloud Run #322 PASS |
-| 2 | 全專案 Design System / UI Style Checkpoint | 🟡 IN PROGRESS | 核准單一視覺 source of truth；固定 design tokens、responsive/layout tokens、共用元件與 mobile/desktop acceptance baseline，再進 implementation |
+| 2 | 全專案 Design System / UI Style Checkpoint | ✅ DONE | Warm Knowledge 單一正式視覺基線已核准；Home / Tasks / Project 三張完工樣板已回存 Drive；semantic tokens、shared components、responsive contract 已落 GitHub；release SHA `567511c62fb70b0d8c40b54e2a9d0f4500bcfcf9`；CI #459、Firebase Hosting #277、Cloud Run #329 PASS |
 | 3 | Task 7 — provider-agnostic AI enrichment | ⬜ NOT STARTED | 智能 Tag、候選 Notes、雙鏈建議、privacy/consent/cache/provider abstraction，backend tests GREEN |
 | 4 | Task 8 — 智能整理 review UI | ⬜ NOT STARTED | 建議檢視、接受/拒絕、AI 狀態、consent UX、manual fallback，Flutter suite / Web build GREEN |
 | 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | ⬜ NOT STARTED | CI、migration、Firebase、Cloud Run、authenticated runtime、真實 Drive integration evidence PASS |
@@ -81,6 +81,7 @@
 - Calendar destructive confirmation baseline。
 - action-id idempotency implementation baseline。
 - shared immutable backend image / Artifact Registry cleanup strategy baseline。
+- Warm Knowledge Design System semantic tokens / shared component / responsive contract baseline。
 
 上述「平台能力存在」不等於所有產品 UI 已完成；各項真正完成狀態仍以 `acceptance.md` 的 evidence 層級為準。
 
@@ -92,7 +93,20 @@
 - 修正 release SHA：`9a540a55baaf32a33e7376cab4183f998f596685`。
 - CI #450：PASS。
 - Deploy Cloud Run #322 / run `36952320601`：PASS；migration、deploy、health、readiness、401 protection、cloud-domain、checklist、idempotency、Google failure-path、SQLite success/failure、image retention 全 PASS。
-- Drive long-lived closure tracker 已同步為 `1/11 = 9.1%`，Current package = #2。
+
+## Package #2 封板 evidence — 2026-10-02
+
+- 正式視覺方向：**Warm Knowledge**；不再允許第二套正式 theme track。
+- Drive 正式視覺基準：`life_assistant Design System — Final UI Reference`（file ID `1QnKn-UbAadpCY58EYdatvbxkRLOWKHC8V4rTYoEXLy8`），實際嵌入 Home / Dashboard、Tasks、Project 三張完工樣板。
+- GitHub implementation / spec release SHA：`567511c62fb70b0d8c40b54e2a9d0f4500bcfcf9`。
+- semantic token baseline：spacing、radius、breakpoints、window classes、layout、motion、44px minimum touch target。
+- shared component baseline：`AppPageFrame`、`AppSectionCard`、`AppStatusChip`、`AppStatePanel`；barrel `lib/app/design_system/design_system.dart`。
+- responsive contract：compact `<600`、medium `600–839`、expanded `840–1199`、roomy `>=1200`；page-action breakpoint `720`；content max width `1040`。
+- CI #459 / run `36985802044`：PASS；backend、deployment scripts、Flutter Analyze、Test、Web build、branding verify 全 PASS。
+- Firebase Hosting #277 / run `36986034878`：PASS；Hosting runtime verify、Task production acceptance、Project production acceptance PASS。
+- Deploy Cloud Run #329 / run `36985912899`：PASS；migration、backend deploy、health、readiness、401 protection、authenticated cloud-domain、Checklist、idempotency、Google provider failure-path、SQLite backfill success/failure、image retention 全 PASS。
+- 此工作包封的是 Design System 基線與 adoption contract；既有頁面逐頁 pixel-level 重構屬後續 UI adoption，不另開第二套設計系統。
+- Drive long-lived closure tracker 應同步為 `2/11 = 18.2%`，Current package = #3。
 
 ## 文件與 evidence 分工
 
@@ -102,13 +116,15 @@
 - `acceptance.md`：逐項 completion truth 與 release evidence。
 - `release_checklist.md`：Phase 1 final release gate。
 - `wbs.md`：scope decomposition，不代表排程。
+- `doc/design_system.md`：Design System 核心設計原則與 token 基礎。
+- `doc/design_system_checkpoint_v0_2.md`：Package #2 核准後的 responsive / component / adoption implementation contract。
 - 歷史 batch progress 文件：保留稽核價值，不再當 current status。
 
 ## 下一步
 
 目前固定下一步：
 
-1. 進入工作包 #2：全專案 Design System / UI Style Checkpoint。
-2. 先核准單一設計方向與 source of truth，消除 `AppTheme.clean` / Warm Knowledge 雙軌風格漂移。
-3. 固定 color / typography / spacing / radius / responsive-layout / component tokens 與 mobile/desktop acceptance baseline。
-4. 設計 checkpoint 核准後才開始全站共用元件與既有頁面 adoption implementation。
+1. 工作包 #3：Task 7 — provider-agnostic AI enrichment。
+2. 先依目前 GitHub implementation 盤點既有 AI/provider abstraction、privacy/consent/cache 與 Notes/Tag linkage 契約，再進 TDD。
+3. 完成智能 Tag、候選 Notes、雙鏈建議與 provider-agnostic backend contract；backend tests / CI GREEN 後再進下一 gate。
+4. Design System #2 已封板；所有新 UI 直接採 Warm Knowledge 共用 tokens / components，不再重新討論第二套主風格。

@@ -76,7 +76,7 @@ void main() {
     final api = _FakeDriveApi(_settings());
     await _pumpSettings(tester, api);
 
-    expect(find.text('智能整理設定'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, '智能整理設定'), findsOneWidget);
     expect(find.text('自動套用建議標籤'), findsOneWidget);
     expect(find.text('建議相關筆記'), findsOneWidget);
     expect(find.text('允許將文件內容送交 AI 分析'), findsOneWidget);

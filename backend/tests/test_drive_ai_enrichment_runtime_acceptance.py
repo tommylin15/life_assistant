@@ -10,7 +10,7 @@ class DriveAIEnrichmentRuntimeAcceptanceContractTests(unittest.TestCase):
             self.repo_root / "backend/scripts/run_drive_ai_enrichment_acceptance.py"
         )
         self.workflow_path = (
-            self.repo_root / ".github/workflows/drive-ai-enrichment-runtime-acceptance.yml"
+            self.repo_root / ".github/workflows/postdeploy-runtime-acceptance.yml"
         )
 
     def test_runtime_acceptance_script_exists_and_compiles(self):
@@ -47,7 +47,10 @@ class DriveAIEnrichmentRuntimeAcceptanceContractTests(unittest.TestCase):
             "github.event.workflow_run.conclusion == 'success'",
             "github.event.workflow_run.head_sha || github.sha",
             "life-assistant-backend",
-            "life-assistant-drive-ai-acceptance",
+            "POSTDEPLOY_ACCEPTANCE_JOB: life-assistant-postdeploy-acceptance",
+            'echo "ref=${IMAGE_BASE}@${IMAGE_DIGEST}"',
+            '--image "${{ steps.image.outputs.ref }}"',
+            'gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB"',
             "scripts.run_drive_ai_enrichment_acceptance",
             "--update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest",
         ):

@@ -18,14 +18,15 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         self.assertNotIn("git diff --quiet HEAD^ HEAD -- backend", self.text)
         self.assertNotIn("backend_changes.outputs.deploy", self.text)
 
-    def test_backend_image_is_built_once_and_reused_for_every_runtime(self):
+    def test_backend_image_is_built_once_and_reused_for_main_release_runtimes(self):
         shared_image_ref = '--image "${{ steps.backend_image.outputs.ref }}"'
         self.assertEqual(self.text.count("gcloud builds submit backend"), 1)
         self.assertIn("--async", self.text)
         self.assertIn('gcloud builds describe "$BUILD_ID"', self.text)
         self.assertIn("BUILD_STATUS", self.text)
         self.assertNotIn("--source backend", self.text)
-        self.assertEqual(self.text.count(shared_image_ref), 8)
+        self.assertEqual(self.text.count(shared_image_ref), 3)
+        self.assertIn("CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance", self.text)
 
     def test_acceptance_jobs_collect_runtime_diagnostics_on_failure(self):
         wrapper_call = ".github/scripts/run_cloud_run_job_with_diagnostics.sh"
@@ -95,7 +96,8 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
     def test_sqlite_backfill_acceptance_runs_after_cloud_domain_acceptance(self):
         cloud_marker = "Run authenticated cloud-domain acceptance"
         backfill_marker = "Run SQLite backfill runtime acceptance"
-        self.assertIn("BACKFILL_ACCEPTANCE_JOB: life-assistant-sqlite-backfill-acceptance", self.text)
+        self.assertIn("CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance", self.text)
+        self.assertIn('gcloud run jobs execute "$CORE_ACCEPTANCE_JOB"', self.text)
         self.assertIn("--args=-m,scripts.run_sqlite_backfill_acceptance", self.text)
         self.assertIn(cloud_marker, self.text)
         self.assertIn(backfill_marker, self.text)
@@ -104,10 +106,8 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
     def test_sqlite_backfill_failure_acceptance_runs_after_success_acceptance(self):
         success_marker = "Run SQLite backfill runtime acceptance"
         failure_marker = "Run SQLite backfill failure-path runtime acceptance"
-        self.assertIn(
-            "BACKFILL_FAILURE_ACCEPTANCE_JOB: life-assistant-sqlite-backfill-failure-acceptance",
-            self.text,
-        )
+        self.assertIn("CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance", self.text)
+        self.assertIn('gcloud run jobs execute "$CORE_ACCEPTANCE_JOB"', self.text)
         self.assertIn("--args=-m,scripts.run_sqlite_backfill_failure_acceptance", self.text)
         self.assertIn(success_marker, self.text)
         self.assertIn(failure_marker, self.text)

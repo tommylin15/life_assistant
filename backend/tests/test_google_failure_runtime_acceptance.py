@@ -41,8 +41,11 @@ class GoogleFailureRuntimeAcceptanceContractTests(unittest.TestCase):
         )
         sqlite_marker = "Run SQLite backfill runtime acceptance"
         self.assertIn(
-            "GOOGLE_FAILURE_ACCEPTANCE_JOB: "
-            "life-assistant-google-failure-acceptance",
+            "CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance",
+            workflow,
+        )
+        self.assertIn(
+            'gcloud run jobs execute "$CORE_ACCEPTANCE_JOB"',
             workflow,
         )
         self.assertIn(

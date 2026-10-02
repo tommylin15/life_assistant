@@ -23,13 +23,19 @@ class ProjectDriveRuntimeAcceptanceContractTests(unittest.TestCase):
     def test_workflow_runs_only_after_successful_cloud_run_release(self):
         workflow = (
             Path(__file__).parents[2]
-            / ".github/workflows/project-drive-runtime-acceptance.yml"
+            / ".github/workflows/postdeploy-runtime-acceptance.yml"
         ).read_text(encoding="utf-8")
         self.assertIn("workflows: [Deploy Cloud Run]", workflow)
         self.assertIn("github.event.workflow_run.conclusion == 'success'", workflow)
         self.assertIn("github.event.workflow_run.head_sha", workflow)
+        self.assertIn(
+            "POSTDEPLOY_ACCEPTANCE_JOB: life-assistant-postdeploy-acceptance",
+            workflow,
+        )
         self.assertIn("scripts.run_project_drive_runtime_acceptance", workflow)
+        self.assertIn('gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB"', workflow)
         self.assertIn("--max-retries 0", workflow)
+        self.assertIn("--task-timeout 5m", workflow)
 
     def test_acceptance_covers_relation_lifecycle_and_exact_cleanup(self):
         source = inspect.getsource(acceptance)

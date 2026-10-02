@@ -89,9 +89,10 @@ class IdempotencyContractTests(unittest.TestCase):
 
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn(
-            "IDEMPOTENCY_ACCEPTANCE_JOB: life-assistant-idempotency-acceptance",
+            "CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance",
             workflow,
         )
+        self.assertIn('gcloud run jobs execute "$CORE_ACCEPTANCE_JOB"', workflow)
         self.assertIn("Run action-id idempotency runtime acceptance", workflow)
         self.assertIn("--args=-m,scripts.run_idempotency_acceptance", workflow)
         self.assertLess(

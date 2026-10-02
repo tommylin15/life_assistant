@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../app/theme/app_tokens.dart';
+
 class AppShellDestination {
   const AppShellDestination({
     required this.path,
@@ -24,8 +26,6 @@ class AppShell extends StatelessWidget {
     required this.onNavigate,
     required this.child,
   });
-
-  static const compactBreakpoint = 840.0;
 
   static const destinations = <AppShellDestination>[
     AppShellDestination(
@@ -83,7 +83,7 @@ class AppShell extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final index = selectedIndex;
 
-    if (width < compactBreakpoint) {
+    if (width < AppBreakpoints.navigationRail) {
       return Scaffold(
         body: child,
         bottomNavigationBar: SafeArea(
@@ -104,6 +104,8 @@ class AppShell extends StatelessWidget {
       );
     }
 
+    final extended = width >= AppBreakpoints.roomyDesktop;
+
     return Scaffold(
       body: Row(
         children: [
@@ -111,11 +113,26 @@ class AppShell extends StatelessWidget {
             child: NavigationRail(
               selectedIndex: index,
               onDestinationSelected: _navigate,
-              labelType: NavigationRailLabelType.all,
+              extended: extended,
+              labelType: extended ? null : NavigationRailLabelType.all,
+              minWidth: AppLayout.navigationRailWidth,
+              minExtendedWidth: AppLayout.extendedNavigationRailWidth,
               groupAlignment: -0.75,
-              leading: const Padding(
-                padding: EdgeInsets.only(bottom: 12),
-                child: Icon(Icons.auto_awesome_outlined),
+              leading: Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: extended
+                    ? const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.auto_awesome_outlined),
+                          SizedBox(width: AppSpacing.sm),
+                          Text(
+                            'life_assistant',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      )
+                    : const Icon(Icons.auto_awesome_outlined),
               ),
               destinations: [
                 for (final destination in destinations)

@@ -16,3 +16,26 @@ abstract class AppRadius {
   static const xl = 20.0;
   static const pill = 999.0;
 }
+
+abstract class AppBreakpoints {
+  static const compact = 600.0;
+  static const pageActions = 720.0;
+  static const navigationRail = 840.0;
+  static const roomyDesktop = 1200.0;
+}
+
+abstract class AppLayout {
+  static const contentMaxWidth = 1040.0;
+  static const navigationRailWidth = 80.0;
+  static const extendedNavigationRailWidth = 184.0;
+
+  static double pageHorizontalFor(double width) {
+    if (width >= AppBreakpoints.roomyDesktop) {
+      return AppSpacing.x2l;
+    }
+    if (width >= AppBreakpoints.pageActions) {
+      return AppSpacing.xl;
+    }
+    return AppSpacing.lg;
+  }
+}

@@ -5,19 +5,6 @@ import 'app_colors.dart';
 import 'app_tokens.dart';
 
 abstract class AppTheme {
-  static ThemeData get clean => _build(
-    brightness: Brightness.light,
-    canvas: const Color(0xFFF7F9FA),
-    paper: Colors.white,
-    card: Colors.white,
-    elevated: Colors.white,
-    muted: const Color(0xFFEAF0F2),
-    textPrimary: const Color(0xFF1F2A30),
-    textSecondary: const Color(0xFF66747B),
-    border: const Color(0xFFDDE5E8),
-    accent: const Color(0xFF397D7A),
-    accentSoft: const Color(0xFFD9ECEA),
-  );
   static ThemeData get light => _build(
     brightness: Brightness.light,
     canvas: AppColors.lightCanvas,
@@ -59,15 +46,17 @@ abstract class AppTheme {
     required Color accent,
     required Color accentSoft,
   }) {
+    final onAccent = brightness == Brightness.light
+        ? Colors.white
+        : AppColors.darkCanvas;
+
     return ThemeData(
       brightness: brightness,
       scaffoldBackgroundColor: canvas,
       colorScheme: ColorScheme(
         brightness: brightness,
         primary: accent,
-        onPrimary: brightness == Brightness.light
-            ? Colors.white
-            : AppColors.darkCanvas,
+        onPrimary: onAccent,
         secondary: AppColors.accentApricot,
         onSecondary: Colors.white,
         error: AppColors.danger,
@@ -96,11 +85,69 @@ abstract class AppTheme {
           fontWeight: FontWeight.w600,
         ),
       ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: elevated,
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: paper,
+        elevation: 0,
         indicatorColor: accentSoft,
-        labelTextStyle: WidgetStateProperty.all(
-          TextStyle(fontSize: 12, color: textSecondary),
+        selectedIconTheme: IconThemeData(color: accent, size: 22),
+        unselectedIconTheme: IconThemeData(color: textSecondary, size: 22),
+        selectedLabelTextStyle: TextStyle(
+          color: accent,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+        unselectedLabelTextStyle: TextStyle(
+          color: textSecondary,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: paper,
+        elevation: 0,
+        indicatorColor: accentSoft,
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          return IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? accent
+                : textSecondary,
+            size: 22,
+          );
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          return TextStyle(
+            fontSize: 12,
+            color: states.contains(WidgetState.selected)
+                ? accent
+                : textSecondary,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w500,
+          );
+        }),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: accent,
+        foregroundColor: onAccent,
+        elevation: 0,
+        focusElevation: 1,
+        hoverElevation: 1,
+        highlightElevation: 1,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return accent;
+          }
+          return Colors.transparent;
+        }),
+        checkColor: WidgetStatePropertyAll(onAccent),
+        side: BorderSide(color: border, width: 1.25),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.xs),
         ),
       ),
       dividerTheme: DividerThemeData(color: border, thickness: 1, space: 1),
@@ -176,9 +223,7 @@ abstract class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: accent,
-          foregroundColor: brightness == Brightness.light
-              ? Colors.white
-              : AppColors.darkCanvas,
+          foregroundColor: onAccent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
@@ -199,15 +244,27 @@ abstract class AppTheme {
         style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: accentSoft,
+        backgroundColor: paper,
+        selectedColor: accentSoft,
+        checkmarkColor: accent,
         labelStyle: TextStyle(fontSize: 13, color: textPrimary),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.pill),
         ),
-        side: BorderSide.none,
+        side: BorderSide(color: border),
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm,
           vertical: 2,
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: elevated,
+        contentTextStyle: TextStyle(color: textPrimary),
+        behavior: SnackBarBehavior.floating,
+        elevation: 1,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          side: BorderSide(color: border),
         ),
       ),
       pageTransitionsTheme: const PageTransitionsTheme(

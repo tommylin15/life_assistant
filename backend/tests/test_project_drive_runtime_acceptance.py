@@ -2,6 +2,8 @@ import inspect
 import unittest
 from pathlib import Path
 
+import httpx
+
 from scripts import run_project_drive_runtime_acceptance as acceptance
 
 
@@ -43,6 +45,22 @@ class ProjectDriveRuntimeAcceptanceContractTests(unittest.TestCase):
         self.assertIn("delete(ProjectDriveDocument)", source)
         self.assertIn("delete(DriveDocument)", source)
         self.assertIn("delete(Project)", source)
+
+    def test_delete_guard_reads_shared_error_envelope(self):
+        response = httpx.Response(
+            409,
+            json={
+                "error": {
+                    "code": "http_409",
+                    "message": "Project has linked Drive documents",
+                    "request_id": "acceptance-request",
+                }
+            },
+        )
+        self.assertEqual(
+            acceptance._error_message(response, "Project delete guard for Drive relation"),
+            "Project has linked Drive documents",
+        )
 
     def test_stage_exit_codes_are_unique_and_cover_runtime_path(self):
         expected = {

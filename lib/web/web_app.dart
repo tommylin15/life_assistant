@@ -6,6 +6,8 @@ import '../app/theme/app_theme.dart';
 import 'acceptance_center_page.dart';
 import 'app_shell.dart';
 import 'auth_state.dart';
+import 'drive_page.dart';
+import 'drive_settings_page.dart';
 import 'integrations_page.dart';
 import 'login_page.dart';
 import 'notes_page.dart';
@@ -46,7 +48,15 @@ final _router = GoRouter(
           path: '/more/notes',
           builder: (_, __) => const NotesPage(),
         ),
-        GoRoute(path: '/more', builder: (_, __) => const _MorePage()),
+        GoRoute(
+          path: '/more/drive/settings',
+          builder: (_, __) => const DriveSettingsPage(),
+        ),
+        GoRoute(
+          path: '/more/drive',
+          builder: (_, __) => const DrivePage(),
+        ),
+        GoRoute(path: '/more', builder: (_, __) => const MorePage()),
       ],
     ),
     GoRoute(
@@ -126,8 +136,8 @@ class _SectionPlaceholderPage extends StatelessWidget {
       );
 }
 
-class _MorePage extends StatelessWidget {
-  const _MorePage();
+class MorePage extends StatelessWidget {
+  const MorePage({super.key});
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -141,6 +151,13 @@ class _MorePage extends StatelessWidget {
               subtitle: const Text('Markdown、搜尋、標籤與雙向連結'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.go('/more/notes'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.cloud_outlined),
+              title: const Text('Google Drive'),
+              subtitle: const Text('檢視智能整理結果、相關筆記建議與 AI 同意設定'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/more/drive'),
             ),
             ListTile(
               leading: const Icon(Icons.hub_outlined),

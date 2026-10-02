@@ -1,79 +1,53 @@
 # life_assistant — Active TODO
 
-最後更新：2026-09-28
+最後更新：2026-10-02
 
-> 本檔只保留**目前 active / next / non-blocking backlog**。正式執行順序以 `phase1_delivery_order.md` 為準；完成狀態與 runtime evidence 以 `acceptance.md` 為準。不要再在本檔維護另一套歷史完成清單或 release evidence snapshot。
+> 本檔只保留**目前 active / next / non-blocking backlog**。正式封板進度以 `progress.md` 為準；完成條件與 runtime evidence 以 `acceptance.md`、GitHub Actions 與 deployed runtime 為準。不要在本檔維護另一套歷史完成清單。
 
 ## Current
 
-### 1. Cloud mutation idempotency 收尾
+### #2 — Project-wide Design System / UI Style Checkpoint
 
-- action-id idempotency implementation baseline 已進 `main`（commit `470d54c236286dc364fd920cc52e79deee685c09`）。
-- 確認 migration / CI / deployment / runtime acceptance evidence 完整。
-- evidence 完整前，產品層不得自行標示 DONE。
+狀態：**IN PROGRESS — read-only design audit / direction checkpoint**。
 
-## Next — UI-critical foundation
+目前 gate：
 
-### 2. Authorization / minimum-permission + destructive/sensitive policy 核心版
+- 核准單一全站視覺 source of truth；目前 `doc/design_system.md` 定義 Warm Knowledge，但 `app_theme.dart` 同時保留未使用的 `AppTheme.clean`，需消除雙軌漂移。
+- 將 color / typography / spacing / radius 擴充成可實際驅動產品 UI 的 token baseline。
+- 補 responsive / layout tokens；目前 App Shell 使用 `840` breakpoint、Tasks 使用 `720`，頁面 spacing / max-width 仍有局部硬編碼。
+- 定義共用 component baseline：buttons、inputs、cards、chips/tags、dialogs/bottom sheets、loading/empty/error states、navigation。
+- 固定 mobile / desktop acceptance 規則與最低可存取性要求。
+- 設計 checkpoint 核准後，才進 implementation / adoption；不先逐頁零散美化。
 
-- Backend authorization / minimum-permission baseline。
-- 共用 destructive / sensitive action policy gate。
-- Calendar delete confirmation 作為既有 reference pattern，不重做。
-- 只先完成 Phase 1 主要 UI 直接依賴的 policy，不要求先完成所有未來 MCP / Agent policy。
+## Just Closed
 
-### 3. Checklist Cloud 主線
+### #1 — Finish Task 6：shared Drive / Notes Tag system
 
-- PostgreSQL persistence。
-- Backend/API contract。
-- tests / CI / deployment / runtime evidence。
-- Flutter Web 可直接使用的 checklist path。
+狀態：**DONE / PASS**。
 
-## Next — UI Vertical Slice A
+封板 evidence：
 
-### 4. App Shell
+- Notes production UI E2E GREEN，含雙向 link / unlink。
+- Project↔Drive Runtime Acceptance #12 GREEN。
+- release SHA `9a540a55baaf32a33e7376cab4183f998f596685`。
+- CI #450 PASS。
+- Deploy Cloud Run #322 PASS。
+- Drive closure tracker 已更新為 `1/11 = 9.1%`。
 
-- Tasks
-- Projects
-- Notes
-- Habits
-- Shopping
-- Calendar
-- Integrations / Settings
-- mobile / desktop responsive shell
+## Next
 
-### 5. Task 完整 UX
-
-- create / edit / complete / delete
-- due date / time
-- priority
-- reminder
-- tags
-- project
-- checklist
-- loading / empty / error / data states
-- mobile + desktop UX acceptance
-
-### 6. Project UX
-
-- project list
-- create / edit / delete
-- linked Task visibility / relation flow
-- delete guard 的可理解錯誤呈現
-- mobile + desktop UX acceptance
-
-## Then — UI Vertical Slice B
-
-1. Notes；同批補 full-text search。
-2. Habits。
-3. Shopping。
-4. Calendar 一般使用者 read/list/create/update/delete UI。
-5. Activity / Execution Log 與 Integrations 的使用者可理解呈現。
+1. #3 — Task 7：provider-agnostic AI enrichment。
+2. #4 — Task 8：智能整理 review UI。
+3. #5 — Task 9：Drive Knowledge production delivery + acceptance。
+4. #6–#9 — Habits / Shopping / Calendar / Activity + Integrations productization。
+5. #10 — Integration / foundation tail closure。
+6. #11 — Phase 1 final Release Gate / 封板 checkpoint。
 
 ## Non-blocking backlog
 
-以下仍需完成，但不再阻塞前述 UI vertical slices，除非成為直接 dependency：
+以下仍需完成，但只有在成為直接 dependency 或進入對應工作包時才提升優先級：
 
-- Attachment central storage/reference strategy；在附件 UI 開工前收斂。
+- Attachment central storage/reference strategy。
 - versioned Bridge / MCP API contract。
 - Bridge/MCP input/output schema、proposed action、permission / confirmation、idempotency 與 failure evidence 完整化。
 - 真實 Google provider failure / Drive partial-success 驗收。
@@ -83,7 +57,7 @@
 
 ## Product DONE 規則
 
-使用者功能至少要同時具備：
+使用者功能至少要依工作包需求具備：
 
 1. implementation
 2. tests

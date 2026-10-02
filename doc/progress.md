@@ -21,7 +21,7 @@
 - **Completed packages：3 / 11**
 - **Closure progress：27.3%**
 - **Current package：#4 — Task 8 — 智能整理 review UI**
-- **Current state：NOT VERIFIED — READY NEXT（NOT STARTED）**
+- **Current state：PARTIAL / IN PROGRESS — design & implementation survey；product implementation NOT STARTED**
 - **Next checkpoint：#4 DONE 後 = 4/11 = 36.4%**
 
 | # | 工作包 | 狀態 | DONE 條件 / 目前 gate |
@@ -29,7 +29,7 @@
 | 1 | 完成 Task 6 — Drive / Notes 共用 Tag | ✅ DONE | Notes production UI E2E GREEN（含雙向 link/unlink）；Project↔Drive Runtime Acceptance #12 GREEN；release SHA `9a540a55baaf32a33e7376cab4183f998f596685`；CI #450、Cloud Run #322 PASS |
 | 2 | 全專案 Design System / UI Style Checkpoint | ✅ DONE | Warm Knowledge 單一正式視覺基線已核准；Home / Tasks / Project 三張完工樣板已回存 Drive；semantic tokens、shared components、responsive contract 已落 GitHub；release SHA `567511c62fb70b0d8c40b54e2a9d0f4500bcfcf9`；CI #459、Firebase Hosting #277、Cloud Run #329 PASS |
 | 3 | Task 7 — provider-agnostic AI enrichment | ✅ DONE | provider abstraction、privacy/consent/cache、shared Tag、候選 Notes、accept/reject relation、partial-success semantics；release SHA `cd2fdcd5645a9f73141c7824b59a8349d15bb86c`；CI #463、Cloud Run #335、Drive AI Runtime #3 PASS |
-| 4 | Task 8 — 智能整理 review UI | ⬜ NOT STARTED | 建議檢視、接受/拒絕、AI 狀態、consent UX、manual fallback，Flutter suite / Web build / browser acceptance GREEN |
+| 4 | Task 8 — 智能整理 review UI | 🟡 PARTIAL / IN PROGRESS | GitHub 現況盤點與 UI architecture discovery 已開始；確認目前無既有 Drive review page / Drive-specific Flutter API facade；尚未寫 product code。下一 gate：完成 Task 8 UI design/spec → implementation plan → TDD；最終需 Flutter suite / Web build / browser/mobile acceptance GREEN |
 | 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | ⬜ NOT STARTED | CI、migration、Firebase、Cloud Run、authenticated runtime、真實 Drive integration evidence PASS |
 | 6 | Habits 完整產品化 | ⬜ NOT STARTED | 完整 vertical slice：implementation、tests、CI、deployment/runtime、可操作 UI、mobile/desktop acceptance |
 | 7 | Shopping 完整產品化 | ⬜ NOT STARTED | 完整 vertical slice：implementation、tests、CI、deployment/runtime、可操作 UI、mobile/desktop acceptance |
@@ -125,6 +125,16 @@
 - 詳細 checkpoint：`doc/drive_ai_enrichment_checkpoint_v0_1.md`。
 - Concrete provider 接入時仍需把 provider/model identity 納入 relevant cache-invalidation contract 並補 external-provider integration evidence；此項不阻塞 #3 provider-agnostic foundation closure。
 
+## Package #4 current checkpoint — 2026-10-02
+
+- 狀態：**PARTIAL / IN PROGRESS — design & implementation survey；尚未進入 product implementation。**
+- 已讀 GitHub `main` 的 Flutter navigation / App Shell、Google Integrations、shared API client、Projects UI/test pattern、Warm Knowledge shared components，以及 Drive enrichment backend endpoints / response schemas。
+- 現況確認：repo 目前沒有獨立 Drive review page，也沒有 Drive-specific Flutter API facade；現有 `IntegrationsPage` 主要負責 Google 授權、API 驗收與 legacy Drive Bridge ensure，不適合直接承擔智能整理 review workflow。
+- 已確認 #4 必須沿用 #3 contract：provider-agnostic、explicit content consent、pending Note suggestion accept/reject、partial-success semantics、manual fallback；不能把 AI failure 顯示成 core Drive / Project failure。
+- UI 架構初步方向：新增獨立 Drive Knowledge / intelligent-organization review surface，沿用 Warm Knowledge Design System；不新增第二套 theme，也不把 provider vendor identity洩漏成 Flutter domain contract。
+- 目前尚未完成：Task 8 written design/spec、implementation plan、product code、Flutter tests、Analyze、Web build、Firebase deploy、browser/mobile acceptance。
+- 因此 #4 不計入 DONE；全案仍維持 `3/11 = 27.3%`。
+
 ## 文件與 evidence 分工
 
 - `phase1_delivery_order.md`：目前執行順序。
@@ -142,7 +152,7 @@
 
 目前固定下一步：
 
-1. 工作包 #4：Task 8 — 智能整理 review UI。
-2. 直接沿用 #3 的 provider-agnostic enrichment contract，實作建議檢視、接受/拒絕、AI status、consent UX 與 manual fallback。
-3. 所有新 UI 使用已封板的 Warm Knowledge tokens / shared components / responsive contract，不另開第二套主風格。
-4. Flutter tests / Analyze / Web build 及對應 browser/mobile acceptance GREEN 後，才判斷 #4 能否封板至 `4/11 = 36.4%`。
+1. 工作包 #4：Task 8 — 智能整理 review UI；目前已完成 repo/contract discovery，接著完成 architectural design/spec。
+2. 設計固定沿用 #3 provider-agnostic enrichment contract，涵蓋建議檢視、接受/拒絕、AI status、consent UX、manual fallback 與 partial-success presentation。
+3. UI 必須使用已封板的 Warm Knowledge tokens / shared components / responsive contract；review workflow 與 Google 授權/整合驗收 UI 分離。
+4. Design/spec 核准後才進 implementation plan 與 TDD；Flutter tests / Analyze / Web build 及對應 browser/mobile acceptance GREEN 後，才判斷 #4 能否封板至 `4/11 = 36.4%`。

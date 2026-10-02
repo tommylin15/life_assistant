@@ -1,6 +1,6 @@
 # 生活助理 App v0.1 — 開發進度摘要
 
-最後更新：2026-10-01
+最後更新：2026-10-02
 
 目前狀態：**Phase 1 = PARTIAL。**
 
@@ -18,16 +18,16 @@
 
 ### 目前總覽
 
-- **Completed packages：0 / 11**
-- **Closure progress：0.0%**
-- **Current package：#1 — 完成 Task 6：Drive / Notes 共用 Tag**
-- **Current state：PARTIAL / IN PROGRESS**
-- **Next checkpoint：#1 DONE 後 = 1/11 = 9.1%**
+- **Completed packages：1 / 11**
+- **Closure progress：9.1%**
+- **Current package：#2 — 全專案 Design System / UI Style Checkpoint**
+- **Current state：IN PROGRESS — read-only design audit / direction checkpoint**
+- **Next checkpoint：#2 DONE 後 = 2/11 = 18.2%**
 
 | # | 工作包 | 狀態 | DONE 條件 / 目前 gate |
 |---|---|---|---|
-| 1 | 完成 Task 6 — Drive / Notes 共用 Tag | 🟡 IN PROGRESS | Backend Tag service / Drive Tag API 已 GREEN；剩 Drive 卡片 Tag 編輯/顯示 + Project 關聯文件 Tag 顯示，需 Flutter tests / Web build / CI PASS |
-| 2 | 全專案 Design System / UI Style Checkpoint | ⬜ NOT STARTED | 核准全站視覺方向；固定 design tokens、共用元件、mobile/desktop responsive 規則，並建立既有/新頁面採用基線 |
+| 1 | 完成 Task 6 — Drive / Notes 共用 Tag | ✅ DONE | Notes production UI E2E GREEN（含雙向 link/unlink）；Project↔Drive Runtime Acceptance #12 GREEN；release SHA `9a540a55baaf32a33e7376cab4183f998f596685`；CI #450、Cloud Run #322 PASS |
+| 2 | 全專案 Design System / UI Style Checkpoint | 🟡 IN PROGRESS | 核准單一視覺 source of truth；固定 design tokens、responsive/layout tokens、共用元件與 mobile/desktop acceptance baseline，再進 implementation |
 | 3 | Task 7 — provider-agnostic AI enrichment | ⬜ NOT STARTED | 智能 Tag、候選 Notes、雙鏈建議、privacy/consent/cache/provider abstraction，backend tests GREEN |
 | 4 | Task 8 — 智能整理 review UI | ⬜ NOT STARTED | 建議檢視、接受/拒絕、AI 狀態、consent UX、manual fallback，Flutter suite / Web build GREEN |
 | 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | ⬜ NOT STARTED | CI、migration、Firebase、Cloud Run、authenticated runtime、真實 Drive integration evidence PASS |
@@ -84,6 +84,16 @@
 
 上述「平台能力存在」不等於所有產品 UI 已完成；各項真正完成狀態仍以 `acceptance.md` 的 evidence 層級為準。
 
+## Package #1 封板 evidence — 2026-10-02
+
+- Notes production UI acceptance：GREEN；雙向 link / unlink 已通過，刪除 nested-navigator regression 已補測。
+- Project↔Drive runtime acceptance：run #12 / workflow run `36953736081`，GREEN。
+- Project↔Drive 前一個 exit-code 28 根因：acceptance script 使用舊 FastAPI `detail` 錯誤格式；production 已統一為 shared `error.message` envelope。功能 delete guard 本體未壞。
+- 修正 release SHA：`9a540a55baaf32a33e7376cab4183f998f596685`。
+- CI #450：PASS。
+- Deploy Cloud Run #322 / run `36952320601`：PASS；migration、deploy、health、readiness、401 protection、cloud-domain、checklist、idempotency、Google failure-path、SQLite success/failure、image retention 全 PASS。
+- Drive long-lived closure tracker 已同步為 `1/11 = 9.1%`，Current package = #2。
+
 ## 文件與 evidence 分工
 
 - `phase1_delivery_order.md`：目前執行順序。
@@ -98,6 +108,7 @@
 
 目前固定下一步：
 
-1. 將 Task 6 的 Drive Tag UI / Project Tag UI 從 RED 轉 GREEN。
-2. Task 6 完整 CI / Web build PASS 後，工作包 #1 打 ✅，封板進度更新為 **1/11 = 9.1%**。
-3. 進入工作包 #2：全專案 Design System / UI Style Checkpoint。
+1. 進入工作包 #2：全專案 Design System / UI Style Checkpoint。
+2. 先核准單一設計方向與 source of truth，消除 `AppTheme.clean` / Warm Knowledge 雙軌風格漂移。
+3. 固定 color / typography / spacing / radius / responsive-layout / component tokens 與 mobile/desktop acceptance baseline。
+4. 設計 checkpoint 核准後才開始全站共用元件與既有頁面 adoption implementation。

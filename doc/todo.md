@@ -6,45 +6,43 @@
 
 ## Current
 
-### #3 — Task 7：provider-agnostic AI enrichment
+### #4 — Task 8：智能整理 review UI
 
 狀態：**NOT VERIFIED — READY NEXT（NOT STARTED）**。
 
 目前 gate：
 
-- 先以 GitHub `main` 盤點既有 AI/provider abstraction、privacy / consent / cache 與 Notes / Tag linkage 契約，不假設 Drive 規格已實作。
-- 以 TDD 固定 provider-agnostic backend contract，避免 UI 或 domain code 綁死單一模型供應商。
-- 完成智能 Tag、候選 Notes、雙鏈建議所需的 domain / API / persistence 契約。
-- 明確處理 privacy、consent、cache、provider failure / partial-success semantics。
-- backend tests、CI 與必要 runtime evidence GREEN 才能進下一 gate。
-- 若 Task 7 需要新增 UI，直接使用已封板的 Warm Knowledge tokens / shared components / responsive contract，不另開第二套視覺規則。
+- 直接使用 #3 已封板的 provider-agnostic enrichment API / persistence contract，不在 Flutter domain code 綁死單一 AI provider。
+- 依 Warm Knowledge Design System 實作 AI 狀態、建議檢視、接受/拒絕、consent UX 與 manual fallback。
+- Related Note suggestion 只有使用者接受後才成為 authoritative Drive↔Note relation；拒絕不建立 relation。
+- UI 必須清楚呈現 disabled / unavailable / succeeded / partial / failed / skipped 等狀態，不把 AI failure 包裝成 core Drive / Project failure。
+- consent OFF 時不得暗示已送出內容做 AI 分析；仍保留手動 Tag / Note relationship 能力。
+- 完成 Flutter tests、Analyze、Web build，以及對應 browser/mobile acceptance 後才可進下一 gate。
 
 ## Just Closed
 
-### #2 — Project-wide Design System / UI Style Checkpoint
+### #3 — Task 7：provider-agnostic AI enrichment
 
-狀態：**DONE / PASS**。
+狀態：**DONE / PASS — backend foundation**。
 
 封板 evidence：
 
-- Warm Knowledge 已成為單一正式視覺基線。
-- Drive `life_assistant Design System — Final UI Reference` 已實際保存 Home / Dashboard、Tasks、Project 三張完工樣板。
-- release SHA `567511c62fb70b0d8c40b54e2a9d0f4500bcfcf9`。
-- semantic tokens：spacing、radius、breakpoints/window classes、layout、motion、44px touch target。
-- shared components：`AppPageFrame`、`AppSectionCard`、`AppStatusChip`、`AppStatePanel`。
-- responsive contract：`<600` compact、`600–839` medium、`840–1199` expanded、`>=1200` roomy；page actions `720`；content max width `1040`。
-- CI #459 / run `36985802044` PASS：backend、Flutter Analyze/Test/Web build、branding verify 全 PASS。
-- Firebase Hosting #277 / run `36986034878` PASS：Hosting verify、Task production acceptance、Project production acceptance PASS。
-- Deploy Cloud Run #329 / run `36985912899` PASS：migration、deploy、health/readiness、cloud-domain、Checklist、idempotency、Google provider failure-path、SQLite success/failure、image retention 全 PASS。
-- `progress.md` closure commit：`43fddeb504dc307ec0299bf796f102b9ec623278`；全案封板進度提升為 `2/11 = 18.2%`。
+- final release SHA `cd2fdcd5645a9f73141c7824b59a8349d15bb86c`。
+- provider-agnostic adapter boundary、privacy/consent、stable fingerprint cache、shared Tag reuse、bounded Note candidates、accept/reject suggestion persistence、partial-success semantics 已落地。
+- Alembic head `20261002_0009`；enrichment runs / Note-link suggestions persistence 已加入。
+- CI #463 / run `36994280896` PASS；backend **315/315** tests PASS，Flutter / deployment-scripts PASS。
+- Firebase Hosting #281 / run `36994497368` PASS。
+- Deploy Cloud Run #335 / run `36994497260` PASS；migration、deploy、health/readiness、401、cloud-domain、Checklist、idempotency、Google failure-path、SQLite success/failure、image retention 全 PASS。
+- Drive AI Enrichment Runtime Acceptance #3 / run `36997713417` PASS；exact release SHA / image verified；Cloud Run execution `life-assistant-drive-ai-acceptance-52fj9` PASS。
+- 詳細 checkpoint：`doc/drive_ai_enrichment_checkpoint_v0_1.md`。
+- 本包不宣稱 concrete external-AI provider 已接通；repo 尚無核准 vendor credential/config contract，default resolver 維持 disabled/unavailable degraded mode。真實 provider / Drive production delivery 留在後續 integration package。
 
 ## Next
 
-1. #4 — Task 8：智能整理 review UI。
-2. #5 — Task 9：Drive Knowledge production delivery + acceptance。
-3. #6–#9 — Habits / Shopping / Calendar / Activity + Integrations productization。
-4. #10 — Integration / foundation tail closure。
-5. #11 — Phase 1 final Release Gate / 封板 checkpoint。
+1. #5 — Task 9：Drive Knowledge production delivery + acceptance。
+2. #6–#9 — Habits / Shopping / Calendar / Activity + Integrations productization。
+3. #10 — Integration / foundation tail closure。
+4. #11 — Phase 1 final Release Gate / 封板 checkpoint。
 
 ## Non-blocking backlog
 
@@ -57,6 +55,7 @@
 - 真實帳號 Calendar read/list 重驗。
 - 真實歷史 SQLite migration：只有在實際 legacy SQLite source file 可定位時執行。
 - Artifact Registry latest-only retention 的最終 physical inventory evidence。
+- Concrete AI provider adapter / deployment config；接入時補 provider/model-aware cache invalidation contract 與 external-provider integration evidence。
 
 ## Product DONE 規則
 

@@ -8,16 +8,34 @@
 
 ### #4 — Task 8：智能整理 review UI
 
-狀態：**NOT VERIFIED — READY NEXT（NOT STARTED）**。
+狀態：**PARTIAL / IN PROGRESS — design & implementation survey；product implementation NOT STARTED**。
 
-目前 gate：
+已完成的 current-package discovery：
 
-- 直接使用 #3 已封板的 provider-agnostic enrichment API / persistence contract，不在 Flutter domain code 綁死單一 AI provider。
+- 已盤點 GitHub `main` 的 Flutter route / App Shell、`IntegrationsPage`、shared `ApiClient`、Projects UI/test pattern、Warm Knowledge shared components，以及 Drive enrichment backend endpoints / schemas。
+- 確認 repo 目前沒有獨立 Drive review page，也沒有 Drive-specific Flutter API facade。
+- 確認現有 `IntegrationsPage` 的主要責任是 Google 授權、API 驗收與 legacy Drive Bridge ensure；智能整理 review workflow 應與授權/整合驗收 UI 分離。
+- 已固定沿用 #3 provider-agnostic enrichment contract，不在 Flutter domain code 綁死單一 AI provider。
+
+下一個 concrete gate：
+
+- 完成 Task 8 architectural design/spec，明確定義 Drive Knowledge / 智能整理 review surface、狀態模型、資料流與錯誤/partial-success presentation。
+- Design/spec 核准後才進 implementation plan 與 TDD。
 - 依 Warm Knowledge Design System 實作 AI 狀態、建議檢視、接受/拒絕、consent UX 與 manual fallback。
 - Related Note suggestion 只有使用者接受後才成為 authoritative Drive↔Note relation；拒絕不建立 relation。
 - UI 必須清楚呈現 disabled / unavailable / succeeded / partial / failed / skipped 等狀態，不把 AI failure 包裝成 core Drive / Project failure。
 - consent OFF 時不得暗示已送出內容做 AI 分析；仍保留手動 Tag / Note relationship 能力。
 - 完成 Flutter tests、Analyze、Web build，以及對應 browser/mobile acceptance 後才可進下一 gate。
+
+尚未完成：
+
+- Task 8 written design/spec。
+- implementation plan。
+- product code。
+- Task 8 Flutter tests / Analyze / Web build。
+- Firebase deployment / production browser/mobile acceptance。
+
+因此 #4 尚不計入 DONE；Closure progress 維持 **3/11 = 27.3%**。
 
 ## Just Closed
 

@@ -70,21 +70,27 @@ class DriveMigrationTests(unittest.TestCase):
             "DriveWorkspaceDocument",
             "NoteDriveDocument",
             "ProjectDriveDocument",
+            "DriveEnrichmentSettings",
+            "DriveDocumentEnrichmentRun",
+            "DriveNoteLinkSuggestion",
         ):
             self.assertIn(model_name, env_source)
 
-    def test_release_gate_targets_drive_head_and_requires_core_tables(self):
+    def test_release_gate_targets_current_head_and_requires_enrichment_tables(self):
         release_source = (
             self.backend_root / "scripts/apply_cloud_domain_parity_release.py"
         ).read_text(encoding="utf-8")
-        self.assertIn('PREVIOUS_RELEASE_REVISION = "20260930_0007"', release_source)
-        self.assertIn('RELEASE_TARGET_REVISION = "20261001_0008"', release_source)
+        self.assertIn('PREVIOUS_RELEASE_REVISION = "20261001_0008"', release_source)
+        self.assertIn('RELEASE_TARGET_REVISION = "20261002_0009"', release_source)
         for table_name in (
             "drive_workspaces",
             "drive_documents",
             "drive_workspace_documents",
             "project_drive_documents",
             "note_drive_documents",
+            "drive_enrichment_settings",
+            "drive_document_enrichment_runs",
+            "drive_note_link_suggestions",
         ):
             self.assertIn(f'"{table_name}"', release_source)
 

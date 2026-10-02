@@ -10,6 +10,9 @@ from app.config import settings
 from app.db.session import Base
 from app.models.drive import (  # noqa: F401
     DriveDocument,
+    DriveDocumentEnrichmentRun,
+    DriveEnrichmentSettings,
+    DriveNoteLinkSuggestion,
     DriveWorkspace,
     DriveWorkspaceDocument,
     NoteDriveDocument,
@@ -59,10 +62,6 @@ def run_migrations_offline() -> None:
 def do_run_migrations(connection: Connection) -> None:
     is_postgresql = connection.dialect.name == "postgresql"
     context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
-    # The advisory lock must live inside the same transaction Alembic owns.
-    # Executing a session-level lock before context.begin_transaction() makes
-    # SQLAlchemy autobegin a transaction; Alembic can then finish without
-    # committing its revision/DDL, and connection close rolls it back.
     with context.begin_transaction():
         if is_postgresql:
             connection.execute(

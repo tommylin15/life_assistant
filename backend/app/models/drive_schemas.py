@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -128,3 +129,63 @@ class PickerConfigOut(BaseModel):
     developer_key: str
     app_id: str
     scope: str
+
+
+class DriveEnrichmentSettingsOut(BaseModel):
+    auto_tags_enabled: bool = True
+    note_suggestions_enabled: bool = True
+    allow_document_content: bool = False
+    max_related_note_suggestions: int = Field(default=5, ge=1, le=20)
+
+    model_config = {"from_attributes": True}
+
+
+class DriveEnrichmentSettingsUpdate(BaseModel):
+    auto_tags_enabled: bool | None = None
+    note_suggestions_enabled: bool | None = None
+    allow_document_content: bool | None = None
+    max_related_note_suggestions: int | None = Field(default=None, ge=1, le=20)
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one enrichment setting must be provided")
+        for field in self.model_fields_set:
+            if getattr(self, field) is None:
+                raise ValueError(f"Enrichment setting {field} cannot be null")
+        return self
+
+
+class DriveEnrichmentRunRequest(BaseModel):
+    force: bool = False
+
+
+class DriveNoteSuggestionDecision(BaseModel):
+    decision: Literal["accepted", "rejected"]
+
+
+class DriveNoteSuggestionOut(BaseModel):
+    id: str
+    note_id: str
+    confidence: float
+    reason: str
+    decision: Literal["pending", "accepted", "rejected"]
+    decided_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DriveEnrichmentRunOut(BaseModel):
+    id: str
+    drive_document_id: str
+    content_fingerprint: str
+    provider: str | None
+    model: str | None
+    status: Literal["succeeded", "partial", "failed", "skipped"]
+    suggested_tags: list[str]
+    note_suggestions: list[DriveNoteSuggestionOut]
+    error_code: str | None
+    cache_hit: bool = False
+    created_at: datetime

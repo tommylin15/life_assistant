@@ -29,9 +29,13 @@ from scripts.reconcile_projects_status_default import (
 )
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-PREVIOUS_RELEASE_REVISION = "20260930_0007"
-LEGACY_DIRECT_RELEASE_REVISIONS = {"20260927_0005", "20260928_0006"}
-RELEASE_TARGET_REVISION = "20261001_0008"
+PREVIOUS_RELEASE_REVISION = "20261001_0008"
+LEGACY_DIRECT_RELEASE_REVISIONS = {
+    "20260927_0005",
+    "20260928_0006",
+    "20260930_0007",
+}
+RELEASE_TARGET_REVISION = "20261002_0009"
 EXIT_RELEASE_REVISION = 60
 EXIT_RELEASE_ALEMBIC = 61
 EXIT_RELEASE_MISSING_TABLES = 62
@@ -66,6 +70,9 @@ RELEASE_REQUIRED_TABLES = {
     "drive_workspace_documents",
     "project_drive_documents",
     "note_drive_documents",
+    "drive_enrichment_settings",
+    "drive_document_enrichment_runs",
+    "drive_note_link_suggestions",
 }
 RELEASE_REQUIRED_TASK_COLUMNS = {"source_type", "source_ref", "completed_at", "deleted_at"}
 

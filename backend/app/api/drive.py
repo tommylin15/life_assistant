@@ -12,6 +12,12 @@ from app.models.drive_schemas import (
     DriveDocumentOut,
     DriveDocumentRegister,
     DriveDocumentRegisterOut,
+    DriveEnrichmentRunOut,
+    DriveEnrichmentRunRequest,
+    DriveEnrichmentSettingsOut,
+    DriveEnrichmentSettingsUpdate,
+    DriveNoteSuggestionDecision,
+    DriveNoteSuggestionOut,
     DriveProjectLinksCreate,
     DriveProjectLinksOut,
     DriveWorkspaceCreate,
@@ -19,7 +25,7 @@ from app.models.drive_schemas import (
     DriveWorkspaceUpdate,
     PickerConfigOut,
 )
-from app.services import drive_documents
+from app.services import drive_documents, drive_enrichment
 from app.services.execution_log import fail_execution
 from app.services.google_oauth import SERVICE_SCOPES
 from app.services.idempotency import (
@@ -209,6 +215,27 @@ async def get_picker_config(
     )
 
 
+@router.get("/enrichment/settings", response_model=DriveEnrichmentSettingsOut)
+async def get_drive_enrichment_settings(
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await drive_enrichment.get_enrichment_settings(db, user["sub"])
+
+
+@router.put("/enrichment/settings", response_model=DriveEnrichmentSettingsOut)
+async def put_drive_enrichment_settings(
+    body: DriveEnrichmentSettingsUpdate,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await drive_enrichment.update_enrichment_settings(
+        db,
+        user["sub"],
+        body.model_dump(exclude_unset=True),
+    )
+
+
 @router.post(
     "/documents/register",
     response_model=DriveDocumentRegisterOut,
@@ -294,6 +321,58 @@ async def list_drive_project_documents(
         project_id,
     )
     return DriveDocumentListOut(documents=documents, returned=len(documents))
+
+
+@router.post(
+    "/documents/{document_id}/enrichment",
+    response_model=DriveEnrichmentRunOut,
+)
+async def run_drive_document_enrichment(
+    document_id: str,
+    body: DriveEnrichmentRunRequest,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await drive_enrichment.enrich_document(
+        db,
+        user["sub"],
+        document_id,
+        force=body.force,
+    )
+
+
+@router.get(
+    "/documents/{document_id}/enrichment",
+    response_model=DriveEnrichmentRunOut | None,
+)
+async def get_drive_document_enrichment(
+    document_id: str,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await drive_enrichment.get_latest_enrichment(
+        db,
+        user["sub"],
+        document_id,
+    )
+
+
+@router.post(
+    "/note-suggestions/{suggestion_id}/decision",
+    response_model=DriveNoteSuggestionOut,
+)
+async def decide_drive_note_suggestion(
+    suggestion_id: str,
+    body: DriveNoteSuggestionDecision,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await drive_enrichment.decide_note_suggestion(
+        db,
+        user["sub"],
+        suggestion_id,
+        body.decision,
+    )
 
 
 @router.post("/documents/{document_id}/projects", response_model=DriveProjectLinksOut)

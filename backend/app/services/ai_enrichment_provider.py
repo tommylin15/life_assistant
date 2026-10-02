@@ -99,31 +99,34 @@ def compute_enrichment_fingerprint(
     enable_tags: bool = True,
     enable_related_notes: bool = True,
 ) -> str:
+    """Return a stable fingerprint for source/context inputs only.
+
+    Existing Tags and the current candidate-Note snapshot are deliberately not
+    part of cache identity because enrichment itself can change those values.
+    Including them makes a successful run invalidate its own cache on the next
+    request. They remain available to provider adapters as prompt context.
+    """
+
+    del candidate_notes
     payload = {
         "contract": "drive-ai-enrichment-v1",
         "document_id": document_context.document_id,
         "title": document_context.title.strip(),
         "mime_type": document_context.mime_type.strip(),
         "document_text": (document_context.document_text or "").strip(),
-        "project_context": sorted({value.strip() for value in document_context.project_context if value.strip()}),
-        "existing_tags": sorted({value.strip().casefold() for value in document_context.existing_tags if value.strip()}),
+        "project_context": sorted(
+            {value.strip() for value in document_context.project_context if value.strip()}
+        ),
         "max_related_notes": document_context.max_related_notes,
         "enable_tags": enable_tags,
         "enable_related_notes": enable_related_notes,
-        "candidate_notes": sorted(
-            [
-                {
-                    "note_id": item.note_id,
-                    "title": item.title.strip()[:300],
-                    "snippet": item.snippet.strip()[:500],
-                    "project_id": item.project_id,
-                }
-                for item in candidate_notes
-            ],
-            key=lambda value: value["note_id"],
-        ),
     }
-    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -175,9 +178,23 @@ async def execute_provider_enrichment(
     enable_related_notes: bool,
 ) -> ProviderEnrichmentOutcome:
     if not allow_ai:
-        return ProviderEnrichmentOutcome("skipped", provider.provider_name, provider.model_name, (), (), "consent_disabled")
+        return ProviderEnrichmentOutcome(
+            "skipped",
+            provider.provider_name,
+            provider.model_name,
+            (),
+            (),
+            "consent_disabled",
+        )
     if not enable_tags and not enable_related_notes:
-        return ProviderEnrichmentOutcome("skipped", provider.provider_name, provider.model_name, (), (), "enrichment_disabled")
+        return ProviderEnrichmentOutcome(
+            "skipped",
+            provider.provider_name,
+            provider.model_name,
+            (),
+            (),
+            "enrichment_disabled",
+        )
 
     tags: tuple[TagSuggestion, ...] = ()
     notes: tuple[RelatedNoteSuggestion, ...] = ()
@@ -210,4 +227,11 @@ async def execute_provider_enrichment(
     else:
         status = "failed"
         error_code = failures[0] if len(failures) == 1 else "multiple_provider_failures"
-    return ProviderEnrichmentOutcome(status, provider.provider_name, provider.model_name, tags, notes, error_code)
+    return ProviderEnrichmentOutcome(
+        status,
+        provider.provider_name,
+        provider.model_name,
+        tags,
+        notes,
+        error_code,
+    )

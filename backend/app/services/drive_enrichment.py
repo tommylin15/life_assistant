@@ -321,7 +321,7 @@ async def enrich_document(
         enable_related_notes=enrichment_settings.note_suggestions_enabled,
     )
 
-    if not force:
+    if enrichment_settings.allow_document_content and not force:
         cached = (
             await db.execute(
                 select(DriveDocumentEnrichmentRun)

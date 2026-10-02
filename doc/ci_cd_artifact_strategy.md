@@ -1,10 +1,10 @@
 # Life Assistant CI/CD Artifact Strategy
 
-最後更新：2026-09-28
+最後更新：2026-10-02
 
 ## 目的
 
-Cloud Run release pipeline 採「一次 build、多個 runtime 共用同一個 immutable image digest」，避免 migration job、API service 與 acceptance jobs 各自重複 build Docker image。
+Cloud Run release pipeline 採「一次 build、多個 runtime 共用同一個 immutable image digest」，避免 migration job、API service 與 acceptance runner 各自重複 build Docker image；runtime acceptance 則以固定少量 Cloud Run Job runner 搭配 execution-level overrides 執行，避免每一種 acceptance case 都永久佔用一個 Cloud Run Job 資源。
 
 ## Release image
 
@@ -13,8 +13,24 @@ Cloud Run release pipeline 採「一次 build、多個 runtime 共用同一個 i
 1. `backend/` 只執行一次 Cloud Build。
 2. image package 固定為 `life-assistant-backend`，tag 使用 release commit SHA。
 3. deployment 取得 build digest，後續 runtime 一律使用 `IMAGE@sha256:...`，不以 mutable tag 作 runtime identity。
-4. `life-assistant-db-migrate`、`life-assistant-api`、cloud-domain acceptance、idempotency acceptance、Google failure acceptance、SQLite backfill acceptance 與 SQLite backfill failure acceptance 全部使用同一 digest。
-5. workflow 不再以 `--source backend` 分別觸發 migration / service build。
+4. `life-assistant-db-migrate`、`life-assistant-api`、`life-assistant-core-acceptance` 與 `life-assistant-postdeploy-acceptance` 使用同一個 release image digest。
+5. core acceptance 與 post-deploy acceptance 的個別案例不再各自 `deploy` 一個永久 Job；固定 runner 建立/更新一次後，以 `gcloud run jobs execute --args ...` 覆寫當次 execution 的 module arguments。
+6. workflow 不再以 `--source backend` 分別觸發 migration / service build。
+
+## Cloud Run Job topology
+
+正常 CI/CD 管理的固定 Cloud Run Job 資源：
+
+- `life-assistant-db-migrate`：資料庫 migration。
+- `life-assistant-core-acceptance`：Cloud domain、Checklist、idempotency、Google failure、SQLite backfill success/failure 的共用 runner。
+- `life-assistant-postdeploy-acceptance`：Notes、Project↔Drive、Drive AI enrichment 的共用 runner。
+
+設計原則：
+
+- acceptance case 仍保留各自獨立 Cloud Run execution、task exit code 與 logs，可繼續由 `.github/scripts/run_cloud_run_job_with_diagnostics.sh` 收集失敗證據。
+- core runner 與 post-deploy runner 分開，避免 Deploy Cloud Run 與後續 acceptance workflow 互相改寫同一個 Job image/config。
+- post-deploy acceptance 合併為單一 workflow 並序列執行，避免多個 workflow 同時更新同一 runner。
+- 正常 deployment workflow 不執行 `gcloud run jobs delete`。舊的 feature-specific acceptance Jobs 只有在新 topology 有足夠 runtime replacement evidence 後，才可列為 legacy cleanup candidates；實際刪除 production Cloud Run 資源仍需依治理規則取得明確確認。
 
 ## Artifact retention
 
@@ -53,6 +69,8 @@ binding 範圍限定在 Artifact Registry repository `cloud-run-source-deploy`�
 
 ## 2026-09-28 Runtime Evidence
 
+> 本節保留當日歷史 runtime evidence；其中 acceptance Job 名稱反映當時尚未 consolidation 的 topology。
+
 Release commit `3a6b39a8f39f9395f291e70c9eaf7a9c0280f3b2`，Deploy Cloud Run run `36384575614` attempt 2 / job `108836281621`：
 
 - CI #293：PASS。
@@ -83,7 +101,7 @@ Release commit `3a6b39a8f39f9395f291e70c9eaf7a9c0280f3b2`，Deploy Cloud Run run
 - one-build runtime：PASS
 - migration shared digest：PASS
 - API shared digest / health / readiness：PASS
-- acceptance job shared digest：PASS（已執行的 cloud-domain acceptance 使用相同 digest）
+- acceptance job shared digest：PASS（2026-09-28 已執行的 cloud-domain acceptance 使用相同 digest）
 
 ### Latest-only retention
 
@@ -103,3 +121,15 @@ Release commit `3a6b39a8f39f9395f291e70c9eaf7a9c0280f3b2`，Deploy Cloud Run run
 2. 重新列出 `life-assistant-backend` versions，確認實際僅剩最新 1 個 version；若仍在 processing，維持 NOT VERIFIED，不得假設已完成。
 
 另外，Deploy Cloud Run 目前仍有獨立的 authenticated cloud-domain acceptance failure，應另案依實際 failing assertion / exception 排查，不應混入本次 Docker image retention 完成判定。
+
+## 2026-10-02 Cloud Run Job consolidation
+
+本節記錄新的 Job topology 設計與 implementation intent；在對應 main commit 經 CI、deployment 與 runtime acceptance 驗證前，不把它視為 production 完成狀態。
+
+預期固定資源由原本多個 feature-specific acceptance Jobs 收斂為：
+
+- `life-assistant-db-migrate`
+- `life-assistant-core-acceptance`
+- `life-assistant-postdeploy-acceptance`
+
+既有 feature-specific acceptance Jobs 不由本次 workflow 自動刪除。它們在新的 shared runners 完成 replacement runtime verification 後，可另列 legacy cleanup candidates；production resource deletion 仍需明確確認。

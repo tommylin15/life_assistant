@@ -30,11 +30,7 @@ jobs:
       RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       CLOUD_RUN_SERVICE: life-assistant-api
       MIGRATION_JOB: life-assistant-db-migrate
-      ACCEPTANCE_JOB: life-assistant-cloud-domain-acceptance
-      IDEMPOTENCY_ACCEPTANCE_JOB: life-assistant-idempotency-acceptance
-      GOOGLE_FAILURE_ACCEPTANCE_JOB: life-assistant-google-failure-acceptance
-      BACKFILL_ACCEPTANCE_JOB: life-assistant-sqlite-backfill-acceptance
-      BACKFILL_FAILURE_ACCEPTANCE_JOB: life-assistant-sqlite-backfill-failure-acceptance
+      CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance
       GCP_NETWORK: janusai-lake-poc
       GCP_SUBNET: janusai-lake-poc-uscentral1
       DATABASE_HOST: 10.42.0.5
@@ -243,10 +239,9 @@ jobs:
             "${{ steps.service_url.outputs.url }}/api/v1/tasks")"
           test "$STATUS" = "401"
 
-      - name: Run authenticated cloud-domain acceptance
+      - name: Configure shared core acceptance runner
         run: |
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$ACCEPTANCE_JOB" \
-            gcloud run jobs deploy "$ACCEPTANCE_JOB" \
+          gcloud run jobs deploy "$CORE_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --image "${{ steps.backend_image.outputs.ref }}" \
@@ -259,101 +254,71 @@ jobs:
             --task-timeout 10m \
             --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --quiet
+
+      - name: Run authenticated cloud-domain acceptance
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_cloud_domain_parity_acceptance \
+            --task-timeout 10m \
             --wait \
             --quiet
 
       - name: Run checklist cloud runtime acceptance
         run: |
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$ACCEPTANCE_JOB" \
-            gcloud run jobs deploy "$ACCEPTANCE_JOB" \
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --image "${{ steps.backend_image.outputs.ref }}" \
-            --command python \
             --args=-m,scripts.run_checklist_cloud_acceptance \
-            --network "$GCP_NETWORK" \
-            --subnet "$GCP_SUBNET" \
-            --vpc-egress private-ranges-only \
-            --max-retries 0 \
             --task-timeout 10m \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
-            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --wait \
             --quiet
 
       - name: Run action-id idempotency runtime acceptance
         run: |
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$IDEMPOTENCY_ACCEPTANCE_JOB" \
-            gcloud run jobs deploy "$IDEMPOTENCY_ACCEPTANCE_JOB" \
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --image "${{ steps.backend_image.outputs.ref }}" \
-            --command python \
             --args=-m,scripts.run_idempotency_acceptance \
-            --network "$GCP_NETWORK" \
-            --subnet "$GCP_SUBNET" \
-            --vpc-egress private-ranges-only \
-            --max-retries 0 \
             --task-timeout 10m \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
-            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --wait \
             --quiet
 
       - name: Run Google provider failure-path runtime acceptance
         run: |
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$GOOGLE_FAILURE_ACCEPTANCE_JOB" \
-            gcloud run jobs deploy "$GOOGLE_FAILURE_ACCEPTANCE_JOB" \
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --image "${{ steps.backend_image.outputs.ref }}" \
-            --command python \
             --args=-m,scripts.run_google_failure_acceptance \
-            --network "$GCP_NETWORK" \
-            --subnet "$GCP_SUBNET" \
-            --vpc-egress private-ranges-only \
-            --max-retries 0 \
             --task-timeout 10m \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI" \
-            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --wait \
             --quiet
 
       - name: Run SQLite backfill runtime acceptance
         run: |
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$BACKFILL_ACCEPTANCE_JOB" \
-            gcloud run jobs deploy "$BACKFILL_ACCEPTANCE_JOB" \
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --image "${{ steps.backend_image.outputs.ref }}" \
-            --command python \
             --args=-m,scripts.run_sqlite_backfill_acceptance \
-            --network "$GCP_NETWORK" \
-            --subnet "$GCP_SUBNET" \
-            --vpc-egress private-ranges-only \
-            --max-retries 0 \
             --task-timeout 10m \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
-            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --wait \
             --quiet
 
       - name: Run SQLite backfill failure-path runtime acceptance
         run: |
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$BACKFILL_FAILURE_ACCEPTANCE_JOB" \
-            gcloud run jobs deploy "$BACKFILL_FAILURE_ACCEPTANCE_JOB" \
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
-            --image "${{ steps.backend_image.outputs.ref }}" \
-            --command python \
             --args=-m,scripts.run_sqlite_backfill_failure_acceptance \
-            --network "$GCP_NETWORK" \
-            --subnet "$GCP_SUBNET" \
-            --vpc-egress private-ranges-only \
-            --max-retries 0 \
             --task-timeout 10m \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
-            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --wait \
             --quiet
 

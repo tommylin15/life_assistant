@@ -1,0 +1,130 @@
+name: Post-deploy Runtime Acceptance
+
+on:
+  workflow_run:
+    workflows: [Deploy Cloud Run]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: postdeploy-runtime-acceptance-main
+  cancel-in-progress: false
+
+jobs:
+  accept:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      ARTIFACT_REPOSITORY: cloud-run-source-deploy
+      BACKEND_IMAGE: life-assistant-backend
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      POSTDEPLOY_ACCEPTANCE_JOB: life-assistant-postdeploy-acceptance
+      GCP_NETWORK: janusai-lake-poc
+      GCP_SUBNET: janusai-lake-poc-uscentral1
+      DATABASE_HOST: 10.42.0.5
+      DATABASE_PORT: '5432'
+      DATABASE_NAME: life_assistant
+      DATABASE_USER: life_assistant_user
+      DATABASE_SSLMODE: require
+
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Resolve immutable release image
+        id: image
+        run: |
+          IMAGE_BASE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${BACKEND_IMAGE}"
+          IMAGE_TAG="${IMAGE_BASE}:${RELEASE_SHA}"
+          IMAGE_DIGEST="$(gcloud artifacts docker images describe "$IMAGE_TAG" \
+            --project "$GCP_PROJECT_ID" \
+            --format='value(image_summary.digest)')"
+          test -n "$IMAGE_DIGEST"
+          echo "ref=${IMAGE_BASE}@${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure shared post-deploy acceptance runner
+        run: |
+          gcloud run jobs deploy "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "${{ steps.image.outputs.ref }}" \
+            --command python \
+            --args=-m,scripts.run_notes_product_acceptance \
+            --network "$GCP_NETWORK" \
+            --subnet "$GCP_SUBNET" \
+            --vpc-egress private-ranges-only \
+            --max-retries 0 \
+            --task-timeout 10m \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE" \
+            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --quiet
+
+      - name: Run Notes product runtime acceptance
+        id: notes_acceptance
+        continue-on-error: true
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_notes_product_acceptance \
+            --task-timeout 10m \
+            --wait \
+            --quiet
+
+      - name: Run Project Drive runtime acceptance
+        id: project_drive_acceptance
+        continue-on-error: true
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_project_drive_runtime_acceptance \
+            --task-timeout 5m \
+            --wait \
+            --quiet
+
+      - name: Run Drive AI enrichment runtime acceptance
+        id: drive_ai_acceptance
+        continue-on-error: true
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_drive_ai_enrichment_acceptance \
+            --task-timeout 5m \
+            --wait \
+            --quiet
+
+      - name: Fail post-deploy runtime acceptance gate
+        if: >-
+          steps.notes_acceptance.outcome == 'failure' ||
+          steps.project_drive_acceptance.outcome == 'failure' ||
+          steps.drive_ai_acceptance.outcome == 'failure'
+        run: |
+          echo "::error::One or more post-deploy runtime acceptance cases failed; see per-case diagnostics above."
+          exit 1

@@ -43,7 +43,28 @@ void main() {
     expect(navigatedTo, '/projects');
   });
 
-  testWidgets('uses navigation rail on wide layouts', (tester) async {
+  testWidgets('keeps compact rail on medium desktop layouts', (tester) async {
+    await tester.pumpWidget(
+      _hostShell(
+        size: const Size(900, 900),
+        location: '/projects/active',
+        onNavigate: (_) {},
+      ),
+    );
+
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(NavigationRail), findsOneWidget);
+
+    final navigationRail = tester.widget<NavigationRail>(
+      find.byType(NavigationRail),
+    );
+    expect(navigationRail.selectedIndex, 3);
+    expect(navigationRail.extended, isFalse);
+  });
+
+  testWidgets('uses extended sidebar rail on roomy desktop layouts', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _hostShell(
         size: const Size(1200, 900),
@@ -59,5 +80,6 @@ void main() {
       find.byType(NavigationRail),
     );
     expect(navigationRail.selectedIndex, 3);
+    expect(navigationRail.extended, isTrue);
   });
 }

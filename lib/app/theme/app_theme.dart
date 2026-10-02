@@ -19,6 +19,11 @@ abstract class AppTheme {
     accentSoft: AppColors.accentSageSoft,
   );
 
+  // Backwards-compatible preference alias. This is intentionally not a
+  // second palette: legacy "clean" selections render Warm Knowledge light.
+  @Deprecated('Use AppTheme.light. The clean palette was retired in v0.1.')
+  static final ThemeData clean = light;
+
   static ThemeData get dark => _build(
     brightness: Brightness.dark,
     canvas: AppColors.darkCanvas,

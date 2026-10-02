@@ -6,42 +6,45 @@
 
 ## Current
 
-### #2 — Project-wide Design System / UI Style Checkpoint
+### #3 — Task 7：provider-agnostic AI enrichment
 
-狀態：**IN PROGRESS — read-only design audit / direction checkpoint**。
+狀態：**NOT VERIFIED — READY NEXT（NOT STARTED）**。
 
 目前 gate：
 
-- 核准單一全站視覺 source of truth；目前 `doc/design_system.md` 定義 Warm Knowledge，但 `app_theme.dart` 同時保留未使用的 `AppTheme.clean`，需消除雙軌漂移。
-- 將 color / typography / spacing / radius 擴充成可實際驅動產品 UI 的 token baseline。
-- 補 responsive / layout tokens；目前 App Shell 使用 `840` breakpoint、Tasks 使用 `720`，頁面 spacing / max-width 仍有局部硬編碼。
-- 定義共用 component baseline：buttons、inputs、cards、chips/tags、dialogs/bottom sheets、loading/empty/error states、navigation。
-- 固定 mobile / desktop acceptance 規則與最低可存取性要求。
-- 設計 checkpoint 核准後，才進 implementation / adoption；不先逐頁零散美化。
+- 先以 GitHub `main` 盤點既有 AI/provider abstraction、privacy / consent / cache 與 Notes / Tag linkage 契約，不假設 Drive 規格已實作。
+- 以 TDD 固定 provider-agnostic backend contract，避免 UI 或 domain code 綁死單一模型供應商。
+- 完成智能 Tag、候選 Notes、雙鏈建議所需的 domain / API / persistence 契約。
+- 明確處理 privacy、consent、cache、provider failure / partial-success semantics。
+- backend tests、CI 與必要 runtime evidence GREEN 才能進下一 gate。
+- 若 Task 7 需要新增 UI，直接使用已封板的 Warm Knowledge tokens / shared components / responsive contract，不另開第二套視覺規則。
 
 ## Just Closed
 
-### #1 — Finish Task 6：shared Drive / Notes Tag system
+### #2 — Project-wide Design System / UI Style Checkpoint
 
 狀態：**DONE / PASS**。
 
 封板 evidence：
 
-- Notes production UI E2E GREEN，含雙向 link / unlink。
-- Project↔Drive Runtime Acceptance #12 GREEN。
-- release SHA `9a540a55baaf32a33e7376cab4183f998f596685`。
-- CI #450 PASS。
-- Deploy Cloud Run #322 PASS。
-- Drive closure tracker 已更新為 `1/11 = 9.1%`。
+- Warm Knowledge 已成為單一正式視覺基線。
+- Drive `life_assistant Design System — Final UI Reference` 已實際保存 Home / Dashboard、Tasks、Project 三張完工樣板。
+- release SHA `567511c62fb70b0d8c40b54e2a9d0f4500bcfcf9`。
+- semantic tokens：spacing、radius、breakpoints/window classes、layout、motion、44px touch target。
+- shared components：`AppPageFrame`、`AppSectionCard`、`AppStatusChip`、`AppStatePanel`。
+- responsive contract：`<600` compact、`600–839` medium、`840–1199` expanded、`>=1200` roomy；page actions `720`；content max width `1040`。
+- CI #459 / run `36985802044` PASS：backend、Flutter Analyze/Test/Web build、branding verify 全 PASS。
+- Firebase Hosting #277 / run `36986034878` PASS：Hosting verify、Task production acceptance、Project production acceptance PASS。
+- Deploy Cloud Run #329 / run `36985912899` PASS：migration、deploy、health/readiness、cloud-domain、Checklist、idempotency、Google provider failure-path、SQLite success/failure、image retention 全 PASS。
+- `progress.md` closure commit：`43fddeb504dc307ec0299bf796f102b9ec623278`；全案封板進度提升為 `2/11 = 18.2%`。
 
 ## Next
 
-1. #3 — Task 7：provider-agnostic AI enrichment。
-2. #4 — Task 8：智能整理 review UI。
-3. #5 — Task 9：Drive Knowledge production delivery + acceptance。
-4. #6–#9 — Habits / Shopping / Calendar / Activity + Integrations productization。
-5. #10 — Integration / foundation tail closure。
-6. #11 — Phase 1 final Release Gate / 封板 checkpoint。
+1. #4 — Task 8：智能整理 review UI。
+2. #5 — Task 9：Drive Knowledge production delivery + acceptance。
+3. #6–#9 — Habits / Shopping / Calendar / Activity + Integrations productization。
+4. #10 — Integration / foundation tail closure。
+5. #11 — Phase 1 final Release Gate / 封板 checkpoint。
 
 ## Non-blocking backlog
 

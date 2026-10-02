@@ -77,6 +77,17 @@ def _json_object(response: httpx.Response, label: str) -> dict:
     return payload
 
 
+def _error_message(response: httpx.Response, label: str) -> str:
+    payload = _json_object(response, label)
+    error = payload.get("error")
+    if not isinstance(error, dict):
+        raise AssertionError(f"{label}: expected shared error envelope")
+    message = error.get("message")
+    if not isinstance(message, str) or not message:
+        raise AssertionError(f"{label}: expected non-empty error.message")
+    return message
+
+
 def _record(check: str) -> None:
     print(f"project_drive_runtime_check={check}:PASS", flush=True)
 
@@ -240,9 +251,9 @@ async def run_acceptance() -> None:
                 headers={CONFIRMATION_HEADER: project_confirmation},
             )
             _expect(response, 409, "Project delete guard for Drive relation")
-            detail = _json_object(response, "Project delete guard for Drive relation").get("detail")
-            if detail != "Project has linked Drive documents":
-                raise AssertionError(f"Unexpected Project delete guard detail: {detail!r}")
+            message = _error_message(response, "Project delete guard for Drive relation")
+            if message != "Project has linked Drive documents":
+                raise AssertionError(f"Unexpected Project delete guard message: {message!r}")
             _record("project_delete_guard")
 
             stage = "detach"

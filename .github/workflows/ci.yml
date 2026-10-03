@@ -54,6 +54,18 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-pub --no-fatal-infos
 
+      - name: Diagnostic baseline plain MaterialApp
+        run: flutter test --no-pub test/drive_navigation_harness_test.dart --plain-name "baseline plain MaterialApp pumps" --reporter expanded
+
+      - name: Diagnostic MorePage plain MaterialApp
+        run: flutter test --no-pub test/drive_navigation_harness_test.dart --plain-name "MorePage pumps in plain MaterialApp" --reporter expanded
+
+      - name: Diagnostic baseline local GoRouter
+        run: flutter test --no-pub test/drive_navigation_harness_test.dart --plain-name "baseline local GoRouter pumps" --reporter expanded
+
+      - name: Diagnostic MorePage local GoRouter
+        run: flutter test --no-pub test/drive_navigation_harness_test.dart --plain-name "MorePage pumps once with local GoRouter" --reporter expanded
+
       - name: Test Drive page pump
         run: flutter test --no-pub test/drive_navigation_test.dart --plain-name "More page pumps without exception" --reporter expanded
 

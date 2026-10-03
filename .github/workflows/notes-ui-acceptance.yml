@@ -35,6 +35,7 @@ jobs:
       - name: Validate acceptance script syntax
         run: |
           node --check .github/scripts/verify_notes_ui_production.mjs
+          node --check .github/scripts/verify_drive_ui_production.mjs
           node --check .github/scripts/diagnose_notes_route.mjs
 
       - name: Install production UI acceptance tooling
@@ -55,19 +56,22 @@ jobs:
           grep -Fq '<title>生活助理</title>' /tmp/notes-route.html
           BASE_URL="$BASE_URL" node .github/scripts/diagnose_notes_route.mjs
 
-      - name: Verify deployed release and Notes UI
+      - name: Verify deployed release, Notes UI, and Drive UI
         run: |
           BASE_URL="https://${GCP_PROJECT_ID}.web.app"
           REMOTE_RELEASE="$(curl --fail --silent --show-error \
             -H 'Cache-Control: no-cache' \
-            "$BASE_URL/release.txt?notes_acceptance=$RELEASE_SHA")"
+            "$BASE_URL/release.txt?web_acceptance=$RELEASE_SHA")"
           test "$REMOTE_RELEASE" = "$RELEASE_SHA"
           BASE_URL="$BASE_URL" node .github/scripts/verify_notes_ui_production.mjs
+          BASE_URL="$BASE_URL" node .github/scripts/verify_drive_ui_production.mjs
 
-      - name: Upload Notes UI acceptance diagnostics
+      - name: Upload Web UI acceptance diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: notes-ui-production-acceptance-${{ env.RELEASE_SHA }}
-          path: /tmp/notes-ui-acceptance.png
+          name: web-ui-production-acceptance-${{ env.RELEASE_SHA }}
+          path: |
+            /tmp/notes-ui-acceptance.png
+            /tmp/drive-ui-acceptance.png
           if-no-files-found: ignore

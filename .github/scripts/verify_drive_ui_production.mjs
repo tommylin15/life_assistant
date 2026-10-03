@@ -134,8 +134,28 @@ async function mockApi(page, state) {
   });
 }
 
-async function semantics(page) {
-  await page.waitForSelector('flutter-view', { timeout: 30000 });
+function installDiagnostics(page, label) {
+  page.on('pageerror', (error) => {
+    console.log(`drive_ui_page_error=${label}:${error.stack ?? error.message}`);
+  });
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      console.log(`drive_ui_console_error=${label}:${message.text()}`);
+    }
+  });
+  page.on('requestfailed', (request) => {
+    console.log(
+      `drive_ui_request_failed=${label}:${request.failure()?.errorText ?? 'unknown'}:${request.url()}`,
+    );
+  });
+}
+
+async function semantics(page, label) {
+  const flutterView = page.locator('flutter-view');
+  await flutterView.waitFor({ state: 'attached', timeout: 30000 });
+  const rootVisible = await flutterView.first().isVisible().catch(() => false);
+  console.log(`drive_ui_flutter_view=${label}:attached:visible=${rootVisible}`);
+
   const placeholder = page.locator('flt-semantics-placeholder');
   if ((await placeholder.count()) > 0) {
     await placeholder.first().evaluate((element) => element.click());
@@ -206,12 +226,13 @@ const pass = (name) => console.log(`drive_ui_check=${name}:PASS`);
 
 async function desktop(context) {
   const page = await context.newPage();
+  installDiagnostics(page, 'desktop');
   await page.setViewportSize({ width: 1280, height: 900 });
   const state = initialState();
   await mockApi(page, state);
 
   await page.goto(`${baseUrl}/more/drive`, { waitUntil: 'domcontentloaded' });
-  await semantics(page);
+  await semantics(page, 'desktop_review');
 
   await named(page, 'Google Drive 智能整理');
   await named(page, /目前未允許將文件內容送交 AI 分析/);
@@ -249,7 +270,7 @@ async function desktop(context) {
   await page.goto(`${baseUrl}/more/drive/settings`, {
     waitUntil: 'domcontentloaded',
   });
-  await semantics(page);
+  await semantics(page, 'desktop_settings');
   await named(page, '智能整理設定');
   const consent = await scrollNamed(page, '允許將文件內容送交 AI 分析');
   await consent.click();
@@ -275,12 +296,13 @@ async function desktop(context) {
 
 async function mobile(context) {
   const page = await context.newPage();
+  installDiagnostics(page, 'mobile');
   await page.setViewportSize({ width: 390, height: 844 });
   const state = initialState();
   await mockApi(page, state);
 
   await page.goto(`${baseUrl}/more/drive`, { waitUntil: 'domcontentloaded' });
-  await semantics(page);
+  await semantics(page, 'mobile_review');
   await named(page, 'Google Drive 智能整理');
   await scrollNamed(page, '旅行規劃');
   await scrollNamed(page, '接受');
@@ -290,7 +312,7 @@ async function mobile(context) {
   await page.goto(`${baseUrl}/more/drive/settings`, {
     waitUntil: 'domcontentloaded',
   });
-  await semantics(page);
+  await semantics(page, 'mobile_settings');
   await named(page, '智能整理設定');
   await scrollNamed(page, '允許將文件內容送交 AI 分析');
   await scrollNamed(page, '儲存設定');

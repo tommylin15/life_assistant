@@ -4,11 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:life_assistant/app/theme/app_theme.dart';
 import 'package:life_assistant/web/web_app.dart';
 
-void main() {
-  testWidgets('More exposes Google Drive intelligent organization entry', (
-    tester,
-  ) async {
-    final router = GoRouter(
+GoRouter _router() => GoRouter(
       initialLocation: '/more',
       routes: [
         GoRoute(path: '/more', builder: (_, __) => const MorePage()),
@@ -20,18 +16,37 @@ void main() {
         ),
       ],
     );
+
+Future<void> _pumpMore(WidgetTester tester, GoRouter router) async {
+  await tester.pumpWidget(
+    MaterialApp.router(
+      theme: AppTheme.light,
+      routerConfig: router,
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('More renders Google Drive intelligent organization entry', (
+    tester,
+  ) async {
+    final router = _router();
     addTearDown(router.dispose);
 
-    await tester.pumpWidget(
-      MaterialApp.router(
-        theme: AppTheme.light,
-        routerConfig: router,
-      ),
-    );
-    await tester.pumpAndSettle();
+    await _pumpMore(tester, router);
 
     expect(find.text('Google Drive'), findsOneWidget);
     expect(find.textContaining('智能整理'), findsOneWidget);
+  });
+
+  testWidgets('More navigates to Google Drive intelligent organization', (
+    tester,
+  ) async {
+    final router = _router();
+    addTearDown(router.dispose);
+
+    await _pumpMore(tester, router);
 
     await tester.tap(find.text('Google Drive'));
     await tester.pumpAndSettle();

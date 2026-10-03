@@ -54,7 +54,13 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-pub --no-fatal-infos
 
-      - name: Diagnostic baseline plain MaterialApp
+      - name: Diagnostic MaterialApp without web_app import
+        run: flutter test --no-pub test/material_app_baseline_test.dart --reporter expanded
+
+      - name: Diagnostic web_app symbol load
+        run: flutter test --no-pub test/web_app_symbol_baseline_test.dart --reporter expanded
+
+      - name: Diagnostic baseline plain MaterialApp with web_app import
         run: flutter test --no-pub test/drive_navigation_harness_test.dart --plain-name "baseline plain MaterialApp pumps" --reporter expanded
 
       - name: Diagnostic MorePage plain MaterialApp

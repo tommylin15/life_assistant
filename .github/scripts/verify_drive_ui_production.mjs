@@ -327,7 +327,11 @@ async function mobile(context) {
 
 const browser = await chromium.launch({ headless: true });
 try {
-  const context = await browser.newContext();
+  const context = await browser.newContext({
+    serviceWorkers: 'block',
+    locale: 'zh-TW',
+    timezoneId: 'Asia/Taipei',
+  });
   await desktop(context);
   await mobile(context);
   await context.close();

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:life_assistant/app/theme/app_theme.dart';
-import 'package:life_assistant/web/web_app.dart';
+import 'package:life_assistant/web/more_page.dart';
 
 GoRouter _router() => GoRouter(
       initialLocation: '/more',

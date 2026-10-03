@@ -54,35 +54,8 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-pub --no-fatal-infos
 
-      - name: Diagnostic MaterialApp without web_app import
-        run: flutter test --no-pub test/material_app_baseline_test.dart --reporter expanded
-
-      - name: Diagnostic web_app symbol load
-        run: flutter test --no-pub test/web_app_symbol_baseline_test.dart --reporter expanded
-
-      - name: Diagnostic baseline plain MaterialApp with web_app import
-        run: flutter test --no-pub test/drive_navigation_harness_test.dart --plain-name "baseline plain MaterialApp pumps" --reporter expanded
-
-      - name: Diagnostic MorePage plain MaterialApp
-        run: flutter test --no-pub test/drive_navigation_harness_test.dart --plain-name "MorePage pumps in plain MaterialApp" --reporter expanded
-
-      - name: Diagnostic baseline local GoRouter
-        run: flutter test --no-pub test/drive_navigation_harness_test.dart --plain-name "baseline local GoRouter pumps" --reporter expanded
-
-      - name: Diagnostic MorePage local GoRouter
-        run: flutter test --no-pub test/drive_navigation_harness_test.dart --plain-name "MorePage pumps once with local GoRouter" --reporter expanded
-
-      - name: Test Drive page pump
-        run: flutter test --no-pub test/drive_navigation_test.dart --plain-name "More page pumps without exception" --reporter expanded
-
-      - name: Test Drive entry title
-        run: flutter test --no-pub test/drive_navigation_test.dart --plain-name "More renders Google Drive entry title" --reporter expanded
-
-      - name: Test Drive entry subtitle
-        run: flutter test --no-pub test/drive_navigation_test.dart --plain-name "More renders intelligent organization subtitle" --reporter expanded
-
-      - name: Test Drive navigation action
-        run: flutter test --no-pub test/drive_navigation_test.dart --plain-name "More navigates to Google Drive intelligent organization" --reporter expanded
+      - name: Test Drive navigation
+        run: flutter test --no-pub test/drive_navigation_test.dart --reporter expanded
 
       - name: Test
         run: flutter test --no-pub --reporter expanded

@@ -7,12 +7,16 @@ from app.services import google_drive_files
 
 
 class _FakeResponse:
-    def __init__(self, status_code: int, payload: dict):
+    def __init__(self, status_code: int, payload):
         self.status_code = status_code
         self._payload = payload
 
     def json(self):
         return self._payload
+
+    @property
+    def text(self):
+        return self._payload if isinstance(self._payload, str) else ""
 
 
 class _FakeClient:
@@ -175,6 +179,79 @@ class GoogleDriveFileAdapterTests(IsolatedAsyncioTestCase):
                 )
 
         self.assertEqual(raised.exception.status_code, 502)
+
+    async def test_google_doc_text_is_exported_as_plain_text(self):
+        read_drive_text = getattr(google_drive_files, "read_drive_text", None)
+        self.assertTrue(callable(read_drive_text))
+        if not callable(read_drive_text):
+            return
+
+        responses = [
+            _FakeResponse(
+                200,
+                {
+                    "id": "file-1",
+                    "name": "Roadmap",
+                    "mimeType": "application/vnd.google-apps.document",
+                },
+            ),
+            _FakeResponse(200, "Snapshot body"),
+        ]
+        calls: list[dict] = []
+        with (
+            patch.object(
+                google_drive_files,
+                "get_access_token",
+                AsyncMock(return_value="drive-token"),
+            ),
+            patch.object(
+                google_drive_files.httpx,
+                "AsyncClient",
+                side_effect=lambda **_kwargs: _FakeClient(responses, calls),
+            ),
+        ):
+            result = await read_drive_text(AsyncMock(), "user-a", "file-1")
+
+        self.assertTrue(result.supported)
+        self.assertEqual(result.text, "Snapshot body")
+        self.assertEqual(result.source_mime_type, "application/vnd.google-apps.document")
+        self.assertEqual(calls[1]["url"], "https://www.googleapis.com/drive/v3/files/file-1/export")
+        self.assertEqual(calls[1]["params"], {"mimeType": "text/plain"})
+
+    async def test_unsupported_binary_is_reported_without_media_download(self):
+        read_drive_text = getattr(google_drive_files, "read_drive_text", None)
+        self.assertTrue(callable(read_drive_text))
+        if not callable(read_drive_text):
+            return
+
+        responses = [
+            _FakeResponse(
+                200,
+                {
+                    "id": "file-1",
+                    "name": "Attachment.pdf",
+                    "mimeType": "application/pdf",
+                },
+            )
+        ]
+        calls: list[dict] = []
+        with (
+            patch.object(
+                google_drive_files,
+                "get_access_token",
+                AsyncMock(return_value="drive-token"),
+            ),
+            patch.object(
+                google_drive_files.httpx,
+                "AsyncClient",
+                side_effect=lambda **_kwargs: _FakeClient(responses, calls),
+            ),
+        ):
+            result = await read_drive_text(AsyncMock(), "user-a", "file-1")
+
+        self.assertFalse(result.supported)
+        self.assertIsNone(result.text)
+        self.assertEqual(len(calls), 1)
 
 
 if __name__ == "__main__":

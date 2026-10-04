@@ -149,8 +149,30 @@ async function installMocks(page) {
   });
 }
 
+function installDiagnostics(page, label) {
+  page.on('pageerror', (error) => {
+    console.log(
+      `drive_knowledge_page_error=${label}:${error.stack ?? error.message}`,
+    );
+  });
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      console.log(`drive_knowledge_console_error=${label}:${message.text()}`);
+    }
+  });
+  page.on('requestfailed', (request) => {
+    console.log(
+      `drive_knowledge_request_failed=${label}:${request.failure()?.errorText ?? 'unknown'}:${request.url()}`,
+    );
+  });
+}
+
 async function enableFlutterSemantics(page) {
-  await page.waitForSelector('flutter-view', { timeout: 30000 });
+  const flutterView = page.locator('flutter-view');
+  await flutterView.waitFor({ state: 'attached', timeout: 30000 });
+  const rootVisible = await flutterView.first().isVisible().catch(() => false);
+  console.log(`drive_knowledge_flutter_view=attached:visible=${rootVisible}`);
+
   const placeholder = page.locator('flt-semantics-placeholder');
   if ((await placeholder.count()) > 0) {
     await placeholder.first().evaluate((element) => element.click());
@@ -211,6 +233,7 @@ function record(check) {
 
 async function runAcceptance(context) {
   const page = await context.newPage();
+  installDiagnostics(page, 'drive_knowledge');
   await page.setViewportSize({ width: 1280, height: 1000 });
   await installMocks(page);
 

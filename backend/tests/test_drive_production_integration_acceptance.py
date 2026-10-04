@@ -2,6 +2,10 @@ import py_compile
 import unittest
 from pathlib import Path
 
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+
+from scripts import run_drive_knowledge_runtime_acceptance as runtime_acceptance
+
 
 class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
     def setUp(self):
@@ -81,6 +85,44 @@ class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
         self.assertIn("page.on('console'", source)
         self.assertIn("page.on('requestfailed'", source)
         self.assertNotIn("waitForSelector('flutter-view'", source)
+
+    def test_import_stage_failures_have_distinct_byte_safe_diagnostics(self):
+        classifier = getattr(runtime_acceptance, "_exit_code_for_stage_error", None)
+        self.assertTrue(callable(classifier))
+        if not callable(classifier):
+            return
+
+        cases = (
+            (AssertionError("HTTP 500"), 71),
+            (IntegrityError("insert", {}, RuntimeError("unique violation")), 72),
+            (SQLAlchemyError("database failure"), 73),
+            (RuntimeError("unexpected"), 74),
+        )
+        observed: set[int] = set()
+        for cause, expected in cases:
+            error = runtime_acceptance.AcceptanceStageError("import", cause)
+            code = classifier(error)
+            self.assertEqual(code, expected)
+            self.assertGreater(code, 0)
+            self.assertLess(code, 256)
+            observed.add(code)
+
+        self.assertEqual(len(observed), len(cases))
+        self.assertTrue(observed.isdisjoint(runtime_acceptance.STAGE_EXIT_CODES.values()))
+
+    def test_non_import_stage_keeps_existing_stage_exit_code(self):
+        classifier = getattr(runtime_acceptance, "_exit_code_for_stage_error", None)
+        self.assertTrue(callable(classifier))
+        if not callable(classifier):
+            return
+        error = runtime_acceptance.AcceptanceStageError(
+            "verify_import",
+            AssertionError("verification failed"),
+        )
+        self.assertEqual(
+            classifier(error),
+            runtime_acceptance.STAGE_EXIT_CODES["verify_import"],
+        )
 
 
 if __name__ == "__main__":

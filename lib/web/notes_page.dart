@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import 'note_api.dart';
+import 'note_drive_relations.dart';
 
 final _notesProvider = FutureProvider.family<_Workspace, String>((ref, query) async {
   final api = ref.read(noteApiProvider);
@@ -124,33 +125,39 @@ class _NotesPageState extends ConsumerState<NotesPage> {
                     itemBuilder: (_, index) {
                       final note = workspace.notes[index];
                       return Card(
-                        child: ListTile(
-                          onTap: () => _edit(workspace, note: note),
-                          leading: const Icon(Icons.description_outlined),
-                          title: Text(note.displayTitle),
-                          subtitle: Text(
-                            [
-                              if (note.body.trim().isNotEmpty) _plain(note.body),
-                              if (workspace.projectName(note.projectId) case final name?) name,
-                              if (note.updatedAt case final updated?)
-                                '更新 ${DateFormat('M/d HH:mm').format(updated.toLocal())}',
-                            ].join('\n'),
-                            maxLines: 4,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: PopupMenuButton<String>(
-                            tooltip: '筆記選項',
-                            onSelected: (action) {
-                              if (action == 'edit') _edit(workspace, note: note);
-                              if (action == 'links') _links(workspace, note);
-                              if (action == 'delete') _delete(note);
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'edit', child: Text('編輯')),
-                              PopupMenuItem(value: 'links', child: Text('雙向連結')),
-                              PopupMenuItem(value: 'delete', child: Text('刪除')),
-                            ],
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            ListTile(
+                              onTap: () => _edit(workspace, note: note),
+                              leading: const Icon(Icons.description_outlined),
+                              title: Text(note.displayTitle),
+                              subtitle: Text(
+                                [
+                                  if (note.body.trim().isNotEmpty) _plain(note.body),
+                                  if (workspace.projectName(note.projectId) case final name?) name,
+                                  if (note.updatedAt case final updated?)
+                                    '更新 ${DateFormat('M/d HH:mm').format(updated.toLocal())}',
+                                ].join('\n'),
+                                maxLines: 4,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: PopupMenuButton<String>(
+                                tooltip: '筆記選項',
+                                onSelected: (action) {
+                                  if (action == 'edit') _edit(workspace, note: note);
+                                  if (action == 'links') _links(workspace, note);
+                                  if (action == 'delete') _delete(note);
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(value: 'edit', child: Text('編輯')),
+                                  PopupMenuItem(value: 'links', child: Text('雙向連結')),
+                                  PopupMenuItem(value: 'delete', child: Text('刪除')),
+                                ],
+                              ),
+                            ),
+                            NoteDriveRelations(noteId: note.id),
+                          ],
                         ),
                       );
                     },

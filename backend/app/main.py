@@ -11,6 +11,7 @@ from app import config as app_config
 from app.api.activity import router as activity_router
 from app.api.auth import SESSION_COOKIE, router as auth_router
 from app.api.drive import router as drive_router
+from app.api.drive_note_import import router as drive_note_import_router
 from app.api.google_integrations import router as google_integrations_router
 from app.api.google_project import router as google_project_router
 from app.api.habits import router as habits_router
@@ -137,6 +138,7 @@ app.include_router(habits_router, prefix="/api/v1")
 app.include_router(shopping_router, prefix="/api/v1")
 app.include_router(templates_router, prefix="/api/v1")
 app.include_router(drive_router, prefix="/api/v1")
+app.include_router(drive_note_import_router, prefix="/api/v1")
 app.include_router(google_integrations_router, prefix="/api/v1")
 app.include_router(google_project_router, prefix="/api/v1")
 app.include_router(activity_router, prefix="/api/v1")

@@ -15,6 +15,9 @@ class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
         self.workflow = (
             self.repo_root / ".github/workflows/drive-knowledge-runtime-acceptance.yml"
         )
+        self.ui_script = (
+            self.repo_root / ".github/scripts/verify_drive_knowledge_production.mjs"
+        )
         self.config_source = (
             self.repo_root / "backend/app/config.py"
         ).read_text(encoding="utf-8")
@@ -69,6 +72,15 @@ class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
             'drive_external_ai_integration=NOT_VERIFIED reason=production_provider_adapter_not_enabled',
             source,
         )
+
+    def test_drive_knowledge_ui_acceptance_waits_for_attached_flutter_root_with_diagnostics(self):
+        source = self.ui_script.read_text(encoding="utf-8")
+        self.assertIn("page.locator('flutter-view')", source)
+        self.assertIn("state: 'attached'", source)
+        self.assertIn("page.on('pageerror'", source)
+        self.assertIn("page.on('console'", source)
+        self.assertIn("page.on('requestfailed'", source)
+        self.assertNotIn("waitForSelector('flutter-view'", source)
 
 
 if __name__ == "__main__":

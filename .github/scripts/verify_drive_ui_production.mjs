@@ -173,6 +173,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function candidates(page, text) {
   const pattern = text instanceof RegExp ? text : new RegExp(`^${esc(text)}$`);
+  const loosePattern = text instanceof RegExp ? text : new RegExp(esc(text));
   return [
     page.getByRole('button', { name: pattern }),
     page.getByRole('switch', { name: pattern }),
@@ -180,6 +181,7 @@ function candidates(page, text) {
     page.getByRole('menuitem', { name: pattern }),
     page.getByLabel(pattern),
     page.getByText(pattern),
+    page.getByText(loosePattern),
   ];
 }
 

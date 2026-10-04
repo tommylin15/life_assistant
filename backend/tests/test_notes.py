@@ -195,7 +195,7 @@ class NotesRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(target_ctx.exception.status_code, 404)
 
-    async def test_delete_note_cleans_links_and_tag_relations_before_delete(self):
+    async def test_delete_note_cleans_links_tags_and_drive_relations_before_delete(self):
         from app.api.notes import delete_note
 
         note = Note(id="a", title="A", body="")
@@ -207,7 +207,7 @@ class NotesRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
             patch("app.api.notes.fail_execution", new=AsyncMock()),
         ):
             await delete_note("a", {"sub": "u"}, db)
-        self.assertEqual(db.execute.await_count, 2)
+        self.assertEqual(db.execute.await_count, 3)
         db.delete.assert_awaited_once_with(note)
         db.commit.assert_awaited()
 

@@ -14,6 +14,10 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
     def setUpClass(cls):
         cls.text = WORKFLOW.read_text(encoding="utf-8")
 
+    def test_latest_main_release_supersedes_stale_deploy_run(self):
+        self.assertIn("group: deploy-cloud-run-main", self.text)
+        self.assertIn("cancel-in-progress: true", self.text)
+
     def test_batch_fast_forward_cannot_skip_backend_release(self):
         self.assertNotIn("git diff --quiet HEAD^ HEAD -- backend", self.text)
         self.assertNotIn("backend_changes.outputs.deploy", self.text)

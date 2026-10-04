@@ -26,6 +26,10 @@ COLON_COMMA_BUNDLE_KEYS = (
     "DATABASE_URL",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
+    "AI_ENRICHMENT_PROVIDER",
+    "AI_ENRICHMENT_MODEL",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
 )
 
 
@@ -346,6 +350,10 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:8081/auth/callback"
     frontend_url: str = "http://localhost:5000"
+    ai_enrichment_provider: str = "disabled"
+    ai_enrichment_model: str = ""
+    openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env", env_file_encoding="utf-8")
 

@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 import httpx
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.api.auth import current_user
 from app.confirmation import CONFIRMATION_HEADER, explicit_confirmation_value
@@ -49,12 +50,42 @@ STAGE_EXIT_CODES = {
     "cleanup": 70,
 }
 
+IMPORT_FAILURE_EXIT_CODES = {
+    "http_contract": 71,
+    "integrity": 72,
+    "database": 73,
+    "unexpected": 74,
+}
+
 
 class AcceptanceStageError(RuntimeError):
     def __init__(self, stage: str, cause: BaseException) -> None:
         super().__init__(f"{stage}: {type(cause).__name__}: {cause}")
         self.stage = stage
         self.cause = cause
+
+
+def _exit_code_for_stage_error(error: AcceptanceStageError) -> int:
+    if error.stage != "import":
+        return STAGE_EXIT_CODES.get(error.stage, 1)
+    cause = error.cause
+    if isinstance(cause, AssertionError):
+        return IMPORT_FAILURE_EXIT_CODES["http_contract"]
+    if isinstance(cause, IntegrityError):
+        return IMPORT_FAILURE_EXIT_CODES["integrity"]
+    if isinstance(cause, SQLAlchemyError):
+        return IMPORT_FAILURE_EXIT_CODES["database"]
+    return IMPORT_FAILURE_EXIT_CODES["unexpected"]
+
+
+def _failure_category(error: AcceptanceStageError) -> str:
+    if error.stage != "import":
+        return "stage_failure"
+    code = _exit_code_for_stage_error(error)
+    for category, category_code in IMPORT_FAILURE_EXIT_CODES.items():
+        if code == category_code:
+            return category
+    return "unexpected"
 
 
 async def _acceptance_user() -> dict:
@@ -360,7 +391,7 @@ async def run_acceptance() -> None:
                 raise AcceptanceStageError("cleanup", cleanup_error) from cleanup_error
             print(
                 "drive_knowledge_runtime_cleanup_error="
-                f"{type(cleanup_error).__name__}:{cleanup_error}",
+                f"{type(cleanup_error).__name__}",
                 flush=True,
             )
 
@@ -376,14 +407,14 @@ def main() -> int:
     except AcceptanceStageError as exc:
         print(
             f"drive_knowledge_runtime_acceptance=FAIL stage={exc.stage} "
-            f"error={type(exc.cause).__name__}:{exc.cause}",
+            f"category={_failure_category(exc)} error={type(exc.cause).__name__}",
             flush=True,
         )
-        return STAGE_EXIT_CODES.get(exc.stage, 1)
+        return _exit_code_for_stage_error(exc)
     except BaseException as exc:
         print(
             "drive_knowledge_runtime_acceptance=FAIL stage=unknown "
-            f"error={type(exc).__name__}:{exc}",
+            f"error={type(exc).__name__}",
             flush=True,
         )
         return 1

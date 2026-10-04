@@ -16,11 +16,17 @@ Uri _driveApiUri(String path) {
 
 abstract class DriveApi {
   Future<List<Map<String, dynamic>>> getDocuments();
-  Future<Map<String, dynamic>> getPickerConfig();
+  Future<Map<String, dynamic>> getPickerConfig() {
+    throw UnsupportedError('Drive Picker configuration is not implemented.');
+  }
+
   Future<List<Map<String, dynamic>>> registerDocuments(
     List<String> googleFileIds, {
     String? workspaceId,
-  });
+  }) {
+    throw UnsupportedError('Drive document registration is not implemented.');
+  }
+
   Future<Map<String, dynamic>> getEnrichmentSettings();
   Future<Map<String, dynamic>> updateEnrichmentSettings(
     Map<String, dynamic> body,

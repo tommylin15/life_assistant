@@ -273,6 +273,13 @@ async def _require_project(db: AsyncSession, project_id: str) -> Project:
     return project
 
 
+async def _require_note(db: AsyncSession, note_id: str) -> Note:
+    note = await db.get(Note, note_id)
+    if note is None:
+        raise HTTPException(404, "Note not found")
+    return note
+
+
 async def _apply_note_tags(
     db: AsyncSession,
     note_id: str,
@@ -325,6 +332,91 @@ async def import_document_to_note(
     )
     await _apply_note_tags(db, note.id, tags)
     return note
+
+
+async def attach_document_note(
+    db: AsyncSession,
+    user_sub: str,
+    document_id: str,
+    note_id: str,
+) -> tuple[NoteDriveDocument, bool]:
+    document = await get_document(db, user_sub, document_id)
+    await _require_note(db, note_id)
+    relation = await db.get(
+        NoteDriveDocument,
+        {
+            "note_id": note_id,
+            "drive_document_id": document.id,
+        },
+    )
+    if relation is not None:
+        return relation, False
+    relation = NoteDriveDocument(
+        note_id=note_id,
+        drive_document_id=document.id,
+        relation_type="related",
+        link_source="manual",
+    )
+    db.add(relation)
+    return relation, True
+
+
+async def detach_document_note(
+    db: AsyncSession,
+    user_sub: str,
+    document_id: str,
+    note_id: str,
+) -> bool:
+    document = await get_document(db, user_sub, document_id)
+    relation = await db.get(
+        NoteDriveDocument,
+        {
+            "note_id": note_id,
+            "drive_document_id": document.id,
+        },
+    )
+    if relation is None:
+        return False
+    if relation.relation_type == "source_import":
+        raise HTTPException(409, "Drive source import relation cannot be unlinked")
+    await db.delete(relation)
+    return True
+
+
+async def list_document_note_relations(
+    db: AsyncSession,
+    user_sub: str,
+    document_id: str,
+) -> list[tuple[Note, NoteDriveDocument]]:
+    document = await get_document(db, user_sub, document_id)
+    result = await db.execute(
+        select(Note, NoteDriveDocument)
+        .join(NoteDriveDocument, NoteDriveDocument.note_id == Note.id)
+        .where(NoteDriveDocument.drive_document_id == document.id)
+        .order_by(NoteDriveDocument.created_at.asc(), Note.id.asc())
+    )
+    return list(result.all())
+
+
+async def list_note_document_relations(
+    db: AsyncSession,
+    user_sub: str,
+    note_id: str,
+) -> list[tuple[DriveDocument, NoteDriveDocument]]:
+    await _require_note(db, note_id)
+    result = await db.execute(
+        select(DriveDocument, NoteDriveDocument)
+        .join(
+            NoteDriveDocument,
+            NoteDriveDocument.drive_document_id == DriveDocument.id,
+        )
+        .where(
+            NoteDriveDocument.note_id == note_id,
+            DriveDocument.user_sub == user_sub,
+        )
+        .order_by(NoteDriveDocument.created_at.asc(), DriveDocument.id.asc())
+    )
+    return list(result.all())
 
 
 async def list_project_documents(

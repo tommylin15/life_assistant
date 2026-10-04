@@ -118,7 +118,7 @@ class DriveNoteImportServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(entity_tags), 1)
         self.assertEqual(entity_tags[0].entity_type, "note")
         self.assertEqual(entity_tags[0].entity_id, note.id)
-        db.commit.assert_awaited_once()
+        db.commit.assert_not_awaited()
 
     async def test_unsupported_binary_returns_stable_422_without_creating_note(self):
         import_document_to_note = getattr(

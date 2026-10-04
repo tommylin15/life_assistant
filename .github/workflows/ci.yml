@@ -114,6 +114,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Check deployment acceptance syntax
         run: |
           bash -n scripts/bootstrap_gcp_wif.sh
@@ -123,3 +127,6 @@ jobs:
           bash -n .github/scripts/run_cloud_run_job_with_diagnostics.sh
           node --check .github/scripts/verify_task_ui_production.mjs
           node --check .github/scripts/verify_project_ui_production.mjs
+          node --check .github/scripts/verify_drive_knowledge_production.mjs
+          python -m py_compile backend/scripts/run_drive_knowledge_runtime_acceptance.py
+          python -m py_compile backend/scripts/run_drive_google_integration_acceptance.py

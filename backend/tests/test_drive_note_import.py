@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.drive import DriveDocument, NoteDriveDocument
+from app.models.migration_support import EntityTag, Tag
 from app.models.note import Note
 from app.services import drive_documents
 
@@ -67,6 +68,9 @@ class DriveNoteImportServiceTests(unittest.IsolatedAsyncioTestCase):
         db.flush = AsyncMock()
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
+        missing_tag = MagicMock()
+        missing_tag.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=missing_tag)
 
         with (
             patch(
@@ -91,7 +95,7 @@ class DriveNoteImportServiceTests(unittest.IsolatedAsyncioTestCase):
                 document.id,
                 title=None,
                 project_id=None,
-                tags=[],
+                tags=["旅行"],
             )
 
         self.assertIsInstance(note, Note)
@@ -108,6 +112,12 @@ class DriveNoteImportServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(relations[0].drive_document_id, document.id)
         self.assertEqual(relations[0].relation_type, "source_import")
         self.assertEqual(relations[0].link_source, "import")
+        tags = [item for item in added if isinstance(item, Tag)]
+        self.assertEqual([item.name for item in tags], ["旅行"])
+        entity_tags = [item for item in added if isinstance(item, EntityTag)]
+        self.assertEqual(len(entity_tags), 1)
+        self.assertEqual(entity_tags[0].entity_type, "note")
+        self.assertEqual(entity_tags[0].entity_id, note.id)
         db.commit.assert_awaited_once()
 
     async def test_unsupported_binary_returns_stable_422_without_creating_note(self):

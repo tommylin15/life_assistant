@@ -192,7 +192,13 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('drive-note-import-d1')));
     await tester.pumpAndSettle();
-    expect(find.text('轉成筆記'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('轉成筆記'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.enterText(
       find.byKey(const ValueKey('drive-note-title-field')),

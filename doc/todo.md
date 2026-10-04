@@ -1,63 +1,45 @@
 # life_assistant — Active TODO
 
-最後更新：2026-10-02
+最後更新：2026-10-04
 
 > 本檔只保留**目前 active / next / non-blocking backlog**。正式封板進度以 `progress.md` 為準；完成條件與 runtime evidence 以 `acceptance.md`、GitHub Actions 與 deployed runtime 為準。不要在本檔維護另一套歷史完成清單。
 
 ## Current
 
-### #4 — Task 8：智能整理 review UI
+### #5 — Task 9：Drive Knowledge 正式交付與 production acceptance
 
-狀態：**PARTIAL / IN PROGRESS — design & implementation survey；product implementation NOT STARTED**。
+狀態：**NOT STARTED**。
 
-已完成的 current-package discovery：
+依使用者指示，本輪在 Task 8 封板並回寫文件後停止，因此目前沒有開始 Task 9 implementation、migration、deployment 或 production integration work。
 
-- 已盤點 GitHub `main` 的 Flutter route / App Shell、`IntegrationsPage`、shared `ApiClient`、Projects UI/test pattern、Warm Knowledge shared components，以及 Drive enrichment backend endpoints / schemas。
-- 確認 repo 目前沒有獨立 Drive review page，也沒有 Drive-specific Flutter API facade。
-- 確認現有 `IntegrationsPage` 的主要責任是 Google 授權、API 驗收與 legacy Drive Bridge ensure；智能整理 review workflow 應與授權/整合驗收 UI 分離。
-- 已固定沿用 #3 provider-agnostic enrichment contract，不在 Flutter domain code 綁死單一 AI provider。
+Task 9 重新啟動時的第一個 concrete gate：
 
-下一個 concrete gate：
-
-- 完成 Task 8 architectural design/spec，明確定義 Drive Knowledge / 智能整理 review surface、狀態模型、資料流與錯誤/partial-success presentation。
-- Design/spec 核准後才進 implementation plan 與 TDD。
-- 依 Warm Knowledge Design System 實作 AI 狀態、建議檢視、接受/拒絕、consent UX 與 manual fallback。
-- Related Note suggestion 只有使用者接受後才成為 authoritative Drive↔Note relation；拒絕不建立 relation。
-- UI 必須清楚呈現 disabled / unavailable / succeeded / partial / failed / skipped 等狀態，不把 AI failure 包裝成 core Drive / Project failure。
-- consent OFF 時不得暗示已送出內容做 AI 分析；仍保留手動 Tag / Note relationship 能力。
-- 完成 Flutter tests、Analyze、Web build，以及對應 browser/mobile acceptance 後才可進下一 gate。
-
-尚未完成：
-
-- Task 8 written design/spec。
-- implementation plan。
-- product code。
-- Task 8 Flutter tests / Analyze / Web build。
-- Firebase deployment / production browser/mobile acceptance。
-
-因此 #4 尚不計入 DONE；Closure progress 維持 **3/11 = 27.3%**。
+- 先讀取當時 GitHub `main` 與 runtime evidence，重新確認 Task 8/Task 7 依賴沒有漂移。
+- 盤點 true Drive / external-AI production delivery 所需 credential/config contract、migration、runtime/integration acceptance。
+- 不把 Task 8 的 mocked deterministic production UI acceptance 誤稱為 Task 9 的真實外部 provider integration evidence。
+- 最終仍需 CI、migration、Firebase、Cloud Run、authenticated runtime、true Drive integration evidence 完整後才可封板。
 
 ## Just Closed
 
-### #3 — Task 7：provider-agnostic AI enrichment
+### #4 — Task 8：智能整理 review UI
 
-狀態：**DONE / PASS — backend foundation**。
+狀態：**DONE / PASS**。
 
 封板 evidence：
 
-- final release SHA `cd2fdcd5645a9f73141c7824b59a8349d15bb86c`。
-- provider-agnostic adapter boundary、privacy/consent、stable fingerprint cache、shared Tag reuse、bounded Note candidates、accept/reject suggestion persistence、partial-success semantics 已落地。
-- Alembic head `20261002_0009`；enrichment runs / Note-link suggestions persistence 已加入。
-- CI #463 / run `36994280896` PASS；backend **315/315** tests PASS，Flutter / deployment-scripts PASS。
-- Firebase Hosting #281 / run `36994497368` PASS。
-- Deploy Cloud Run #335 / run `36994497260` PASS；migration、deploy、health/readiness、401、cloud-domain、Checklist、idempotency、Google failure-path、SQLite success/failure、image retention 全 PASS。
-- Drive AI Enrichment Runtime Acceptance #3 / run `36997713417` PASS；exact release SHA / image verified；Cloud Run execution `life-assistant-drive-ai-acceptance-52fj9` PASS。
-- 詳細 checkpoint：`doc/drive_ai_enrichment_checkpoint_v0_1.md`。
-- 本包不宣稱 concrete external-AI provider 已接通；repo 尚無核准 vendor credential/config contract，default resolver 維持 disabled/unavailable degraded mode。真實 provider / Drive production delivery 留在後續 integration package。
+- final UI acceptance release SHA `78cdb43645f606d63b8a6171e53babec9f26de10`。
+- 獨立 `DrivePage` / `DriveSettingsPage`、Drive API facade、`/more/drive` / `/more/drive/settings` navigation 已落地。
+- provider-neutral presentation、explicit content consent、cache state、related Note suggestion accept/reject、force re-analysis、partial/failed/skipped fallback 與 manual/degraded behavior 已落地。
+- CI #482 / run `37168408452` PASS：backend、deployment scripts、Flutter Analyze、Drive navigation、完整 Flutter tests、Web build、branding verify 全 PASS。
+- Firebase Hosting #300 / run `37168500908` PASS：build、release stamp、deploy、Hosting verify、Task UI、Project UI production acceptance PASS。
+- Notes UI Acceptance #65 / run `37168620482` PASS：Notes production UI PASS；Drive desktop provider-neutral review、suggestion accept、force re-analysis、settings consent save、mobile review controls、mobile settings 全 PASS；final `drive_ui_acceptance=PASS`。
+- Backend/runtime product code在最後兩個 acceptance-only commits 未變；已驗證基線 Deploy Cloud Run #352 / run `37130495284` PASS，Post-deploy Runtime Acceptance #17 / run `37132443415` PASS。
+- 專項 checkpoint：`doc/drive_intelligent_organization_review_ui_checkpoint_v0_1.md`。
+- Closure progress 已更新為 **4/11 = 36.4%**。
 
 ## Next
 
-1. #5 — Task 9：Drive Knowledge production delivery + acceptance。
+1. #5 — Task 9：Drive Knowledge production delivery + acceptance（**NOT STARTED，本輪停止**）。
 2. #6–#9 — Habits / Shopping / Calendar / Activity + Integrations productization。
 3. #10 — Integration / foundation tail closure。
 4. #11 — Phase 1 final Release Gate / 封板 checkpoint。

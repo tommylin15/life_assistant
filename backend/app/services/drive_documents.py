@@ -1,17 +1,20 @@
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.drive import (
     DriveDocument,
     DriveWorkspace,
     DriveWorkspaceDocument,
+    NoteDriveDocument,
     ProjectDriveDocument,
 )
+from app.models.migration_support import EntityTag, Tag
+from app.models.note import Note
 from app.models.project import Project
-from app.services.google_drive_files import get_drive_file_metadata
+from app.services.google_drive_files import get_drive_file_metadata, read_drive_text
 
 
 async def get_workspace(
@@ -268,6 +271,60 @@ async def _require_project(db: AsyncSession, project_id: str) -> Project:
     if project is None:
         raise HTTPException(404, "Project not found")
     return project
+
+
+async def _apply_note_tags(
+    db: AsyncSession,
+    note_id: str,
+    tag_names: list[str],
+) -> None:
+    for name in tag_names:
+        tag = (
+            await db.execute(
+                select(Tag).where(func.lower(Tag.name) == name.casefold()).limit(1)
+            )
+        ).scalar_one_or_none()
+        if tag is None:
+            tag = Tag(id=str(uuid.uuid4()), name=name)
+            db.add(tag)
+            await db.flush()
+        db.add(EntityTag(entity_type="note", entity_id=note_id, tag_id=tag.id))
+
+
+async def import_document_to_note(
+    db: AsyncSession,
+    user_sub: str,
+    document_id: str,
+    *,
+    title: str | None,
+    project_id: str | None,
+    tags: list[str],
+) -> Note:
+    document = await get_document(db, user_sub, document_id)
+    if project_id is not None:
+        await _require_project(db, project_id)
+
+    snapshot = await read_drive_text(db, user_sub, document.google_file_id)
+    if not snapshot.supported or snapshot.text is None:
+        raise HTTPException(422, "drive_text_unavailable")
+
+    note = Note(
+        id=str(uuid.uuid4()),
+        title=document.name if title is None else title,
+        body=snapshot.text,
+        project_id=project_id,
+    )
+    db.add(note)
+    db.add(
+        NoteDriveDocument(
+            note_id=note.id,
+            drive_document_id=document.id,
+            relation_type="source_import",
+            link_source="import",
+        )
+    )
+    await _apply_note_tags(db, note.id, tags)
+    return note
 
 
 async def list_project_documents(

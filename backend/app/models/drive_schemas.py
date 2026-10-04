@@ -124,6 +124,48 @@ class DriveProjectLinksOut(BaseModel):
     returned: int
 
 
+class DriveNoteImportRequest(BaseModel):
+    title: str | None = Field(default=None, max_length=2000)
+    project_id: str | None = Field(default=None, min_length=1, max_length=36)
+    tags: list[str] = Field(default_factory=list, max_length=100)
+    model_config = {"extra": "forbid"}
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip()
+
+    @field_validator("project_id")
+    @classmethod
+    def normalize_project_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Project ID cannot be blank")
+        return normalized
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in values:
+            value = raw.strip()
+            if not value:
+                raise ValueError("Tag cannot be blank")
+            if len(value) > 255:
+                raise ValueError("Tag is too long")
+            key = value.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(value)
+        return normalized
+
+
 class PickerConfigOut(BaseModel):
     client_id: str
     developer_key: str

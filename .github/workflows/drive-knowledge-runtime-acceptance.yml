@@ -1,0 +1,275 @@
+name: Drive Knowledge Runtime Acceptance
+
+on:
+  workflow_run:
+    workflows: [Post-deploy Runtime Acceptance]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: drive-knowledge-runtime-acceptance-main
+  cancel-in-progress: false
+
+jobs:
+  accept:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      ARTIFACT_REPOSITORY: cloud-run-source-deploy
+      BACKEND_IMAGE: life-assistant-backend
+      BACKEND_SERVICE: life-assistant-api
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      ACCEPTANCE_JOB: life-assistant-postdeploy-acceptance
+      GCP_NETWORK: janusai-lake-poc
+      GCP_SUBNET: janusai-lake-poc-uscentral1
+      DATABASE_HOST: 10.42.0.5
+      DATABASE_PORT: '5432'
+      DATABASE_NAME: life_assistant
+      DATABASE_USER: life_assistant_user
+      DATABASE_SSLMODE: require
+      DRIVE_ACCEPTANCE_USER_SUB: ${{ vars.DRIVE_ACCEPTANCE_USER_SUB }}
+      DRIVE_ACCEPTANCE_GOOGLE_FILE_ID: ${{ vars.DRIVE_ACCEPTANCE_GOOGLE_FILE_ID }}
+
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Resolve immutable release image
+        id: image
+        run: |
+          IMAGE_BASE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${BACKEND_IMAGE}"
+          IMAGE_TAG="${IMAGE_BASE}:${RELEASE_SHA}"
+          IMAGE_DIGEST="$(gcloud artifacts docker images describe "$IMAGE_TAG" \
+            --project "$GCP_PROJECT_ID" \
+            --format='value(image_summary.digest)')"
+          test -n "$IMAGE_DIGEST"
+          echo "ref=${IMAGE_BASE}@${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "drive_knowledge_release_image=PASS sha=$RELEASE_SHA digest=$IMAGE_DIGEST"
+
+      - name: Inspect deployed Picker configuration
+        id: picker_config
+        run: |
+          gcloud run services describe "$BACKEND_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format=json > /tmp/drive-service.json
+          python - <<'PY'
+          import json
+          import os
+
+          payload = json.load(open('/tmp/drive-service.json', encoding='utf-8'))
+          containers = (
+              payload.get('spec', {})
+              .get('template', {})
+              .get('spec', {})
+              .get('containers', [])
+          )
+          env_rows = containers[0].get('env', []) if containers else []
+          env_by_name = {row.get('name'): row for row in env_rows if row.get('name')}
+
+          def configured(name: str) -> bool:
+              row = env_by_name.get(name)
+              if not row:
+                  return False
+              if str(row.get('value', '')).strip():
+                  return True
+              return bool(row.get('valueSource') or row.get('valueFrom'))
+
+          developer_key = configured('GOOGLE_PICKER_DEVELOPER_KEY')
+          app_id = configured('GOOGLE_PICKER_APP_ID')
+          ready = developer_key and app_id
+          print(
+              'drive_picker_deployment_config='
+              + ('PASS' if ready else 'NOT_VERIFIED')
+              + f' developer_key={"present" if developer_key else "missing"}'
+              + f' app_id={"present" if app_id else "missing"}'
+          )
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
+              handle.write(f'picker_ready={str(ready).lower()}\n')
+              handle.write(f'developer_key_present={str(developer_key).lower()}\n')
+              handle.write(f'app_id_present={str(app_id).lower()}\n')
+          PY
+
+      - name: Configure shared acceptance runner
+        run: |
+          gcloud run jobs deploy "$ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "${{ steps.image.outputs.ref }}" \
+            --command python \
+            --args=-m,scripts.run_drive_knowledge_runtime_acceptance \
+            --network "$GCP_NETWORK" \
+            --subnet "$GCP_SUBNET" \
+            --vpc-egress private-ranges-only \
+            --max-retries 0 \
+            --task-timeout 10m \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,DRIVE_ACCEPTANCE_USER_SUB=$DRIVE_ACCEPTANCE_USER_SUB,DRIVE_ACCEPTANCE_GOOGLE_FILE_ID=$DRIVE_ACCEPTANCE_GOOGLE_FILE_ID" \
+            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --quiet
+
+      - name: Run Drive Knowledge synthetic runtime acceptance
+        id: synthetic_runtime
+        continue-on-error: true
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_drive_knowledge_runtime_acceptance \
+            --task-timeout 10m \
+            --wait \
+            --quiet
+
+      - name: Run real Google Drive integration acceptance when fixture exists
+        id: real_google
+        continue-on-error: true
+        run: |
+          if [ -z "$DRIVE_ACCEPTANCE_USER_SUB" ] || [ -z "$DRIVE_ACCEPTANCE_GOOGLE_FILE_ID" ]; then
+            echo "drive_google_integration_acceptance=NOT_VERIFIED reason=picker_selected_fixture_not_configured"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_drive_google_integration_acceptance \
+            --task-timeout 10m \
+            --wait \
+            --quiet
+
+      - name: Verify exact Firebase release is live
+        id: firebase_release
+        continue-on-error: true
+        run: |
+          BASE_URL="https://${GCP_PROJECT_ID}.web.app"
+          REMOTE_RELEASE=""
+          for attempt in $(seq 1 36); do
+            REMOTE_RELEASE="$(curl --fail --silent --show-error \
+              --retry 2 --retry-delay 1 --retry-all-errors \
+              -H 'Cache-Control: no-cache' \
+              "$BASE_URL/release.txt?release=$RELEASE_SHA&attempt=$attempt" || true)"
+            if [ "$REMOTE_RELEASE" = "$RELEASE_SHA" ]; then
+              echo "drive_knowledge_frontend_release=PASS attempt=$attempt sha=$REMOTE_RELEASE"
+              exit 0
+            fi
+            echo "drive_knowledge_frontend_release=WAIT attempt=$attempt expected=$RELEASE_SHA actual=${REMOTE_RELEASE:-<unavailable>}"
+            sleep 5
+          done
+          echo "drive_knowledge_frontend_release=FAIL expected=$RELEASE_SHA actual=${REMOTE_RELEASE:-<unavailable>}" >&2
+          exit 1
+
+      - name: Verify OAuth client configuration through public login redirect
+        id: oauth_config
+        continue-on-error: true
+        run: |
+          BASE_URL="https://${GCP_PROJECT_ID}.web.app"
+          HEADERS="$(mktemp)"
+          STATUS="$(curl --silent --show-error \
+            --output /dev/null \
+            --dump-header "$HEADERS" \
+            --write-out '%{http_code}' \
+            "$BASE_URL/auth/login")"
+          case "$STATUS" in 302|303|307|308) ;; *) exit 1 ;; esac
+          LOCATION="$(tr -d '\r' < "$HEADERS" | awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/^location:[[:space:]]*/, ""); print; exit}')"
+          python - "$LOCATION" <<'PY'
+          import sys
+          from urllib.parse import parse_qs, urlparse
+          location = sys.argv[1]
+          parsed = urlparse(location)
+          query = parse_qs(parsed.query)
+          assert parsed.hostname == 'accounts.google.com', parsed.hostname
+          assert query.get('client_id', [''])[0].strip(), 'missing OAuth client_id'
+          print('drive_oauth_client_config=PASS')
+          PY
+
+      - name: Install production UI acceptance tooling
+        if: steps.firebase_release.outcome == 'success'
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Run Drive Knowledge production UI acceptance
+        id: production_ui
+        if: steps.firebase_release.outcome == 'success'
+        continue-on-error: true
+        run: |
+          BASE_URL="https://${GCP_PROJECT_ID}.web.app" \
+            node .github/scripts/verify_drive_knowledge_production.mjs
+
+      - name: Record live external-AI status
+        run: |
+          echo "drive_external_ai_integration=NOT_VERIFIED reason=production_provider_adapter_not_enabled"
+          echo "Synthetic provider orchestration is covered by Post-deploy Runtime Acceptance; this status is not a live model PASS."
+
+      - name: Write Drive Knowledge acceptance summary
+        if: always()
+        run: |
+          {
+            echo "## Drive Knowledge acceptance — $RELEASE_SHA"
+            echo
+            echo "- Synthetic backend runtime: ${{ steps.synthetic_runtime.outcome }}"
+            echo "- Deployed production UI artifact: ${{ steps.production_ui.outcome }}"
+            echo "- OAuth client redirect: ${{ steps.oauth_config.outcome }}"
+            echo "- Picker developer key present: ${{ steps.picker_config.outputs.developer_key_present }}"
+            echo "- Picker app ID present: ${{ steps.picker_config.outputs.app_id_present }}"
+            if [ "${{ steps.real_google.outputs.configured }}" = "true" ]; then
+              echo "- Real Google Drive integration fixture: configured (${{ steps.real_google.outcome }})"
+            else
+              echo "- Real Google Drive integration fixture: NOT VERIFIED (no explicit Picker-selected fixture configured)"
+            fi
+            echo "- Live external AI provider: NOT VERIFIED"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail mandatory Drive Knowledge acceptance gates
+        if: always()
+        run: |
+          FAILED=0
+          if [ "${{ steps.synthetic_runtime.outcome }}" != "success" ]; then
+            echo "::error::Drive Knowledge synthetic runtime acceptance failed."
+            FAILED=1
+          fi
+          if [ "${{ steps.firebase_release.outcome }}" != "success" ]; then
+            echo "::error::Exact Firebase release was not observed."
+            FAILED=1
+          fi
+          if [ "${{ steps.production_ui.outcome }}" != "success" ]; then
+            echo "::error::Drive Knowledge production UI acceptance failed."
+            FAILED=1
+          fi
+          if [ "${{ steps.oauth_config.outcome }}" != "success" ]; then
+            echo "::error::OAuth client configuration check failed."
+            FAILED=1
+          fi
+          if [ "${{ steps.picker_config.outputs.picker_ready }}" != "true" ]; then
+            echo "::error::Google Picker deployment config is incomplete; Task 9 cannot be production-ready."
+            FAILED=1
+          fi
+          if [ "${{ steps.real_google.outputs.configured }}" = "true" ] && [ "${{ steps.real_google.outcome }}" != "success" ]; then
+            echo "::error::Configured real Google Drive integration acceptance failed."
+            FAILED=1
+          fi
+          exit "$FAILED"

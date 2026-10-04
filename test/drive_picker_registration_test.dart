@@ -7,7 +7,7 @@ import 'package:life_assistant/web/drive_page.dart';
 import 'package:life_assistant/web/google_drive_picker.dart';
 import 'package:life_assistant/web/note_api.dart';
 
-class _FakeDriveApi implements DriveApi {
+class _FakeDriveApi implements DriveApi, DrivePickerApi {
   final List<Map<String, dynamic>> documents = [];
   final List<List<String>> registrations = [];
 
@@ -139,6 +139,7 @@ Future<void> _pump(
     ProviderScope(
       overrides: [
         driveApiProvider.overrideWithValue(api),
+        drivePickerApiProvider.overrideWithValue(api),
         googleDrivePickerProvider.overrideWithValue(picker),
         noteApiProvider.overrideWithValue(_FakeNoteApi()),
       ],

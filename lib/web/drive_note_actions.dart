@@ -19,27 +19,8 @@ class DriveNoteActions extends ConsumerStatefulWidget {
 
 class _DriveNoteActionsState extends ConsumerState<DriveNoteActions> {
   bool _busy = false;
-  List<Map<String, dynamic>> _relations = const [];
 
   String get _documentId => widget.document['id']?.toString() ?? '';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadRelations();
-  }
-
-  Future<void> _loadRelations() async {
-    if (_documentId.isEmpty) return;
-    try {
-      final relations =
-          await ref.read(driveNoteApiProvider).getDocumentNotes(_documentId);
-      if (!mounted) return;
-      setState(() => _relations = relations);
-    } catch (_) {
-      // Relationship metadata is supplemental and must not hide the Drive file.
-    }
-  }
 
   Future<void> _importToNote() async {
     if (_busy || _documentId.isEmpty) return;
@@ -70,7 +51,6 @@ class _DriveNoteActionsState extends ConsumerState<DriveNoteActions> {
           'tags': result.tags,
         },
       );
-      await _loadRelations();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已轉成筆記。Drive 原始文件不會被修改。')),
@@ -111,7 +91,6 @@ class _DriveNoteActionsState extends ConsumerState<DriveNoteActions> {
             _documentId,
             noteId,
           );
-      await _loadRelations();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已建立 Drive 與筆記的手動關聯。')),
@@ -130,47 +109,26 @@ class _DriveNoteActionsState extends ConsumerState<DriveNoteActions> {
   Widget build(BuildContext context) {
     if (_documentId.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: AppSpacing.md),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            FilledButton.tonalIcon(
-              key: ValueKey('drive-note-import-$_documentId'),
-              onPressed: _busy ? null : _importToNote,
-              icon: const Icon(Icons.note_add_outlined),
-              label: const Text('轉成筆記'),
-            ),
-            OutlinedButton.icon(
-              key: ValueKey('drive-note-link-$_documentId'),
-              onPressed: _busy ? null : _linkExistingNote,
-              icon: const Icon(Icons.link),
-              label: const Text('關聯既有筆記'),
-            ),
-          ],
-        ),
-        if (_relations.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sm),
-          ..._relations.map((relation) {
-            final note = (relation['note'] as Map?)?.cast<String, dynamic>() ??
-                const <String, dynamic>{};
-            final title = note['title']?.toString().trim();
-            final displayTitle =
-                title == null || title.isEmpty ? '未命名筆記' : title;
-            final source = relation['relation_type'] == 'source_import';
-            return Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xs),
-              child: Text(
-                source ? '來源筆記：$displayTitle' : '相關筆記：$displayTitle',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            );
-          }),
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: [
+          FilledButton.tonalIcon(
+            key: ValueKey('drive-note-import-$_documentId'),
+            onPressed: _busy ? null : _importToNote,
+            icon: const Icon(Icons.note_add_outlined),
+            label: const Text('轉成筆記'),
+          ),
+          OutlinedButton.icon(
+            key: ValueKey('drive-note-link-$_documentId'),
+            onPressed: _busy ? null : _linkExistingNote,
+            icon: const Icon(Icons.link),
+            label: const Text('關聯既有筆記'),
+          ),
         ],
-      ],
+      ),
     );
   }
 }

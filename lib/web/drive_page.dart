@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../app/design_system/design_system.dart';
 import 'drive_api.dart';
+import 'drive_note_actions.dart';
 import 'google_drive_picker.dart';
 import 'note_api.dart';
 
@@ -353,6 +354,7 @@ class _DrivePageState extends ConsumerState<DrivePage> {
                 ),
             ],
           ),
+          DriveNoteActions(document: document),
           if (hasEnrichmentError) ...[
             const SizedBox(height: AppSpacing.md),
             const Text('智能整理狀態暫時無法取得；Drive 文件本身仍可正常使用。'),

@@ -104,8 +104,8 @@ class _DrivePageState extends ConsumerState<DrivePage> {
     if (_addingDocuments) return;
     setState(() => _addingDocuments = true);
     try {
-      final driveApi = ref.read(driveApiProvider);
-      final config = PickerConfig.fromJson(await driveApi.getPickerConfig());
+      final pickerApi = ref.read(drivePickerApiProvider);
+      final config = PickerConfig.fromJson(await pickerApi.getPickerConfig());
       final googleFileIds = await ref.read(googleDrivePickerProvider).pick(
             config,
             folders: false,
@@ -113,7 +113,7 @@ class _DrivePageState extends ConsumerState<DrivePage> {
           );
       if (googleFileIds.isEmpty) return;
 
-      await driveApi.registerDocuments(googleFileIds);
+      await pickerApi.registerDocuments(googleFileIds);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('已加入 ${googleFileIds.length} 個 Drive 檔案。')),

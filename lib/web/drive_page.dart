@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../app/design_system/design_system.dart';
 import 'drive_api.dart';
+import 'google_drive_picker.dart';
 import 'note_api.dart';
 
 class DrivePage extends ConsumerStatefulWidget {
@@ -15,6 +16,7 @@ class DrivePage extends ConsumerStatefulWidget {
 
 class _DrivePageState extends ConsumerState<DrivePage> {
   bool _loading = true;
+  bool _addingDocuments = false;
   Object? _loadError;
   List<Map<String, dynamic>> _documents = const [];
   Map<String, dynamic> _settings = const {};
@@ -98,6 +100,39 @@ class _DrivePageState extends ConsumerState<DrivePage> {
     });
   }
 
+  Future<void> _addDriveFiles() async {
+    if (_addingDocuments) return;
+    setState(() => _addingDocuments = true);
+    try {
+      final driveApi = ref.read(driveApiProvider);
+      final config = PickerConfig.fromJson(await driveApi.getPickerConfig());
+      final googleFileIds = await ref.read(googleDrivePickerProvider).pick(
+            config,
+            folders: false,
+            multiSelect: true,
+          );
+      if (googleFileIds.isEmpty) return;
+
+      await driveApi.registerDocuments(googleFileIds);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已加入 ${googleFileIds.length} 個 Drive 檔案。')),
+      );
+      await _load();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('無法加入 Drive 檔案；既有文件與智能整理結果不受影響。'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _addingDocuments = false);
+      }
+    }
+  }
+
   Future<void> _reanalyze(String documentId) async {
     if (_busyDocuments.contains(documentId)) return;
     setState(() => _busyDocuments.add(documentId));
@@ -171,6 +206,17 @@ class _DrivePageState extends ConsumerState<DrivePage> {
       appBar: AppBar(
         title: const Text('Google Drive 智能整理'),
         actions: [
+          IconButton(
+            key: const ValueKey('add-drive-files'),
+            tooltip: '加入 Drive 檔案',
+            onPressed: _addingDocuments ? null : _addDriveFiles,
+            icon: _addingDocuments
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add_to_drive),
+          ),
           IconButton(
             tooltip: '智能整理設定',
             onPressed: () => context.go('/more/drive/settings'),
@@ -249,10 +295,16 @@ class _DrivePageState extends ConsumerState<DrivePage> {
             ],
             const SizedBox(height: AppSpacing.lg),
             if (_documents.isEmpty)
-              const AppStatePanel(
+              AppStatePanel(
                 title: '目前沒有已註冊的 Drive 文件',
-                message: '智能整理只會處理已由應用程式取得存取權並註冊的文件，不會遞迴掃描整個雲端硬碟。',
-                icon: Icon(Icons.cloud_queue_outlined),
+                message: '只會處理你透過 Google Picker 明確選取並授權的文件，不會遞迴掃描整個雲端硬碟。',
+                icon: const Icon(Icons.cloud_queue_outlined),
+                action: FilledButton.icon(
+                  key: const ValueKey('add-drive-files-empty'),
+                  onPressed: _addingDocuments ? null : _addDriveFiles,
+                  icon: const Icon(Icons.add_to_drive),
+                  label: const Text('選取 Drive 檔案'),
+                ),
               )
             else
               ..._documents.map((document) => Padding(

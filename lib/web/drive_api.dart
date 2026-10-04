@@ -16,6 +16,11 @@ Uri _driveApiUri(String path) {
 
 abstract class DriveApi {
   Future<List<Map<String, dynamic>>> getDocuments();
+  Future<Map<String, dynamic>> getPickerConfig();
+  Future<List<Map<String, dynamic>>> registerDocuments(
+    List<String> googleFileIds, {
+    String? workspaceId,
+  });
   Future<Map<String, dynamic>> getEnrichmentSettings();
   Future<Map<String, dynamic>> updateEnrichmentSettings(
     Map<String, dynamic> body,
@@ -43,6 +48,33 @@ class HttpDriveApi implements DriveApi {
   @override
   Future<List<Map<String, dynamic>>> getDocuments() async {
     final res = await _client.get(_driveApiUri('/drive/documents'));
+    _check(res.statusCode, res.body);
+    final payload = jsonDecode(res.body) as Map<String, dynamic>;
+    return (payload['documents'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+  }
+
+  @override
+  Future<Map<String, dynamic>> getPickerConfig() async {
+    final res = await _client.get(_driveApiUri('/drive/picker-config'));
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> registerDocuments(
+    List<String> googleFileIds, {
+    String? workspaceId,
+  }) async {
+    final body = <String, dynamic>{'google_file_ids': googleFileIds};
+    if (workspaceId != null && workspaceId.trim().isNotEmpty) {
+      body['workspace_id'] = workspaceId.trim();
+    }
+    final res = await _client.post(
+      _driveApiUri('/drive/documents/register'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
     _check(res.statusCode, res.body);
     final payload = jsonDecode(res.body) as Map<String, dynamic>;
     return (payload['documents'] as List? ?? const [])

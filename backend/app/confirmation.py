@@ -31,18 +31,18 @@ def _single_path_target(path: str, prefix: str) -> str | None:
     return target_id
 
 
-def _drive_project_detach_target(path: str) -> str | None:
+def _drive_nested_detach_target(path: str, segment: str) -> str | None:
     if not path.startswith(DRIVE_DOCUMENT_PATH_PREFIX):
         return None
     remainder = path[len(DRIVE_DOCUMENT_PATH_PREFIX) :]
     parts = remainder.split("/")
-    if len(parts) != 3 or parts[1] != "projects":
+    if len(parts) != 3 or parts[1] != segment:
         return None
     document_id = unquote(parts[0]).strip()
-    project_id = unquote(parts[2]).strip()
-    if not document_id or not project_id or "/" in document_id or "/" in project_id:
+    related_id = unquote(parts[2]).strip()
+    if not document_id or not related_id or "/" in document_id or "/" in related_id:
         return None
-    return f"{document_id}:{project_id}"
+    return f"{document_id}:{related_id}"
 
 
 def confirmation_requirement(method: str, path: str) -> tuple[str, str] | None:
@@ -51,9 +51,13 @@ def confirmation_requirement(method: str, path: str) -> tuple[str, str] | None:
     if method.upper() != "DELETE":
         return None
 
-    drive_project_target = _drive_project_detach_target(path)
+    drive_project_target = _drive_nested_detach_target(path, "projects")
     if drive_project_target is not None:
         return ("drive.document.project.detach", drive_project_target)
+
+    drive_note_target = _drive_nested_detach_target(path, "notes")
+    if drive_note_target is not None:
+        return ("drive.document.note.detach", drive_note_target)
 
     for prefix, action_type in _DESTRUCTIVE_DELETE_RULES:
         target_id = _single_path_target(path, prefix)

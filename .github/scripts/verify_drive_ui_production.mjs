@@ -181,6 +181,7 @@ function candidates(page, text) {
     page.getByRole('menuitem', { name: pattern }),
     page.getByLabel(pattern),
     page.getByText(pattern),
+    page.getByLabel(loosePattern),
     page.getByText(loosePattern),
   ];
 }

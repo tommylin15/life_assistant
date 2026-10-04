@@ -16,17 +16,6 @@ Uri _driveApiUri(String path) {
 
 abstract class DriveApi {
   Future<List<Map<String, dynamic>>> getDocuments();
-  Future<Map<String, dynamic>> getPickerConfig() {
-    throw UnsupportedError('Drive Picker configuration is not implemented.');
-  }
-
-  Future<List<Map<String, dynamic>>> registerDocuments(
-    List<String> googleFileIds, {
-    String? workspaceId,
-  }) {
-    throw UnsupportedError('Drive document registration is not implemented.');
-  }
-
   Future<Map<String, dynamic>> getEnrichmentSettings();
   Future<Map<String, dynamic>> updateEnrichmentSettings(
     Map<String, dynamic> body,
@@ -42,7 +31,15 @@ abstract class DriveApi {
   );
 }
 
-class HttpDriveApi implements DriveApi {
+abstract class DrivePickerApi {
+  Future<Map<String, dynamic>> getPickerConfig();
+  Future<List<Map<String, dynamic>>> registerDocuments(
+    List<String> googleFileIds, {
+    String? workspaceId,
+  });
+}
+
+class HttpDriveApi implements DriveApi, DrivePickerApi {
   final _client = createApiHttpClient();
 
   void _check(int statusCode, String body) {
@@ -150,4 +147,12 @@ class HttpDriveApi implements DriveApi {
   }
 }
 
-final driveApiProvider = Provider<DriveApi>((_) => HttpDriveApi());
+final _httpDriveApiProvider = Provider<HttpDriveApi>((_) => HttpDriveApi());
+
+final driveApiProvider = Provider<DriveApi>(
+  (ref) => ref.watch(_httpDriveApiProvider),
+);
+
+final drivePickerApiProvider = Provider<DrivePickerApi>(
+  (ref) => ref.watch(_httpDriveApiProvider),
+);

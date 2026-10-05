@@ -34,15 +34,27 @@ def _exit_code_for_unavailable_provider(
     api_key: str,
     base_url: str,
 ) -> int:
+    mask = 0
     if provider.strip().casefold() != "openai":
-        return EXIT_NOT_CONFIGURED
+        mask |= 1
     if not model.strip():
-        return EXIT_MODEL_MISSING
+        mask |= 2
     if not api_key.strip():
-        return EXIT_API_KEY_MISSING
+        mask |= 4
     if not base_url.strip():
+        mask |= 8
+
+    if mask == 0:
+        return EXIT_NOT_CONFIGURED
+    if mask == 1:
+        return EXIT_NOT_CONFIGURED
+    if mask == 2:
+        return EXIT_MODEL_MISSING
+    if mask == 4:
+        return EXIT_API_KEY_MISSING
+    if mask == 8:
         return EXIT_BASE_URL_MISSING
-    return EXIT_NOT_CONFIGURED
+    return 100 + mask
 
 
 def _unavailable_reason(exit_code: int) -> str:

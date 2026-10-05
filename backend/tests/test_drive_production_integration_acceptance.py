@@ -4,6 +4,7 @@ from pathlib import Path
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from scripts import run_drive_external_ai_acceptance as external_ai_acceptance
 from scripts import run_drive_knowledge_runtime_acceptance as runtime_acceptance
 
 
@@ -65,6 +66,31 @@ class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
         self.assertNotIn("DriveDocument", source)
         self.assertNotIn("SessionLocal", source)
         self.assertNotIn("googleapis.com", source)
+
+    def test_live_external_ai_runner_classifies_incomplete_config_without_exposing_values(self):
+        classifier = getattr(external_ai_acceptance, "_exit_code_for_unavailable_provider", None)
+        self.assertTrue(callable(classifier))
+        if not callable(classifier):
+            return
+
+        cases = (
+            ({"provider": "disabled", "model": "gpt-test", "api_key": "secret", "base_url": "https://example.invalid/v1"}, 84),
+            ({"provider": "openai", "model": "", "api_key": "secret", "base_url": "https://example.invalid/v1"}, 86),
+            ({"provider": "openai", "model": "gpt-test", "api_key": "", "base_url": "https://example.invalid/v1"}, 87),
+            ({"provider": "openai", "model": "gpt-test", "api_key": "secret", "base_url": ""}, 88),
+        )
+        observed: set[int] = set()
+        for values, expected in cases:
+            code = classifier(**values)
+            self.assertEqual(code, expected)
+            self.assertGreater(code, 0)
+            self.assertLess(code, 256)
+            observed.add(code)
+        self.assertEqual(len(observed), len(cases))
+
+        source = self.ai_script.read_text(encoding="utf-8")
+        self.assertNotIn("print(api_key", source)
+        self.assertNotIn("print(model", source)
 
     def test_task9_workflow_executes_runtime_config_and_live_ai_gates(self):
         self.assertTrue(self.workflow.is_file())

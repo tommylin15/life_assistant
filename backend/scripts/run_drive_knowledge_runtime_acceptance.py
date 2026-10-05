@@ -57,12 +57,50 @@ IMPORT_FAILURE_EXIT_CODES = {
     "unexpected": 74,
 }
 
+INTEGRITY_CONSTRAINT_EXIT_CODES = {
+    "note_drive_documents_note_id_fkey": 75,
+    "note_drive_documents_drive_document_id_fkey": 76,
+    "entity_tags_pkey": 77,
+    "entity_tags_tag_id_fkey": 78,
+    "tags_name_key": 79,
+    "note_drive_documents_pkey": 80,
+}
+
 
 class AcceptanceStageError(RuntimeError):
     def __init__(self, stage: str, cause: BaseException) -> None:
         super().__init__(f"{stage}: {type(cause).__name__}: {cause}")
         self.stage = stage
         self.cause = cause
+
+
+def _known_integrity_constraint(error: IntegrityError) -> str | None:
+    pending: list[BaseException | object | None] = [
+        error.orig,
+        error.__cause__,
+        error.__context__,
+    ]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop(0)
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        name = getattr(current, "constraint_name", None)
+        if isinstance(name, str) and name in INTEGRITY_CONSTRAINT_EXIT_CODES:
+            return name
+        text = str(current)
+        for candidate in INTEGRITY_CONSTRAINT_EXIT_CODES:
+            if candidate in text:
+                return candidate
+        pending.extend(
+            (
+                getattr(current, "orig", None),
+                getattr(current, "__cause__", None),
+                getattr(current, "__context__", None),
+            )
+        )
+    return None
 
 
 def _exit_code_for_stage_error(error: AcceptanceStageError) -> int:
@@ -72,6 +110,9 @@ def _exit_code_for_stage_error(error: AcceptanceStageError) -> int:
     if isinstance(cause, AssertionError):
         return IMPORT_FAILURE_EXIT_CODES["http_contract"]
     if isinstance(cause, IntegrityError):
+        constraint = _known_integrity_constraint(cause)
+        if constraint is not None:
+            return INTEGRITY_CONSTRAINT_EXIT_CODES[constraint]
         return IMPORT_FAILURE_EXIT_CODES["integrity"]
     if isinstance(cause, SQLAlchemyError):
         return IMPORT_FAILURE_EXIT_CODES["database"]
@@ -82,6 +123,8 @@ def _failure_category(error: AcceptanceStageError) -> str:
     if error.stage != "import":
         return "stage_failure"
     code = _exit_code_for_stage_error(error)
+    if code in INTEGRITY_CONSTRAINT_EXIT_CODES.values():
+        return "integrity_constraint"
     for category, category_code in IMPORT_FAILURE_EXIT_CODES.items():
         if code == category_code:
             return category

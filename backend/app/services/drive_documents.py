@@ -322,6 +322,7 @@ async def import_document_to_note(
         project_id=project_id,
     )
     db.add(note)
+    await db.flush()
     db.add(
         NoteDriveDocument(
             note_id=note.id,

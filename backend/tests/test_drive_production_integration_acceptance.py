@@ -7,6 +7,12 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from scripts import run_drive_knowledge_runtime_acceptance as runtime_acceptance
 
 
+class _ConstraintError(RuntimeError):
+    def __init__(self, constraint_name: str):
+        super().__init__(f'constraint {constraint_name}')
+        self.constraint_name = constraint_name
+
+
 class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
     def setUp(self):
         self.repo_root = Path(__file__).parents[2]
@@ -86,6 +92,12 @@ class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
         self.assertIn("page.on('requestfailed'", source)
         self.assertNotIn("waitForSelector('flutter-view'", source)
 
+    def test_drive_knowledge_ui_acceptance_pins_valid_browser_locale_and_timezone(self):
+        source = self.ui_script.read_text(encoding="utf-8")
+        self.assertIn("locale: 'zh-TW'", source)
+        self.assertIn("timezoneId: 'Asia/Taipei'", source)
+        self.assertIn("serviceWorkers: 'block'", source)
+
     def test_import_stage_failures_have_distinct_byte_safe_diagnostics(self):
         classifier = getattr(runtime_acceptance, "_exit_code_for_stage_error", None)
         self.assertTrue(callable(classifier))
@@ -108,6 +120,33 @@ class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
             observed.add(code)
 
         self.assertEqual(len(observed), len(cases))
+        self.assertTrue(observed.isdisjoint(runtime_acceptance.STAGE_EXIT_CODES.values()))
+
+    def test_import_integrity_failure_identifies_safe_constraint_family(self):
+        classifier = getattr(runtime_acceptance, "_exit_code_for_stage_error", None)
+        self.assertTrue(callable(classifier))
+        if not callable(classifier):
+            return
+
+        expected_codes = {
+            "note_drive_documents_note_id_fkey": 75,
+            "note_drive_documents_drive_document_id_fkey": 76,
+            "entity_tags_pkey": 77,
+            "entity_tags_tag_id_fkey": 78,
+            "tags_name_key": 79,
+            "note_drive_documents_pkey": 80,
+        }
+        observed: set[int] = set()
+        for constraint_name, expected in expected_codes.items():
+            cause = IntegrityError("insert", {}, _ConstraintError(constraint_name))
+            error = runtime_acceptance.AcceptanceStageError("import", cause)
+            code = classifier(error)
+            self.assertEqual(code, expected)
+            self.assertGreater(code, 0)
+            self.assertLess(code, 256)
+            observed.add(code)
+
+        self.assertEqual(len(observed), len(expected_codes))
         self.assertTrue(observed.isdisjoint(runtime_acceptance.STAGE_EXIT_CODES.values()))
 
     def test_non_import_stage_keeps_existing_stage_exit_code(self):

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 
+from app import config
 from app.services.ai_enrichment_provider import (
     AIProviderError,
     DocumentEnrichmentContext,
@@ -21,16 +22,52 @@ from app.services.ai_enrichment_provider import (
 
 EXIT_NOT_CONFIGURED = 84
 EXIT_PROVIDER_FAILURE = 85
+EXIT_MODEL_MISSING = 86
+EXIT_API_KEY_MISSING = 87
+EXIT_BASE_URL_MISSING = 88
+
+
+def _exit_code_for_unavailable_provider(
+    *,
+    provider: str,
+    model: str,
+    api_key: str,
+    base_url: str,
+) -> int:
+    if provider.strip().casefold() != "openai":
+        return EXIT_NOT_CONFIGURED
+    if not model.strip():
+        return EXIT_MODEL_MISSING
+    if not api_key.strip():
+        return EXIT_API_KEY_MISSING
+    if not base_url.strip():
+        return EXIT_BASE_URL_MISSING
+    return EXIT_NOT_CONFIGURED
+
+
+def _unavailable_reason(exit_code: int) -> str:
+    return {
+        EXIT_NOT_CONFIGURED: "provider_not_openai_or_unavailable",
+        EXIT_MODEL_MISSING: "model_missing",
+        EXIT_API_KEY_MISSING: "api_key_missing",
+        EXIT_BASE_URL_MISSING: "base_url_missing",
+    }.get(exit_code, "production_provider_not_configured")
 
 
 async def run_acceptance() -> None:
     provider = get_ai_enrichment_provider()
     if isinstance(provider, UnavailableAIEnrichmentProvider):
+        exit_code = _exit_code_for_unavailable_provider(
+            provider=str(config.settings.ai_enrichment_provider or ""),
+            model=str(config.settings.ai_enrichment_model or ""),
+            api_key=str(config.settings.openai_api_key or ""),
+            base_url=str(config.settings.openai_base_url or ""),
+        )
         print(
-            "drive_external_ai_integration=NOT_VERIFIED reason=production_provider_not_configured",
+            f"drive_external_ai_integration=NOT_VERIFIED reason={_unavailable_reason(exit_code)}",
             flush=True,
         )
-        raise SystemExit(EXIT_NOT_CONFIGURED)
+        raise SystemExit(exit_code)
 
     context = DocumentEnrichmentContext(
         document_id="acceptance-synthetic-drive-document",

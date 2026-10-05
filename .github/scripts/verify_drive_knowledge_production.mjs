@@ -277,7 +277,11 @@ async function runAcceptance(context) {
 
 const browser = await chromium.launch({ headless: true });
 try {
-  const context = await browser.newContext();
+  const context = await browser.newContext({
+    serviceWorkers: 'block',
+    locale: 'zh-TW',
+    timezoneId: 'Asia/Taipei',
+  });
   await runAcceptance(context);
   await context.close();
 } catch (error) {

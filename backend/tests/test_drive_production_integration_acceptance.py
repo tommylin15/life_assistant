@@ -5,6 +5,7 @@ from pathlib import Path
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from scripts import run_drive_external_ai_acceptance as external_ai_acceptance
+from scripts import run_drive_production_config_acceptance as production_config_acceptance
 from scripts import run_drive_knowledge_runtime_acceptance as runtime_acceptance
 
 
@@ -91,6 +92,50 @@ class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
         source = self.ai_script.read_text(encoding="utf-8")
         self.assertNotIn("print(api_key", source)
         self.assertNotIn("print(model", source)
+
+    def test_picker_config_classifier_reports_combined_missing_fields_without_values(self):
+        classifier = getattr(production_config_acceptance, "_exit_code_for_config_state", None)
+        self.assertTrue(callable(classifier))
+        if not callable(classifier):
+            return
+
+        self.assertEqual(
+            classifier(
+                google_client_id="client",
+                developer_key="",
+                app_id="",
+            ),
+            96,
+        )
+        self.assertEqual(
+            classifier(
+                google_client_id="",
+                developer_key="",
+                app_id="",
+            ),
+            97,
+        )
+
+    def test_live_external_ai_runner_reports_combined_missing_fields(self):
+        classifier = external_ai_acceptance._exit_code_for_unavailable_provider
+        self.assertEqual(
+            classifier(
+                provider="disabled",
+                model="",
+                api_key="",
+                base_url="https://api.openai.com/v1",
+            ),
+            107,
+        )
+        self.assertEqual(
+            classifier(
+                provider="",
+                model="",
+                api_key="",
+                base_url="",
+            ),
+            115,
+        )
 
     def test_task9_workflow_executes_runtime_config_and_live_ai_gates(self):
         self.assertTrue(self.workflow.is_file())

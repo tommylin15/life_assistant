@@ -189,13 +189,18 @@ function escapeRegex(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-async function visible(locator, timeout = 15000) {
+async function visible(locatorOrLocators, timeout = 15000) {
+  const locators = Array.isArray(locatorOrLocators)
+    ? locatorOrLocators
+    : [locatorOrLocators];
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    const count = await locator.count();
-    for (let index = 0; index < count; index += 1) {
-      const item = locator.nth(index);
-      if (await item.isVisible().catch(() => false)) return item;
+    for (const locator of locators) {
+      const count = await locator.count();
+      for (let index = 0; index < count; index += 1) {
+        const item = locator.nth(index);
+        if (await item.isVisible().catch(() => false)) return item;
+      }
     }
     await pageDelay(120);
   }
@@ -223,8 +228,11 @@ async function pageDelay(ms) {
 }
 
 async function waitForText(page, text, timeout = 10000) {
-  const locator = page.getByText(new RegExp(escapeRegex(text)));
-  await visible(locator, timeout);
+  const pattern = new RegExp(escapeRegex(text));
+  await visible(
+    [page.getByLabel(pattern), page.getByText(pattern)],
+    timeout,
+  );
 }
 
 function record(check) {

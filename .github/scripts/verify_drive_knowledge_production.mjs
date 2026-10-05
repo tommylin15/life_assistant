@@ -1,186 +1,170 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
-const baseUrl = process.env.BASE_URL;
-if (!baseUrl) throw new Error('BASE_URL is required');
+const baseUrl = process.env.DRIVE_UI_BASE_URL;
+if (!baseUrl) {
+  console.error('DRIVE_UI_BASE_URL is required');
+  process.exit(2);
+}
 
 const document = {
-  id: 'drive-production-document',
-  google_file_id: 'picker-selected-production-file',
-  name: 'Picker 驗收文件',
+  id: 'acceptance-drive-document',
+  google_file_id: 'acceptance-google-file',
+  name: '驗收 Drive 文件',
   mime_type: 'application/vnd.google-apps.document',
-  web_view_link: 'https://drive.google.com/file/d/production-source/view',
-  modified_at: '2026-10-04T08:00:00Z',
-  created_at: '2026-10-04T08:00:00Z',
-  updated_at: '2026-10-04T08:00:00Z',
+  web_view_link: 'https://drive.google.com/file/d/acceptance-google-file/view',
+  modified_at: '2026-10-05T00:00:00Z',
+  created_at: '2026-10-05T00:00:00Z',
+  updated_at: '2026-10-05T00:00:00Z',
 };
 const note = {
-  id: 'drive-production-note',
+  id: 'acceptance-note',
   title: '既有驗收筆記',
-  body: 'Drive Knowledge production artifact acceptance',
+  body: 'acceptance note body',
   project_id: null,
-  created_at: '2026-10-04T08:00:00Z',
-  updated_at: '2026-10-04T08:00:00Z',
+  created_at: '2026-10-05T00:00:00Z',
+  updated_at: '2026-10-05T00:00:00Z',
 };
 const project = {
-  id: 'drive-production-project',
-  name: 'Drive 驗收專案',
+  id: 'acceptance-project',
+  name: '驗收專案',
+  description: '',
+  status: 'active',
+  created_at: '2026-10-05T00:00:00Z',
+  updated_at: '2026-10-05T00:00:00Z',
 };
 
 const observed = {
   importBody: null,
-  manualLink: null,
+  linkBody: null,
   sourceOpen: null,
 };
 
-function json(route, status, payload) {
+function json(route, payload, status = 200) {
   return route.fulfill({
     status,
-    contentType: 'application/json; charset=utf-8',
+    contentType: 'application/json',
     body: JSON.stringify(payload),
-  });
-}
-
-function bodyOf(request) {
-  const raw = request.postData();
-  return raw ? JSON.parse(raw) : {};
-}
-
-async function installMocks(page) {
-  await page.route('**/auth/me', (route) =>
-    json(route, 200, {
-      email: 'drive-production-ui@example.invalid',
-      name: 'Drive Production UI Acceptance',
-    }),
-  );
-
-  await page.route('**/api/v1/**', async (route) => {
-    const request = route.request();
-    const method = request.method();
-    const { pathname } = new URL(request.url());
-
-    if (pathname === '/api/v1/drive/documents' && method === 'GET') {
-      return json(route, 200, { documents: [document], returned: 1 });
-    }
-    if (pathname === '/api/v1/drive/enrichment/settings' && method === 'GET') {
-      return json(route, 200, {
-        auto_tags_enabled: true,
-        note_suggestions_enabled: true,
-        allow_document_content: true,
-        max_related_note_suggestions: 5,
-      });
-    }
-    if (
-      pathname === `/api/v1/drive/documents/${document.id}/enrichment` &&
-      method === 'GET'
-    ) {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json; charset=utf-8',
-        body: 'null',
-      });
-    }
-    if (pathname === '/api/v1/notes' && method === 'GET') {
-      return json(route, 200, [note]);
-    }
-    if (pathname === '/api/v1/projects' && method === 'GET') {
-      return json(route, 200, [project]);
-    }
-    if (
-      pathname === `/api/v1/drive/documents/${document.id}/note-import` &&
-      method === 'POST'
-    ) {
-      observed.importBody = bodyOf(request);
-      return json(route, 201, {
-        ...note,
-        id: 'drive-imported-production-note',
-        title: observed.importBody.title ?? document.name,
-        project_id: observed.importBody.project_id ?? null,
-      });
-    }
-    if (
-      pathname === `/api/v1/drive/documents/${document.id}/notes/${note.id}` &&
-      method === 'POST'
-    ) {
-      observed.manualLink = { documentId: document.id, noteId: note.id };
-      return json(route, 200, {
-        note,
-        relation_type: 'related',
-        link_source: 'manual',
-      });
-    }
-    if (
-      pathname === `/api/v1/drive/notes/${note.id}/documents` &&
-      method === 'GET'
-    ) {
-      return json(route, 200, [
-        {
-          document,
-          relation_type: 'source_import',
-          link_source: 'import',
-        },
-        {
-          document: {
-            ...document,
-            id: 'drive-related-production-document',
-            name: '相關驗收文件',
-            web_view_link: 'https://drive.google.com/file/d/related/view',
-          },
-          relation_type: 'related',
-          link_source: 'manual',
-        },
-      ]);
-    }
-    if (
-      pathname.startsWith('/api/v1/drive/notes/') &&
-      pathname.endsWith('/documents') &&
-      method === 'GET'
-    ) {
-      return json(route, 200, []);
-    }
-
-    console.error(`drive_knowledge_unexpected_api=${method} ${pathname}`);
-    return json(route, 404, { detail: 'unexpected Drive Knowledge acceptance request' });
-  });
-
-  await page.route('https://drive.google.com/**', async (route) => {
-    observed.sourceOpen = route.request().url();
-    await route.abort();
   });
 }
 
 function installDiagnostics(page, label) {
   page.on('pageerror', (error) => {
-    console.log(
-      `drive_knowledge_page_error=${label}:${error.stack ?? error.message}`,
-    );
+    console.error(`${label}_pageerror=${error?.stack ?? error}`);
   });
   page.on('console', (message) => {
     if (message.type() === 'error') {
-      console.log(`drive_knowledge_console_error=${label}:${message.text()}`);
+      console.error(`${label}_console_error=${message.text()}`);
     }
   });
   page.on('requestfailed', (request) => {
-    console.log(
-      `drive_knowledge_request_failed=${label}:${request.failure()?.errorText ?? 'unknown'}:${request.url()}`,
+    console.error(
+      `${label}_requestfailed=${request.method()} ${request.url()} ${request.failure()?.errorText ?? 'unknown'}`,
     );
   });
 }
 
-async function enableFlutterSemantics(page) {
-  const flutterView = page.locator('flutter-view');
-  await flutterView.waitFor({ state: 'attached', timeout: 30000 });
-  const rootVisible = await flutterView.first().isVisible().catch(() => false);
-  console.log(`drive_knowledge_flutter_view=attached:visible=${rootVisible}`);
+async function installMocks(page) {
+  await page.route('**/auth/me', (route) =>
+    json(route, {
+      id: 'acceptance-user',
+      email: 'acceptance@example.invalid',
+      name: 'Acceptance User',
+      picture: null,
+    }),
+  );
 
-  const placeholder = page.locator('flt-semantics-placeholder');
-  if ((await placeholder.count()) > 0) {
-    await placeholder.first().evaluate((element) => element.click());
-  } else {
-    const enable = page.getByLabel('Enable accessibility', { exact: true });
-    if ((await enable.count()) > 0) {
-      await enable.first().evaluate((element) => element.click());
+  await page.route('**/api/v1/drive/documents', (route) => {
+    if (route.request().method() === 'GET') return json(route, [document]);
+    return route.fallback();
+  });
+
+  await page.route('**/api/v1/drive/enrichment/settings', (route) =>
+    json(route, {
+      auto_tags_enabled: true,
+      note_suggestions_enabled: true,
+      allow_document_content: true,
+      max_related_note_suggestions: 5,
+    }),
+  );
+
+  await page.route('**/api/v1/drive/documents/*/enrichment', (route) =>
+    json(route, null),
+  );
+
+  await page.route('**/api/v1/notes', (route) => {
+    if (route.request().method() === 'GET') return json(route, [note]);
+    return route.fallback();
+  });
+
+  await page.route('**/api/v1/projects', (route) => {
+    if (route.request().method() === 'GET') return json(route, [project]);
+    return route.fallback();
+  });
+
+  await page.route('**/api/v1/drive/documents/*/note-import', async (route) => {
+    observed.importBody = route.request().postDataJSON();
+    return json(route, note, 201);
+  });
+
+  await page.route('**/api/v1/drive/documents/*/notes/*', async (route) => {
+    if (route.request().method() === 'POST') {
+      observed.linkBody = {
+        documentId: route.request().url().split('/documents/')[1].split('/notes/')[0],
+        noteId: route.request().url().split('/notes/')[1].split(/[?#]/)[0],
+      };
+      return json(route, {
+        note,
+        relation_type: 'related',
+        link_source: 'manual',
+      });
     }
+    return route.fallback();
+  });
+
+  await page.route(`**/api/v1/drive/notes/${note.id}/documents`, (route) =>
+    json(route, [
+      {
+        document,
+        relation_type: 'source_import',
+        link_source: 'import',
+      },
+      {
+        document: {
+          ...document,
+          id: 'acceptance-related-drive-document',
+          google_file_id: 'acceptance-related-google-file',
+          name: '相關驗收文件',
+          web_view_link: 'https://drive.google.com/file/d/acceptance-related-google-file/view',
+        },
+        relation_type: 'related',
+        link_source: 'manual',
+      },
+    ]),
+  );
+
+  await page.route('**/api/v1/drive/notes/*/documents', (route) => json(route, []));
+
+  await page.route('https://drive.google.com/**', async (route) => {
+    observed.sourceOpen = route.request().url();
+    await route.abort();
+  });
+
+  await page.route('**/api/v1/**', (route) => {
+    console.error(
+      `drive_knowledge_unexpected_api=${route.request().method()} ${route.request().url()}`,
+    );
+    return route.fallback();
+  });
+}
+
+async function enableFlutterSemantics(page) {
+  await page.locator('flutter-view').waitFor({ state: 'attached', timeout: 30000 });
+  const flutterView = page.locator('flutter-view').first();
+  console.log(`drive_knowledge_flutter_view=attached:visible=${await flutterView.isVisible().catch(() => false)}`);
+  const enable = page.getByLabel('Enable accessibility', { exact: true });
+  if ((await enable.count()) > 0) {
+    await enable.first().evaluate((element) => element.click());
   }
   await page.waitForTimeout(300);
 }
@@ -260,6 +244,7 @@ async function runAcceptance(context) {
   await page.keyboard.press('Escape');
 
   await (await named(page, '關聯既有筆記')).click();
+  await (await named(page, '筆記')).click();
   await waitForText(page, note.title);
   record('manual_relation_dialog_contract');
   await page.keyboard.press('Escape');
@@ -286,15 +271,12 @@ async function runAcceptance(context) {
 const browser = await chromium.launch({ headless: true });
 try {
   const context = await browser.newContext({
-    serviceWorkers: 'block',
     locale: 'zh-TW',
     timezoneId: 'Asia/Taipei',
+    serviceWorkers: 'block',
   });
   await runAcceptance(context);
   await context.close();
-} catch (error) {
-  console.error(`drive_knowledge_ui_acceptance=FAIL ${error?.stack ?? error}`);
-  process.exitCode = 1;
 } finally {
   await browser.close();
 }

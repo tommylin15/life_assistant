@@ -7,6 +7,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "deploy-cloud-run.yml"
 CLEANUP_POLICY = REPO_ROOT / ".github" / "artifact-registry-cleanup-policy.json"
 DIAGNOSTIC_WRAPPER = REPO_ROOT / ".github" / "scripts" / "run_cloud_run_job_with_diagnostics.sh"
+WORKFLOW_RUN_CHAINS = {
+    "deploy-cloud-run.yml": "deploy-cloud-run-main",
+    "deploy-firebase-hosting.yml": "deploy-firebase-hosting-main",
+    "postdeploy-runtime-acceptance.yml": "postdeploy-runtime-acceptance-main",
+    "drive-knowledge-runtime-acceptance.yml": "drive-knowledge-runtime-acceptance-main",
+    "notes-ui-acceptance.yml": "notes-ui-acceptance-main",
+}
 
 
 class DeployCloudRunWorkflowContractTests(unittest.TestCase):
@@ -17,6 +24,17 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
     def test_latest_main_release_supersedes_stale_deploy_run(self):
         self.assertIn("group: deploy-cloud-run-main", self.text)
         self.assertIn("cancel-in-progress: true", self.text)
+
+    def test_ineligible_workflow_run_events_cannot_block_or_cancel_eligible_chain(self):
+        suffix = "${{ github.event.workflow_run.conclusion || 'success' }}"
+        for filename, group in WORKFLOW_RUN_CHAINS.items():
+            workflow = REPO_ROOT / ".github" / "workflows" / filename
+            text = workflow.read_text(encoding="utf-8")
+            self.assertIn(
+                f"group: {group}-{suffix}",
+                text,
+                msg=f"{filename} must isolate failed/cancelled upstream events from success concurrency",
+            )
 
     def test_batch_fast_forward_cannot_skip_backend_release(self):
         self.assertNotIn("git diff --quiet HEAD^ HEAD -- backend", self.text)

@@ -42,6 +42,17 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         self.assertIn("status.lastAttemptResult.exitCode", wrapper)
         self.assertIn("gcloud logging read", wrapper)
 
+    def test_acceptance_wrapper_has_heartbeat_and_hard_timeout(self):
+        wrapper = DIAGNOSTIC_WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("RUN_JOB_HEARTBEAT_SECONDS", wrapper)
+        self.assertIn("RUN_JOB_MAX_WAIT_SECONDS", wrapper)
+        self.assertIn("timeout --signal=TERM", wrapper)
+        self.assertIn("cloud_run_job_wait=HEARTBEAT", wrapper)
+        self.assertIn("cloud_run_job_wait=TIMEOUT", wrapper)
+
+    def test_deploy_job_has_outer_hard_timeout(self):
+        self.assertIn("timeout-minutes: 90", self.text)
+
     def test_cleanup_policy_retains_only_latest_shared_backend_image(self):
         policies = json.loads(CLEANUP_POLICY.read_text(encoding="utf-8"))
         policies_by_name = {policy["name"]: policy for policy in policies}

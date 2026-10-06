@@ -41,6 +41,7 @@ jobs:
       DATABASE_SSLMODE: require
       FRONTEND_URL: https://gen-lang-client-0593591102.web.app
       GOOGLE_REDIRECT_URI: https://gen-lang-client-0593591102.web.app/auth/callback
+      GOOGLE_PICKER_APP_ID: '131494961796'
       ALEMBIC_METADATA_BOOTSTRAP_APPROVED_REVISION: '20260926_0004'
 
     steps:
@@ -200,6 +201,11 @@ jobs:
 
       - name: Deploy backend to Cloud Run
         run: |
+          PROJECT_NUMBER="$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')"
+          test -n "$PROJECT_NUMBER"
+          test "$GOOGLE_PICKER_APP_ID" = "$PROJECT_NUMBER"
+          echo "drive_picker_app_id_contract=PASS project_number=$PROJECT_NUMBER"
+
           gcloud run deploy "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
@@ -208,7 +214,7 @@ jobs:
             --subnet "$GCP_SUBNET" \
             --vpc-egress private-ranges-only \
             --allow-unauthenticated \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI" \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI,GOOGLE_PICKER_APP_ID=$GOOGLE_PICKER_APP_ID" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --quiet
 

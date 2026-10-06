@@ -21,6 +21,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     environment: dev-test
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102

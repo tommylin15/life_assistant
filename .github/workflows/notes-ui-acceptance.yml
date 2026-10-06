@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: notes-ui-acceptance-main
+  group: notes-ui-acceptance-main-${{ github.event.workflow_run.conclusion || 'success' }}
   cancel-in-progress: false
 
 jobs:

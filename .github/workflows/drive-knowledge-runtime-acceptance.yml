@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: drive-knowledge-runtime-acceptance-main
+  group: drive-knowledge-runtime-acceptance-main-${{ github.event.workflow_run.conclusion || 'success' }}
   cancel-in-progress: false
 
 jobs:

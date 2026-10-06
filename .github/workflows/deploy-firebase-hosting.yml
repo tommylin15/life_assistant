@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy-firebase-hosting-main
+  group: deploy-firebase-hosting-main-${{ github.event.workflow_run.conclusion || 'success' }}
   cancel-in-progress: false
 
 jobs:

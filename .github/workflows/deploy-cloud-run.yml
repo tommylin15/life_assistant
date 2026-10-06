@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy-cloud-run-main
+  group: deploy-cloud-run-main-${{ github.event.workflow_run.conclusion || 'success' }}
   cancel-in-progress: true
 
 jobs:

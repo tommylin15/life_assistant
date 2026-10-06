@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: postdeploy-runtime-acceptance-main
+  group: postdeploy-runtime-acceptance-main-${{ github.event.workflow_run.conclusion || 'success' }}
   cancel-in-progress: false
 
 jobs:

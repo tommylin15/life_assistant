@@ -36,6 +36,7 @@ jobs:
       DATABASE_NAME: life_assistant
       DATABASE_USER: life_assistant_user
       DATABASE_SSLMODE: require
+      GOOGLE_PICKER_APP_ID: '131494961796'
       DRIVE_ACCEPTANCE_USER_SUB: ${{ vars.DRIVE_ACCEPTANCE_USER_SUB }}
       DRIVE_ACCEPTANCE_GOOGLE_FILE_ID: ${{ vars.DRIVE_ACCEPTANCE_GOOGLE_FILE_ID }}
 
@@ -69,6 +70,11 @@ jobs:
 
       - name: Configure shared acceptance runner
         run: |
+          PROJECT_NUMBER="$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')"
+          test -n "$PROJECT_NUMBER"
+          test "$GOOGLE_PICKER_APP_ID" = "$PROJECT_NUMBER"
+          echo "drive_picker_app_id_contract=PASS project_number=$PROJECT_NUMBER"
+
           gcloud run jobs deploy "$ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
@@ -80,7 +86,7 @@ jobs:
             --vpc-egress private-ranges-only \
             --max-retries 0 \
             --task-timeout 10m \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,DRIVE_ACCEPTANCE_USER_SUB=$DRIVE_ACCEPTANCE_USER_SUB,DRIVE_ACCEPTANCE_GOOGLE_FILE_ID=$DRIVE_ACCEPTANCE_GOOGLE_FILE_ID" \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,DRIVE_ACCEPTANCE_USER_SUB=$DRIVE_ACCEPTANCE_USER_SUB,DRIVE_ACCEPTANCE_GOOGLE_FILE_ID=$DRIVE_ACCEPTANCE_GOOGLE_FILE_ID,GOOGLE_PICKER_APP_ID=$GOOGLE_PICKER_APP_ID" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --quiet
 

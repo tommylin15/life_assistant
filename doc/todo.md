@@ -1,6 +1,6 @@
 # life_assistant — Active TODO
 
-最後更新：2026-10-04
+最後更新：2026-10-06
 
 > 本檔只保留**目前 active / next / non-blocking backlog**。正式封板進度以 `progress.md` 為準；完成條件與 runtime evidence 以 `acceptance.md`、GitHub Actions 與 deployed runtime 為準。不要在本檔維護另一套歷史完成清單。
 
@@ -8,16 +8,25 @@
 
 ### #5 — Task 9：Drive Knowledge 正式交付與 production acceptance
 
-狀態：**NOT STARTED**。
+狀態：**PARTIAL**。
 
-依使用者指示，本輪在 Task 8 封板並回寫文件後停止，因此目前沒有開始 Task 9 implementation、migration、deployment 或 production integration work。
+目前 exact release SHA：`8c1527ecc93709cf49eada00257183483b706eb6`。
 
-Task 9 重新啟動時的第一個 concrete gate：
+已通過：
+- CI #547。
+- Deploy Cloud Run #419。
+- Deploy Firebase Hosting #365。
+- Notes UI Acceptance #130。
+- Post-deploy Runtime Acceptance #84。
+- Drive Knowledge synthetic backend runtime、exact Firebase release、OAuth redirect、production UI。
+- CI/CD stuck-recovery hardening 已有 runtime evidence：Cloud Run acceptance 每 30 秒 heartbeat、660 秒 hard bound、PASS/TIMEOUT/FAIL diagnostics、deploy outer timeout 90 分鐘；workflow-run concurrency 已隔離 ineligible run，避免不合格 workflow_run 取消有效部署。
 
-- 先讀取當時 GitHub `main` 與 runtime evidence，重新確認 Task 8/Task 7 依賴沒有漂移。
-- 盤點 true Drive / external-AI production delivery 所需 credential/config contract、migration、runtime/integration acceptance。
-- 不把 Task 8 的 mocked deterministic production UI acceptance 誤稱為 Task 9 的真實外部 provider integration evidence。
-- 最終仍需 CI、migration、Firebase、Cloud Run、authenticated runtime、true Drive integration evidence 完整後才可封板。
+仍阻塞 Task 9 封板：
+- Picker production config：FAIL；Task exit `96` = developer key + app id 缺少。
+- Live external AI：FAIL；Task exit `107` = provider + model + API key 未完成 production config。
+- Real Google Drive integration fixture：NOT VERIFIED；`DRIVE_ACCEPTANCE_USER_SUB` / `DRIVE_ACCEPTANCE_GOOGLE_FILE_ID` 尚未配置。
+
+下一 concrete gate：只處理上述三個 external production gates，不重做已 PASS 的 CI / Cloud Run / Firebase / synthetic runtime。production secret / credential 變更必須先取得使用者明確確認。
 
 ## Just Closed
 
@@ -39,7 +48,7 @@ Task 9 重新啟動時的第一個 concrete gate：
 
 ## Next
 
-1. #5 — Task 9：Drive Knowledge production delivery + acceptance（**NOT STARTED，本輪停止**）。
+1. #5 — Task 9：Drive Knowledge production delivery + acceptance（**PARTIAL；剩 3 個 mandatory external gates**）。
 2. #6–#9 — Habits / Shopping / Calendar / Activity + Integrations productization。
 3. #10 — Integration / foundation tail closure。
 4. #11 — Phase 1 final Release Gate / 封板 checkpoint。

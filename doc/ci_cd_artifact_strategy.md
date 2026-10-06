@@ -1,6 +1,6 @@
 # Life Assistant CI/CD Artifact Strategy
 
-最後更新：2026-10-02
+最後更新：2026-10-06
 
 ## 目的
 
@@ -133,3 +133,47 @@ Release commit `3a6b39a8f39f9395f291e70c9eaf7a9c0280f3b2`，Deploy Cloud Run run
 - `life-assistant-postdeploy-acceptance`
 
 既有 feature-specific acceptance Jobs 不由本次 workflow 自動刪除。它們在新的 shared runners 完成 replacement runtime verification 後，可另列 legacy cleanup candidates；production resource deletion 仍需明確確認。
+
+
+## 2026-10-06 Stuck CI / Deploy recovery hardening
+
+本節把 `recovering-stuck-ci-deploys` 的診斷原則落到目前 GitHub Actions / Cloud Run pipeline。核心不是「卡住就重跑」，而是先判斷：
+
+- `queued`：runner scheduling，尚未執行程式；不應因排隊直接 patch/redeploy。
+- `in_progress` + Cloud Run blocking wait：silent-but-bounded；應看 Cloud Run execution 是否仍 RUNNING，並由 heartbeat 提供進度。
+- 超過 hard bound 或 Cloud Run terminal failure：真正 timeout/failure；先收 diagnostics，再 fail。
+- downstream workflow 未啟動 / 被 skipped / cancelled：workflow-chain / concurrency 問題，與 Cloud Run task 本身不同。
+
+Production hardening：
+
+- `.github/scripts/run_cloud_run_job_with_diagnostics.sh`
+  - `RUN_JOB_HEARTBEAT_SECONDS` 預設 30 秒。
+  - `RUN_JOB_MAX_WAIT_SECONDS` 預設 660 秒。
+  - command 由 `timeout --signal=TERM --kill-after=15s` 包住。
+  - 等待中輸出 `cloud_run_job_wait=HEARTBEAT`。
+  - 正常完成輸出 `cloud_run_job_wait=PASS`。
+  - timeout 輸出 `cloud_run_job_wait=TIMEOUT`，其他錯誤輸出 `cloud_run_job_wait=FAIL`，之後收集 Cloud Run execution/task diagnostics。
+- `.github/workflows/deploy-cloud-run.yml`
+  - deploy job outer bound：`timeout-minutes: 90`。
+- workflow-run concurrency isolation：
+  - Deploy Cloud Run / Firebase / Notes UI / Post-deploy / Drive Knowledge 的 concurrency group 帶入 upstream `workflow_run.conclusion`。
+  - 目的：ineligible/skipped upstream run 不再與 valid success run 共用完全相同 group，避免錯誤 cancellation chain。
+
+TDD / runtime evidence：
+
+- RED contract commit：`f1014a57efa2063a20cc198fa39708dcb2fc7116`；CI #543 如預期只在 heartbeat / outer-timeout 新要求失敗。
+- bounded wait implementation：`3bd8787487c4322d26d3c617aa58f4dc60a2251b`。
+- deploy outer timeout：`bd47bd44164f364d266236502fe9a7b93873093e`；CI #545 PASS。
+- concurrency RED：`caf63a7d759f8d881f46bdf17d7ff5250918dadf`；CI #546 FAIL。
+- concurrency GREEN / production release：`8c1527ecc93709cf49eada00257183483b706eb6`；CI #547 PASS。
+- Deploy Cloud Run #419 / run `37399118811`：PASS；多個 core acceptance execution 實際每 30 秒輸出 heartbeat，最後輸出 PASS。
+- Firebase #365、Notes UI #130、Post-deploy #84：PASS。
+- Drive Knowledge #40 的 FAIL 屬 Task 9 external config / fixture gates，不是 silent-wait hardening failure。
+
+完成判定：
+- implementation：PASS
+- tests / CI：PASS
+- deployment：PASS
+- runtime heartbeat / bounded-wait evidence：PASS
+- workflow-chain concurrency isolation：PASS
+- Task 9 Drive Knowledge final acceptance：**另案 PARTIAL / FAIL**，不可包裝為此 CI/CD hardening 的失敗，也不可反向把 CI/CD hardening PASS 說成 Task 9 DONE。

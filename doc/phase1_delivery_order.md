@@ -1,8 +1,22 @@
 # life_assistant Phase 1 — Delivery Order
 
-最後更新：2026-09-28
+最後更新：2026-10-06
 
 > 本文件定義 Phase 1 後續的**執行順序**。`doc/acceptance.md` 與 `doc/release_checklist.md` 繼續定義完成條件與 Release Gate；本文件只負責「先做什麼、後做什麼」。若本文件與較舊文件的隱含先後順序不同，以本文件的執行順序為準，但不得因此降低既有 acceptance / security / migration 要求。
+
+## Current closure checkpoint — 2026-10-06
+
+2026-10-01 之後的 Phase 1 closure 以 `doc/progress.md` 的 11 個工作包為目前執行序；本文件後續各節保留原始 vertical-slice delivery rationale，不再被解讀成另一套平行進度表。
+
+目前：
+- Completed packages：**4/11 = 36.4%**。
+- Current package：**#5 — Task 9 Drive Knowledge 正式交付與 production acceptance**。
+- Current state：**PARTIAL**。
+- exact release SHA `8c1527ecc93709cf49eada00257183483b706eb6` 的 CI #547、Cloud Run #419、Firebase #365、Notes UI #130、Post-deploy #84 已 PASS。
+- Drive Knowledge #40 final gate 仍 FAIL：Picker production config、live external AI、real Picker-selected Drive fixture 尚未全部 PASS。
+- #5 全部 mandatory gates PASS 後才進 #6 Habits productization；不可因 CI / deployment 已綠燈跳過 Task 9 integration gate。
+
+測試、CI/CD、deployment、acceptance 遇到卡住時，依 `recovering-stuck-ci-deploys` 先分類 queued / silent-but-bounded / timeout-failure / workflow-chain break，再決定是否 retry；不以重跑取代 evidence。
 
 ## 原則
 

@@ -1,6 +1,6 @@
 # 生活助理 App v0.1 — Acceptance Criteria
 
-最後更新：2026-09-28
+最後更新：2026-10-06
 
 > 本文件定義 Phase 1 Platform Release Gate。`[x]` 只代表該條要求層級已有足夠 evidence；Implementation / CI / Deployment PASS 不自動等於 Runtime / Integration PASS。
 
@@ -106,6 +106,28 @@
 - [x] 真實帳號 Drive Bridge ensure PASS。
 - [x] synthetic root-success / bridge-failure → `partial_success` execution evidence runtime PASS。
 - [ ] 真實 provider failure / partial-success execution evidence PASS。
+
+### Task 9 — Drive Knowledge production delivery checkpoint（2026-10-06）
+
+Production release SHA：`8c1527ecc93709cf49eada00257183483b706eb6`。
+
+- [x] CI #547 / run `37398923047` PASS。
+- [x] Deploy Cloud Run #419 / run `37399118811` PASS。
+- [x] Deploy Firebase Hosting #365 / run `37399118824` PASS。
+- [x] Notes UI Acceptance #130 / run `37399362083` PASS。
+- [x] Post-deploy Runtime Acceptance #84 / run `37401137520` PASS。
+- [x] Drive Knowledge synthetic backend runtime PASS。
+- [x] exact Firebase release observed PASS。
+- [x] OAuth client public redirect check PASS。
+- [x] Drive Knowledge production UI acceptance PASS。
+- [ ] Runtime-loaded Google Picker production config PASS；目前 FAIL，Cloud Run task exit `96` = Picker developer key + app id 缺少。
+- [ ] Live external AI production acceptance PASS；目前 FAIL，Cloud Run task exit `107` = provider + model + API key 未完成 production config。
+- [ ] Real Google Drive Picker-selected fixture integration PASS；目前 `DRIVE_ACCEPTANCE_USER_SUB` / `DRIVE_ACCEPTANCE_GOOGLE_FILE_ID` 空白，故 NOT VERIFIED。
+
+Drive Knowledge Runtime Acceptance #40 / run `37401905383` 的 final mandatory gate 因上述三項未完成而 FAIL。步驟本身使用 `continue-on-error` 時可顯示 step conclusion success，因此完成判定必須看 runner/task exit 與 final gate，不可只看單一步驟表面 conclusion。
+
+**Task 9 = PARTIAL；Package #5 尚未 DONE；Phase 1 closure 仍為 4/11 = 36.4%。**
+
 
 ## Backend Error / Audit
 
@@ -252,6 +274,19 @@ Legacy SQLite 同名能力不等於 Cloud acceptance；上述 `[x]` 依 Cloud Do
 - SQLite success-path execution `life-assistant-sqlite-backfill-acceptance-8hv2l`：PASS；failure-path execution `life-assistant-sqlite-backfill-failure-acceptance-g84n9`：PASS。
 - Cloud Run deploy 仍有既有非阻塞 `--allow-unauthenticated` IAM policy re-apply warning；revision 仍 100% serving，health/ready/401 checks PASS，未做額外 IAM 變更。
 - **Calendar destructive confirmation enforcement：DONE / PASS。此證據不代表所有 destructive/sensitive action 的 final policy gate 已完成。**
+
+
+
+### CI/CD stuck-recovery checkpoint — 2026-10-06
+
+- [x] 共用 Cloud Run Job wait 具 bounded execution：`RUN_JOB_MAX_WAIT_SECONDS` 預設 660 秒。
+- [x] wait 期間具可觀測 heartbeat：`RUN_JOB_HEARTBEAT_SECONDS` 預設 30 秒。
+- [x] success / timeout / failure 分別輸出 `cloud_run_job_wait=PASS / TIMEOUT / FAIL` 並保留 failure diagnostics。
+- [x] Deploy Cloud Run job 具 outer `timeout-minutes: 90`。
+- [x] workflow-run concurrency group 已依 upstream conclusion 隔離，避免 ineligible/skipped workflow_run 與有效 success run 共用同一 cancellation group。
+- [x] runtime evidence：Deploy Cloud Run #419 中多個 `life-assistant-core-acceptance` execution 實際持續輸出 30 秒 heartbeat，最後均輸出 PASS；workflow overall PASS。
+- [x] Post-deploy Runtime Acceptance #84 PASS。
+- [ ] 任何未來 timeout/failure 仍需依 `recovering-stuck-ci-deploys` 分類 queued / silent-but-bounded / true timeout-failure / chain break；不得因本次 hardening 已 PASS 就假設未來卡住都屬同一原因。
 
 ## Phase 1 Status
 

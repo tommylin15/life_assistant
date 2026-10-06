@@ -1,8 +1,19 @@
 # 生活助理 App v0.1 — Release Checklist
 
-最後更新：2026-09-24
+最後更新：2026-10-06
 
 > 本清單定義目前 **Phase 1 Web / Cloud Release Gate**。尚未完成的項目維持未勾選；完成判定需有實際 tests / CI / deployment / runtime evidence。
+
+## Current checkpoint — 2026-10-06
+
+本清單仍是 **Phase 1 final gate**，未勾選項不因單一工作包通過而自動變成完成。當前 rollup：
+
+- Phase 1 closure：**4/11 = 36.4%，PARTIAL**。
+- Current package：**#5 Task 9 — Drive Knowledge production delivery + acceptance，PARTIAL**。
+- release SHA `8c1527ecc93709cf49eada00257183483b706eb6`：CI #547、Cloud Run #419、Firebase #365、Notes UI #130、Post-deploy #84 PASS。
+- Drive Knowledge #40 final mandatory gate FAIL：Picker production config、live external AI、real Picker-selected Drive fixture 尚未 PASS。
+- CI/CD stuck-recovery hardening（heartbeat / hard timeout / diagnostics / workflow-run concurrency isolation）已有 production runtime evidence PASS。
+- 因此本文件不得被解讀為「CI 綠燈即可 release complete」；Task 9 與其餘 #6–#11 closure packages 仍需逐包完成。
 
 ## 1. Web / PWA
 

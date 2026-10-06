@@ -9,13 +9,39 @@ fi
 JOB_NAME="$1"
 shift
 
+HEARTBEAT_SECONDS="${RUN_JOB_HEARTBEAT_SECONDS:-30}"
+MAX_WAIT_SECONDS="${RUN_JOB_MAX_WAIT_SECONDS:-660}"
+
+start_epoch="$(date +%s)"
 set +e
-"$@"
+timeout --signal=TERM --kill-after=15s "$MAX_WAIT_SECONDS" "$@" &
+COMMAND_PID=$!
+
+(
+  while kill -0 "$COMMAND_PID" 2>/dev/null; do
+    now="$(date +%s)"
+    elapsed=$((now - start_epoch))
+    echo "cloud_run_job_wait=HEARTBEAT job=$JOB_NAME elapsed_seconds=$elapsed max_wait_seconds=$MAX_WAIT_SECONDS"
+    sleep "$HEARTBEAT_SECONDS"
+  done
+) &
+HEARTBEAT_PID=$!
+
+wait "$COMMAND_PID"
 COMMAND_EXIT=$?
+kill "$HEARTBEAT_PID" 2>/dev/null || true
+wait "$HEARTBEAT_PID" 2>/dev/null || true
 set -e
 
 if [ "$COMMAND_EXIT" -eq 0 ]; then
+  echo "cloud_run_job_wait=PASS job=$JOB_NAME"
   exit 0
+fi
+
+if [ "$COMMAND_EXIT" -eq 124 ] || [ "$COMMAND_EXIT" -eq 137 ]; then
+  echo "::error::cloud_run_job_wait=TIMEOUT job=$JOB_NAME max_wait_seconds=$MAX_WAIT_SECONDS"
+else
+  echo "::error::cloud_run_job_wait=FAIL job=$JOB_NAME command_exit=$COMMAND_EXIT"
 fi
 
 echo "::error::Cloud Run job $JOB_NAME failed with exit code $COMMAND_EXIT; collecting diagnostics."

@@ -9,6 +9,7 @@ import 'auth_state.dart';
 import 'drive_page.dart';
 import 'drive_settings_page.dart';
 import 'integrations_page.dart';
+import 'habits_page.dart';
 import 'login_page.dart';
 import 'more_page.dart';
 import 'notes_page.dart';
@@ -45,6 +46,10 @@ final _router = GoRouter(
           ),
         ),
         GoRoute(path: '/projects', builder: (_, __) => const ProjectsPage()),
+        GoRoute(
+          path: '/more/habits',
+          builder: (_, __) => const HabitsPage(),
+        ),
         GoRoute(
           path: '/more/notes',
           builder: (_, __) => const NotesPage(),

@@ -125,7 +125,7 @@
 - 真實 fixture 已透過 Picker 登記，驗收帳號與 file ID 已設於 GitHub `dev-test`；來源文件保持不變，驗收只清理自己建立的本地 Note / Tag。識別碼與其他專案 secret 清理 evidence 見 `integrations.md`。
 - 歷史 #45 live AI 因免費 endpoint 不支援嚴格 JSON Schema 回覆 `404` 而 FAIL；commit `2d08118` 改為 OpenRouter JSON mode + schema prompt，保留後端欄位 / candidate ID 驗證與 `data_collection=deny`。#47 已覆蓋修復後正式版本。
 
-**Task 9 historical closure release `2d08118...` / #47 = DONE / PASS；但 latest release `02eda11...` 的 Drive Knowledge #54 = FAIL（live external AI production acceptance）。Package #5 歷史封板 evidence 保留，但目前 Drive Knowledge production health 不可宣稱全綠。**
+**Task 9 historical closure release `2d08118...` / #47 = DONE / PASS；latest health 已由 release `3b75e9e...` 的 Drive Knowledge #59 / run `37595859159` 再次驗證 PASS。Package #5 歷史封板 evidence 保留，current Drive Knowledge production health 亦為 PASS。**
 
 ## Habits productization checkpoint — Package #6（2026-10-07）
 
@@ -152,9 +152,12 @@ Evidence：
 
 ### Latest-release cross-feature health note
 
-- Drive Knowledge Runtime Acceptance #54 / run `37578066375`：**FAIL**。
-- Failure scope：live external AI production acceptance；同次 run 的 Picker app-id contract、real Drive fixture、exact Firebase release、OAuth config 與 production UI evidence仍可見 PASS。
-- 因此 Task 9 的 historical closure release `2d08118...` 與 #47 PASS 保留為歷史封板 evidence；但 **current latest-release Drive Knowledge health = FAIL**，不得以歷史 PASS 取代目前 runtime truth。
+- Habits release `02eda1124885846f41ca32ca185d9e1a5a5ebfe1` 的 Drive Knowledge Runtime Acceptance #54 / run `37578066375` 曾為 **FAIL**；failure scope 僅 live external AI production acceptance，其餘 Picker / real Drive fixture / exact Firebase / OAuth / production UI 皆有 PASS evidence。
+- 原 #54 / rerun 的 Cloud Run task exit `85` 只能證明 provider call failure；GitHub deployment identity 無 Cloud Logging read 權限，因此未將單一 provider 根因臆測為已知。
+- Remediation：`89d54011` 加入 bounded transient retry；`a44617bc` 讓 live acceptance 測完所有 configured providers 並以 provider failure mask 暴露失敗；`668aa0db` / `3b75e9e2` 補齊 runtime resilience / retry tests。
+- Release `3b75e9e288be0d2179cd381281b55210a14ad875`：CI #562 / run `37592497897`、Firebase #380 / run `37592780715`、Cloud Run #434 / run `37592780705`、Post-deploy Runtime #100 / run `37594646099` 均 **PASS**。
+- Drive Knowledge Runtime Acceptance #59 / run `37595859159`：**PASS**；production config、synthetic runtime、real Google Drive fixture、live external AI、exact Firebase release、OAuth redirect、production UI 與 final mandatory gate 全 PASS。Live external AI execution `life-assistant-postdeploy-acceptance-n8zk9` successful。
+- 因此 **#54 regression = CLOSED / PASS**；current latest-release Drive Knowledge health 已恢復全綠，可繼續 #7 Shopping。
 
 ## Backend Error / Audit
 

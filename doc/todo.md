@@ -6,24 +6,26 @@
 
 ## Current
 
-### #6 — Habits 完整產品化
+### #7 — Shopping 完整產品化
 
-狀態：**NOT STARTED**。下一步先檢查既有 backend / UI / tests，完成可操作 vertical slice 與 mobile / desktop acceptance。
+狀態：**NOT STARTED**。#6 Habits 已封板；Drive Knowledge #54 regression 亦已由 release `3b75e9e...` / Runtime Acceptance #59 PASS 關閉。下一步檢查既有 Shopping backend / UI / tests，完成可操作 vertical slice 與 mobile / desktop acceptance。
 
 ## Just Closed
 
-### #5 — Task 9：Drive Knowledge 正式交付與 production acceptance
+### #6 — Habits 完整產品化
 
-狀態：**DONE / PASS**；closure progress **5/11 = 45.5%**。
+狀態：**DONE / PASS**；closure progress **6/11 = 54.5%**。
 
-- release `2d08118a13c71c6fec97e8bfba0857b861eefd1e`；Drive Knowledge #47 / run `37568734572` final mandatory gate PASS。
-- Picker、三個 live AI provider、真實 Drive fixture 與 production UI 全 PASS；完整 release / secret / fixture evidence 見 `acceptance.md`、`integrations.md`。
+- release `02eda1124885846f41ca32ca185d9e1a5a5ebfe1`；CI #558、Firebase #376、Cloud Run #430、Habits UI #7、Post-deploy Runtime #96 PASS。
+- Follow-up cross-feature Drive Knowledge #54 曾 FAIL；修正版 release `3b75e9e288be0d2179cd381281b55210a14ad875` 的 CI #562、Cloud Run #434、Post-deploy #100、Drive Knowledge #59 / run `37595859159` 全 PASS，regression 已關閉。
+- 詳細 evidence 見 `progress.md`、`acceptance.md`、`integrations.md`。
 
 ## Next
 
-1. #6–#9 — Habits / Shopping / Calendar / Activity + Integrations productization。
-2. #10 — Integration / foundation tail closure。
-3. #11 — Phase 1 final Release Gate / 封板 checkpoint。
+1. #7 — Shopping 完整產品化。
+2. #8–#9 — Calendar / Activity + Integrations productization。
+3. #10 — Integration / foundation tail closure。
+4. #11 — Phase 1 final Release Gate / 封板 checkpoint。
 
 ## Non-blocking backlog
 

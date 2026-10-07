@@ -21,7 +21,7 @@
 - **Completed packages：6 / 11**
 - **Closure progress：54.5%**
 - **Current package：#7 — Shopping 完整產品化**
-- **Current state：NOT STARTED — #6 Habits 已完成 vertical-slice 封板；另有 latest-release Drive Knowledge regression（#54 FAIL）需獨立追蹤。**
+- **Current state：NOT STARTED — #6 Habits 已完成 vertical-slice 封板；Drive Knowledge latest-release regression 已於 release `3b75e9e288be0d2179cd381281b55210a14ad875` / Runtime Acceptance #59 關閉並恢復 PASS。**
 - **Next checkpoint：#7 DONE 後 = 7/11 = 63.6%**
 
 | # | 工作包 | 狀態 | DONE 條件 / 目前 gate |
@@ -30,7 +30,7 @@
 | 2 | 全專案 Design System / UI Style Checkpoint | ✅ DONE | Warm Knowledge 單一正式視覺基線已核准；Home / Tasks / Project 三張完工樣板已回存 Drive；semantic tokens、shared components、responsive contract 已落 GitHub；release SHA `567511c62fb70b0d8c40b54e2a9d0f4500bcfcf9`；CI #459、Firebase Hosting #277、Cloud Run #329 PASS |
 | 3 | Task 7 — provider-agnostic AI enrichment | ✅ DONE | provider abstraction、privacy/consent/cache、shared Tag、候選 Notes、accept/reject relation、partial-success semantics；release SHA `cd2fdcd5645a9f73141c7824b59a8349d15bb86c`；CI #463、Cloud Run #335、Drive AI Runtime #3 PASS |
 | 4 | Task 8 — 智能整理 review UI | ✅ DONE | 獨立 Drive review/settings UI、provider-neutral presentation、explicit consent、Note suggestion accept/reject、force re-analysis、partial/failed/skipped fallback、desktop/mobile production acceptance；release SHA `78cdb43645f606d63b8a6171e53babec9f26de10`；CI #482、Firebase #300、Notes/Drive UI Acceptance #65 PASS；backend/runtime 沿用相同產品碼基線 Cloud Run #352 + Post-deploy Runtime #17 PASS |
-| 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | ✅ DONE | release SHA `2d08118a13c71c6fec97e8bfba0857b861eefd1e`；CI #551、Firebase #369、Drive Knowledge #47 final gate PASS；Picker / Gemini / Groq / OpenRouter / 真實 Drive / production UI 全 PASS |
+| 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | ✅ DONE | historical closure release `2d08118a13c71c6fec97e8bfba0857b861eefd1e` / #47 PASS；latest health release `3b75e9e288be0d2179cd381281b55210a14ad875` / Drive Knowledge #59 PASS；Picker / live external AI / 真實 Drive / production UI 全 PASS |
 | 6 | Habits 完整產品化 | ✅ DONE | release SHA `02eda1124885846f41ca32ca185d9e1a5a5ebfe1`；CI #558、Firebase #376、Cloud Run #430、Habits UI Acceptance #7、Post-deploy Runtime #96 全 PASS；Habit list/create/update/complete/history、週期/提醒 UI、mobile/desktop production acceptance 與真實 PostgreSQL runtime evidence 完整 |
 | 7 | Shopping 完整產品化 | ⬜ NOT STARTED | 完整 vertical slice：implementation、tests、CI、deployment/runtime、可操作 UI、mobile/desktop acceptance |
 | 8 | Calendar 完整產品化 | ⬜ NOT STARTED | 一般使用者 read/list/create/update/delete UX + true-account verification + 完整 vertical-slice evidence |
@@ -154,7 +154,7 @@
 - Post-deploy Runtime Acceptance #96 / run `37579244566`：PASS；Notes、Project Drive、Drive AI enrichment regression 全 PASS。
 - Habit backend runtime 由 authenticated cloud-domain acceptance 真實走 PostgreSQL，涵蓋 habit create/update/complete/completions/activity persistence。
 - 因此 Package #6 計入 DONE；下一工作包為 **#7 Shopping 完整產品化**。
-- **Cross-feature regression：**同一 release 的 Drive Knowledge Runtime Acceptance #54 / run `37578066375` 為 **FAIL**，失敗點為 live external AI production acceptance。Picker app-id、真實 Drive fixture、exact Firebase release、OAuth 與 production UI 仍有 PASS evidence。此 regression 不否定 Habits #6 的封板 evidence，但 latest-release Drive Knowledge health 必須標示 FAIL，不能沿用舊 #47 PASS 宣稱目前仍全綠。
+- **Cross-feature regression closure：**Habits release `02eda112...` 的 Drive Knowledge Runtime Acceptance #54 / run `37578066375` 曾因 live external AI production acceptance FAIL。後續 commits `89d54011` / `a44617bc` / `668aa0db` / `3b75e9e2` 加入 transient retry、provider failure mask 與測試；release `3b75e9e288be0d2179cd381281b55210a14ad875` 的 CI #562、Firebase #380、Cloud Run #434、Post-deploy Runtime #100 與 Drive Knowledge Runtime Acceptance #59 / run `37595859159` 均 PASS，latest-release Drive Knowledge health 已恢復全綠。
 
 ## 文件與 evidence 分工
 
@@ -174,5 +174,5 @@
 
 1. #6 Habits 已 DONE，封板進度 **6/11 = 54.5%**。
 2. 下一工作包：#7 Shopping 完整產品化；目前 NOT STARTED。
-3. Latest-release Drive Knowledge Runtime Acceptance #54 為 **FAIL**（live external AI production acceptance）；此 regression 不否定 #6 Habits 封板，但目前 production health 不可宣稱全綠。
+3. Drive Knowledge #54 regression 已關閉：release `3b75e9e...` 的 Runtime Acceptance #59 / run `37595859159` **PASS**，目前 latest-release production health 已恢復全綠。
 4. #7–#11 依 `phase1_delivery_order.md` 推進；Phase 1 整體仍 PARTIAL。

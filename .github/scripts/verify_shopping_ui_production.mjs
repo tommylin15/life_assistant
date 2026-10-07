@@ -196,10 +196,10 @@ async function desktop(context) {
   await semantics(page);
 
   await named(page, '購物清單');
-  await named(page, '生活用品');
-  await named(page, '完成 0 / 1');
-  await named(page, '牛奶');
-  await named(page, '分類：生鮮');
+  await named(page, /生活用品/);
+  await named(page, /完成 0 \/ 1/);
+  await named(page, /牛奶/);
+  await named(page, /分類：生鮮/);
   pass('list_category_progress');
 
   await (await named(page, '新增清單')).click();
@@ -210,7 +210,7 @@ async function desktop(context) {
     () => state.creates.some((body) => body.name === '旅行採買'),
     'shopping list create',
   );
-  await named(page, '旅行採買');
+  await named(page, /旅行採買/);
   pass('create_list');
 
   await (await named(page, '新增品項：旅行採買')).click();
@@ -222,20 +222,21 @@ async function desktop(context) {
     () => state.itemCreates.some((entry) => entry.body.name === '充電線'),
     'shopping item create',
   );
-  await named(page, '充電線');
-  await named(page, '分類：3C');
+  await named(page, /充電線/);
+  await named(page, /分類：3C/);
   pass('create_item');
 
-  const toggle = page.getByText('充電線').locator('..').getByRole('checkbox');
-  const fallbackToggle = page.getByRole('checkbox').last();
-  const checkbox = (await toggle.count()) > 0 ? toggle : fallbackToggle;
-  await checkbox.check();
+  const checkbox = await visible([
+    page.getByRole('checkbox', { name: /充電線/ }),
+    page.getByRole('checkbox').last(),
+  ]);
+  await checkbox.click();
 
   await waitObserved(
     () => state.updates.some((entry) => entry.body.is_done === true),
     'shopping item toggle',
   );
-  await named(page, '完成 1 / 1');
+  await named(page, /完成 1 \/ 1/);
   pass('toggle_item');
 
   await page.close();
@@ -256,7 +257,7 @@ async function mobile(context) {
   await page.goto(`${baseUrl}/more`, { waitUntil: 'domcontentloaded' });
   await semantics(page);
   await (await named(page, '購物清單')).click();
-  await named(page, '生活用品');
+  await named(page, /生活用品/);
   await named(page, '新增清單');
   await named(page, '新增品項：生活用品');
   assert.deepEqual(overflow, []);

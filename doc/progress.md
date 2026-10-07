@@ -18,11 +18,12 @@
 
 ### 目前總覽
 
-- **Completed packages：6 / 11**
-- **Closure progress：54.5%**
-- **Current package：#7 — Shopping 完整產品化**
-- **Current state：NOT STARTED — #6 Habits 已完成 vertical-slice 封板；Drive Knowledge latest-release regression 已於 release `3b75e9e288be0d2179cd381281b55210a14ad875` / Runtime Acceptance #59 關閉並恢復 PASS。**
-- **Next checkpoint：#7 DONE 後 = 7/11 = 63.6%**
+- **Completed packages：7 / 11**
+- **Closure progress：63.6%**
+- **Current package：#7 — Shopping 完整產品化（已封板；依使用者指示停在 #7）**
+- **Current state：DONE / PASS — Shopping implementation、tests、CI、Firebase、Cloud Run、PostgreSQL runtime、desktop/mobile production UI evidence 完整。**
+- **Next checkpoint：#8 Calendar = NOT STARTED；留待新對話開始。**
+- **Independent cross-feature health：Drive Knowledge Runtime Acceptance #63 / run `37625447402` 兩次 attempt 皆 FAIL，Cloud Run task exit `91` = Gemini-only direct provider health failure；此 regression 保持 OPEN，不包裝為 PASS，也不回溯取消 Shopping #7 的 DONE。**
 
 | # | 工作包 | 狀態 | DONE 條件 / 目前 gate |
 |---|---|---|---|
@@ -32,7 +33,7 @@
 | 4 | Task 8 — 智能整理 review UI | ✅ DONE | 獨立 Drive review/settings UI、provider-neutral presentation、explicit consent、Note suggestion accept/reject、force re-analysis、partial/failed/skipped fallback、desktop/mobile production acceptance；release SHA `78cdb43645f606d63b8a6171e53babec9f26de10`；CI #482、Firebase #300、Notes/Drive UI Acceptance #65 PASS；backend/runtime 沿用相同產品碼基線 Cloud Run #352 + Post-deploy Runtime #17 PASS |
 | 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | ✅ DONE | historical closure release `2d08118a13c71c6fec97e8bfba0857b861eefd1e` / #47 PASS；latest health release `3b75e9e288be0d2179cd381281b55210a14ad875` / Drive Knowledge #59 PASS；Picker / live external AI / 真實 Drive / production UI 全 PASS |
 | 6 | Habits 完整產品化 | ✅ DONE | release SHA `02eda1124885846f41ca32ca185d9e1a5a5ebfe1`；CI #558、Firebase #376、Cloud Run #430、Habits UI Acceptance #7、Post-deploy Runtime #96 全 PASS；Habit list/create/update/complete/history、週期/提醒 UI、mobile/desktop production acceptance 與真實 PostgreSQL runtime evidence 完整 |
-| 7 | Shopping 完整產品化 | ⬜ NOT STARTED | 完整 vertical slice：implementation、tests、CI、deployment/runtime、可操作 UI、mobile/desktop acceptance |
+| 7 | Shopping 完整產品化 | ✅ DONE | release SHA `1dd0b1f15827ae9cf50a8f4fcb69a1fa3782f40d`；CI #566、Firebase #384、Cloud Run #438、Shopping UI #4、Post-deploy Runtime #104 PASS；list/create item/toggle、分類/進度、mobile navigation、真實 PostgreSQL cloud-domain persistence evidence 完整 |
 | 8 | Calendar 完整產品化 | ⬜ NOT STARTED | 一般使用者 read/list/create/update/delete UX + true-account verification + 完整 vertical-slice evidence |
 | 9 | Activity / Execution Log + Integrations 完整產品化 | ⬜ NOT STARTED | 使用者可理解的 Activity / Integration UI + 所需 runtime/integration evidence |
 | 10 | Integration / Foundation 尾項收尾 | ⬜ NOT STARTED | Attachment strategy；Bridge/MCP contract；true provider failure / partial-success；Calendar true-account read/list 重驗；historical SQLite migration 僅在 source 存在時執行 |
@@ -156,6 +157,21 @@
 - 因此 Package #6 計入 DONE；下一工作包為 **#7 Shopping 完整產品化**。
 - **Cross-feature regression closure：**Habits release `02eda112...` 的 Drive Knowledge Runtime Acceptance #54 / run `37578066375` 曾因 live external AI production acceptance FAIL。後續 commits `89d54011` / `a44617bc` / `668aa0db` / `3b75e9e2` 加入 transient retry、provider failure mask 與測試；release `3b75e9e288be0d2179cd381281b55210a14ad875` 的 CI #562、Firebase #380、Cloud Run #434、Post-deploy Runtime #100 與 Drive Knowledge Runtime Acceptance #59 / run `37595859159` 均 PASS，latest-release Drive Knowledge health 已恢復全綠。
 
+## Package #7 closure evidence — 2026-10-07
+
+- 狀態：**DONE / PASS**；全案 closure **7/11 = 63.6%**。
+- Final release SHA：`1dd0b1f15827ae9cf50a8f4fcb69a1fa3782f40d`。
+- Product implementation：`/more/shopping` 正式入口、Shopping API facade、清單建立、品項新增、分類、完成狀態 toggle、清單完成進度、loading / empty / error state、responsive mobile/desktop UI。
+- Initial product commit：`6884d9baadec0702ac8976edda07ac79068c6020`；provider-container test isolation fix：`a99a11ff980df16442b28876b4efe113d8721363`；production semantics hardening：`a88e7acc23c701c22b27b3419a10e8b61492a238`；mobile merged-semantics navigation fix：`1dd0b1f15827ae9cf50a8f4fcb69a1fa3782f40d`。
+- CI #566 / run `37621843816`：**PASS**；backend、deployment scripts、Flutter Analyze、完整 tests、Web build、branding verify 全 PASS。
+- Firebase Hosting #384 / run `37622140411`：**PASS**；exact release deploy/verify、Task 與 Project production UI regression PASS。
+- Shopping UI Acceptance #4 / run `37622504893`：**PASS**；`list_category_progress`、`create_list`、`create_item`、`toggle_item`、`mobile_navigation_controls` 全 PASS。
+- Habits UI #15 / run `37622504844`、Notes UI #149 / run `37622504904`：**PASS**，同 release UI regression 未發現新破壞。
+- Deploy Cloud Run #438 / run `37622140547`：**PASS**；migration、deploy、health、DB readiness、401 protection、authenticated cloud-domain、checklist、action-id idempotency、Google failure-path、SQLite success/failure 與 image cleanup 全部通過。Authenticated cloud-domain acceptance 真實走 FastAPI + PostgreSQL，涵蓋 Shopping list/item persistence。
+- Post-deploy Runtime Acceptance #104 / run `37624483194`：**PASS**。
+- 因此 Shopping #7 的 DONE 條件（implementation / tests / CI / deployment / runtime / UI entry + 操作 flow / mobile+desktop acceptance）均有直接 evidence，Package #7 計入 DONE。
+- **不相關但必須保留的 latest-release health issue：**Drive Knowledge Runtime Acceptance #63 / run `37625447402` attempt 1、2 均 FAIL。兩次 live external AI Cloud Run task exit 都為 `91`；依 `run_drive_external_ai_acceptance.py` 的 provider failure mask，代表 Gemini bit `1` 單獨失敗。Production config、synthetic runtime、real Drive fixture、exact Firebase release、OAuth、Drive Knowledge production UI 均 PASS；該 provider-health regression 保持 **OPEN / FAIL**，不降級驗收門檻，也不宣稱 latest release 全案全綠。
+
 ## 文件與 evidence 分工
 
 - `phase1_delivery_order.md`：目前執行順序。
@@ -172,7 +188,7 @@
 
 ## 下一步
 
-1. #6 Habits 已 DONE，封板進度 **6/11 = 54.5%**。
-2. 下一工作包：#7 Shopping 完整產品化；目前 NOT STARTED。
-3. Drive Knowledge #54 regression 已關閉：release `3b75e9e...` 的 Runtime Acceptance #59 / run `37595859159` **PASS**，目前 latest-release production health 已恢復全綠。
-4. #7–#11 依 `phase1_delivery_order.md` 推進；Phase 1 整體仍 PARTIAL。
+1. #7 Shopping 已 **DONE / PASS**；封板進度 **7/11 = 63.6%**。
+2. 依使用者指示，本對話停在 #7；**#8 Calendar 尚未開始**，留待新對話。
+3. Drive Knowledge #63 為獨立 cross-feature provider-health regression：兩次 attempt 皆 Gemini-only exit `91`，狀態 **OPEN / FAIL**；不得描述為已修復或全案全綠。
+4. Phase 1 整體仍 **PARTIAL**；#8–#11 尚未完成。

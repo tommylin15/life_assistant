@@ -6,24 +6,27 @@
 
 ## Current
 
-### #7 — Shopping 完整產品化
+### Paused after #7 — per user instruction
 
-狀態：**NOT STARTED**。#6 Habits 已封板；Drive Knowledge #54 regression 亦已由 release `3b75e9e...` / Runtime Acceptance #59 PASS 關閉。下一步檢查既有 Shopping backend / UI / tests，完成可操作 vertical slice 與 mobile / desktop acceptance。
+狀態：**#7 Shopping = DONE / PASS；7/11 = 63.6%**。本對話不啟動 #8。
+
+獨立 cross-feature health：Drive Knowledge Runtime Acceptance #63 / run `37625447402` 兩次 attempt 均 FAIL，task exit `91` = Gemini-only direct provider failure。此項保持 OPEN，不影響 #7 的直接完成證據，但代表 latest-release cross-feature health 並非全綠。
 
 ## Just Closed
 
-### #6 — Habits 完整產品化
+### #7 — Shopping 完整產品化
 
-狀態：**DONE / PASS**；closure progress **6/11 = 54.5%**。
+狀態：**DONE / PASS**；closure progress **7/11 = 63.6%**。
 
-- release `02eda1124885846f41ca32ca185d9e1a5a5ebfe1`；CI #558、Firebase #376、Cloud Run #430、Habits UI #7、Post-deploy Runtime #96 PASS。
-- Follow-up cross-feature Drive Knowledge #54 曾 FAIL；修正版 release `3b75e9e288be0d2179cd381281b55210a14ad875` 的 CI #562、Cloud Run #434、Post-deploy #100、Drive Knowledge #59 / run `37595859159` 全 PASS，regression 已關閉。
-- 詳細 evidence 見 `progress.md`、`acceptance.md`、`integrations.md`。
+- final release `1dd0b1f15827ae9cf50a8f4fcb69a1fa3782f40d`。
+- CI #566 / run `37621843816`、Firebase #384 / run `37622140411`、Cloud Run #438 / run `37622140547`、Shopping UI #4 / run `37622504893`、Post-deploy Runtime #104 / run `37624483194`：PASS。
+- Shopping list/create item/category/toggle/progress、responsive UI、More navigation、mobile/desktop production acceptance、真實 PostgreSQL persistence evidence 完整。
+- 詳細 evidence 見 `progress.md`、`acceptance.md`。
 
 ## Next
 
-1. #7 — Shopping 完整產品化。
-2. #8–#9 — Calendar / Activity + Integrations productization。
+1. #8 — Calendar 完整產品化：**NOT STARTED；新對話才開始**。
+2. #9 — Activity / Execution Log + Integrations productization。
 3. #10 — Integration / foundation tail closure。
 4. #11 — Phase 1 final Release Gate / 封板 checkpoint。
 
@@ -38,6 +41,7 @@
 - 真實帳號 Calendar read/list 重驗。
 - 真實歷史 SQLite migration：只有在實際 legacy SQLite source file 可定位時執行。
 - Artifact Registry latest-only retention 的最終 physical inventory evidence。
+- Drive Knowledge latest-release provider health regression：Runtime Acceptance #63 / run `37625447402` attempt 1、2 均 FAIL，task exit `91` = Gemini-only direct provider failure；保持 OPEN，後續獨立修復，不得誤標已解決。
 
 ## Product DONE 規則
 

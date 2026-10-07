@@ -159,6 +159,38 @@ Evidence：
 - Drive Knowledge Runtime Acceptance #59 / run `37595859159`：**PASS**；production config、synthetic runtime、real Google Drive fixture、live external AI、exact Firebase release、OAuth redirect、production UI 與 final mandatory gate 全 PASS。Live external AI execution `life-assistant-postdeploy-acceptance-n8zk9` successful。
 - 因此 **#54 regression = CLOSED / PASS**；current latest-release Drive Knowledge health 已恢復全綠，可繼續 #7 Shopping。
 
+## Shopping productization checkpoint — Package #7（2026-10-07）
+
+- [x] 正式 Web entry：`/more/shopping`。
+- [x] Shopping list create / list UI。
+- [x] Shopping item create UI。
+- [x] item category presentation。
+- [x] item done / undone mutation 與清單完成進度。
+- [x] loading / empty / error states。
+- [x] mobile + desktop production acceptance。
+- [x] 真實 PostgreSQL runtime：Shopping list/item create、toggle 與 reread persistence。
+- [x] exact release CI / Firebase / Cloud Run / post-deploy evidence。
+
+Evidence：
+
+- Final release SHA：`1dd0b1f15827ae9cf50a8f4fcb69a1fa3782f40d`。
+- CI #566 / run `37621843816`：PASS。
+- Firebase Hosting #384 / run `37622140411`：PASS。
+- Shopping UI Acceptance #4 / run `37622504893`：PASS；desktop list/category/progress、create list、create item、toggle item，以及 mobile More → Shopping navigation/controls 全 PASS。
+- Deploy Cloud Run #438 / run `37622140547`：PASS；authenticated cloud-domain acceptance 真實走 PostgreSQL，Shopping persistence path PASS；其餘既有 Cloud Run regression gates 亦 PASS。
+- Post-deploy Runtime Acceptance #104 / run `37624483194`：PASS。
+- 同 release Habits UI #15 / run `37622504844` 與 Notes UI #149 / run `37622504904`：PASS。
+- Mobile acceptance 初次 failure 根因為 Flutter `ListTile` merged semantics：精確字串 `購物清單` 無法匹配 title+subtitle semantic label。Final fix `1dd0b1f...` 改用已在 Habits 驗證過的 regex semantics locator 並加入 `/more/shopping` route assertion；production acceptance PASS。
+
+**Package #7 = DONE / PASS；Phase 1 closure = 7/11 = 63.6%。**
+
+### Independent latest-release Drive Knowledge health note
+
+- Drive Knowledge Runtime Acceptance #63 / run `37625447402`：attempt 1、2 均 **FAIL**。
+- 兩次 live external AI execution task exit 均為 `91`；現行 provider failure mask 定義 `90 + 1 = Gemini-only failure`。因此這不是 Shopping API/UI/runtime failure，也不是 Groq/OpenRouter 同時失敗的 evidence。
+- 同一 #63 的 production config、synthetic Drive Knowledge runtime、real Google Drive fixture、exact Firebase release、OAuth redirect、Drive Knowledge production UI 均 PASS。
+- 此 issue 維持 **OPEN / FAIL**；不更改 mandatory Drive Knowledge acceptance 標準、不以 fallback success 冒充 Gemini direct health PASS。它不取消已具完整 direct evidence 的 Shopping Package #7 DONE，但 Phase 1/latest-release cross-feature health 不得宣稱全綠。
+
 ## Backend Error / Audit
 
 - [x] API error = `error.code / message / request_id` baseline。

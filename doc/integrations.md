@@ -258,3 +258,12 @@ API references：[Gemini compatibility](https://ai.google.dev/gemini-api/docs/op
 Final deployed evidence：release `2d08118a13c71c6fec97e8bfba0857b861eefd1e` 的 Drive Knowledge #47 / run `37568734572` final gate PASS。真實 Drive execution `life-assistant-postdeploy-acceptance-hlpg2` PASS；AI execution `life-assistant-postdeploy-acceptance-sqlx5` 三個 provider 各自 PASS、exit `0`，Gemini 成功模型為 `3.6 Flash` / `3.8 Flash`。OpenRouter JSON mode 已在正式 image 中通過兩個 stage，不再是只通過本機驗收。
 
 Latest regression closure evidence：Habits release `02eda112...` 的 Drive Knowledge #54 曾在 live external AI gate 以 Cloud Run task exit `85` 失敗；因 deployment identity 缺 Cloud Logging read，當次無法可靠還原單一 provider 根因，因此不做未證實歸因。後續 `89d54011` 加入 408/429/5xx/transport bounded retry，`a44617bc` 改為逐一驗證全部 configured providers 並以 provider failure mask 回傳失敗組合，`668aa0db` / `3b75e9e2` 補齊測試。release `3b75e9e288be0d2179cd381281b55210a14ad875` 的 Drive Knowledge #59 / run `37595859159` final gate PASS；live external AI execution `life-assistant-postdeploy-acceptance-n8zk9` successful，real Drive / Picker / exact Firebase / OAuth / production UI 同輪亦全 PASS。
+
+
+## Latest provider health after Shopping release — 2026-10-07
+
+- Shopping final release `1dd0b1f15827ae9cf50a8f4fcb69a1fa3782f40d` 的 Drive Knowledge Runtime Acceptance #63 / run `37625447402` 已執行兩次 attempt，兩次 final mandatory gate 均 FAIL。
+- 失敗只來自 live external AI execution；兩次 Cloud Run task exit code 均為 `91`。依 `backend/scripts/run_drive_external_ai_acceptance.py`：`EXIT_PROVIDER_FAILURE_MASK_BASE=90`，Gemini bit=`1`，因此 `91` 可明確分類為 **Gemini-only direct provider health failure**。
+- 同一輪 production config、synthetic Drive Knowledge runtime、real Google Drive fixture、exact Firebase release、OAuth redirect、Drive Knowledge production UI 均 PASS。
+- 現行 live acceptance 的設計刻意逐一驗證 configured providers，不允許 fallback 成功遮蔽 primary provider failure；本次不修改此標準，也不把 fallback 可用性寫成 Gemini PASS。
+- 狀態：**OPEN / FAIL**。這是獨立 cross-feature/provider-health regression，需後續另行修復或待 upstream provider 恢復後重驗；Shopping Package #7 的 direct product evidence 已完整，因此 #7 仍可封板 DONE。

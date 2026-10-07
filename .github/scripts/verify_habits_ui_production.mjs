@@ -246,7 +246,7 @@ async function desktop(context) {
   await named(page, /提醒 22:00/);
   pass('update');
 
-  await (await named(page, '記錄完成：瀏覽器習慣更新')).click();
+  await (await named(page, /記錄完成：瀏覽器習慣更新/)).click();
   await waitObserved(
     () => state.completes.includes('habit-browser-1'),
     'habit completion',
@@ -255,9 +255,9 @@ async function desktop(context) {
   await named(page, /完成紀錄 1 筆/);
   pass('complete');
 
-  const historyButtons = page.getByRole('button', { name: /^完成紀錄$/ });
-  await visible([historyButtons]);
-  await historyButtons.first().click();
+  const historyButtons = page.getByRole('button', { name: /完成紀錄/ });
+  const historyButton = await visible([historyButtons]);
+  await historyButton.click();
   await named(page, /瀏覽器習慣更新 · 完成紀錄/);
   await named(page, /2026\/10\/7/);
   pass('history_dialog');
@@ -281,7 +281,7 @@ async function mobile(context) {
   await semantics(page);
   await (await named(page, /習慣/)).click();
   await named(page, /晨間快走/);
-  await named(page, '記錄完成：晨間快走');
+  await named(page, /記錄完成：晨間快走/);
   await named(page, '新增習慣');
   assert.deepEqual(overflow, []);
   pass('mobile_navigation_controls');

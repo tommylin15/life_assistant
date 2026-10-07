@@ -101,6 +101,7 @@ Future<void> _pump(
 ) async {
   await tester.pumpWidget(
     ProviderScope(
+      key: UniqueKey(),
       overrides: [shoppingApiProvider.overrideWithValue(api)],
       child: const MaterialApp(home: ShoppingPage()),
     ),

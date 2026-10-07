@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -18,6 +19,11 @@ from app import config
 TAG_CONFIDENCE_THRESHOLD = 0.80
 RELATED_NOTE_CONFIDENCE_THRESHOLD = 0.60
 _OPENAI_TIMEOUT_SECONDS = 30.0
+_TRANSIENT_RETRY_DELAYS_SECONDS = (1.0,)
+
+
+def _is_transient_http_status(status_code: int) -> bool:
+    return status_code in {408, 429} or 500 <= status_code <= 599
 
 
 @dataclass(frozen=True, slots=True)
@@ -389,15 +395,43 @@ class ChatCompletionsEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
                 " Return only a JSON object matching this schema: " + json.dumps(schema)
             )
             body["provider"] = {"require_parameters": True, "data_collection": "deny"}
-        try:
-            async with httpx.AsyncClient(timeout=_OPENAI_TIMEOUT_SECONDS) as client:
-                response = await client.post(
-                    f"{self._base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
-                    json=body,
+        response = None
+        last_http_error: httpx.HTTPError | None = None
+        for attempt in range(len(_TRANSIENT_RETRY_DELAYS_SECONDS) + 1):
+            try:
+                async with httpx.AsyncClient(timeout=_OPENAI_TIMEOUT_SECONDS) as client:
+                    response = await client.post(
+                        f"{self._base_url}/chat/completions",
+                        headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
+                        json=body,
+                    )
+            except httpx.HTTPError as exc:
+                last_http_error = exc
+                if attempt >= len(_TRANSIENT_RETRY_DELAYS_SECONDS):
+                    raise AIProviderError("provider_http_error") from exc
+                logging.getLogger(__name__).warning(
+                    "drive_ai_transient_retry provider=%s model=%s reason=transport attempt=%s",
+                    self.provider_name,
+                    self.model_name,
+                    attempt + 1,
                 )
-        except httpx.HTTPError as exc:
-            raise AIProviderError("provider_http_error") from exc
+            else:
+                if (
+                    not _is_transient_http_status(response.status_code)
+                    or attempt >= len(_TRANSIENT_RETRY_DELAYS_SECONDS)
+                ):
+                    break
+                logging.getLogger(__name__).warning(
+                    "drive_ai_transient_retry provider=%s model=%s status=%s attempt=%s",
+                    self.provider_name,
+                    self.model_name,
+                    response.status_code,
+                    attempt + 1,
+                )
+            await asyncio.sleep(_TRANSIENT_RETRY_DELAYS_SECONDS[attempt])
+
+        if response is None:
+            raise AIProviderError("provider_http_error") from last_http_error
         if not 200 <= response.status_code < 300:
             raise AIProviderError("provider_http_error")
         try:
@@ -444,13 +478,40 @@ class LatestGeminiEnrichmentProvider(ChatCompletionsEnrichmentProvider):
 
     async def _structured_response(self, **kwargs) -> dict[str, Any]:
         if self._models is None:
-            try:
-                async with httpx.AsyncClient(timeout=_OPENAI_TIMEOUT_SECONDS) as client:
-                    response = await client.get(
-                        "https://generativelanguage.googleapis.com/v1beta/models",
-                        headers={"x-goog-api-key": self._api_key},
-                        params={"pageSize": 1000},
+            response = None
+            last_http_error: httpx.HTTPError | None = None
+            for attempt in range(len(_TRANSIENT_RETRY_DELAYS_SECONDS) + 1):
+                try:
+                    async with httpx.AsyncClient(timeout=_OPENAI_TIMEOUT_SECONDS) as client:
+                        response = await client.get(
+                            "https://generativelanguage.googleapis.com/v1beta/models",
+                            headers={"x-goog-api-key": self._api_key},
+                            params={"pageSize": 1000},
+                        )
+                except httpx.HTTPError as exc:
+                    last_http_error = exc
+                    if attempt >= len(_TRANSIENT_RETRY_DELAYS_SECONDS):
+                        raise AIProviderError("provider_http_error") from exc
+                    logging.getLogger(__name__).warning(
+                        "drive_ai_transient_retry provider=gemini model=models-list reason=transport attempt=%s",
+                        attempt + 1,
                     )
+                else:
+                    if (
+                        not _is_transient_http_status(response.status_code)
+                        or attempt >= len(_TRANSIENT_RETRY_DELAYS_SECONDS)
+                    ):
+                        break
+                    logging.getLogger(__name__).warning(
+                        "drive_ai_transient_retry provider=gemini model=models-list status=%s attempt=%s",
+                        response.status_code,
+                        attempt + 1,
+                    )
+                await asyncio.sleep(_TRANSIENT_RETRY_DELAYS_SECONDS[attempt])
+
+            try:
+                if response is None:
+                    raise AIProviderError("provider_http_error") from last_http_error
                 if response.status_code != 200:
                     raise AIProviderError("provider_http_error")
                 models = response.json()["models"]
@@ -461,8 +522,6 @@ class LatestGeminiEnrichmentProvider(ChatCompletionsEnrichmentProvider):
                     if match and "generateContent" in item.get("supportedGenerationMethods", []):
                         versions[name] = tuple(map(int, match.group(1).split(".")))
                 self._models = sorted(versions, key=versions.get, reverse=True)[:3]
-            except httpx.HTTPError as exc:
-                raise AIProviderError("provider_http_error") from exc
             except (ValueError, TypeError, KeyError, AttributeError) as exc:
                 raise AIProviderError("provider_invalid_output") from exc
         # ponytail: at most three model attempts per stage; OpenRouter handles total failure.

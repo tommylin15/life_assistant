@@ -200,6 +200,21 @@ async function waitObserved(predicate, label) {
   throw new Error(`not observed: ${label}`);
 }
 
+async function activateSemanticTarget(locator, label) {
+  const info = await locator
+    .evaluate((element) => ({
+      tag: element.tagName,
+      role: element.getAttribute('role'),
+      aria: element.getAttribute('aria-label'),
+      text: element.textContent?.trim().slice(0, 160) ?? '',
+    }))
+    .catch(() => null);
+  console.log(`habits_ui_semantic_target=${label} ${JSON.stringify(info)}`);
+  await locator.evaluate((element) => {
+    element.click();
+  });
+}
+
 const pass = (name) => console.log(`habits_ui_check=${name}:PASS`);
 
 async function desktop(context) {
@@ -246,7 +261,8 @@ async function desktop(context) {
   await named(page, /提醒 22:00/);
   pass('update');
 
-  await (await named(page, /記錄完成：瀏覽器習慣更新/)).click();
+  const completeButton = await named(page, /記錄完成：瀏覽器習慣更新/);
+  await activateSemanticTarget(completeButton, 'complete habit');
   await waitObserved(
     () => state.completes.includes('habit-browser-1'),
     'habit completion',
@@ -257,7 +273,7 @@ async function desktop(context) {
 
   const historyButtons = page.getByRole('button', { name: /完成紀錄/ });
   const historyButton = await visible([historyButtons]);
-  await historyButton.click();
+  await activateSemanticTarget(historyButton, 'completion history');
   await named(page, /瀏覽器習慣更新 · 完成紀錄/);
   await named(page, /2026\/10\/7/);
   pass('history_dialog');

@@ -176,4 +176,6 @@ TDD / runtime evidence：
 - deployment：PASS
 - runtime heartbeat / bounded-wait evidence：PASS
 - workflow-chain concurrency isolation：PASS
-- Task 9 Drive Knowledge final acceptance：**另案 PARTIAL / FAIL**，不可包裝為此 CI/CD hardening 的失敗，也不可反向把 CI/CD hardening PASS 說成 Task 9 DONE。
+- Task 9 Drive Knowledge final acceptance 在上述 checkpoint 為**另案 PARTIAL / FAIL**，不可包裝為此 CI/CD hardening 的失敗，也不可反向把 CI/CD hardening PASS 說成 Task 9 DONE。
+
+後續 Task 9 closure：release `2d08118a13c71c6fec97e8bfba0857b861eefd1e` 的 Drive Knowledge #47 / run `37568734572` final mandatory gate 已 PASS；Picker、三個 live AI provider 與真實 Drive fixture 都有獨立 PASS evidence。Task 9 現為 DONE；完整證據見 `acceptance.md`，不改變上述 CI/CD hardening 的歷史範圍。

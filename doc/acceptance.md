@@ -109,28 +109,23 @@
 
 ### Task 9 — Drive Knowledge production delivery checkpoint（2026-10-07）
 
-Production release SHA：`42faaff7eea3cff1550284c2effabfa5095bb497`。
+- [x] Runtime-loaded Google Picker production config PASS；專用 key 限制 `picker.googleapis.com` 與正式 Hosting / `docs.google.com` referrers；app id `131494961796`。
+- [x] 三個 external AI provider 各自真實 API acceptance PASS。
+- [x] 真實 Picker-selected Drive fixture：metadata、readable text、one-time Note import、source relation 與 exact cleanup PASS。
+- [x] Exact release image / Firebase release、synthetic backend runtime、OAuth redirect、production desktop/mobile UI 與 final mandatory gate PASS。
 
-- [x] CI #549 / run `37543331647` PASS。
-- [x] Deploy Cloud Run #421 / run `37543564478` PASS。
-- [x] Deploy Firebase Hosting #367 / run `37543564411` PASS。
-- [x] Notes UI Acceptance #132 / run `37544080670` PASS。
-- [x] Post-deploy Runtime Acceptance #86 / run `37545879334` PASS。
-- [x] Drive Knowledge synthetic backend runtime PASS。
-- [x] exact release image observed PASS；digest `sha256:2540d32caefb0c1d542e6e255bc6e1c820e870fbdaaee402632ce256d7fe7cdb`。
-- [x] exact Firebase release observed PASS。
-- [x] OAuth client public redirect check PASS。
-- [x] Drive Knowledge production UI acceptance PASS。
-- [x] Google Picker app-id/runtime project-number contract PASS；project number / app id = `131494961796`。
-- [x] Runtime-loaded Google Picker production config PASS；execution `life-assistant-postdeploy-acceptance-df75m` 成功，task exit `0`；`drive_picker_runtime_config=PASS client_id=present developer_key=present app_id=present`。
-- [ ] Live external AI production acceptance PASS；目前 FAIL，Cloud Run task exit `107` = provider + model + API key 未完成 production config。
-- [ ] Real Google Drive Picker-selected fixture integration PASS；目前 `DRIVE_ACCEPTANCE_USER_SUB` / `DRIVE_ACCEPTANCE_GOOGLE_FILE_ID` 空白，故 NOT VERIFIED。
+- Production release SHA：`2d08118a13c71c6fec97e8bfba0857b861eefd1e`；ready revision `life-assistant-api-00154-xrt`。
+- CI #551 / run `37568284598`、Firebase Hosting #369 / run `37568479243`、Notes UI run `37568672137`：PASS。
+- Cloud Run #423 / run `37568479305`：PASS；ready revision、core persistence、checklist、action-id、Google failure-path 與 synthetic SQLite backfill / failure-path 回歸驗收全 PASS。
+- Drive Knowledge Runtime Acceptance #47 / run `37568734572`：**PASS，所有 mandatory gates 通過**。
+- Exact image digest：`sha256:4817dd48cd1302cde83699cc91c764fd1de721a31689fecc7203603e28bec9d4`；exact Firebase release、OAuth redirect、desktop/mobile production UI：PASS。
+- Picker config execution `life-assistant-postdeploy-acceptance-xslp9`、synthetic execution `life-assistant-postdeploy-acceptance-dzspg`、真實 Drive execution `life-assistant-postdeploy-acceptance-hlpg2`：PASS。
+- Live AI execution `life-assistant-postdeploy-acceptance-sqlx5`：succeeded `1`、failed `0`、exit `0`。Gemini `latest-3-flash`（成功模型 `3.6 Flash` / `3.8 Flash`）、Groq `openai/gpt-oss-120b`、OpenRouter `openrouter/free` 兩個 stage 各自 PASS。
+- Runtime 只讀取 `life-assistant-bundle:latest`，現在僅 version `7` enabled，versions `1–6` destroyed；沒有其他 bundle 的 runtime dependency。
+- 真實 fixture 已透過 Picker 登記，驗收帳號與 file ID 已設於 GitHub `dev-test`；來源文件保持不變，驗收只清理自己建立的本地 Note / Tag。識別碼與其他專案 secret 清理 evidence 見 `integrations.md`。
+- 歷史 #45 live AI 因免費 endpoint 不支援嚴格 JSON Schema 回覆 `404` 而 FAIL；commit `2d08118` 改為 OpenRouter JSON mode + schema prompt，保留後端欄位 / candidate ID 驗證與 `data_collection=deny`。#47 已覆蓋修復後正式版本。
 
-Drive Knowledge Runtime Acceptance #42 / run `37546874379` 的 final mandatory gate 仍 FAIL。相較 #40，Picker blocker 已由「developer key + app id」縮小為「developer key only」；app id 缺口已由 commits `fc02c4a35b1797ee471cd7bcc4669186c812fee4` / `42faaff7eea3cff1550284c2effabfa5095bb497` 解決。步驟若使用 `continue-on-error` 仍可能顯示表面 success，因此完成判定必須看 runner/task exit 與 final gate。
-
-**Task 9 = PARTIAL；Package #5 尚未 DONE；Phase 1 closure 仍為 4/11 = 36.4%。**
-
-Picker config follow-up（2026-10-07）：已啟用 API Keys API / Picker API，建立專用 `life-assistant-picker` key，僅允許 `picker.googleapis.com` 與正式 `web.app` / `firebaseapp.com`、`docs.google.com` referrers。`life-assistant-bundle` version `5` 已追加 developer key；Backend parser 驗證原有 DB / OAuth 欄位一致。Cloud Run #421 attempt 2 已部署 ready revision `life-assistant-api-00152-dvx`；整體 deployment workflow 的其他驗收仍以 GitHub 最終結果為準。Picker config runtime PASS 後依使用者授權銷毀 version `4`；versions `1–4` 均為 destroyed，僅 version `5` enabled。此 PASS 只代表設定成功載入；真實 Picker 選檔 / Drive fixture integration 仍 NOT VERIFIED，live external AI 仍未 PASS。
+**Task 9 = DONE；Package #5 完成；Phase 1 closure = 5/11 = 45.5%。下一工作包為 #6 Habits，Phase 1 整體仍 PARTIAL。**
 
 ## Backend Error / Audit
 

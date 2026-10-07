@@ -9,12 +9,13 @@
 2026-10-01 之後的 Phase 1 closure 以 `doc/progress.md` 的 11 個工作包為目前執行序；本文件後續各節保留原始 vertical-slice delivery rationale，不再被解讀成另一套平行進度表。
 
 目前：
-- Completed packages：**4/11 = 36.4%**。
-- Current package：**#5 — Task 9 Drive Knowledge 正式交付與 production acceptance**。
-- Current state：**PARTIAL**。
-- exact release SHA `42faaff7eea3cff1550284c2effabfa5095bb497` 的 CI #549、Cloud Run #421、Firebase #367、Notes UI #132、Post-deploy #86 已 PASS。
-- Drive Knowledge #42 final gate 仍 FAIL；後續 Picker production config 已由 execution `life-assistant-postdeploy-acceptance-df75m` 驗證 PASS（exit `0`）。剩 live external AI 與 real Picker-selected Drive fixture 未 PASS。
-- #5 全部 mandatory gates PASS 後才進 #6 Habits productization；不可因 CI / deployment 已綠燈跳過 Task 9 integration gate。
+- Completed packages：**5/11 = 45.5%**。
+- Just closed：**#5 — Task 9 Drive Knowledge 正式交付與 production acceptance，DONE / PASS**。
+- Current package：**#6 — Habits 完整產品化，NOT STARTED**。
+- exact release SHA `2d08118a13c71c6fec97e8bfba0857b861eefd1e`；CI #551、Firebase #369、Drive Knowledge #47 final mandatory gate PASS。
+- Picker production config、Gemini / Groq / OpenRouter 真實 API、真實 Picker-selected Drive fixture、synthetic runtime、production desktop/mobile UI 均 PASS。
+- Cloud Run #423 PASS；ready revision `life-assistant-api-00154-xrt` 與末端回歸驗收均完成。
+- 封板 evidence 與 secret / fixture 設定見 `acceptance.md`、`integrations.md`；Phase 1 整體仍 PARTIAL。
 
 測試、CI/CD、deployment、acceptance 遇到卡住時，依 `recovering-stuck-ci-deploys` 先分類 queued / silent-but-bounded / timeout-failure / workflow-chain break，再決定是否 retry；不以重跑取代 evidence。
 

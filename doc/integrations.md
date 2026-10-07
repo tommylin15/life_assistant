@@ -247,10 +247,12 @@ API references：[Gemini compatibility](https://ai.google.dev/gemini-api/docs/op
 
 ## Secret 與真實 Drive 驗收設定 — 2026-10-07
 
-- Life Assistant Cloud Run revision `life-assistant-api-00153-fjn` 只引用 `LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest`；沒有 omniAgent / Janus bundle 的 runtime dependency。
+- Life Assistant Cloud Run revision `life-assistant-api-00154-xrt` 只引用 `LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest`；沒有 omniAgent / Janus bundle 的 runtime dependency。
 - `life-assistant-bundle` 現在只有 version `7` enabled；被取代的 versions `1–6` 均 destroyed。新版 DB / OAuth / Picker 設定已載入且真實 Drive PASS。
 - Groq key 另依使用者授權加入 `omniagent-bundle:2` 與 `janus-runtime-bundle:5`。omniAgent gateway / chat 更新 pinned reference 至 `2`；Janus API 重部署載入 `5`，三個服務 health 均 `200`。這次只追加 key，不宣稱其他專案已實作 Groq provider adapter。
 - 新版本健康驗收後，`omniagent-bundle:1`、`janus-runtime-bundle:3–4` 已 destroyed；Janus runtime 只保留 `5` enabled。`janus-mart-codex-auth:1` 沒有 Gemini / OpenRouter 欄位，未修改或刪除。
 - 真實 Drive fixture 使用 `tommylin15@gmail.com`；user sub `114499021556773459186`。使用者授權建立非敏感 Google 文件 `Life Assistant Drive Acceptance 2026-10-07`，file ID `1mLEdBCDyFdDO7dXDO5djgudKSjPhz2400ihV6YODpcs`，已透過 production Picker 選取並在 Drive UI 登記成功。
 - GitHub `dev-test` 的 `DRIVE_ACCEPTANCE_USER_SUB` / `DRIVE_ACCEPTANCE_GOOGLE_FILE_ID` 已設定；保留 fixture 供後續重跑。驗收只讀來源並清理自己建立的本地測試 Note / Tag，不修改 Google 文件，不擴大 `drive.file` scope。
 - 真實 Drive execution `life-assistant-postdeploy-acceptance-tqwr4` PASS、exit `0`。AI 診斷 execution `life-assistant-postdeploy-acceptance-9djrt` 中 Gemini 成功模型為 `gemini-3.7-flash` / `gemini-3.8-flash`，Groq `openai/gpt-oss-120b` 亦 PASS；但 OpenRouter 嚴格 JSON Schema 回覆 `404`。改用 JSON mode 後本機兩個 stage 均 `200`、acceptance PASS；完整新版 deployed gate 必須另行重跑，不以本機結果替代。
+
+Final deployed evidence：release `2d08118a13c71c6fec97e8bfba0857b861eefd1e` 的 Drive Knowledge #47 / run `37568734572` final gate PASS。真實 Drive execution `life-assistant-postdeploy-acceptance-hlpg2` PASS；AI execution `life-assistant-postdeploy-acceptance-sqlx5` 三個 provider 各自 PASS、exit `0`，Gemini 成功模型為 `3.6 Flash` / `3.8 Flash`。OpenRouter JSON mode 已在正式 image 中通過兩個 stage，不再是只通過本機驗收。

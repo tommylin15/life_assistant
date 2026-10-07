@@ -8,12 +8,12 @@
 
 本清單仍是 **Phase 1 final gate**，未勾選項不因單一工作包通過而自動變成完成。當前 rollup：
 
-- Phase 1 closure：**4/11 = 36.4%，PARTIAL**。
-- Current package：**#5 Task 9 — Drive Knowledge production delivery + acceptance，PARTIAL**。
-- release SHA `42faaff7eea3cff1550284c2effabfa5095bb497`：CI #549、Cloud Run #421、Firebase #367、Notes UI #132、Post-deploy #86 PASS。
-- Drive Knowledge #42 final mandatory gate FAIL：Picker app id contract 已 PASS；仍缺 Picker developer key、live external AI production config、real Picker-selected Drive fixture。
+- Phase 1 closure：**5/11 = 45.5%，PARTIAL**。
+- Just closed：**#5 Task 9 — Drive Knowledge production delivery + acceptance，DONE / PASS**；下一包 **#6 Habits，NOT STARTED**。
+- release SHA `2d08118a13c71c6fec97e8bfba0857b861eefd1e`：CI #551、Cloud Run #423、Firebase #369、Notes UI run `37568672137`、Drive Knowledge #47 final mandatory gate PASS。
+- Picker developer key / app id、三個 live AI provider、real Picker-selected Drive fixture 與 production UI 已 PASS；完整 evidence 見 `acceptance.md`、`integrations.md`。
 - CI/CD stuck-recovery hardening（heartbeat / hard timeout / diagnostics / workflow-run concurrency isolation）已有 production runtime evidence PASS。
-- 因此本文件不得被解讀為「CI 綠燈即可 release complete」；Task 9 與其餘 #6–#11 closure packages 仍需逐包完成。
+- 因此本文件不得被解讀為「CI 綠燈即可 release complete」；其餘 #6–#11 closure packages 仍需逐包完成，以下 Phase 1 final checklist 不因 Task 9 PASS 而自動勾選。
 
 ## 1. Web / PWA
 

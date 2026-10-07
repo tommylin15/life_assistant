@@ -256,7 +256,9 @@ async function mobile(context) {
 
   await page.goto(`${baseUrl}/more`, { waitUntil: 'domcontentloaded' });
   await semantics(page);
-  await (await named(page, '購物清單')).click();
+  const shoppingEntry = await named(page, /購物清單/);
+  await shoppingEntry.click();
+  await page.waitForURL(/\/more\/shopping$/, { timeout: 6000 });
   await named(page, /生活用品/);
   await named(page, '新增清單');
   await named(page, '新增品項：生活用品');

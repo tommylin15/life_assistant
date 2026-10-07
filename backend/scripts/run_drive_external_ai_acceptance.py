@@ -270,7 +270,10 @@ async def run_configured_providers() -> None:
     if provider_failures:
         summary = ",".join(f"{name}:{code}" for name, code in provider_failures)
         print(f"drive_external_ai_summary=FAIL provider_failures={summary}", flush=True)
-        if len(provider_failures) == 1:
+        if (
+            len(provider_failures) == 1
+            and provider_failures[0][1] in _PROVIDER_DIAGNOSTIC_EXIT_CODES
+        ):
             raise SystemExit(provider_failures[0][1])
         if provider_failure_mask:
             raise SystemExit(EXIT_PROVIDER_FAILURE_MASK_BASE + provider_failure_mask)

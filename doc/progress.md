@@ -1,6 +1,6 @@
 # 生活助理 App v0.1 — 開發進度摘要
 
-最後更新：2026-10-06
+最後更新：2026-10-07
 
 目前狀態：**Phase 1 = PARTIAL。**
 
@@ -30,7 +30,7 @@
 | 2 | 全專案 Design System / UI Style Checkpoint | ✅ DONE | Warm Knowledge 單一正式視覺基線已核准；Home / Tasks / Project 三張完工樣板已回存 Drive；semantic tokens、shared components、responsive contract 已落 GitHub；release SHA `567511c62fb70b0d8c40b54e2a9d0f4500bcfcf9`；CI #459、Firebase Hosting #277、Cloud Run #329 PASS |
 | 3 | Task 7 — provider-agnostic AI enrichment | ✅ DONE | provider abstraction、privacy/consent/cache、shared Tag、候選 Notes、accept/reject relation、partial-success semantics；release SHA `cd2fdcd5645a9f73141c7824b59a8349d15bb86c`；CI #463、Cloud Run #335、Drive AI Runtime #3 PASS |
 | 4 | Task 8 — 智能整理 review UI | ✅ DONE | 獨立 Drive review/settings UI、provider-neutral presentation、explicit consent、Note suggestion accept/reject、force re-analysis、partial/failed/skipped fallback、desktop/mobile production acceptance；release SHA `78cdb43645f606d63b8a6171e53babec9f26de10`；CI #482、Firebase #300、Notes/Drive UI Acceptance #65 PASS；backend/runtime 沿用相同產品碼基線 Cloud Run #352 + Post-deploy Runtime #17 PASS |
-| 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | 🟨 PARTIAL | release SHA `8c1527ecc93709cf49eada00257183483b706eb6`：CI #547、Cloud Run #419、Firebase #365、Notes UI #130、Post-deploy #84 PASS；Drive Knowledge #40 final gate FAIL，剩 Picker production config、live external AI、真實 Drive fixture |
+| 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | 🟨 PARTIAL | release SHA `42faaff7eea3cff1550284c2effabfa5095bb497`：CI #549、Cloud Run #421、Firebase #367、Notes UI #132、Post-deploy #86 PASS；Drive Knowledge #42 final gate FAIL，Picker app id 已解決，剩 developer key、live external AI、真實 Drive fixture |
 | 6 | Habits 完整產品化 | ⬜ NOT STARTED | 完整 vertical slice：implementation、tests、CI、deployment/runtime、可操作 UI、mobile/desktop acceptance |
 | 7 | Shopping 完整產品化 | ⬜ NOT STARTED | 完整 vertical slice：implementation、tests、CI、deployment/runtime、可操作 UI、mobile/desktop acceptance |
 | 8 | Calendar 完整產品化 | ⬜ NOT STARTED | 一般使用者 read/list/create/update/delete UX + true-account verification + 完整 vertical-slice evidence |
@@ -132,26 +132,28 @@
 - 詳細 checkpoint：`doc/drive_intelligent_organization_review_ui_checkpoint_v0_1.md`。
 - 因此 Package #4 計入 DONE；全案封板進度更新為 **4/11 = 36.4%**。
 
-## Package #5 in-progress evidence — 2026-10-06
+## Package #5 in-progress evidence — 2026-10-07
 
 - 狀態：**PARTIAL / NOT DONE — Task 9 Drive Knowledge 正式交付與 production acceptance。**
-- 目前 production release SHA：`8c1527ecc93709cf49eada00257183483b706eb6`。
-- CI #547 / run `37398923047`：**PASS**。
-- Deploy Cloud Run #419 / run `37399118811`：**PASS**。
-  - 共用 Cloud Run acceptance wait 已有實際 runtime heartbeat：預設每 30 秒輸出 `cloud_run_job_wait=HEARTBEAT`，`max_wait_seconds=660`；各 execution 成功時輸出 `cloud_run_job_wait=PASS`。
-  - deploy job 另有 outer `timeout-minutes: 90`。
-- Deploy Firebase Hosting #365 / run `37399118824`：**PASS**。
-- Notes UI Acceptance #130 / run `37399362083`：**PASS**。
-- Post-deploy Runtime Acceptance #84 / run `37401137520`：**PASS**。
-- Drive Knowledge Runtime Acceptance #40 / run `37401905383`：**FAIL（mandatory final gate）**。
+- 目前 production release SHA：`42faaff7eea3cff1550284c2effabfa5095bb497`。
+- CI #549 / run `37543331647`：**PASS**。
+- Deploy Cloud Run #421 / run `37543564478`：**PASS**。
+  - 共用 Cloud Run acceptance wait 仍維持每 30 秒 heartbeat、`max_wait_seconds=660` 與 PASS/TIMEOUT/FAIL diagnostics。
+  - deploy job outer `timeout-minutes: 90`。
+- Deploy Firebase Hosting #367 / run `37543564411`：**PASS**。
+- Notes UI Acceptance #132 / run `37544080670`：**PASS**。
+- Post-deploy Runtime Acceptance #86 / run `37545879334`：**PASS**。
+- Drive Knowledge Runtime Acceptance #42 / run `37546874379`：**FAIL（mandatory final gate）**。
+  - Exact release image：PASS；digest `sha256:2540d32caefb0c1d542e6e255bc6e1c820e870fbdaaee402632ce256d7fe7cdb`。
   - Synthetic backend runtime：PASS。
   - Exact Firebase release：PASS。
   - OAuth client redirect：PASS。
   - Drive Knowledge production UI：PASS。
-  - Runtime-loaded Picker config：FAIL，Cloud Run task exit code `96`；依目前 combined diagnostic contract 代表 `GOOGLE_PICKER_DEVELOPER_KEY` + `GOOGLE_PICKER_APP_ID` 缺少，OAuth client id 已存在。
-  - Live external AI：FAIL，Cloud Run task exit code `107`；依目前 combined diagnostic contract 代表 provider / model / API key 未完成 production config，base URL 已可解析。
+  - Picker app-id/project-number contract：PASS；`131494961796`。
+  - Runtime-loaded Picker config：FAIL，Cloud Run task exit `82`；目前只缺 `GOOGLE_PICKER_DEVELOPER_KEY`，OAuth client id 與 app id 已存在。
+  - Live external AI：FAIL，Cloud Run task exit `107`；provider / model / API key 未完成 production config，base URL 已可解析。
   - Real Google Drive integration fixture：NOT VERIFIED；`DRIVE_ACCEPTANCE_USER_SUB` 與 `DRIVE_ACCEPTANCE_GOOGLE_FILE_ID` 仍為空。
-- CI/CD「看似卡住」hardening 已完成 production evidence：bounded wait + heartbeat + diagnostics，以及 workflow-run concurrency isolation；不再把 queued、silent-but-bounded、timeout/failure、workflow-chain break 混為同一種「卡住」。
+- 相較 Drive Knowledge #40，Picker app id blocker 已解除；不得再把 app id 列為未完成項。
 - 任何 production secret / credential 設定變更仍屬高風險邊界，未經使用者明確確認不得修改。
 - 因 mandatory Task 9 gate 尚未全 PASS，**Package #5 不計入 DONE；全案仍為 4/11 = 36.4%**。
 

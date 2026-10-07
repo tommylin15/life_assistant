@@ -1,6 +1,6 @@
 # life_assistant — Active TODO
 
-最後更新：2026-10-06
+最後更新：2026-10-07
 
 > 本檔只保留**目前 active / next / non-blocking backlog**。正式封板進度以 `progress.md` 為準；完成條件與 runtime evidence 以 `acceptance.md`、GitHub Actions 與 deployed runtime 為準。不要在本檔維護另一套歷史完成清單。
 
@@ -10,21 +10,23 @@
 
 狀態：**PARTIAL**。
 
-目前 exact release SHA：`8c1527ecc93709cf49eada00257183483b706eb6`。
+目前 exact release SHA：`42faaff7eea3cff1550284c2effabfa5095bb497`。
 
 已通過：
-- CI #547。
-- Deploy Cloud Run #419。
-- Deploy Firebase Hosting #365。
-- Notes UI Acceptance #130。
-- Post-deploy Runtime Acceptance #84。
-- Drive Knowledge synthetic backend runtime、exact Firebase release、OAuth redirect、production UI。
-- CI/CD stuck-recovery hardening 已有 runtime evidence：Cloud Run acceptance 每 30 秒 heartbeat、660 秒 hard bound、PASS/TIMEOUT/FAIL diagnostics、deploy outer timeout 90 分鐘；workflow-run concurrency 已隔離 ineligible run，避免不合格 workflow_run 取消有效部署。
+- CI #549 / run `37543331647`。
+- Deploy Cloud Run #421 / run `37543564478`。
+- Deploy Firebase Hosting #367 / run `37543564411`。
+- Notes UI Acceptance #132 / run `37544080670`。
+- Post-deploy Runtime Acceptance #86 / run `37545879334`。
+- Drive Knowledge synthetic backend runtime、exact release image、exact Firebase release、OAuth redirect、production UI。
+- Picker app-id/project-number contract：PASS；`131494961796`。
+- CI/CD stuck-recovery hardening：heartbeat、hard bound、diagnostics、workflow-run concurrency isolation 均已有 runtime evidence。
 
 仍阻塞 Task 9 封板：
-- Picker production config：FAIL；Task exit `96` = developer key + app id 缺少。
+- Picker production config：FAIL；Task exit `82`，目前只缺 `GOOGLE_PICKER_DEVELOPER_KEY`。舊 #40 所列 app id 缺口已解除，不再列為 blocker。
 - Live external AI：FAIL；Task exit `107` = provider + model + API key 未完成 production config。
 - Real Google Drive integration fixture：NOT VERIFIED；`DRIVE_ACCEPTANCE_USER_SUB` / `DRIVE_ACCEPTANCE_GOOGLE_FILE_ID` 尚未配置。
+- 最新 Drive Knowledge Runtime Acceptance：#42 / run `37546874379`，final mandatory gate FAIL。
 
 下一 concrete gate：只處理上述三個 external production gates，不重做已 PASS 的 CI / Cloud Run / Firebase / synthetic runtime。production secret / credential 變更必須先取得使用者明確確認。
 

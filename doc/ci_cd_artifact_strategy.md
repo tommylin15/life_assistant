@@ -1,6 +1,6 @@
 # Life Assistant CI/CD Artifact Strategy
 
-最後更新：2026-10-06
+最後更新：2026-10-07
 
 ## 目的
 
@@ -168,7 +168,7 @@ TDD / runtime evidence：
 - concurrency GREEN / production release：`8c1527ecc93709cf49eada00257183483b706eb6`；CI #547 PASS。
 - Deploy Cloud Run #419 / run `37399118811`：PASS；多個 core acceptance execution 實際每 30 秒輸出 heartbeat，最後輸出 PASS。
 - Firebase #365、Notes UI #130、Post-deploy #84：PASS。
-- Drive Knowledge #40 的 FAIL 屬 Task 9 external config / fixture gates，不是 silent-wait hardening failure。
+- 後續 exact release `42faaff7eea3cff1550284c2effabfa5095bb497`：CI #549、Cloud Run #421、Firebase #367、Notes UI #132、Post-deploy #86 PASS；Drive Knowledge #42 仍 FAIL，但原因仍是 Task 9 external config / fixture gates。Picker app id contract 已 PASS、Picker 只剩 developer key，因此這不是 silent-wait hardening failure。
 
 完成判定：
 - implementation：PASS

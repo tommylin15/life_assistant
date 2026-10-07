@@ -122,13 +122,15 @@ Production release SHA：`42faaff7eea3cff1550284c2effabfa5095bb497`。
 - [x] OAuth client public redirect check PASS。
 - [x] Drive Knowledge production UI acceptance PASS。
 - [x] Google Picker app-id/runtime project-number contract PASS；project number / app id = `131494961796`。
-- [ ] Runtime-loaded Google Picker production config PASS；目前 FAIL，Cloud Run task exit `82` = `GOOGLE_PICKER_DEVELOPER_KEY` 缺少；OAuth client id 與 app id 已存在。
+- [x] Runtime-loaded Google Picker production config PASS；execution `life-assistant-postdeploy-acceptance-df75m` 成功，task exit `0`；`drive_picker_runtime_config=PASS client_id=present developer_key=present app_id=present`。
 - [ ] Live external AI production acceptance PASS；目前 FAIL，Cloud Run task exit `107` = provider + model + API key 未完成 production config。
 - [ ] Real Google Drive Picker-selected fixture integration PASS；目前 `DRIVE_ACCEPTANCE_USER_SUB` / `DRIVE_ACCEPTANCE_GOOGLE_FILE_ID` 空白，故 NOT VERIFIED。
 
 Drive Knowledge Runtime Acceptance #42 / run `37546874379` 的 final mandatory gate 仍 FAIL。相較 #40，Picker blocker 已由「developer key + app id」縮小為「developer key only」；app id 缺口已由 commits `fc02c4a35b1797ee471cd7bcc4669186c812fee4` / `42faaff7eea3cff1550284c2effabfa5095bb497` 解決。步驟若使用 `continue-on-error` 仍可能顯示表面 success，因此完成判定必須看 runner/task exit 與 final gate。
 
 **Task 9 = PARTIAL；Package #5 尚未 DONE；Phase 1 closure 仍為 4/11 = 36.4%。**
+
+Picker config follow-up（2026-10-07）：已啟用 API Keys API / Picker API，建立專用 `life-assistant-picker` key，僅允許 `picker.googleapis.com` 與正式 `web.app` / `firebaseapp.com`、`docs.google.com` referrers。`life-assistant-bundle` version `5` 已追加 developer key；Backend parser 驗證原有 DB / OAuth 欄位一致。Cloud Run #421 attempt 2 已部署 ready revision `life-assistant-api-00152-dvx`；整體 deployment workflow 的其他驗收仍以 GitHub 最終結果為準。Picker config runtime PASS 後依使用者授權銷毀 version `4`；versions `1–4` 均為 destroyed，僅 version `5` enabled。此 PASS 只代表設定成功載入；真實 Picker 選檔 / Drive fixture integration 仍 NOT VERIFIED，live external AI 仍未 PASS。
 
 ## Backend Error / Audit
 

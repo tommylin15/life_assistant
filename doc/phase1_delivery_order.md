@@ -13,7 +13,7 @@
 - Current package：**#5 — Task 9 Drive Knowledge 正式交付與 production acceptance**。
 - Current state：**PARTIAL**。
 - exact release SHA `42faaff7eea3cff1550284c2effabfa5095bb497` 的 CI #549、Cloud Run #421、Firebase #367、Notes UI #132、Post-deploy #86 已 PASS。
-- Drive Knowledge #42 final gate 仍 FAIL：Picker app id contract 已 PASS，但 production developer key 尚缺；live external AI 與 real Picker-selected Drive fixture 亦未 PASS。
+- Drive Knowledge #42 final gate 仍 FAIL；後續 Picker production config 已由 execution `life-assistant-postdeploy-acceptance-df75m` 驗證 PASS（exit `0`）。剩 live external AI 與 real Picker-selected Drive fixture 未 PASS。
 - #5 全部 mandatory gates PASS 後才進 #6 Habits productization；不可因 CI / deployment 已綠燈跳過 Task 9 integration gate。
 
 測試、CI/CD、deployment、acceptance 遇到卡住時，依 `recovering-stuck-ci-deploys` 先分類 queued / silent-but-bounded / timeout-failure / workflow-chain break，再決定是否 retry；不以重跑取代 evidence。

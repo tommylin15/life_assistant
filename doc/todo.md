@@ -22,13 +22,14 @@
 - Picker app-id/project-number contract：PASS；`131494961796`。
 - CI/CD stuck-recovery hardening：heartbeat、hard bound、diagnostics、workflow-run concurrency isolation 均已有 runtime evidence。
 
+- Picker production config：PASS；execution `life-assistant-postdeploy-acceptance-df75m` exit `0`。Secret version `5` 已生效，舊 versions `1–4` 已 destroyed；Picker 設定不再列為 blocker。
+
 仍阻塞 Task 9 封板：
-- Picker production config：FAIL；Task exit `82`，目前只缺 `GOOGLE_PICKER_DEVELOPER_KEY`。舊 #40 所列 app id 缺口已解除，不再列為 blocker。
 - Live external AI：FAIL；Task exit `107` = provider + model + API key 未完成 production config。
 - Real Google Drive integration fixture：NOT VERIFIED；`DRIVE_ACCEPTANCE_USER_SUB` / `DRIVE_ACCEPTANCE_GOOGLE_FILE_ID` 尚未配置。
 - 最新 Drive Knowledge Runtime Acceptance：#42 / run `37546874379`，final mandatory gate FAIL。
 
-下一 concrete gate：只處理上述三個 external production gates，不重做已 PASS 的 CI / Cloud Run / Firebase / synthetic runtime。production secret / credential 變更必須先取得使用者明確確認。
+下一 concrete gate：只處理 live external AI 與 real Google Drive fixture 兩個未通過的 external production gates。production secret / credential 變更必須先取得使用者明確確認。
 
 ## Just Closed
 
@@ -50,7 +51,7 @@
 
 ## Next
 
-1. #5 — Task 9：Drive Knowledge production delivery + acceptance（**PARTIAL；剩 3 個 mandatory external gates**）。
+1. #5 — Task 9：Drive Knowledge production delivery + acceptance（**PARTIAL；剩 2 個 mandatory external gates**）。
 2. #6–#9 — Habits / Shopping / Calendar / Activity + Integrations productization。
 3. #10 — Integration / foundation tail closure。
 4. #11 — Phase 1 final Release Gate / 封板 checkpoint。

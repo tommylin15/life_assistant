@@ -21,7 +21,7 @@
 - **Completed packages：4 / 11**
 - **Closure progress：36.4%**
 - **Current package：#5 — Task 9 — Drive Knowledge 正式交付與 production acceptance**
-- **Current state：PARTIAL — Task 9 implementation / synthetic runtime / production UI / release chain 已大致完成；Picker production config、live external AI、真實 Google Drive fixture 三個 mandatory gates 尚未 PASS。**
+- **Current state：PARTIAL — Task 9 implementation / synthetic runtime / production UI / Picker production config 已 PASS；剩 live external AI、真實 Google Drive fixture 兩個 mandatory gates 尚未 PASS。**
 - **Next checkpoint：#5 DONE 後 = 5/11 = 45.5%**
 
 | # | 工作包 | 狀態 | DONE 條件 / 目前 gate |
@@ -30,7 +30,7 @@
 | 2 | 全專案 Design System / UI Style Checkpoint | ✅ DONE | Warm Knowledge 單一正式視覺基線已核准；Home / Tasks / Project 三張完工樣板已回存 Drive；semantic tokens、shared components、responsive contract 已落 GitHub；release SHA `567511c62fb70b0d8c40b54e2a9d0f4500bcfcf9`；CI #459、Firebase Hosting #277、Cloud Run #329 PASS |
 | 3 | Task 7 — provider-agnostic AI enrichment | ✅ DONE | provider abstraction、privacy/consent/cache、shared Tag、候選 Notes、accept/reject relation、partial-success semantics；release SHA `cd2fdcd5645a9f73141c7824b59a8349d15bb86c`；CI #463、Cloud Run #335、Drive AI Runtime #3 PASS |
 | 4 | Task 8 — 智能整理 review UI | ✅ DONE | 獨立 Drive review/settings UI、provider-neutral presentation、explicit consent、Note suggestion accept/reject、force re-analysis、partial/failed/skipped fallback、desktop/mobile production acceptance；release SHA `78cdb43645f606d63b8a6171e53babec9f26de10`；CI #482、Firebase #300、Notes/Drive UI Acceptance #65 PASS；backend/runtime 沿用相同產品碼基線 Cloud Run #352 + Post-deploy Runtime #17 PASS |
-| 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | 🟨 PARTIAL | release SHA `42faaff7eea3cff1550284c2effabfa5095bb497`：CI #549、Cloud Run #421、Firebase #367、Notes UI #132、Post-deploy #86 PASS；Drive Knowledge #42 final gate FAIL，Picker app id 已解決，剩 developer key、live external AI、真實 Drive fixture |
+| 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | 🟨 PARTIAL | release SHA `42faaff7eea3cff1550284c2effabfa5095bb497`：CI #549、Cloud Run #421、Firebase #367、Notes UI #132、Post-deploy #86 PASS；Picker config follow-up execution `life-assistant-postdeploy-acceptance-df75m` PASS；剩 live external AI、真實 Drive fixture |
 | 6 | Habits 完整產品化 | ⬜ NOT STARTED | 完整 vertical slice：implementation、tests、CI、deployment/runtime、可操作 UI、mobile/desktop acceptance |
 | 7 | Shopping 完整產品化 | ⬜ NOT STARTED | 完整 vertical slice：implementation、tests、CI、deployment/runtime、可操作 UI、mobile/desktop acceptance |
 | 8 | Calendar 完整產品化 | ⬜ NOT STARTED | 一般使用者 read/list/create/update/delete UX + true-account verification + 完整 vertical-slice evidence |
@@ -174,9 +174,8 @@
 ## 下一步
 
 1. Current package 仍為 #5 — Task 9，狀態 **PARTIAL**。
-2. 下一個 concrete gate 不是重跑已通過 CI/deployment，而是補齊並驗證三個 mandatory external gates：
-   - Picker production config。
+2. Picker production config follow-up 已 PASS（execution `life-assistant-postdeploy-acceptance-df75m` exit `0`）；下一個 concrete gate 是補齊並驗證兩個剩餘 mandatory external gates：
    - live external AI production config。
    - explicit Picker-selected real Google Drive fixture。
-3. 三個 gate 全 PASS 前，維持 **4/11 = 36.4%**；只有 Task 9 完整封板後才更新為 **5/11 = 45.5%**。
+3. 剩餘兩個 gate 全 PASS 前，維持 **4/11 = 36.4%**；只有 Task 9 完整封板後才更新為 **5/11 = 45.5%**。
 4. 測試、CI/CD、deployment、acceptance 若再次出現 queued / silent / timeout / skipped chain，依 `recovering-stuck-ci-deploys` 流程先分類與取證，不以盲目重跑取代 diagnosis。

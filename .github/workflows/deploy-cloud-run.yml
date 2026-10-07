@@ -214,6 +214,7 @@ jobs:
             --subnet "$GCP_SUBNET" \
             --vpc-egress private-ranges-only \
             --allow-unauthenticated \
+            --timeout 600 \
             --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI,GOOGLE_PICKER_APP_ID=$GOOGLE_PICKER_APP_ID" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --quiet

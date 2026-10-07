@@ -35,7 +35,7 @@ def _exit_code_for_unavailable_provider(
     base_url: str,
 ) -> int:
     mask = 0
-    if provider.strip().casefold() != "openai":
+    if provider.strip().casefold() not in {"openai", "gemini", "openrouter", "groq"}:
         mask |= 1
     if not model.strip():
         mask |= 2
@@ -59,21 +59,21 @@ def _exit_code_for_unavailable_provider(
 
 def _unavailable_reason(exit_code: int) -> str:
     return {
-        EXIT_NOT_CONFIGURED: "provider_not_openai_or_unavailable",
+        EXIT_NOT_CONFIGURED: "provider_not_supported_or_unavailable",
         EXIT_MODEL_MISSING: "model_missing",
         EXIT_API_KEY_MISSING: "api_key_missing",
         EXIT_BASE_URL_MISSING: "base_url_missing",
     }.get(exit_code, "production_provider_not_configured")
 
 
-async def run_acceptance() -> None:
-    provider = get_ai_enrichment_provider()
+async def run_acceptance(*, provider_name: str | None = None, model: str | None = None) -> None:
+    provider = get_ai_enrichment_provider(provider=provider_name, model=model)
     if isinstance(provider, UnavailableAIEnrichmentProvider):
         exit_code = _exit_code_for_unavailable_provider(
-            provider=str(config.settings.ai_enrichment_provider or ""),
-            model=str(config.settings.ai_enrichment_model or ""),
-            api_key=str(config.settings.openai_api_key or ""),
-            base_url=str(config.settings.openai_base_url or ""),
+            provider=provider_name or str(config.settings.ai_enrichment_provider or ""),
+            model=model if model is not None else str(config.settings.ai_enrichment_model or ""),
+            api_key=str(getattr(config.settings, f"{provider_name or config.settings.ai_enrichment_provider}_api_key", "") or ""),
+            base_url=str(config.settings.openai_base_url or "") if (provider_name or config.settings.ai_enrichment_provider) == "openai" else "vendor_endpoint",
         )
         print(
             f"drive_external_ai_integration=NOT_VERIFIED reason={_unavailable_reason(exit_code)}",
@@ -126,10 +126,27 @@ async def run_acceptance() -> None:
     model_name = provider.model_name or "unknown"
     print(
         "drive_external_ai_integration=PASS "
-        f"provider={provider_name} model={model_name} tag_results={len(tags)} note_results={len(notes)}",
+        f"provider={provider_name} model={model_name} "
+        f"served_models={','.join(sorted(getattr(provider, 'served_models', ())))} "
+        f"tag_results={len(tags)} note_results={len(notes)}",
         flush=True,
     )
 
 
+async def run_configured_providers() -> None:
+    # Test providers individually so a healthy fallback cannot hide a broken primary.
+    await run_acceptance(
+        provider_name=config.settings.ai_enrichment_provider,
+        model=config.settings.ai_enrichment_model,
+    )
+    for tier in ("fallback", "tertiary"):
+        name = getattr(config.settings, f"ai_enrichment_{tier}_provider")
+        if name:
+            await run_acceptance(
+                provider_name=name,
+                model=getattr(config.settings, f"ai_enrichment_{tier}_model"),
+            )
+
+
 if __name__ == "__main__":
-    asyncio.run(run_acceptance())
+    asyncio.run(run_configured_providers())

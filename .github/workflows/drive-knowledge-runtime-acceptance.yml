@@ -144,7 +144,7 @@ jobs:
             --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" \
             --args=-m,scripts.run_drive_external_ai_acceptance \
-            --task-timeout 5m \
+            --task-timeout 10m \
             --wait \
             --quiet
 

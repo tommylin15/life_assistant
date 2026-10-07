@@ -63,6 +63,115 @@ class _FakeClient:
 
 
 class ProductionProviderContractTests(unittest.IsolatedAsyncioTestCase):
+    async def test_latest_gemini_discovers_numeric_order_and_tries_only_top_three(self):
+        calls = []
+        def handle(request):
+            if request.method == "GET":
+                return providers.httpx.Response(200, json={"models": [
+                    {"name": "models/" + name, "supportedGenerationMethods": ["generateContent"]}
+                    for name in ("gemini-3.8-flash", "gemini-3.10-flash", "gemini-3.9-flash",
+                                 "gemini-3.7-flash", "gemini-3.11-flash-lite", "gemini-4.0-flash-preview")
+                ]})
+            model = json.loads(request.content)["model"]
+            calls.append(model)
+            if model != "gemini-3.8-flash":
+                return providers.httpx.Response(503, json={})
+            return providers.httpx.Response(200, json={"choices": [{
+                "finish_reason": "stop", "message": {"content": '{"tags":[]}'},
+            }]})
+        client_class = providers.httpx.AsyncClient
+        with patch.object(providers.httpx, "AsyncClient", side_effect=lambda **kw: client_class(
+            transport=providers.httpx.MockTransport(handle), **kw,
+        )):
+            provider = providers.LatestGeminiEnrichmentProvider(api_key="test-key")
+            self.assertEqual(await provider.suggest_tags(self.context), [])
+            self.assertEqual(calls, ["gemini-3.10-flash", "gemini-3.9-flash", "gemini-3.8-flash"])
+            calls.clear()
+            provider._models = ["gemini-3.10-flash", "gemini-3.9-flash", "gemini-3.7-flash"]
+            with self.assertRaises(AIProviderError):
+                await provider.suggest_tags(self.context)
+            self.assertEqual(len(calls), 3)
+
+    async def test_compatible_providers_use_vendor_endpoints_and_structured_output(self):
+        for name, endpoint in (
+            ("gemini", "https://generativelanguage.googleapis.com/v1beta/openai"),
+            ("openrouter", "https://openrouter.ai/api/v1"),
+            ("groq", "https://api.groq.com/openai/v1"),
+        ):
+            with (
+                self.subTest(provider=name),
+                patch.object(config.settings, "ai_enrichment_provider", name),
+                patch.object(config.settings, "ai_enrichment_model", "test-model"),
+                patch.object(config.settings, f"{name}_api_key", "test-key"),
+                patch.object(config.settings, "ai_enrichment_fallback_provider", ""),
+                patch.object(config.settings, "ai_enrichment_tertiary_provider", ""),
+            ):
+                provider = providers.get_ai_enrichment_provider()
+                self.assertEqual(provider.provider_name, name)
+                calls = []
+                response = _FakeResponse(200, {"choices": [{
+                    "finish_reason": "stop",
+                    "message": {"content": '{"tags":[{"name":"Planning","confidence":0.92}]}'},
+                }]})
+                with patch.object(providers.httpx, "AsyncClient", side_effect=lambda **_: _FakeClient(response, calls)):
+                    self.assertEqual(await provider.suggest_tags(self.context), [TagSuggestion("Planning", 0.92)])
+                self.assertEqual(calls[0]["url"], endpoint + "/chat/completions")
+                self.assertTrue(calls[0]["json"]["response_format"]["json_schema"]["strict"])
+                self.assertNotIn("test-key", json.dumps(calls[0]["json"]))
+                if name == "openrouter":
+                    self.assertEqual(calls[0]["json"]["provider"]["data_collection"], "deny")
+
+    async def test_fallback_runs_once_per_failed_stage_and_preserves_errors(self):
+        primary, fallback = _ThresholdProvider(), _ThresholdProvider()
+        primary.provider_name, fallback.provider_name = "gemini", "openrouter"
+        primary.suggest_tags = AsyncMock(side_effect=AIProviderError("provider_http_error"))
+        fallback.suggest_tags = AsyncMock(return_value=[TagSuggestion("Planning", 0.92)])
+        routed = providers.FallbackAIEnrichmentProvider(primary, fallback)
+        self.assertEqual(await routed.suggest_tags(self.context), [TagSuggestion("Planning", 0.92)])
+        fallback.suggest_tags.assert_awaited_once()
+        fallback.suggest_tags.side_effect = AIProviderError("provider_invalid_output")
+        with self.assertRaises(AIProviderError):
+            await routed.suggest_tags(self.context)
+        primary.suggest_tags = AsyncMock(return_value=[])
+        fallback.suggest_tags.reset_mock()
+        self.assertEqual(await routed.suggest_tags(self.context), [])
+        fallback.suggest_tags.assert_not_awaited()
+
+    async def test_three_provider_chain_uses_groq_only_after_first_two_fail(self):
+        calls = []
+        async def failed(name):
+            calls.append(name)
+            raise AIProviderError("provider_http_error")
+        gemini, router, groq = _ThresholdProvider(), _ThresholdProvider(), _ThresholdProvider()
+        async def gemini_failed(_):
+            return await failed("gemini")
+        async def router_failed(_):
+            return await failed("openrouter")
+        gemini.suggest_tags = AsyncMock(side_effect=gemini_failed)
+        router.suggest_tags = AsyncMock(side_effect=router_failed)
+        groq.suggest_tags = AsyncMock(return_value=[TagSuggestion("Planning", 0.9)])
+        chain = providers.FallbackAIEnrichmentProvider(gemini, providers.FallbackAIEnrichmentProvider(router, groq))
+        self.assertEqual(await chain.suggest_tags(self.context), [TagSuggestion("Planning", 0.9)])
+        self.assertEqual(calls, ["gemini", "openrouter"])
+        groq.suggest_tags.assert_awaited_once()
+
+    async def test_compatible_provider_rejects_malformed_or_truncated_response(self):
+        provider = providers.ChatCompletionsEnrichmentProvider(
+            provider="gemini", api_key="test-key", model="test-model", base_url="https://example.invalid",
+        )
+        for payload in ({}, {"choices": [{"finish_reason": "length", "message": {"content": "{}"}}]},
+                        {"choices": [{"finish_reason": "stop", "message": {"content": "[]"}}]}):
+            with patch.object(providers.httpx, "AsyncClient", side_effect=lambda **_: _FakeClient(_FakeResponse(200, payload), [])):
+                with self.assertRaises(AIProviderError):
+                    await provider.suggest_tags(self.context)
+
+    def test_cache_identity_changes_with_provider_model_and_fallback_policy(self):
+        fingerprint = providers.compute_enrichment_fingerprint
+        baseline = fingerprint(self.context, provider="gemini", model="model-a")
+        self.assertNotEqual(baseline, fingerprint(self.context, provider="openrouter", model="model-a"))
+        self.assertNotEqual(baseline, fingerprint(self.context, provider="gemini", model="model-b"))
+        self.assertNotEqual(baseline, fingerprint(self.context, provider="gemini+openrouter", model="model-a+model-b"))
+
     def setUp(self):
         self.context = DocumentEnrichmentContext(
             document_id="document-1",

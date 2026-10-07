@@ -314,11 +314,14 @@ async def enrich_document(
         existing_tags=existing_tags,
         max_related_notes=enrichment_settings.max_related_note_suggestions,
     )
+    resolved_provider = provider or get_ai_enrichment_provider()
     fingerprint = compute_enrichment_fingerprint(
         context,
         candidates,
         enable_tags=enrichment_settings.auto_tags_enabled,
         enable_related_notes=enrichment_settings.note_suggestions_enabled,
+        provider=resolved_provider.provider_name,
+        model=resolved_provider.model_name,
     )
 
     if enrichment_settings.allow_document_content and not force:
@@ -337,7 +340,6 @@ async def enrich_document(
         if cached is not None:
             return await _run_view(db, cached, cache_hit=True)
 
-    resolved_provider = provider or get_ai_enrichment_provider()
     outcome = await execute_provider_enrichment(
         resolved_provider,
         context,

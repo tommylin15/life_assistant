@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -355,21 +358,161 @@ class OpenAIResponsesEnrichmentProvider(AIEnrichmentProvider):
         return result
 
 
-def get_ai_enrichment_provider() -> AIEnrichmentProvider:
-    provider = _setting("ai_enrichment_provider", "AI_ENRICHMENT_PROVIDER", "disabled").casefold()
-    if provider != "openai":
+class ChatCompletionsEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
+    """Reuse enrichment schemas for Gemini/OpenRouter/Groq's compatible HTTP API."""
+
+    def __init__(self, *, provider: str, api_key: str, model: str, base_url: str) -> None:
+        super().__init__(api_key=api_key, model=model, base_url=base_url)
+        self.provider_name = provider
+        self.served_models: set[str] = set()
+
+    async def _structured_response(
+        self, *, instructions: str, user_payload: dict[str, Any],
+        format_name: str, schema: dict[str, Any],
+    ) -> dict[str, Any]:
+        body = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": instructions},
+                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+            ],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": format_name, "strict": True, "schema": schema},
+            },
+        }
+        if self.provider_name == "openrouter":
+            body["provider"] = {"require_parameters": True, "data_collection": "deny"}
+        try:
+            async with httpx.AsyncClient(timeout=_OPENAI_TIMEOUT_SECONDS) as client:
+                response = await client.post(
+                    f"{self._base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
+                    json=body,
+                )
+        except httpx.HTTPError as exc:
+            raise AIProviderError("provider_http_error") from exc
+        if not 200 <= response.status_code < 300:
+            raise AIProviderError("provider_http_error")
+        try:
+            choice = response.json()["choices"][0]
+            if choice.get("finish_reason") != "stop":
+                raise AIProviderError("provider_invalid_output")
+            parsed = json.loads(choice["message"]["content"])
+        except (ValueError, TypeError, KeyError, IndexError, AttributeError) as exc:
+            raise AIProviderError("provider_invalid_output") from exc
+        if not isinstance(parsed, dict):
+            raise AIProviderError("provider_invalid_output")
+        self.served_models.add(self.model_name)
+        return parsed
+
+
+class FallbackAIEnrichmentProvider(AIEnrichmentProvider):
+    """One fallback per stage; metadata identifies the configured routing policy."""
+
+    def __init__(self, primary: AIEnrichmentProvider, fallback: AIEnrichmentProvider) -> None:
+        self.primary, self.fallback = primary, fallback
+        self.provider_name = f"{primary.provider_name}+{fallback.provider_name}"
+        self.model_name = f"{primary.model_name}+{fallback.model_name}"
+
+    async def suggest_tags(self, document_context):
+        try:
+            return await self.primary.suggest_tags(document_context)
+        except AIProviderError:
+            return await self.fallback.suggest_tags(document_context)
+
+    async def rank_related_notes(self, document_context, candidate_notes):
+        try:
+            return await self.primary.rank_related_notes(document_context, candidate_notes)
+        except AIProviderError:
+            return await self.fallback.rank_related_notes(document_context, candidate_notes)
+
+
+class LatestGeminiEnrichmentProvider(ChatCompletionsEnrichmentProvider):
+    """Try the newest three stable text Flash models, then let outer fallback run."""
+
+    def __init__(self, *, api_key: str) -> None:
+        super().__init__(provider="gemini", api_key=api_key, model="latest-3-flash",
+                         base_url="https://generativelanguage.googleapis.com/v1beta/openai")
+        self._models: list[str] | None = None
+
+    async def _structured_response(self, **kwargs) -> dict[str, Any]:
+        if self._models is None:
+            try:
+                async with httpx.AsyncClient(timeout=_OPENAI_TIMEOUT_SECONDS) as client:
+                    response = await client.get(
+                        "https://generativelanguage.googleapis.com/v1beta/models",
+                        headers={"x-goog-api-key": self._api_key},
+                        params={"pageSize": 1000},
+                    )
+                if response.status_code != 200:
+                    raise AIProviderError("provider_http_error")
+                models = response.json()["models"]
+                versions = {}
+                for item in models:
+                    name = item.get("name", "").removeprefix("models/")
+                    match = re.fullmatch(r"gemini-(\d+(?:\.\d+)+)-flash", name)
+                    if match and "generateContent" in item.get("supportedGenerationMethods", []):
+                        versions[name] = tuple(map(int, match.group(1).split(".")))
+                self._models = sorted(versions, key=versions.get, reverse=True)[:3]
+            except httpx.HTTPError as exc:
+                raise AIProviderError("provider_http_error") from exc
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                raise AIProviderError("provider_invalid_output") from exc
+        # ponytail: at most three model attempts per stage; OpenRouter handles total failure.
+        error = AIProviderError("provider_unavailable")
+        for model in self._models:
+            candidate = ChatCompletionsEnrichmentProvider(
+                provider="gemini", api_key=self._api_key, model=model, base_url=self._base_url,
+            )
+            try:
+                result = await candidate._structured_response(**kwargs)
+                self.served_models.add(model)
+                logging.getLogger(__name__).info("drive_ai_provider_selected provider=gemini model=%s", model)
+                return result
+            except AIProviderError as exc:
+                error = exc
+        raise error
+
+
+def get_ai_enrichment_provider(*, provider: str | None = None, model: str | None = None) -> AIEnrichmentProvider:
+    explicit = provider is not None
+    provider = (provider if explicit else _setting("ai_enrichment_provider", "AI_ENRICHMENT_PROVIDER", "disabled")).casefold()
+    model = model if model is not None else _setting("ai_enrichment_model", "AI_ENRICHMENT_MODEL")
+    if provider not in {"openai", "gemini", "openrouter", "groq"}:
         return UnavailableAIEnrichmentProvider()
 
-    model = _setting("ai_enrichment_model", "AI_ENRICHMENT_MODEL")
-    api_key = _setting("openai_api_key", "OPENAI_API_KEY")
-    base_url = _setting("openai_base_url", "OPENAI_BASE_URL", "https://api.openai.com/v1")
+    api_key = _setting(f"{provider}_api_key", f"{provider.upper()}_API_KEY")
+    base_url = {
+        "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "openrouter": "https://openrouter.ai/api/v1",
+        "groq": "https://api.groq.com/openai/v1",
+        "openai": _setting("openai_base_url", "OPENAI_BASE_URL", "https://api.openai.com/v1"),
+    }[provider]
     if not model or not api_key or not base_url:
         return UnavailableAIEnrichmentProvider()
-    return OpenAIResponsesEnrichmentProvider(
-        api_key=api_key,
-        model=model,
-        base_url=base_url,
-    )
+    if provider == "gemini" and model == "latest-3-flash":
+        resolved = LatestGeminiEnrichmentProvider(api_key=api_key)
+    elif provider == "openai":
+        resolved = OpenAIResponsesEnrichmentProvider(api_key=api_key, model=model, base_url=base_url)
+    else:
+        resolved = ChatCompletionsEnrichmentProvider(provider=provider, api_key=api_key, model=model, base_url=base_url)
+    if not explicit:
+        chain = [resolved]
+        for tier in ("fallback", "tertiary"):
+            name = _setting(f"ai_enrichment_{tier}_provider", f"AI_ENRICHMENT_{tier.upper()}_PROVIDER").casefold()
+            if name:
+                backup = get_ai_enrichment_provider(
+                    provider=name,
+                    model=_setting(f"ai_enrichment_{tier}_model", f"AI_ENRICHMENT_{tier.upper()}_MODEL"),
+                )
+                if isinstance(backup, UnavailableAIEnrichmentProvider):
+                    return backup
+                chain.append(backup)
+        resolved = chain.pop()
+        for primary in reversed(chain):
+            resolved = FallbackAIEnrichmentProvider(primary, resolved)
+    return resolved
 
 
 def compute_enrichment_fingerprint(
@@ -378,6 +521,8 @@ def compute_enrichment_fingerprint(
     *,
     enable_tags: bool = True,
     enable_related_notes: bool = True,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> str:
     """Return a stable fingerprint for source/context inputs only.
 
@@ -390,6 +535,12 @@ def compute_enrichment_fingerprint(
     del candidate_notes
     payload = {
         "contract": "drive-ai-enrichment-v1",
+        "provider": provider,
+        "model": model,
+        # ponytail: moving model policies reuse cache for at most one UTC day;
+        # resolve concrete serving versions if immediate release invalidation is needed.
+        "model_day": datetime.now(timezone.utc).date().isoformat()
+        if model and ("latest" in model or "openrouter/free" in model) else None,
         "document_id": document_context.document_id,
         "title": document_context.title.strip(),
         "mime_type": document_context.mime_type.strip(),

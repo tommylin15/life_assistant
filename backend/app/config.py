@@ -32,6 +32,13 @@ COLON_COMMA_BUNDLE_KEYS = (
     "AI_ENRICHMENT_MODEL",
     "OPENAI_API_KEY",
     "OPENAI_BASE_URL",
+    "GEMINI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "GROQ_API_KEY",
+    "AI_ENRICHMENT_FALLBACK_PROVIDER",
+    "AI_ENRICHMENT_FALLBACK_MODEL",
+    "AI_ENRICHMENT_TERTIARY_PROVIDER",
+    "AI_ENRICHMENT_TERTIARY_MODEL",
 )
 
 
@@ -354,6 +361,13 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5000"
     ai_enrichment_provider: str = "disabled"
     ai_enrichment_model: str = ""
+    ai_enrichment_fallback_provider: str = ""
+    ai_enrichment_fallback_model: str = ""
+    ai_enrichment_tertiary_provider: str = ""
+    ai_enrichment_tertiary_model: str = ""
+    gemini_api_key: str = ""
+    openrouter_api_key: str = ""
+    groq_api_key: str = ""
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
 

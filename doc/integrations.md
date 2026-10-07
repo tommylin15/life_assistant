@@ -229,3 +229,18 @@ App 可提供「ChatGPT Bridge / MCP 設定」入口。
 為準。
 
 實作時不得以 README prose 取代 schema 驗證。
+# Drive AI provider configuration — 2026-10-07
+
+使用者已選擇 Gemini 主用、OpenRouter 免費備援、Groq 第三順位。Backend 保留既有 OpenAI adapter，三個服務共用 Chat Completions JSON Schema 傳輸與既有 Tag / related Note 驗證；不新增 SDK。
+
+- `AI_ENRICHMENT_PROVIDER=gemini`、`AI_ENRICHMENT_MODEL=latest-3-flash`：每次新分析讀取 Google models 清單，按數字版本選最新三個支援 `generateContent` 的正式文字 Flash 模型，依新到舊嘗試。排除 Lite、preview、image、TTS 等變體；每個 stage 最多三次模型呼叫。
+- `AI_ENRICHMENT_FALLBACK_PROVIDER=openrouter`、`AI_ENRICHMENT_FALLBACK_MODEL=openrouter/free`：Gemini stage 失敗後只呼叫一次免費路由；指定 `require_parameters=true`、`data_collection=deny`，沒有符合條件的免費 endpoint 時保留 failure / partial 語意，不改用付費模型。
+- `AI_ENRICHMENT_TERTIARY_PROVIDER=groq`、`AI_ENRICHMENT_TERTIARY_MODEL=openai/gpt-oss-120b`：前兩個服務失敗後呼叫 Groq。各 stage 分別保留 failure / partial 語意；不讀使用者資料來驗收。
+- `GEMINI_API_KEY` / `OPENROUTER_API_KEY` 的授權來源是 `omniagent-bundle`；只複製所需兩個欄位，Groq key 由使用者指定的本機檔案讀取。三把 key 與 routing config 已依明確授權寫入 `life-assistant-bundle` version `6`，原有 DB / OAuth / Picker 欄位驗證一致；不讓 runtime 取得 omniAgent 的 DB / signing secrets。
+- Consent 預設 OFF；相同 bounded context 與 related Note snapshot 才可送出，OAuth / user identity / DB credentials 不送給模型。
+- Cache fingerprint 包含 provider / model routing policy。移動模型策略按 UTC 日期失效，最多沿用一天；force re-analysis 可立即略過 cache。execution run metadata 的 provider / model 表示設定的 routing policy；Gemini selected-model log 與 live acceptance `served_models` 記錄實際成功模型。
+- Live acceptance 分別驗證主用與備援，不讓備援成功掩蓋 Gemini 失敗；只使用 synthetic context，不讀使用者資料。
+
+Local live evidence：Gemini `3.8` / `3.7` 回覆 `503 UNAVAILABLE` 後，`3.6 Flash` 的 tags / related Notes 均 `200` 且 acceptance PASS；`openrouter/free` 與 Groq `openai/gpt-oss-120b` 的兩個 stage 亦 PASS。這是本機 API evidence，不等同 deployed runtime acceptance。多順位的最壞等待時間可能超過 5 分鐘，因此 Cloud Run request 與 live acceptance task timeout 均設為 10 分鐘。
+
+API references：[Gemini compatibility](https://ai.google.dev/gemini-api/docs/openai)、[OpenRouter structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs)、[Free router](https://openrouter.ai/openrouter/free/)。

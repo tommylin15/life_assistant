@@ -289,6 +289,7 @@ class _HabitCard extends StatelessWidget {
             runSpacing: AppSpacing.sm,
             children: [
               Semantics(
+                container: true,
                 button: true,
                 label: '記錄完成：${habit.title}',
                 child: FilledButton.icon(
@@ -303,11 +304,16 @@ class _HabitCard extends StatelessWidget {
                   label: Text(completing ? '記錄中' : '記錄完成'),
                 ),
               ),
-              OutlinedButton.icon(
-                key: ValueKey('habit-history-${habit.id}'),
-                onPressed: onHistory,
-                icon: const Icon(Icons.history),
-                label: const Text('完成紀錄'),
+              Semantics(
+                container: true,
+                button: true,
+                label: '完成紀錄：${habit.title}',
+                child: OutlinedButton.icon(
+                  key: ValueKey('habit-history-${habit.id}'),
+                  onPressed: onHistory,
+                  icon: const Icon(Icons.history),
+                  label: const Text('完成紀錄'),
+                ),
               ),
             ],
           ),

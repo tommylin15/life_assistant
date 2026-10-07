@@ -135,6 +135,14 @@ void main() {
     expect(find.text('每日'), findsOneWidget);
     expect(find.text('提醒 07:30'), findsOneWidget);
     expect(find.text('完成紀錄 2 筆'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(RegExp(r'記錄完成：晨間快走')),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(RegExp(r'完成紀錄：晨間快走')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('habit-history-h1')));
     await tester.pumpAndSettle();

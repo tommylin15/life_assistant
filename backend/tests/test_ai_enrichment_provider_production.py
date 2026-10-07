@@ -80,17 +80,29 @@ class ProductionProviderContractTests(unittest.IsolatedAsyncioTestCase):
                 "finish_reason": "stop", "message": {"content": '{"tags":[]}'},
             }]})
         client_class = providers.httpx.AsyncClient
-        with patch.object(providers.httpx, "AsyncClient", side_effect=lambda **kw: client_class(
-            transport=providers.httpx.MockTransport(handle), **kw,
-        )):
+        with (
+            patch.object(providers.httpx, "AsyncClient", side_effect=lambda **kw: client_class(
+                transport=providers.httpx.MockTransport(handle), **kw,
+            )),
+            patch.object(providers.asyncio, "sleep", new=AsyncMock()),
+        ):
             provider = providers.LatestGeminiEnrichmentProvider(api_key="test-key")
             self.assertEqual(await provider.suggest_tags(self.context), [])
-            self.assertEqual(calls, ["gemini-3.10-flash", "gemini-3.9-flash", "gemini-3.8-flash"])
+            self.assertEqual(
+                calls,
+                [
+                    "gemini-3.10-flash",
+                    "gemini-3.10-flash",
+                    "gemini-3.9-flash",
+                    "gemini-3.9-flash",
+                    "gemini-3.8-flash",
+                ],
+            )
             calls.clear()
             provider._models = ["gemini-3.10-flash", "gemini-3.9-flash", "gemini-3.7-flash"]
             with self.assertRaises(AIProviderError):
                 await provider.suggest_tags(self.context)
-            self.assertEqual(len(calls), 3)
+            self.assertEqual(len(calls), 6)
 
     async def test_compatible_providers_use_vendor_endpoints_and_structured_output(self):
         for name, endpoint in (

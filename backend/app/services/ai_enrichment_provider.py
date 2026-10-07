@@ -662,6 +662,12 @@ class LatestGeminiEnrichmentProvider(ChatCompletionsEnrichmentProvider):
                     return result
                 except AIProviderError as exc:
                     error = exc
+                    if exc.code == "provider_http_error" and exc.status_code == 429:
+                        logging.getLogger(__name__).warning(
+                            "drive_ai_rate_limited provider=gemini model=%s",
+                            model,
+                        )
+                        raise
                     if (
                         exc.code == "provider_http_error"
                         and (

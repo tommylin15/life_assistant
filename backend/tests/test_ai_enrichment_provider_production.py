@@ -115,6 +115,41 @@ class ProductionProviderContractTests(unittest.IsolatedAsyncioTestCase):
                 await provider.suggest_tags(self.context)
             self.assertEqual(len(calls), 9)
 
+    async def test_latest_gemini_stops_model_sweep_on_rate_limit(self):
+        calls = []
+
+        def handle(request):
+            if request.method == "GET":
+                return providers.httpx.Response(200, json={"models": [
+                    {"name": "models/" + name, "supportedGenerationMethods": ["generateContent"]}
+                    for name in (
+                        "gemini-4.0-flash",
+                        "gemini-3.9-flash",
+                        "gemini-3.8-flash",
+                    )
+                ]})
+            model = json.loads(request.content)["model"]
+            calls.append(model)
+            return providers.httpx.Response(429, json={"error": {"message": "rate limited"}})
+
+        client_class = providers.httpx.AsyncClient
+        with (
+            patch.object(providers.httpx, "AsyncClient", side_effect=lambda **kw: client_class(
+                transport=providers.httpx.MockTransport(handle), **kw,
+            )),
+            patch.object(
+                providers,
+                "load_ai_provider_preference",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            provider = providers.LatestGeminiEnrichmentProvider(api_key="test-key")
+            with self.assertRaises(AIProviderError) as raised:
+                await provider.suggest_tags(self.context)
+
+        self.assertEqual(raised.exception.status_code, 429)
+        self.assertEqual(calls, ["gemini-4.0-flash"])
+
     async def test_latest_gemini_prefers_persisted_success_even_outside_newest_three(self):
         calls = []
 

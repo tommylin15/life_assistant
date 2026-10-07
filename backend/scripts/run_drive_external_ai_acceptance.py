@@ -57,6 +57,12 @@ _PROVIDER_FAILURE_BITS = {
     "groq": 4,
     "openai": 8,
 }
+_PROVIDER_DIAGNOSTIC_BASES = {
+    "gemini": 140,
+    "openrouter": 155,
+    "groq": 170,
+    "openai": 185,
+}
 
 
 def _exit_code_for_unavailable_provider(
@@ -118,6 +124,17 @@ def _exit_code_for_provider_error(exc: AIProviderError) -> int:
     if 500 <= exc.status_code <= 599:
         return EXIT_PROVIDER_HTTP_5XX
     return EXIT_PROVIDER_HTTP_OTHER
+
+
+def _provider_specific_diagnostic_exit(provider: str, diagnostic_exit: int) -> int:
+    normalized = provider.strip().casefold()
+    base = _PROVIDER_DIAGNOSTIC_BASES.get(normalized)
+    if base is None or diagnostic_exit not in _PROVIDER_DIAGNOSTIC_EXIT_CODES:
+        return diagnostic_exit
+    encoded = base + (diagnostic_exit - EXIT_PROVIDER_HTTP_TRANSPORT)
+    if not 0 < encoded < 256:
+        return diagnostic_exit
+    return encoded
 
 
 def _provider_error_reason(exc: AIProviderError) -> str:
@@ -274,7 +291,18 @@ async def run_configured_providers() -> None:
             len(provider_failures) == 1
             and provider_failures[0][1] in _PROVIDER_DIAGNOSTIC_EXIT_CODES
         ):
-            raise SystemExit(provider_failures[0][1])
+            provider_name, diagnostic_exit = provider_failures[0]
+            provider_exit = _provider_specific_diagnostic_exit(
+                provider_name,
+                diagnostic_exit,
+            )
+            print(
+                "drive_external_ai_summary=FAIL "
+                f"provider={provider_name} diagnostic_exit={diagnostic_exit} "
+                f"provider_exit={provider_exit}",
+                flush=True,
+            )
+            raise SystemExit(provider_exit)
         if provider_failure_mask:
             raise SystemExit(EXIT_PROVIDER_FAILURE_MASK_BASE + provider_failure_mask)
         raise SystemExit(EXIT_PROVIDER_FAILURE)

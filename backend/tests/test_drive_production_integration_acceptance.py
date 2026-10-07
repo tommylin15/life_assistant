@@ -161,6 +161,26 @@ class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
                 observed.add(actual)
         self.assertEqual(len(observed), len(cases))
 
+    def test_live_external_ai_provider_specific_exit_preserves_provider_identity(self):
+        encode = external_ai_acceptance._provider_specific_diagnostic_exit
+        self.assertEqual(
+            encode("gemini", external_ai_acceptance.EXIT_PROVIDER_HTTP_RATE_LIMIT),
+            144,
+        )
+        self.assertEqual(
+            encode("openrouter", external_ai_acceptance.EXIT_PROVIDER_HTTP_RATE_LIMIT),
+            159,
+        )
+        self.assertEqual(
+            encode("groq", external_ai_acceptance.EXIT_PROVIDER_HTTP_RATE_LIMIT),
+            174,
+        )
+        self.assertEqual(
+            encode("openai", external_ai_acceptance.EXIT_PROVIDER_HTTP_RATE_LIMIT),
+            189,
+        )
+        self.assertEqual(encode("unknown", 124), 124)
+
     def test_task9_workflow_executes_runtime_config_and_live_ai_gates(self):
         self.assertTrue(self.workflow.is_file())
         source = self.workflow.read_text(encoding="utf-8")

@@ -382,6 +382,12 @@ class ChatCompletionsEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
             },
         }
         if self.provider_name == "openrouter":
+            # ponytail: free endpoints support JSON mode, not always JSON Schema;
+            # keep the schema in the prompt and validate tags/candidate IDs locally.
+            body["response_format"] = {"type": "json_object"}
+            body["messages"][0]["content"] += (
+                " Return only a JSON object matching this schema: " + json.dumps(schema)
+            )
             body["provider"] = {"require_parameters": True, "data_collection": "deny"}
         try:
             async with httpx.AsyncClient(timeout=_OPENAI_TIMEOUT_SECONDS) as client:

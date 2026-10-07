@@ -231,12 +231,12 @@ App 可提供「ChatGPT Bridge / MCP 設定」入口。
 實作時不得以 README prose 取代 schema 驗證。
 # Drive AI provider configuration — 2026-10-07
 
-使用者已選擇 Gemini 主用、OpenRouter 免費備援、Groq 第三順位。Backend 保留既有 OpenAI adapter，三個服務共用 Chat Completions JSON Schema 傳輸與既有 Tag / related Note 驗證；不新增 SDK。
+使用者已選擇 Gemini 主用、Groq 第二順位、OpenRouter 免費第三順位。Backend 保留既有 OpenAI adapter，三個服務共用 Chat Completions 傳輸與既有 Tag / related Note 驗證；Gemini / Groq 使用嚴格 JSON Schema，OpenRouter 使用 JSON mode + schema prompt，因符合隱私限制的免費 endpoint 不一定支援 JSON Schema；不新增 SDK。
 
 - `AI_ENRICHMENT_PROVIDER=gemini`、`AI_ENRICHMENT_MODEL=latest-3-flash`：每次新分析讀取 Google models 清單，按數字版本選最新三個支援 `generateContent` 的正式文字 Flash 模型，依新到舊嘗試。排除 Lite、preview、image、TTS 等變體；每個 stage 最多三次模型呼叫。
-- `AI_ENRICHMENT_FALLBACK_PROVIDER=openrouter`、`AI_ENRICHMENT_FALLBACK_MODEL=openrouter/free`：Gemini stage 失敗後只呼叫一次免費路由；指定 `require_parameters=true`、`data_collection=deny`，沒有符合條件的免費 endpoint 時保留 failure / partial 語意，不改用付費模型。
-- `AI_ENRICHMENT_TERTIARY_PROVIDER=groq`、`AI_ENRICHMENT_TERTIARY_MODEL=openai/gpt-oss-120b`：前兩個服務失敗後呼叫 Groq。各 stage 分別保留 failure / partial 語意；不讀使用者資料來驗收。
-- `GEMINI_API_KEY` / `OPENROUTER_API_KEY` 的授權來源是 `omniagent-bundle`；只複製所需兩個欄位，Groq key 由使用者指定的本機檔案讀取。三把 key 與 routing config 已依明確授權寫入 `life-assistant-bundle` version `6`，原有 DB / OAuth / Picker 欄位驗證一致；不讓 runtime 取得 omniAgent 的 DB / signing secrets。
+- `AI_ENRICHMENT_FALLBACK_PROVIDER=groq`、`AI_ENRICHMENT_FALLBACK_MODEL=openai/gpt-oss-120b`：Gemini stage 失敗後呼叫 Groq。各 stage 分別保留 failure / partial 語意；不讀使用者資料來驗收。
+- `AI_ENRICHMENT_TERTIARY_PROVIDER=openrouter`、`AI_ENRICHMENT_TERTIARY_MODEL=openrouter/free`：前兩個服務失敗後只呼叫一次免費路由；指定 `require_parameters=true`、`data_collection=deny`，沒有符合條件的免費 endpoint 時保留 failure / partial 語意，不改用付費模型。
+- `GEMINI_API_KEY` / `OPENROUTER_API_KEY` 的授權來源是 `omniagent-bundle`；只複製所需兩個欄位，Groq key 由使用者指定的本機檔案讀取。三把 key 與 routing config 已依明確授權寫入 `life-assistant-bundle` version `7`，原有 DB / OAuth / Picker 欄位驗證一致；不讓 runtime 取得 omniAgent 的 DB / signing secrets。
 - Consent 預設 OFF；相同 bounded context 與 related Note snapshot 才可送出，OAuth / user identity / DB credentials 不送給模型。
 - Cache fingerprint 包含 provider / model routing policy。移動模型策略按 UTC 日期失效，最多沿用一天；force re-analysis 可立即略過 cache。execution run metadata 的 provider / model 表示設定的 routing policy；Gemini selected-model log 與 live acceptance `served_models` 記錄實際成功模型。
 - Live acceptance 分別驗證主用與備援，不讓備援成功掩蓋 Gemini 失敗；只使用 synthetic context，不讀使用者資料。
@@ -244,3 +244,13 @@ App 可提供「ChatGPT Bridge / MCP 設定」入口。
 Local live evidence：Gemini `3.8` / `3.7` 回覆 `503 UNAVAILABLE` 後，`3.6 Flash` 的 tags / related Notes 均 `200` 且 acceptance PASS；`openrouter/free` 與 Groq `openai/gpt-oss-120b` 的兩個 stage 亦 PASS。這是本機 API evidence，不等同 deployed runtime acceptance。多順位的最壞等待時間可能超過 5 分鐘，因此 Cloud Run request 與 live acceptance task timeout 均設為 10 分鐘。
 
 API references：[Gemini compatibility](https://ai.google.dev/gemini-api/docs/openai)、[OpenRouter structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs)、[Free router](https://openrouter.ai/openrouter/free/)。
+
+## Secret 與真實 Drive 驗收設定 — 2026-10-07
+
+- Life Assistant Cloud Run revision `life-assistant-api-00153-fjn` 只引用 `LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest`；沒有 omniAgent / Janus bundle 的 runtime dependency。
+- `life-assistant-bundle` 現在只有 version `7` enabled；被取代的 versions `1–6` 均 destroyed。新版 DB / OAuth / Picker 設定已載入且真實 Drive PASS。
+- Groq key 另依使用者授權加入 `omniagent-bundle:2` 與 `janus-runtime-bundle:5`。omniAgent gateway / chat 更新 pinned reference 至 `2`；Janus API 重部署載入 `5`，三個服務 health 均 `200`。這次只追加 key，不宣稱其他專案已實作 Groq provider adapter。
+- 新版本健康驗收後，`omniagent-bundle:1`、`janus-runtime-bundle:3–4` 已 destroyed；Janus runtime 只保留 `5` enabled。`janus-mart-codex-auth:1` 沒有 Gemini / OpenRouter 欄位，未修改或刪除。
+- 真實 Drive fixture 使用 `tommylin15@gmail.com`；user sub `114499021556773459186`。使用者授權建立非敏感 Google 文件 `Life Assistant Drive Acceptance 2026-10-07`，file ID `1mLEdBCDyFdDO7dXDO5djgudKSjPhz2400ihV6YODpcs`，已透過 production Picker 選取並在 Drive UI 登記成功。
+- GitHub `dev-test` 的 `DRIVE_ACCEPTANCE_USER_SUB` / `DRIVE_ACCEPTANCE_GOOGLE_FILE_ID` 已設定；保留 fixture 供後續重跑。驗收只讀來源並清理自己建立的本地測試 Note / Tag，不修改 Google 文件，不擴大 `drive.file` scope。
+- 真實 Drive execution `life-assistant-postdeploy-acceptance-tqwr4` PASS、exit `0`。AI 診斷 execution `life-assistant-postdeploy-acceptance-9djrt` 中 Gemini 成功模型為 `gemini-3.7-flash` / `gemini-3.8-flash`，Groq `openai/gpt-oss-120b` 亦 PASS；但 OpenRouter 嚴格 JSON Schema 回覆 `404`。改用 JSON mode 後本機兩個 stage 均 `200`、acceptance PASS；完整新版 deployed gate 必須另行重跑，不以本機結果替代。

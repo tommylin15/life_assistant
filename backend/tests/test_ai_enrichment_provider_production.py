@@ -116,7 +116,11 @@ class ProductionProviderContractTests(unittest.IsolatedAsyncioTestCase):
                 with patch.object(providers.httpx, "AsyncClient", side_effect=lambda **_: _FakeClient(response, calls)):
                     self.assertEqual(await provider.suggest_tags(self.context), [TagSuggestion("Planning", 0.92)])
                 self.assertEqual(calls[0]["url"], endpoint + "/chat/completions")
-                self.assertTrue(calls[0]["json"]["response_format"]["json_schema"]["strict"])
+                if name == "openrouter":
+                    self.assertEqual(calls[0]["json"]["response_format"], {"type": "json_object"})
+                    self.assertIn('"required": ["tags"]', calls[0]["json"]["messages"][0]["content"])
+                else:
+                    self.assertTrue(calls[0]["json"]["response_format"]["json_schema"]["strict"])
                 self.assertNotIn("test-key", json.dumps(calls[0]["json"]))
                 if name == "openrouter":
                     self.assertEqual(calls[0]["json"]["provider"]["data_collection"], "deny")

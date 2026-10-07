@@ -197,10 +197,11 @@ async function desktop(context) {
   await semantics(page);
 
   await named(page, '習慣');
-  await named(page, '晨間快走');
-  await named(page, '每日');
-  await named(page, '提醒 07:30');
-  await named(page, '完成紀錄 1 筆');
+  console.log('habits_ui_stage=desktop_initial_list');
+  await named(page, /晨間快走/);
+  await named(page, /每日/);
+  await named(page, /提醒 07:30/);
+  await named(page, /完成紀錄 1 筆/);
   pass('list_history_summary');
 
   await (await named(page, '新增習慣')).click();
@@ -214,7 +215,7 @@ async function desktop(context) {
   );
   assert.equal(state.creates.at(-1).recurrence_rule, 'FREQ=DAILY');
   assert.equal(state.creates.at(-1).reminder_time, '21:30');
-  await named(page, '瀏覽器習慣');
+  await named(page, /瀏覽器習慣/);
   pass('create');
 
   await (await named(page, '編輯習慣：瀏覽器習慣')).click();
@@ -226,8 +227,8 @@ async function desktop(context) {
     () => state.updates.some((entry) => entry.body.title === '瀏覽器習慣更新'),
     'habit update',
   );
-  await named(page, '瀏覽器習慣更新');
-  await named(page, '提醒 22:00');
+  await named(page, /瀏覽器習慣更新/);
+  await named(page, /提醒 22:00/);
   pass('update');
 
   await (await named(page, '記錄完成：瀏覽器習慣更新')).click();
@@ -236,13 +237,13 @@ async function desktop(context) {
     'habit completion',
   );
   await named(page, /已記錄「瀏覽器習慣更新」完成/);
-  await named(page, '完成紀錄 1 筆');
+  await named(page, /完成紀錄 1 筆/);
   pass('complete');
 
   const historyButtons = page.getByRole('button', { name: /^完成紀錄$/ });
   await visible([historyButtons]);
   await historyButtons.first().click();
-  await named(page, '瀏覽器習慣更新 · 完成紀錄');
+  await named(page, /瀏覽器習慣更新 · 完成紀錄/);
   await named(page, /2026\/10\/7/);
   pass('history_dialog');
 
@@ -263,8 +264,8 @@ async function mobile(context) {
 
   await page.goto(`${baseUrl}/more`, { waitUntil: 'domcontentloaded' });
   await semantics(page);
-  await (await named(page, '習慣')).click();
-  await named(page, '晨間快走');
+  await (await named(page, /習慣/)).click();
+  await named(page, /晨間快走/);
   await named(page, '記錄完成：晨間快走');
   await named(page, '新增習慣');
   assert.deepEqual(overflow, []);

@@ -169,12 +169,27 @@ async function textbox(page, label) {
   );
 }
 
-async function replaceText(locator, value) {
-  await locator.click();
-  await locator.press('Control+A');
-  await locator.press('Backspace');
-  await locator.pressSequentially(value, { delay: 12 });
-  await locator.press('Tab');
+async function replaceText(locator, value, label) {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await locator.click();
+    await delay(180);
+    await locator.press('Control+A').catch(() => {});
+    await locator.press('Backspace').catch(() => {});
+    await locator.pressSequentially('x', { delay: 20 }).catch(() => {});
+    await locator.press('Backspace').catch(() => {});
+    await delay(100);
+    await locator.pressSequentially(value, { delay: 15 });
+    await locator.press('Tab');
+    await delay(150);
+    const actual = await locator.inputValue().catch(() => null);
+    console.log(
+      `habits_ui_typed=${label} attempt=${attempt} value=${JSON.stringify(actual)}`,
+    );
+    if (actual === value) return;
+    if (attempt < 3) await delay(250);
+  }
+  const actual = await locator.inputValue().catch(() => null);
+  assert.equal(actual, value, `${label} DOM value did not match typed text`);
 }
 
 async function waitObserved(predicate, label) {
@@ -205,8 +220,8 @@ async function desktop(context) {
   pass('list_history_summary');
 
   await (await named(page, '新增習慣')).click();
-  await replaceText(await textbox(page, /^名稱$/), '瀏覽器習慣');
-  await replaceText(await textbox(page, /提醒時間/), '21:30');
+  await replaceText(await textbox(page, /^名稱$/), '瀏覽器習慣', 'create title');
+  await replaceText(await textbox(page, /提醒時間/), '21:30', 'create reminder');
   await (await named(page, '儲存')).click();
 
   await waitObserved(
@@ -219,8 +234,8 @@ async function desktop(context) {
   pass('create');
 
   await (await named(page, '編輯習慣：瀏覽器習慣')).click();
-  await replaceText(await textbox(page, /^名稱$/), '瀏覽器習慣更新');
-  await replaceText(await textbox(page, /提醒時間/), '22:00');
+  await replaceText(await textbox(page, /^名稱$/), '瀏覽器習慣更新', 'edit title');
+  await replaceText(await textbox(page, /提醒時間/), '22:00', 'edit reminder');
   await (await named(page, '儲存')).click();
 
   await waitObserved(

@@ -137,6 +137,30 @@ class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
             115,
         )
 
+    def test_live_external_ai_provider_failure_diagnostics_are_byte_safe(self):
+        classifier = external_ai_acceptance._exit_code_for_provider_error
+        cases = (
+            (external_ai_acceptance.AIProviderError("provider_http_error"), 120),
+            (external_ai_acceptance.AIProviderError("provider_http_error", status_code=400), 121),
+            (external_ai_acceptance.AIProviderError("provider_http_error", status_code=401), 122),
+            (external_ai_acceptance.AIProviderError("provider_http_error", status_code=408), 123),
+            (external_ai_acceptance.AIProviderError("provider_http_error", status_code=429), 124),
+            (external_ai_acceptance.AIProviderError("provider_http_error", status_code=503), 125),
+            (external_ai_acceptance.AIProviderError("provider_http_error", status_code=418), 126),
+            (external_ai_acceptance.AIProviderError("provider_invalid_output"), 127),
+            (external_ai_acceptance.AIProviderError("provider_unavailable"), 128),
+            (external_ai_acceptance.AIProviderError("unexpected"), 130),
+        )
+        observed = set()
+        for exc, expected in cases:
+            with self.subTest(code=exc.code, status=exc.status_code):
+                actual = classifier(exc)
+                self.assertEqual(actual, expected)
+                self.assertGreater(actual, 0)
+                self.assertLess(actual, 256)
+                observed.add(actual)
+        self.assertEqual(len(observed), len(cases))
+
     def test_task9_workflow_executes_runtime_config_and_live_ai_gates(self):
         self.assertTrue(self.workflow.is_file())
         source = self.workflow.read_text(encoding="utf-8")

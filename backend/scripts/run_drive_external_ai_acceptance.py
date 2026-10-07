@@ -27,6 +27,30 @@ EXIT_MODEL_MISSING = 86
 EXIT_API_KEY_MISSING = 87
 EXIT_BASE_URL_MISSING = 88
 EXIT_PROVIDER_FAILURE_MASK_BASE = 90
+EXIT_PROVIDER_HTTP_TRANSPORT = 120
+EXIT_PROVIDER_HTTP_BAD_REQUEST = 121
+EXIT_PROVIDER_HTTP_AUTH = 122
+EXIT_PROVIDER_HTTP_TIMEOUT = 123
+EXIT_PROVIDER_HTTP_RATE_LIMIT = 124
+EXIT_PROVIDER_HTTP_5XX = 125
+EXIT_PROVIDER_HTTP_OTHER = 126
+EXIT_PROVIDER_INVALID_OUTPUT = 127
+EXIT_PROVIDER_UNAVAILABLE = 128
+EXIT_PROVIDER_PREFERENCE_NOT_PERSISTED = 129
+EXIT_PROVIDER_OTHER = 130
+_PROVIDER_DIAGNOSTIC_EXIT_CODES = {
+    EXIT_PROVIDER_HTTP_TRANSPORT,
+    EXIT_PROVIDER_HTTP_BAD_REQUEST,
+    EXIT_PROVIDER_HTTP_AUTH,
+    EXIT_PROVIDER_HTTP_TIMEOUT,
+    EXIT_PROVIDER_HTTP_RATE_LIMIT,
+    EXIT_PROVIDER_HTTP_5XX,
+    EXIT_PROVIDER_HTTP_OTHER,
+    EXIT_PROVIDER_INVALID_OUTPUT,
+    EXIT_PROVIDER_UNAVAILABLE,
+    EXIT_PROVIDER_PREFERENCE_NOT_PERSISTED,
+    EXIT_PROVIDER_OTHER,
+}
 _PROVIDER_FAILURE_BITS = {
     "gemini": 1,
     "openrouter": 2,
@@ -74,6 +98,44 @@ def _unavailable_reason(exit_code: int) -> str:
     }.get(exit_code, "production_provider_not_configured")
 
 
+def _exit_code_for_provider_error(exc: AIProviderError) -> int:
+    if exc.code == "provider_invalid_output":
+        return EXIT_PROVIDER_INVALID_OUTPUT
+    if exc.code == "provider_unavailable":
+        return EXIT_PROVIDER_UNAVAILABLE
+    if exc.code != "provider_http_error":
+        return EXIT_PROVIDER_OTHER
+    if exc.status_code is None:
+        return EXIT_PROVIDER_HTTP_TRANSPORT
+    if exc.status_code == 400:
+        return EXIT_PROVIDER_HTTP_BAD_REQUEST
+    if exc.status_code in {401, 403}:
+        return EXIT_PROVIDER_HTTP_AUTH
+    if exc.status_code == 408:
+        return EXIT_PROVIDER_HTTP_TIMEOUT
+    if exc.status_code == 429:
+        return EXIT_PROVIDER_HTTP_RATE_LIMIT
+    if 500 <= exc.status_code <= 599:
+        return EXIT_PROVIDER_HTTP_5XX
+    return EXIT_PROVIDER_HTTP_OTHER
+
+
+def _provider_error_reason(exc: AIProviderError) -> str:
+    code = _exit_code_for_provider_error(exc)
+    return {
+        EXIT_PROVIDER_HTTP_TRANSPORT: "http_transport",
+        EXIT_PROVIDER_HTTP_BAD_REQUEST: "http_400",
+        EXIT_PROVIDER_HTTP_AUTH: "http_auth",
+        EXIT_PROVIDER_HTTP_TIMEOUT: "http_408",
+        EXIT_PROVIDER_HTTP_RATE_LIMIT: "http_429",
+        EXIT_PROVIDER_HTTP_5XX: "http_5xx",
+        EXIT_PROVIDER_HTTP_OTHER: "http_other",
+        EXIT_PROVIDER_INVALID_OUTPUT: "invalid_output",
+        EXIT_PROVIDER_UNAVAILABLE: "provider_unavailable",
+        EXIT_PROVIDER_OTHER: "provider_error",
+    }[code]
+
+
 async def run_acceptance(*, provider_name: str | None = None, model: str | None = None) -> None:
     provider = get_ai_enrichment_provider(provider=provider_name, model=model)
     if isinstance(provider, UnavailableAIEnrichmentProvider):
@@ -117,14 +179,17 @@ async def run_acceptance(*, provider_name: str | None = None, model: str | None 
         tags = await provider.suggest_tags(context)
         notes = await provider.rank_related_notes(context, candidates)
     except AIProviderError as exc:
+        diagnostic_exit = _exit_code_for_provider_error(exc)
         print(
             "drive_external_ai_integration=FAIL "
             f"provider={provider_name or provider.provider_name or 'unknown'} "
             f"model={model if model is not None else provider.model_name or 'unknown'} "
-            f"reason={exc.code}",
+            f"reason={_provider_error_reason(exc)} "
+            f"status_code={exc.status_code if exc.status_code is not None else 'none'} "
+            f"diagnostic_exit={diagnostic_exit}",
             flush=True,
         )
-        raise SystemExit(EXIT_PROVIDER_FAILURE) from exc
+        raise SystemExit(diagnostic_exit) from exc
     except Exception as exc:
         print(
             "drive_external_ai_integration=FAIL "
@@ -157,7 +222,7 @@ async def run_acceptance(*, provider_name: str | None = None, model: str | None 
                 "reason=preferred_model_not_persisted",
                 flush=True,
             )
-            raise SystemExit(EXIT_PROVIDER_FAILURE)
+            raise SystemExit(EXIT_PROVIDER_PREFERENCE_NOT_PERSISTED)
     print(
         "drive_external_ai_integration=PASS "
         f"provider={provider_name} model={model_name} "
@@ -184,15 +249,15 @@ async def run_configured_providers() -> None:
 
     provider_failure_mask = 0
     configuration_failures: list[tuple[str, int]] = []
-    provider_failures: list[str] = []
+    provider_failures: list[tuple[str, int]] = []
     for name, model in configured:
         normalized_name = str(name or "").strip().casefold()
         try:
             await run_acceptance(provider_name=name, model=model)
         except SystemExit as exc:
             exit_code = int(exc.code or EXIT_PROVIDER_FAILURE)
-            if exit_code == EXIT_PROVIDER_FAILURE:
-                provider_failures.append(normalized_name or "unknown")
+            if exit_code == EXIT_PROVIDER_FAILURE or exit_code in _PROVIDER_DIAGNOSTIC_EXIT_CODES:
+                provider_failures.append((normalized_name or "unknown", exit_code))
                 provider_failure_mask |= _PROVIDER_FAILURE_BITS.get(normalized_name, 0)
             else:
                 configuration_failures.append((normalized_name or "unknown", exit_code))
@@ -203,8 +268,10 @@ async def run_configured_providers() -> None:
         raise SystemExit(configuration_failures[0][1])
 
     if provider_failures:
-        summary = ",".join(provider_failures)
+        summary = ",".join(f"{name}:{code}" for name, code in provider_failures)
         print(f"drive_external_ai_summary=FAIL provider_failures={summary}", flush=True)
+        if len(provider_failures) == 1:
+            raise SystemExit(provider_failures[0][1])
         if provider_failure_mask:
             raise SystemExit(EXIT_PROVIDER_FAILURE_MASK_BASE + provider_failure_mask)
         raise SystemExit(EXIT_PROVIDER_FAILURE)

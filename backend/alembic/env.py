@@ -18,6 +18,7 @@ from app.models.drive import (  # noqa: F401
     NoteDriveDocument,
     ProjectDriveDocument,
 )
+from app.models.ai_provider_preference import AIProviderPreference  # noqa: F401
 from app.models.execution_log import ExecutionLog  # noqa: F401
 from app.models.google_integration import GoogleConnection, GoogleOAuthState  # noqa: F401
 from app.models.habit import Habit, HabitCompletion  # noqa: F401

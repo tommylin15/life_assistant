@@ -17,6 +17,7 @@ from app.services.ai_enrichment_provider import (
     RelatedNoteCandidate,
     UnavailableAIEnrichmentProvider,
     get_ai_enrichment_provider,
+    load_ai_provider_preference,
 )
 
 
@@ -146,6 +147,17 @@ async def run_acceptance(*, provider_name: str | None = None, model: str | None 
 
     provider_name = provider.provider_name or "unknown"
     model_name = provider.model_name or "unknown"
+    if provider_name == "gemini":
+        persisted_model = await load_ai_provider_preference("gemini")
+        served_models = set(getattr(provider, "served_models", ()))
+        if not persisted_model or persisted_model not in served_models:
+            print(
+                "drive_external_ai_integration=FAIL "
+                f"provider=gemini model={model_name} "
+                "reason=preferred_model_not_persisted",
+                flush=True,
+            )
+            raise SystemExit(EXIT_PROVIDER_FAILURE)
     print(
         "drive_external_ai_integration=PASS "
         f"provider={provider_name} model={model_name} "

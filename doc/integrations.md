@@ -267,3 +267,12 @@ Latest regression closure evidence：Habits release `02eda112...` 的 Drive Know
 - 同一輪 production config、synthetic Drive Knowledge runtime、real Google Drive fixture、exact Firebase release、OAuth redirect、Drive Knowledge production UI 均 PASS。
 - 現行 live acceptance 的設計刻意逐一驗證 configured providers，不允許 fallback 成功遮蔽 primary provider failure；本次不修改此標準，也不把 fallback 可用性寫成 Gemini PASS。
 - 狀態：**OPEN / FAIL**。這是獨立 cross-feature/provider-health regression，需後續另行修復或待 upstream provider 恢復後重驗；Shopping Package #7 的 direct product evidence 已完整，因此 #7 仍可封板 DONE。
+
+
+### Gemini last-known-good model preference — 2026-10-07
+
+- Gemini routing now persists the last successfully served stable Flash model in PostgreSQL table `ai_provider_preferences`; this is operational routing state, not user memory or secret material.
+- On a new process / Cloud Run instance, `latest-3-flash` first loads the persisted Gemini model. If it is still present in the live model catalog, it is tried before the newest three stable Flash models.
+- If that remembered model fails, the adapter probes the newest stable Flash candidates. Any later successful model replaces the persisted preference, so the routing can automatically move forward or recover from an older model becoming unavailable.
+- Gemini OpenAI-compatible requests use `reasoning_effort=low` to keep this bounded enrichment workload responsive. Transient 408 / 429 / 5xx / transport failures use bounded whole-model-cycle backoff rather than repeatedly spending retries on the same failing newest model.
+- Live external-AI acceptance requires the successful Gemini model to be persisted; fallback success still cannot mask a direct Gemini failure.

@@ -85,24 +85,79 @@ class ProductionProviderContractTests(unittest.IsolatedAsyncioTestCase):
                 transport=providers.httpx.MockTransport(handle), **kw,
             )),
             patch.object(providers.asyncio, "sleep", new=AsyncMock()),
+            patch.object(
+                providers,
+                "load_ai_provider_preference",
+                new=AsyncMock(return_value=None),
+            ),
+            patch.object(
+                providers,
+                "remember_ai_provider_preference",
+                new=AsyncMock(),
+            ),
         ):
             provider = providers.LatestGeminiEnrichmentProvider(api_key="test-key")
             self.assertEqual(await provider.suggest_tags(self.context), [])
             self.assertEqual(
                 calls,
-                [
-                    "gemini-3.10-flash",
-                    "gemini-3.10-flash",
-                    "gemini-3.9-flash",
-                    "gemini-3.9-flash",
-                    "gemini-3.8-flash",
-                ],
+                ["gemini-3.10-flash", "gemini-3.9-flash", "gemini-3.8-flash"],
             )
             calls.clear()
+            self.assertEqual(await provider.suggest_tags(self.context), [])
+            self.assertEqual(calls, ["gemini-3.8-flash"])
+
+            calls.clear()
             provider._models = ["gemini-3.10-flash", "gemini-3.9-flash", "gemini-3.7-flash"]
+            provider._available_models = list(provider._models)
+            provider._preferred_model = None
+            provider._preference_loaded = True
             with self.assertRaises(AIProviderError):
                 await provider.suggest_tags(self.context)
-            self.assertEqual(len(calls), 6)
+            self.assertEqual(len(calls), 9)
+
+    async def test_latest_gemini_prefers_persisted_success_even_outside_newest_three(self):
+        calls = []
+
+        def handle(request):
+            if request.method == "GET":
+                return providers.httpx.Response(200, json={"models": [
+                    {"name": "models/" + name, "supportedGenerationMethods": ["generateContent"]}
+                    for name in (
+                        "gemini-4.0-flash",
+                        "gemini-3.9-flash",
+                        "gemini-3.8-flash",
+                        "gemini-3.6-flash",
+                    )
+                ]})
+            model = json.loads(request.content)["model"]
+            calls.append(model)
+            return providers.httpx.Response(200, json={"choices": [{
+                "finish_reason": "stop",
+                "message": {"content": '{"tags":[]}'},
+            }]})
+
+        client_class = providers.httpx.AsyncClient
+        remember = AsyncMock()
+        with (
+            patch.object(providers.httpx, "AsyncClient", side_effect=lambda **kw: client_class(
+                transport=providers.httpx.MockTransport(handle), **kw,
+            )),
+            patch.object(
+                providers,
+                "load_ai_provider_preference",
+                new=AsyncMock(return_value="gemini-3.6-flash"),
+            ),
+            patch.object(
+                providers,
+                "remember_ai_provider_preference",
+                new=remember,
+            ),
+        ):
+            provider = providers.LatestGeminiEnrichmentProvider(api_key="test-key")
+            self.assertEqual(await provider.suggest_tags(self.context), [])
+
+        self.assertEqual(calls, ["gemini-3.6-flash"])
+        remember.assert_awaited_once_with("gemini", "gemini-3.6-flash")
 
     async def test_compatible_providers_use_vendor_endpoints_and_structured_output(self):
         for name, endpoint in (
@@ -128,6 +183,8 @@ class ProductionProviderContractTests(unittest.IsolatedAsyncioTestCase):
                 with patch.object(providers.httpx, "AsyncClient", side_effect=lambda **_: _FakeClient(response, calls)):
                     self.assertEqual(await provider.suggest_tags(self.context), [TagSuggestion("Planning", 0.92)])
                 self.assertEqual(calls[0]["url"], endpoint + "/chat/completions")
+                if name == "gemini":
+                    self.assertEqual(calls[0]["json"]["reasoning_effort"], "low")
                 if name == "openrouter":
                     self.assertEqual(calls[0]["json"]["response_format"], {"type": "json_object"})
                     self.assertIn('"required": ["tags"]', calls[0]["json"]["messages"][0]["content"])

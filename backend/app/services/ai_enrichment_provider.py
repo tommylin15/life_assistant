@@ -14,16 +14,70 @@ from typing import Any
 import httpx
 
 from app import config
+from app.db.session import SessionLocal
+from app.models.ai_provider_preference import AIProviderPreference
 
 
 TAG_CONFIDENCE_THRESHOLD = 0.80
 RELATED_NOTE_CONFIDENCE_THRESHOLD = 0.60
 _OPENAI_TIMEOUT_SECONDS = 30.0
 _TRANSIENT_RETRY_DELAYS_SECONDS = (1.0,)
+_GEMINI_DISCOVERY_RETRY_DELAYS_SECONDS = (1.0, 3.0)
+_GEMINI_MODEL_CYCLE_RETRY_DELAYS_SECONDS = (2.0, 5.0)
 
 
 def _is_transient_http_status(status_code: int) -> bool:
     return status_code in {408, 429} or 500 <= status_code <= 599
+
+
+async def load_ai_provider_preference(provider: str) -> str | None:
+    normalized = provider.strip().casefold()
+    if not normalized:
+        return None
+    try:
+        async with SessionLocal() as db:
+            preference = await db.get(AIProviderPreference, normalized)
+            if preference is None:
+                return None
+            model = preference.preferred_model.strip()
+            return model or None
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "drive_ai_preference_load_failed provider=%s error=%s",
+            normalized,
+            type(exc).__name__,
+        )
+        return None
+
+
+async def remember_ai_provider_preference(provider: str, model: str) -> None:
+    normalized_provider = provider.strip().casefold()
+    normalized_model = model.strip()
+    if not normalized_provider or not normalized_model:
+        return
+    try:
+        async with SessionLocal() as db:
+            preference = await db.get(AIProviderPreference, normalized_provider)
+            now = datetime.now(timezone.utc)
+            if preference is None:
+                db.add(
+                    AIProviderPreference(
+                        provider=normalized_provider,
+                        preferred_model=normalized_model,
+                        updated_at=now,
+                    )
+                )
+            else:
+                preference.preferred_model = normalized_model
+                preference.updated_at = now
+            await db.commit()
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "drive_ai_preference_store_failed provider=%s model=%s error=%s",
+            normalized_provider,
+            normalized_model,
+            type(exc).__name__,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,9 +123,10 @@ class ProviderEnrichmentOutcome:
 
 
 class AIProviderError(RuntimeError):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, status_code: int | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.status_code = status_code
 
 
 class AIEnrichmentProvider(ABC):
@@ -367,10 +422,23 @@ class OpenAIResponsesEnrichmentProvider(AIEnrichmentProvider):
 class ChatCompletionsEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
     """Reuse enrichment schemas for Gemini/OpenRouter/Groq's compatible HTTP API."""
 
-    def __init__(self, *, provider: str, api_key: str, model: str, base_url: str) -> None:
+    def __init__(
+        self,
+        *,
+        provider: str,
+        api_key: str,
+        model: str,
+        base_url: str,
+        retry_delays_seconds: tuple[float, ...] | None = None,
+    ) -> None:
         super().__init__(api_key=api_key, model=model, base_url=base_url)
         self.provider_name = provider
         self.served_models: set[str] = set()
+        self._retry_delays_seconds = (
+            _TRANSIENT_RETRY_DELAYS_SECONDS
+            if retry_delays_seconds is None
+            else retry_delays_seconds
+        )
 
     async def _structured_response(
         self, *, instructions: str, user_payload: dict[str, Any],
@@ -387,6 +455,11 @@ class ChatCompletionsEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
                 "json_schema": {"name": format_name, "strict": True, "schema": schema},
             },
         }
+        if self.provider_name == "gemini":
+            # Gemini reasoning models cannot always disable thinking entirely.
+            # Low effort keeps bounded enrichment responsive while preserving
+            # structured-output behavior through the OpenAI compatibility API.
+            body["reasoning_effort"] = "low"
         if self.provider_name == "openrouter":
             # ponytail: free endpoints support JSON mode, not always JSON Schema;
             # keep the schema in the prompt and validate tags/candidate IDs locally.
@@ -397,7 +470,7 @@ class ChatCompletionsEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
             body["provider"] = {"require_parameters": True, "data_collection": "deny"}
         response = None
         last_http_error: httpx.HTTPError | None = None
-        for attempt in range(len(_TRANSIENT_RETRY_DELAYS_SECONDS) + 1):
+        for attempt in range(len(self._retry_delays_seconds) + 1):
             try:
                 async with httpx.AsyncClient(timeout=_OPENAI_TIMEOUT_SECONDS) as client:
                     response = await client.post(
@@ -407,7 +480,7 @@ class ChatCompletionsEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
                     )
             except httpx.HTTPError as exc:
                 last_http_error = exc
-                if attempt >= len(_TRANSIENT_RETRY_DELAYS_SECONDS):
+                if attempt >= len(self._retry_delays_seconds):
                     raise AIProviderError("provider_http_error") from exc
                 logging.getLogger(__name__).warning(
                     "drive_ai_transient_retry provider=%s model=%s reason=transport attempt=%s",
@@ -418,7 +491,7 @@ class ChatCompletionsEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
             else:
                 if (
                     not _is_transient_http_status(response.status_code)
-                    or attempt >= len(_TRANSIENT_RETRY_DELAYS_SECONDS)
+                    or attempt >= len(self._retry_delays_seconds)
                 ):
                     break
                 logging.getLogger(__name__).warning(
@@ -428,12 +501,15 @@ class ChatCompletionsEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
                     response.status_code,
                     attempt + 1,
                 )
-            await asyncio.sleep(_TRANSIENT_RETRY_DELAYS_SECONDS[attempt])
+            await asyncio.sleep(self._retry_delays_seconds[attempt])
 
         if response is None:
             raise AIProviderError("provider_http_error") from last_http_error
         if not 200 <= response.status_code < 300:
-            raise AIProviderError("provider_http_error")
+            raise AIProviderError(
+                "provider_http_error",
+                status_code=response.status_code,
+            )
         try:
             choice = response.json()["choices"][0]
             if choice.get("finish_reason") != "stop":
@@ -469,74 +545,145 @@ class FallbackAIEnrichmentProvider(AIEnrichmentProvider):
 
 
 class LatestGeminiEnrichmentProvider(ChatCompletionsEnrichmentProvider):
-    """Try the newest three stable text Flash models, then let outer fallback run."""
+    """Prefer the last successful stable Flash model, then probe newest stable models."""
 
     def __init__(self, *, api_key: str) -> None:
-        super().__init__(provider="gemini", api_key=api_key, model="latest-3-flash",
-                         base_url="https://generativelanguage.googleapis.com/v1beta/openai")
+        super().__init__(
+            provider="gemini",
+            api_key=api_key,
+            model="latest-3-flash",
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+            retry_delays_seconds=(),
+        )
         self._models: list[str] | None = None
+        self._available_models: list[str] | None = None
+        self._preferred_model: str | None = None
+        self._preference_loaded = False
+
+    async def _discover_models(self) -> None:
+        response = None
+        last_http_error: httpx.HTTPError | None = None
+        for attempt in range(len(_GEMINI_DISCOVERY_RETRY_DELAYS_SECONDS) + 1):
+            try:
+                async with httpx.AsyncClient(timeout=_OPENAI_TIMEOUT_SECONDS) as client:
+                    response = await client.get(
+                        "https://generativelanguage.googleapis.com/v1beta/models",
+                        headers={"x-goog-api-key": self._api_key},
+                        params={"pageSize": 1000},
+                    )
+            except httpx.HTTPError as exc:
+                last_http_error = exc
+                if attempt >= len(_GEMINI_DISCOVERY_RETRY_DELAYS_SECONDS):
+                    raise AIProviderError("provider_http_error") from exc
+                logging.getLogger(__name__).warning(
+                    "drive_ai_transient_retry provider=gemini model=models-list "
+                    "reason=transport attempt=%s",
+                    attempt + 1,
+                )
+            else:
+                if (
+                    not _is_transient_http_status(response.status_code)
+                    or attempt >= len(_GEMINI_DISCOVERY_RETRY_DELAYS_SECONDS)
+                ):
+                    break
+                logging.getLogger(__name__).warning(
+                    "drive_ai_transient_retry provider=gemini model=models-list "
+                    "status=%s attempt=%s",
+                    response.status_code,
+                    attempt + 1,
+                )
+            await asyncio.sleep(_GEMINI_DISCOVERY_RETRY_DELAYS_SECONDS[attempt])
+
+        if response is None:
+            raise AIProviderError("provider_http_error") from last_http_error
+        if response.status_code != 200:
+            raise AIProviderError(
+                "provider_http_error",
+                status_code=response.status_code,
+            )
+        try:
+            models = response.json()["models"]
+            versions: dict[str, tuple[int, ...]] = {}
+            for item in models:
+                name = item.get("name", "").removeprefix("models/")
+                match = re.fullmatch(r"gemini-(\d+(?:\.\d+)+)-flash", name)
+                if match and "generateContent" in item.get("supportedGenerationMethods", []):
+                    versions[name] = tuple(map(int, match.group(1).split(".")))
+            self._available_models = sorted(versions, key=versions.get, reverse=True)
+            self._models = self._available_models[:3]
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise AIProviderError("provider_invalid_output") from exc
+        if not self._models:
+            raise AIProviderError("provider_unavailable")
+
+    async def _load_persisted_preference(self) -> None:
+        if self._preference_loaded:
+            return
+        self._preference_loaded = True
+        preferred = await load_ai_provider_preference("gemini")
+        if not preferred or preferred not in (self._available_models or ()):
+            return
+        self._preferred_model = preferred
+        if preferred not in (self._models or ()):
+            self._models = [preferred, *(self._models or ())]
+
+    def _ordered_models(self) -> list[str]:
+        models = list(self._models or ())
+        if self._preferred_model in models:
+            models.remove(self._preferred_model)
+            models.insert(0, self._preferred_model)
+        return models
 
     async def _structured_response(self, **kwargs) -> dict[str, Any]:
         if self._models is None:
-            response = None
-            last_http_error: httpx.HTTPError | None = None
-            for attempt in range(len(_TRANSIENT_RETRY_DELAYS_SECONDS) + 1):
-                try:
-                    async with httpx.AsyncClient(timeout=_OPENAI_TIMEOUT_SECONDS) as client:
-                        response = await client.get(
-                            "https://generativelanguage.googleapis.com/v1beta/models",
-                            headers={"x-goog-api-key": self._api_key},
-                            params={"pageSize": 1000},
-                        )
-                except httpx.HTTPError as exc:
-                    last_http_error = exc
-                    if attempt >= len(_TRANSIENT_RETRY_DELAYS_SECONDS):
-                        raise AIProviderError("provider_http_error") from exc
-                    logging.getLogger(__name__).warning(
-                        "drive_ai_transient_retry provider=gemini model=models-list reason=transport attempt=%s",
-                        attempt + 1,
-                    )
-                else:
-                    if (
-                        not _is_transient_http_status(response.status_code)
-                        or attempt >= len(_TRANSIENT_RETRY_DELAYS_SECONDS)
-                    ):
-                        break
-                    logging.getLogger(__name__).warning(
-                        "drive_ai_transient_retry provider=gemini model=models-list status=%s attempt=%s",
-                        response.status_code,
-                        attempt + 1,
-                    )
-                await asyncio.sleep(_TRANSIENT_RETRY_DELAYS_SECONDS[attempt])
+            await self._discover_models()
+        await self._load_persisted_preference()
 
-            try:
-                if response is None:
-                    raise AIProviderError("provider_http_error") from last_http_error
-                if response.status_code != 200:
-                    raise AIProviderError("provider_http_error")
-                models = response.json()["models"]
-                versions = {}
-                for item in models:
-                    name = item.get("name", "").removeprefix("models/")
-                    match = re.fullmatch(r"gemini-(\d+(?:\.\d+)+)-flash", name)
-                    if match and "generateContent" in item.get("supportedGenerationMethods", []):
-                        versions[name] = tuple(map(int, match.group(1).split(".")))
-                self._models = sorted(versions, key=versions.get, reverse=True)[:3]
-            except (ValueError, TypeError, KeyError, AttributeError) as exc:
-                raise AIProviderError("provider_invalid_output") from exc
-        # ponytail: at most three model attempts per stage; OpenRouter handles total failure.
         error = AIProviderError("provider_unavailable")
-        for model in self._models:
-            candidate = ChatCompletionsEnrichmentProvider(
-                provider="gemini", api_key=self._api_key, model=model, base_url=self._base_url,
+        for cycle in range(len(_GEMINI_MODEL_CYCLE_RETRY_DELAYS_SECONDS) + 1):
+            transient_failure = False
+            for model in self._ordered_models():
+                candidate = ChatCompletionsEnrichmentProvider(
+                    provider="gemini",
+                    api_key=self._api_key,
+                    model=model,
+                    base_url=self._base_url,
+                    retry_delays_seconds=(),
+                )
+                try:
+                    result = await candidate._structured_response(**kwargs)
+                    self._preferred_model = model
+                    self.served_models.add(model)
+                    await remember_ai_provider_preference("gemini", model)
+                    logging.getLogger(__name__).info(
+                        "drive_ai_provider_selected provider=gemini model=%s",
+                        model,
+                    )
+                    return result
+                except AIProviderError as exc:
+                    error = exc
+                    if (
+                        exc.code == "provider_http_error"
+                        and (
+                            exc.status_code is None
+                            or _is_transient_http_status(exc.status_code)
+                        )
+                    ):
+                        transient_failure = True
+
+            if (
+                cycle >= len(_GEMINI_MODEL_CYCLE_RETRY_DELAYS_SECONDS)
+                or not transient_failure
+            ):
+                break
+            delay = _GEMINI_MODEL_CYCLE_RETRY_DELAYS_SECONDS[cycle]
+            logging.getLogger(__name__).warning(
+                "drive_ai_transient_retry provider=gemini model_cycle=%s delay_seconds=%s",
+                cycle + 1,
+                delay,
             )
-            try:
-                result = await candidate._structured_response(**kwargs)
-                self.served_models.add(model)
-                logging.getLogger(__name__).info("drive_ai_provider_selected provider=gemini model=%s", model)
-                return result
-            except AIProviderError as exc:
-                error = exc
+            await asyncio.sleep(delay)
+
         raise error
 
 

@@ -1,0 +1,61 @@
+name: Shopping UI Acceptance
+
+on:
+  workflow_run:
+    workflows: [Deploy Firebase Hosting]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shopping-ui-acceptance-main-${{ github.event.workflow_run.conclusion || 'success' }}
+  cancel-in-progress: false
+
+jobs:
+  accept:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate Shopping acceptance script syntax
+        run: node --check .github/scripts/verify_shopping_ui_production.mjs
+
+      - name: Install production UI acceptance tooling
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Verify deployed release and Shopping UI
+        run: |
+          BASE_URL="https://${GCP_PROJECT_ID}.web.app"
+          REMOTE_RELEASE="$(curl --fail --silent --show-error \
+            -H 'Cache-Control: no-cache' \
+            "$BASE_URL/release.txt?shopping_acceptance=$RELEASE_SHA")"
+          test "$REMOTE_RELEASE" = "$RELEASE_SHA"
+          BASE_URL="$BASE_URL" node .github/scripts/verify_shopping_ui_production.mjs
+
+      - name: Upload Shopping UI acceptance diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopping-ui-production-acceptance-${{ env.RELEASE_SHA }}
+          path: /tmp/shopping-ui-acceptance.png
+          if-no-files-found: ignore

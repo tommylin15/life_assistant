@@ -14,6 +14,7 @@ import 'login_page.dart';
 import 'more_page.dart';
 import 'notes_page.dart';
 import 'projects_page.dart';
+import 'shopping_page.dart';
 import 'tasks_page.dart';
 
 final _router = GoRouter(
@@ -49,6 +50,10 @@ final _router = GoRouter(
         GoRoute(
           path: '/more/habits',
           builder: (_, __) => const HabitsPage(),
+        ),
+        GoRoute(
+          path: '/more/shopping',
+          builder: (_, __) => const ShoppingPage(),
         ),
         GoRoute(
           path: '/more/notes',

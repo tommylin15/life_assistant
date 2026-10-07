@@ -25,6 +25,13 @@ class MorePage extends StatelessWidget {
               onTap: () => context.go('/more/habits'),
             ),
             ListTile(
+              leading: const Icon(Icons.shopping_cart_outlined),
+              title: const Text('購物清單'),
+              subtitle: const Text('清單、分類與採買完成狀態'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/more/shopping'),
+            ),
+            ListTile(
               leading: const Icon(Icons.cloud_outlined),
               title: const Text('Google Drive'),
               subtitle: const Text('檢視智能整理結果、相關筆記建議與 AI 同意設定'),

@@ -200,7 +200,7 @@ async function waitObserved(predicate, label) {
   throw new Error(`not observed: ${label}`);
 }
 
-async function activateSemanticTarget(locator, label) {
+async function clickSemanticTarget(page, locator, label) {
   const info = await locator
     .evaluate((element) => ({
       tag: element.tagName,
@@ -209,10 +209,16 @@ async function activateSemanticTarget(locator, label) {
       text: element.textContent?.trim().slice(0, 160) ?? '',
     }))
     .catch(() => null);
-  console.log(`habits_ui_semantic_target=${label} ${JSON.stringify(info)}`);
-  await locator.evaluate((element) => {
-    element.click();
-  });
+  await locator.scrollIntoViewIfNeeded().catch(() => {});
+  const box = await locator.boundingBox();
+  assert.ok(box, `${label} had no bounding box`);
+  const centerX = box.x + box.width / 2;
+  const centerY = box.y + box.height / 2;
+  console.log(
+    `habits_ui_pointer=${label} x=${centerX.toFixed(1)} y=${centerY.toFixed(1)} ${JSON.stringify(info)}`,
+  );
+  await page.mouse.click(centerX, centerY);
+  await delay(150);
 }
 
 const pass = (name) => console.log(`habits_ui_check=${name}:PASS`);
@@ -262,7 +268,7 @@ async function desktop(context) {
   pass('update');
 
   const completeButton = await named(page, /記錄完成：瀏覽器習慣更新/);
-  await activateSemanticTarget(completeButton, 'complete habit');
+  await clickSemanticTarget(page, completeButton, 'complete habit');
   await waitObserved(
     () => state.completes.includes('habit-browser-1'),
     'habit completion',
@@ -273,7 +279,7 @@ async function desktop(context) {
 
   const historyButtons = page.getByRole('button', { name: /完成紀錄/ });
   const historyButton = await visible([historyButtons]);
-  await activateSemanticTarget(historyButton, 'completion history');
+  await clickSemanticTarget(page, historyButton, 'completion history');
   await named(page, /瀏覽器習慣更新 · 完成紀錄/);
   await named(page, /2026\/10\/7/);
   pass('history_dialog');

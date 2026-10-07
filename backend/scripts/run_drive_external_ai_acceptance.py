@@ -249,7 +249,7 @@ async def run_acceptance(*, provider_name: str | None = None, model: str | None 
     )
 
 
-async def run_configured_providers() -> None:
+async def run_configured_providers(*, only_provider: str | None = None) -> None:
     # Test every configured provider even when an earlier provider fails. This
     # prevents a healthy fallback from hiding a broken primary while still
     # leaving provider-specific task-exit evidence when Cloud Logging is not
@@ -264,6 +264,23 @@ async def run_configured_providers() -> None:
                 (name, getattr(config.settings, f"ai_enrichment_{tier}_model"))
             )
 
+    if only_provider is not None:
+        requested = only_provider.strip().casefold()
+        configured = [
+            (name, model)
+            for name, model in configured
+            if str(name or "").strip().casefold() == requested
+        ]
+        if not configured:
+            print(
+                "drive_external_ai_integration=NOT_VERIFIED "
+                f"provider={requested} reason=provider_not_configured",
+                flush=True,
+            )
+            raise SystemExit(EXIT_NOT_CONFIGURED)
+        # Diagnostic executions intentionally probe exactly one configured stage.
+        configured = configured[:1]
+
     provider_failure_mask = 0
     configuration_failures: list[tuple[str, int]] = []
     provider_failures: list[tuple[str, int]] = []
@@ -273,6 +290,9 @@ async def run_configured_providers() -> None:
             await run_acceptance(provider_name=name, model=model)
         except SystemExit as exc:
             exit_code = int(exc.code or EXIT_PROVIDER_FAILURE)
+            if only_provider is not None and exit_code == EXIT_PROVIDER_FAILURE:
+                # Unexpected exceptions still need a provider-specific diagnostic.
+                exit_code = EXIT_PROVIDER_OTHER
             if exit_code == EXIT_PROVIDER_FAILURE or exit_code in _PROVIDER_DIAGNOSTIC_EXIT_CODES:
                 provider_failures.append((normalized_name or "unknown", exit_code))
                 provider_failure_mask |= _PROVIDER_FAILURE_BITS.get(normalized_name, 0)
@@ -315,4 +335,13 @@ async def run_configured_providers() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(run_configured_providers())
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--only-provider",
+        choices=tuple(_PROVIDER_FAILURE_BITS),
+        help="Run one configured provider directly for Cloud Run task-exit diagnostics.",
+    )
+    arguments = parser.parse_args()
+    asyncio.run(run_configured_providers(only_provider=arguments.only_provider))

@@ -80,8 +80,8 @@ class DriveMigrationTests(unittest.TestCase):
         release_source = (
             self.backend_root / "scripts/apply_cloud_domain_parity_release.py"
         ).read_text(encoding="utf-8")
-        self.assertIn('PREVIOUS_RELEASE_REVISION = "20261001_0008"', release_source)
-        self.assertIn('RELEASE_TARGET_REVISION = "20261002_0009"', release_source)
+        self.assertIn('PREVIOUS_RELEASE_REVISION = "20261002_0009"', release_source)
+        self.assertIn('RELEASE_TARGET_REVISION = "20261007_0010"', release_source)
         for table_name in (
             "drive_workspaces",
             "drive_documents",
@@ -91,6 +91,7 @@ class DriveMigrationTests(unittest.TestCase):
             "drive_enrichment_settings",
             "drive_document_enrichment_runs",
             "drive_note_link_suggestions",
+            "ai_provider_preferences",
         ):
             self.assertIn(f'"{table_name}"', release_source)
 

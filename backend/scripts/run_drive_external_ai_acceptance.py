@@ -25,6 +25,13 @@ EXIT_PROVIDER_FAILURE = 85
 EXIT_MODEL_MISSING = 86
 EXIT_API_KEY_MISSING = 87
 EXIT_BASE_URL_MISSING = 88
+EXIT_PROVIDER_FAILURE_MASK_BASE = 90
+_PROVIDER_FAILURE_BITS = {
+    "gemini": 1,
+    "openrouter": 2,
+    "groq": 4,
+    "openai": 8,
+}
 
 
 def _exit_code_for_unavailable_provider(
@@ -76,7 +83,10 @@ async def run_acceptance(*, provider_name: str | None = None, model: str | None 
             base_url=str(config.settings.openai_base_url or "") if (provider_name or config.settings.ai_enrichment_provider) == "openai" else "vendor_endpoint",
         )
         print(
-            f"drive_external_ai_integration=NOT_VERIFIED reason={_unavailable_reason(exit_code)}",
+            "drive_external_ai_integration=NOT_VERIFIED "
+            f"provider={provider_name or config.settings.ai_enrichment_provider} "
+            f"model={model if model is not None else config.settings.ai_enrichment_model} "
+            f"reason={_unavailable_reason(exit_code)}",
             flush=True,
         )
         raise SystemExit(exit_code)
@@ -107,19 +117,31 @@ async def run_acceptance(*, provider_name: str | None = None, model: str | None 
         notes = await provider.rank_related_notes(context, candidates)
     except AIProviderError as exc:
         print(
-            f"drive_external_ai_integration=FAIL reason={exc.code}",
+            "drive_external_ai_integration=FAIL "
+            f"provider={provider_name or provider.provider_name or 'unknown'} "
+            f"model={model if model is not None else provider.model_name or 'unknown'} "
+            f"reason={exc.code}",
             flush=True,
         )
         raise SystemExit(EXIT_PROVIDER_FAILURE) from exc
     except Exception as exc:
         print(
-            f"drive_external_ai_integration=FAIL reason={type(exc).__name__}",
+            "drive_external_ai_integration=FAIL "
+            f"provider={provider_name or provider.provider_name or 'unknown'} "
+            f"model={model if model is not None else provider.model_name or 'unknown'} "
+            f"reason={type(exc).__name__}",
             flush=True,
         )
         raise SystemExit(EXIT_PROVIDER_FAILURE) from exc
 
     if not isinstance(tags, list) or not isinstance(notes, list):
-        print("drive_external_ai_integration=FAIL reason=invalid_provider_result", flush=True)
+        print(
+            "drive_external_ai_integration=FAIL "
+            f"provider={provider_name or provider.provider_name or 'unknown'} "
+            f"model={model if model is not None else provider.model_name or 'unknown'} "
+            "reason=invalid_provider_result",
+            flush=True,
+        )
         raise SystemExit(EXIT_PROVIDER_FAILURE)
 
     provider_name = provider.provider_name or "unknown"
@@ -134,18 +156,52 @@ async def run_acceptance(*, provider_name: str | None = None, model: str | None 
 
 
 async def run_configured_providers() -> None:
-    # Test providers individually so a healthy fallback cannot hide a broken primary.
-    await run_acceptance(
-        provider_name=config.settings.ai_enrichment_provider,
-        model=config.settings.ai_enrichment_model,
-    )
+    # Test every configured provider even when an earlier provider fails. This
+    # prevents a healthy fallback from hiding a broken primary while still
+    # leaving provider-specific task-exit evidence when Cloud Logging is not
+    # readable by the deployment identity.
+    configured = [
+        (config.settings.ai_enrichment_provider, config.settings.ai_enrichment_model),
+    ]
     for tier in ("fallback", "tertiary"):
         name = getattr(config.settings, f"ai_enrichment_{tier}_provider")
         if name:
-            await run_acceptance(
-                provider_name=name,
-                model=getattr(config.settings, f"ai_enrichment_{tier}_model"),
+            configured.append(
+                (name, getattr(config.settings, f"ai_enrichment_{tier}_model"))
             )
+
+    provider_failure_mask = 0
+    configuration_failures: list[tuple[str, int]] = []
+    provider_failures: list[str] = []
+    for name, model in configured:
+        normalized_name = str(name or "").strip().casefold()
+        try:
+            await run_acceptance(provider_name=name, model=model)
+        except SystemExit as exc:
+            exit_code = int(exc.code or EXIT_PROVIDER_FAILURE)
+            if exit_code == EXIT_PROVIDER_FAILURE:
+                provider_failures.append(normalized_name or "unknown")
+                provider_failure_mask |= _PROVIDER_FAILURE_BITS.get(normalized_name, 0)
+            else:
+                configuration_failures.append((normalized_name or "unknown", exit_code))
+
+    if configuration_failures:
+        summary = ",".join(f"{name}:{code}" for name, code in configuration_failures)
+        print(f"drive_external_ai_summary=FAIL configuration_failures={summary}", flush=True)
+        raise SystemExit(configuration_failures[0][1])
+
+    if provider_failures:
+        summary = ",".join(provider_failures)
+        print(f"drive_external_ai_summary=FAIL provider_failures={summary}", flush=True)
+        if provider_failure_mask:
+            raise SystemExit(EXIT_PROVIDER_FAILURE_MASK_BASE + provider_failure_mask)
+        raise SystemExit(EXIT_PROVIDER_FAILURE)
+
+    print(
+        "drive_external_ai_summary=PASS providers="
+        + ",".join(str(name).strip().casefold() for name, _ in configured),
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

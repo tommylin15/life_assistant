@@ -9,13 +9,13 @@
 2026-10-01 之後的 Phase 1 closure 以 `doc/progress.md` 的 11 個工作包為目前執行序；本文件後續各節保留原始 vertical-slice delivery rationale，不再被解讀成另一套平行進度表。
 
 目前：
-- Completed packages：**5/11 = 45.5%**。
-- Just closed：**#5 — Task 9 Drive Knowledge 正式交付與 production acceptance，DONE / PASS**。
-- Current package：**#6 — Habits 完整產品化，NOT STARTED**。
-- exact release SHA `2d08118a13c71c6fec97e8bfba0857b861eefd1e`；CI #551、Firebase #369、Drive Knowledge #47 final mandatory gate PASS。
-- Picker production config、Gemini / Groq / OpenRouter 真實 API、真實 Picker-selected Drive fixture、synthetic runtime、production desktop/mobile UI 均 PASS。
-- Cloud Run #423 PASS；ready revision `life-assistant-api-00154-xrt` 與末端回歸驗收均完成。
-- 封板 evidence 與 secret / fixture 設定見 `acceptance.md`、`integrations.md`；Phase 1 整體仍 PARTIAL。
+- Completed packages：**6/11 = 54.5%**。
+- Just closed：**#6 — Habits 完整產品化，DONE / PASS**。
+- Current package：**#7 — Shopping 完整產品化，NOT STARTED**。
+- #6 final release SHA `02eda1124885846f41ca32ca185d9e1a5a5ebfe1`；CI #558、Firebase #376、Cloud Run #430、Habits UI #7、Post-deploy Runtime #96 PASS。
+- Habits production desktop/mobile list/create/edit/complete/history、真實 PostgreSQL cloud-domain runtime 與 release-level post-deploy regression均 PASS。
+- Cross-feature health：latest-release Drive Knowledge #54 為 FAIL（live external AI production acceptance）；不回滾 #6 closure，但在 final release gate 前必須重新收斂。
+- #6 封板 evidence 見 `acceptance.md` 與 `habits_productization_checkpoint_v0_1.md`；Phase 1 整體仍 PARTIAL。
 
 測試、CI/CD、deployment、acceptance 遇到卡住時，依 `recovering-stuck-ci-deploys` 先分類 queued / silent-but-bounded / timeout-failure / workflow-chain break，再決定是否 retry；不以重跑取代 evidence。
 

@@ -18,11 +18,11 @@
 
 ### 目前總覽
 
-- **Completed packages：5 / 11**
-- **Closure progress：45.5%**
-- **Current package：#6 — Habits 完整產品化**
-- **Current state：NOT STARTED — #5 Task 9 所有 mandatory production gates 已 PASS。**
-- **Next checkpoint：#6 DONE 後 = 6/11 = 54.5%**
+- **Completed packages：6 / 11**
+- **Closure progress：54.5%**
+- **Current package：#7 — Shopping 完整產品化**
+- **Current state：NOT STARTED — #6 Habits 已完成 vertical-slice 封板；另有 latest-release Drive Knowledge regression（#54 FAIL）需獨立追蹤。**
+- **Next checkpoint：#7 DONE 後 = 7/11 = 63.6%**
 
 | # | 工作包 | 狀態 | DONE 條件 / 目前 gate |
 |---|---|---|---|
@@ -31,7 +31,7 @@
 | 3 | Task 7 — provider-agnostic AI enrichment | ✅ DONE | provider abstraction、privacy/consent/cache、shared Tag、候選 Notes、accept/reject relation、partial-success semantics；release SHA `cd2fdcd5645a9f73141c7824b59a8349d15bb86c`；CI #463、Cloud Run #335、Drive AI Runtime #3 PASS |
 | 4 | Task 8 — 智能整理 review UI | ✅ DONE | 獨立 Drive review/settings UI、provider-neutral presentation、explicit consent、Note suggestion accept/reject、force re-analysis、partial/failed/skipped fallback、desktop/mobile production acceptance；release SHA `78cdb43645f606d63b8a6171e53babec9f26de10`；CI #482、Firebase #300、Notes/Drive UI Acceptance #65 PASS；backend/runtime 沿用相同產品碼基線 Cloud Run #352 + Post-deploy Runtime #17 PASS |
 | 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | ✅ DONE | release SHA `2d08118a13c71c6fec97e8bfba0857b861eefd1e`；CI #551、Firebase #369、Drive Knowledge #47 final gate PASS；Picker / Gemini / Groq / OpenRouter / 真實 Drive / production UI 全 PASS |
-| 6 | Habits 完整產品化 | ⬜ NOT STARTED | 完整 vertical slice：implementation、tests、CI、deployment/runtime、可操作 UI、mobile/desktop acceptance |
+| 6 | Habits 完整產品化 | ✅ DONE | release SHA `02eda1124885846f41ca32ca185d9e1a5a5ebfe1`；CI #558、Firebase #376、Cloud Run #430、Habits UI Acceptance #7、Post-deploy Runtime #96 全 PASS；Habit list/create/update/complete/history、週期/提醒 UI、mobile/desktop production acceptance 與真實 PostgreSQL runtime evidence 完整 |
 | 7 | Shopping 完整產品化 | ⬜ NOT STARTED | 完整 vertical slice：implementation、tests、CI、deployment/runtime、可操作 UI、mobile/desktop acceptance |
 | 8 | Calendar 完整產品化 | ⬜ NOT STARTED | 一般使用者 read/list/create/update/delete UX + true-account verification + 完整 vertical-slice evidence |
 | 9 | Activity / Execution Log + Integrations 完整產品化 | ⬜ NOT STARTED | 使用者可理解的 Activity / Integration UI + 所需 runtime/integration evidence |
@@ -141,6 +141,21 @@
 - Picker、synthetic runtime、真實 Drive、Gemini → Groq → OpenRouter 免費路由、production desktop/mobile UI：PASS。
 - Runtime 僅讀 `life-assistant-bundle:latest`；新 version `7` enabled、舊 versions `1–6` destroyed。完整 execution / model / fixture / secret evidence 見 `acceptance.md`、`integrations.md`。
 
+## Package #6 closure evidence — 2026-10-07
+
+- 狀態：**DONE / PASS**；全案 closure **6/11 = 54.5%**。
+- Final release SHA：`02eda1124885846f41ca32ca185d9e1a5a5ebfe1`。
+- Product implementation：Habits Web API facade、`/more/habits` 正式入口、list/create/update、週期/提醒、append-only completion history、完成操作、loading/empty/error state、responsive UI。
+- Accessibility / interaction follow-up：`28f1bddc34f0e87c8eb757ce446ad8d9e54ec7c4` 隔離 completion/history action semantics；final acceptance 以 Flutter pointer event 驗證真實操作。
+- CI #558 / run `37577319168`：PASS；backend tests、deployment-script syntax、Flutter Analyze、完整 widget tests、Web build、branding verify 全 PASS。
+- Firebase Hosting #376 / run `37577494901`：PASS；exact release deploy、Hosting verify、Task/Project production regression 全 PASS。
+- Habits UI Acceptance #7 / run `37577765718`：PASS；desktop list/create/edit/complete/history 與 mobile navigation/controls 全 PASS。
+- Deploy Cloud Run #430 / run `37577494982`：PASS；migration、deploy、health、DB readiness、401 protection、authenticated cloud-domain、checklist、idempotency、Google failure-path、SQLite backfill success/failure、image cleanup 全 PASS。
+- Post-deploy Runtime Acceptance #96 / run `37579244566`：PASS；Notes、Project Drive、Drive AI enrichment regression 全 PASS。
+- Habit backend runtime 由 authenticated cloud-domain acceptance 真實走 PostgreSQL，涵蓋 habit create/update/complete/completions/activity persistence。
+- 因此 Package #6 計入 DONE；下一工作包為 **#7 Shopping 完整產品化**。
+- **Cross-feature regression：**同一 release 的 Drive Knowledge Runtime Acceptance #54 / run `37578066375` 為 **FAIL**，失敗點為 live external AI production acceptance。Picker app-id、真實 Drive fixture、exact Firebase release、OAuth 與 production UI 仍有 PASS evidence。此 regression 不否定 Habits #6 的封板 evidence，但 latest-release Drive Knowledge health 必須標示 FAIL，不能沿用舊 #47 PASS 宣稱目前仍全綠。
+
 ## 文件與 evidence 分工
 
 - `phase1_delivery_order.md`：目前執行順序。
@@ -157,6 +172,7 @@
 
 ## 下一步
 
-1. #5 Task 9 已 DONE，封板進度 **5/11 = 45.5%**。
-2. 下一工作包：#6 Habits 完整產品化；目前 NOT STARTED。
-3. #7–#11 依 `phase1_delivery_order.md` 推進；Phase 1 整體仍 PARTIAL。
+1. #6 Habits 已 DONE，封板進度 **6/11 = 54.5%**。
+2. 下一工作包：#7 Shopping 完整產品化；目前 NOT STARTED。
+3. Latest-release Drive Knowledge Runtime Acceptance #54 為 **FAIL**（live external AI production acceptance）；此 regression 不否定 #6 Habits 封板，但目前 production health 不可宣稱全綠。
+4. #7–#11 依 `phase1_delivery_order.md` 推進；Phase 1 整體仍 PARTIAL。

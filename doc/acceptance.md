@@ -125,7 +125,36 @@
 - 真實 fixture 已透過 Picker 登記，驗收帳號與 file ID 已設於 GitHub `dev-test`；來源文件保持不變，驗收只清理自己建立的本地 Note / Tag。識別碼與其他專案 secret 清理 evidence 見 `integrations.md`。
 - 歷史 #45 live AI 因免費 endpoint 不支援嚴格 JSON Schema 回覆 `404` 而 FAIL；commit `2d08118` 改為 OpenRouter JSON mode + schema prompt，保留後端欄位 / candidate ID 驗證與 `data_collection=deny`。#47 已覆蓋修復後正式版本。
 
-**Task 9 = DONE；Package #5 完成；Phase 1 closure = 5/11 = 45.5%。下一工作包為 #6 Habits，Phase 1 整體仍 PARTIAL。**
+**Task 9 historical closure release `2d08118...` / #47 = DONE / PASS；但 latest release `02eda11...` 的 Drive Knowledge #54 = FAIL（live external AI production acceptance）。Package #5 歷史封板 evidence 保留，但目前 Drive Knowledge production health 不可宣稱全綠。**
+
+## Habits productization checkpoint — Package #6（2026-10-07）
+
+- [x] 正式 Web entry：`/more/habits`。
+- [x] Habit list / create / update UI。
+- [x] recurrence / reminder UI。
+- [x] completion mutation 與 append-only completion history UI。
+- [x] loading / empty / error states。
+- [x] mobile + desktop production acceptance。
+- [x] 真實 PostgreSQL runtime：habit create/update/complete/completions/activity persistence。
+- [x] exact release CI / Firebase / Cloud Run / post-deploy evidence。
+
+Evidence：
+
+- Final release SHA：`02eda1124885846f41ca32ca185d9e1a5a5ebfe1`。
+- CI #558 / run `37577319168`：PASS。
+- Firebase Hosting #376 / run `37577494901`：PASS。
+- Habits UI Acceptance #7 / run `37577765718`：PASS；desktop list/create/edit/complete/history + mobile navigation/controls。
+- Deploy Cloud Run #430 / run `37577494982`：PASS；authenticated cloud-domain acceptance 亦 PASS。
+- Post-deploy Runtime Acceptance #96 / run `37579244566`：PASS。
+- Semantics product fix：`28f1bddc34f0e87c8eb757ce446ad8d9e54ec7c4`；final Flutter pointer acceptance：`02eda1124885846f41ca32ca185d9e1a5a5ebfe1`。
+
+**Package #6 = DONE / PASS；Phase 1 closure = 6/11 = 54.5%。下一工作包為 #7 Shopping。**
+
+### Latest-release cross-feature health note
+
+- Drive Knowledge Runtime Acceptance #54 / run `37578066375`：**FAIL**。
+- Failure scope：live external AI production acceptance；同次 run 的 Picker app-id contract、real Drive fixture、exact Firebase release、OAuth config 與 production UI evidence仍可見 PASS。
+- 因此 Task 9 的 historical closure release `2d08118...` 與 #47 PASS 保留為歷史封板 evidence；但 **current latest-release Drive Knowledge health = FAIL**，不得以歷史 PASS 取代目前 runtime truth。
 
 ## Backend Error / Audit
 

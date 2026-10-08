@@ -119,10 +119,25 @@ def inventory(project, region):
                 if len(rows) >= 10000:
                     raise RuntimeError("image list may be truncated")
                 images = []
+                item["image_row_fields"] = sorted(rows[0]) if rows else []
                 for row in rows:
-                    image_uri = row.get("uri", "")
-                    if not image_uri or "@sha256:" not in image_uri:
-                        failures.append(f"{repo_name}:image_uri_missing")
+                    image_uri = row.get("uri", "") or row.get("image", "")
+                    # gcloud CLI JSON may expose IMAGE and DIGEST separately,
+                    # rather than a combined image@sha256:<digest> URI.
+                    digest = row.get("digest", "")
+                    resource = row.get("name", "")
+                    if isinstance(resource, str) and "/dockerImages/" in resource:
+                        from urllib.parse import unquote
+                        encoded = resource.split("/dockerImages/", 1)[1]
+                        suffix = unquote(encoded)
+                        if suffix and not suffix.startswith("projects/"):
+                            image_uri = uri + "/" + suffix
+                    if isinstance(digest, str) and SHA.fullmatch(digest):
+                        if isinstance(image_uri, str) and "@sha256:" not in image_uri:
+                            image_uri = image_key(image_uri) + "@" + digest
+                    if not isinstance(image_uri, str) or "@sha256:" not in image_uri:
+                        if f"{repo_name}:image_uri_missing" not in failures:
+                            failures.append(f"{repo_name}:image_uri_missing")
                         continue
                     tags = row.get("tags", [])
                     if not isinstance(tags, list):

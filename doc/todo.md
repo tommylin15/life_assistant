@@ -6,6 +6,13 @@
 
 ## Current
 
+### CI/CD V3 實作與 GCP/AR/GCS 清理驗收（2026-10-08）
+
+- 使用者核准先切換 GitHub Actions → 公開 GHCR 固定 digest → Cloud Run 0% candidate → Firebase Preview → 正式流量與回滾驗收；成功後才停用兩個舊 Cloud Build triggers。舊 release 路線在切換成功前保留。
+- 新增 CI main push 完整測試、V3 manual release、GHCR scan/publish、候選/Preview/live gates、十版 revision fail-closed 清理、read-only GCP 清冊與受控 triggers disable workflow。**部署/實際驗收要由 Actions 執行紀錄證明，不因 workflow 進 main 就宣稱 DONE。**
+- 刪除範圍限已逐項證明無依賴的舊 GCS CI/CD 檔案、CI/CD 專用且無備份/應用資料的 bucket、失去所有 live/job/回滾依賴的 AR image/digest、確認全庫無共用後的 AR repository。備份/業務資料絕對保留；見 `v3_cleanup_and_cutover_inventory.md`。
+- **本輪 GCP 讀回、Cloud Run 真實流量/rollback、10 revisions 實際刪除、triggers disable、GCS/AR 刪除都需個別列 PASS / FAIL / NOT VERIFIED。**
+
 ### CI/CD V3 — 已核准新設計、等待實作與全鏈驗收
 
 **本輪範圍：文件先行，NOT DEPLOYED / PARTIAL**。正式設計以 `ci_cd_ghcr_release_policy.md` 為準：GitHub Actions 完整測試 → manual full-SHA GHCR 公開映像發布 → Cloud Run 固定 digest 0% 候選 → Firebase Preview / 真實 acceptance → promotion / rollback。新流程禁止 Cloud Build 呼叫及主動 GCS/Artifact Registry 寫入；歷史 Cloud Build 僅獨立 WIF 唯讀診斷＋遮罩 Actions logs。Cloud Build V2 操作文件保留歷史追溯，不再作為未來 release target。

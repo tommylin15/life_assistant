@@ -1,0 +1,100 @@
+name: V3 Cutover - disable legacy Cloud Build triggers
+
+on:
+  workflow_dispatch:
+    inputs:
+      verified_release_run_id:
+        description: "Successful promoted V3 Release Actions run ID"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: life-assistant-v3-production-release
+  cancel-in-progress: false
+
+jobs:
+  disable-legacy:
+    runs-on: ubuntu-latest
+    environment: dev-test
+    timeout-minutes: 20
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_RUN_ID: ${{ inputs.verified_release_run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require actually successful promoted+retained V3 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_RUN_ID" =~ ^[0-9]{1,20}$ ]]
+          RUN="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID")"
+          echo "$RUN" | jq -e --arg wf "V3 Release - GHCR to Cloud Run" \
+            '.name==$wf and .head_branch=="main" and
+             .status=="completed" and .conclusion=="success"'
+          JOBS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/jobs?per_page=100")"
+          echo "$JOBS" | jq -e '
+            [.jobs[].steps[] |
+             select(.name=="Post-promotion live health, OAuth redirect, PostgreSQL and access gates"
+             or .name=="Retain latest 10 revisions after all live gates PASS") |
+             select(.conclusion=="success") | .name] | unique | length==2'
+          echo "release_run_evidence=PASS run=$RELEASE_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Readback current serving image and readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe life-assistant-api \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            | jq -e '
+                [.status.traffic[] | select(.percent==100)] | length==1'
+          IMAGE="$(gcloud run services describe life-assistant-api \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format='value(spec.template.spec.containers[0].image)')"
+          [[ "$IMAGE" =~ ^ghcr[.]io/tommylin15/life_assistant-backend@sha256:[a-f0-9]{64}$ ]]
+          curl --fail --silent --show-error \
+            "https://gen-lang-client-0593591102.web.app/health" >/dev/null
+          echo "serving_from_ghcr=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Disable only two verified legacy life_assistant triggers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ITEM in \
+            "70ca60f2-8519-40c4-9422-5ac78f1b355f:life-assistant-v2-main" \
+            "892a893e-173f-49b2-9055-d5a9adc21496:life-assistant-v2-release"; do
+            ID="$(printf '%s' "$ITEM" | cut -d: -f1)"
+            NAME="$(printf '%s' "$ITEM" | cut -d: -f2)"
+            gcloud builds triggers describe "$ID" --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" --format=json \
+              > "$RUNNER_TEMP/v3-trigger-$ID-before.json"
+            jq -e --arg name "$NAME" --arg id "$ID" \
+              '.name==$name and .id==$id' "$RUNNER_TEMP/v3-trigger-$ID-before.json"
+            ACCESS_TOKEN="$(gcloud auth print-access-token)"
+            curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $ACCESS_TOKEN" \
+              -H 'Content-Type: application/json' \
+              -X PATCH \
+              -d '{"disabled":true}' \
+              "https://cloudbuild.googleapis.com/v1/projects/$GCP_PROJECT_ID/locations/$GCP_REGION/triggers/$ID?updateMask=disabled" \
+              > "$RUNNER_TEMP/v3-trigger-$ID-after.json"
+            gcloud builds triggers describe "$ID" --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" --format=json \
+              | jq -e --arg name "$NAME" '.name==$name and .disabled==true'
+            echo "legacy_trigger_disabled=PASS name=$NAME id=$ID" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "No trigger was deleted. GCS and AR objects were not modified." \
+            >> "$GITHUB_STEP_SUMMARY"

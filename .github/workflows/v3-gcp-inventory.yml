@@ -1,0 +1,51 @@
+name: V3 GCP Dependency Inventory (read only)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/v3-gcp-inventory.yml
+      - .github/workflows/v3-release-ghcr.yml
+      - .github/scripts/v3_revision_retention.py
+      - .github/scripts/v3_gcp_inventory.py
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate for read-only inventory
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Inspect dependency metadata without deleting anything
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/v3_gcp_inventory.py \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            | tee "$RUNNER_TEMP/v3-gcp-inventory.json"
+          python - "$RUNNER_TEMP/v3-gcp-inventory.json" <<'PY'
+          import json, os, sys
+          d = json.load(open(sys.argv[1]))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
+              print("## V3 GCP dependency inventory (read only)", file=out)
+              for name, value in d["checks"].items():
+                  print(f"- {name}: {value['status']}; count={value.get('count','?')}", file=out)
+              print("No resource was modified or deleted.", file=out)
+          if any(v["status"] != "PASS" for v in d["checks"].values()):
+              raise SystemExit("Inventory partial: missing GCP read permissions or API readback")
+          PY

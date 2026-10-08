@@ -9,7 +9,6 @@ on:
 
 jobs:
   flutter:
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,7 +86,6 @@ jobs:
           grep -Fq '/icons/life-assistant-512-v8.png' build/web/manifest-v6.json
 
   backend:
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -113,7 +111,6 @@ jobs:
         run: python -m unittest discover -s tests -v
 
   deployment-scripts:
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -135,3 +132,8 @@ jobs:
           node --check .github/scripts/verify_drive_knowledge_production.mjs
           python -m py_compile backend/scripts/run_drive_knowledge_runtime_acceptance.py
           python -m py_compile backend/scripts/run_drive_google_integration_acceptance.py
+          python -m py_compile .github/scripts/v3_revision_retention.py
+          python -m py_compile .github/scripts/v3_gcp_inventory.py
+
+      - name: Test V3 revision retention fail-closed contracts
+        run: python -m unittest tests/test_v3_revision_retention.py -v

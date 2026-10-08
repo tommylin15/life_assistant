@@ -112,14 +112,41 @@ jobs:
               > "$RUNNER_TEMP/v3-trigger-$ID-before.json"
             jq -e --arg name "$NAME" --arg id "$ID" \
               '.name==$name and .id==$id' "$RUNNER_TEMP/v3-trigger-$ID-before.json"
+            if jq -e '.disabled == true' "$RUNNER_TEMP/v3-trigger-$ID-before.json" >/dev/null; then
+              echo "legacy_trigger_already_disabled=PASS name=$NAME id=$ID" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
             ACCESS_TOKEN="$(gcloud auth print-access-token)"
-            curl --fail-with-body --silent --show-error \
+            # Regional PATCH requires the resourceName in the BuildTrigger body
+            # plus projectId/triggerId query parameters; update only disabled.
+            PATCH_BODY="$(jq -n --arg project "$GCP_PROJECT_ID" --arg region "$GCP_REGION" \
+              --arg id "$ID" --arg name "$NAME" \
+              '{resourceName:("projects/"+$project+"/locations/"+$region+"/triggers/"+$id),
+                id:$id,name:$name,disabled:true}')"
+            PATCH_STATUS="$(curl --silent --show-error \
+              -o "$RUNNER_TEMP/v3-trigger-$ID-after.json" -w '%{http_code}' \
               -H "Authorization: Bearer $ACCESS_TOKEN" \
               -H 'Content-Type: application/json' \
-              -X PATCH \
-              -d '{"disabled":true}' \
-              "https://cloudbuild.googleapis.com/v1/projects/$GCP_PROJECT_ID/locations/$GCP_REGION/triggers/$ID?updateMask=disabled" \
-              > "$RUNNER_TEMP/v3-trigger-$ID-after.json"
+              -X PATCH -d "$PATCH_BODY" \
+              "https://cloudbuild.googleapis.com/v1/projects/$GCP_PROJECT_ID/locations/$GCP_REGION/triggers/$ID?projectId=$GCP_PROJECT_ID&triggerId=$ID&updateMask=disabled")"
+            if [ "$PATCH_STATUS" != "200" ]; then
+              python - "$RUNNER_TEMP/v3-trigger-$ID-after.json" "$PATCH_STATUS" <<'PY'
+            import json,sys
+            try:
+                payload=json.load(open(sys.argv[1]))
+                error=payload.get("error",{})
+                category=str(error.get("status","UNKNOWN"))[:60]
+                message=str(error.get("message",""))[:200]
+                if any(word in message.lower() for word in
+                       ("secret","credential","authorization","token","password")):
+                    message="[redacted]"
+                print("::error::Cloud Build PATCH status="+sys.argv[2]+
+                      " category="+category+" reason="+message)
+            except (ValueError,OSError,TypeError):
+                print("::error::Cloud Build PATCH failed; response unavailable")
+            PY
+              exit 1
+            fi
             gcloud builds triggers describe "$ID" --project "$GCP_PROJECT_ID" \
               --region "$GCP_REGION" --format=json \
               | jq -e --arg name "$NAME" '.name==$name and .disabled==true'

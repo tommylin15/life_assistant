@@ -82,6 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           TARGET=.github/workflows/v3-cutover-disable-triggers.yml
+          grep -Fq 'gcloud components install beta' "$TARGET"
           grep -Fq 'gcloud beta builds triggers export' "$TARGET"
           grep -Fq 'gcloud builds triggers import' "$TARGET"
           grep -Fq 'disabled: true' "$TARGET"

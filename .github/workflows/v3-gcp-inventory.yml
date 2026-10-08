@@ -9,6 +9,7 @@ on:
       - .github/workflows/v3-release-ghcr.yml
       - .github/scripts/v3_revision_retention.py
       - .github/scripts/v3_gcp_inventory.py
+      - .github/scripts/v3_ar_docker_inventory.py
 
 permissions:
   contents: read
@@ -108,4 +109,31 @@ jobs:
           if any(x["readback"] != "PASS" or x.get("deletion_eligible") is not False
                  for x in result["buckets"]):
               raise SystemExit("GCS metadata inventory incomplete, delete forbidden")
+          PY
+
+      - name: Inventory AR Docker image digests versus scoped Cloud Run references (no deletion)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/v3_ar_docker_inventory.py \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            | tee "$RUNNER_TEMP/v3-ar-docker-inventory.json"
+          python - "$RUNNER_TEMP/v3-ar-docker-inventory.json" <<'PY'
+          import json, os, sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              obj=json.load(f)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              print("## AR Docker image inventory — read-only", file=out)
+              print(f"- status={obj['status']}; region={obj['cloud_run_scope']['region']}", file=out)
+              for repo in obj["repositories"]:
+                  if repo["format"].upper() != "DOCKER":
+                      print(f"- {repo['repository']}: non-Docker, not assessed", file=out)
+                  else:
+                      print(f"- {repo['repository']}: Docker digests={repo.get('docker_digest_count','?')}; "
+                            f"Cloud Run referenced={repo.get('referenced','?')}; "
+                            f"unreferenced in checked region={repo.get('unreferenced_scope_only','?')}; "
+                            "deletion_eligible=NO",file=out)
+              print("No image/tag/digest/repository was deleted or approved for deletion.",file=out)
+          if obj["status"] != "PASS":
+              raise SystemExit("AR reference assessment incomplete; deletion forbidden")
           PY

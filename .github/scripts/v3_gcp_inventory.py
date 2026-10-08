@@ -22,6 +22,44 @@ def query(*args):
     return {"status": "PASS", "count": len(items), "items": items}
 
 
+def latest_life_assistant_revision(project, region):
+    """Read back only public image references, never env/secrets or full manifests."""
+    base = ["--project", project, "--region", region, "--format=json"]
+    service = subprocess.run(
+        ["gcloud", "run", "services", "describe", "life-assistant-api", *base],
+        capture_output=True, text=True)
+    if service.returncode:
+        return {"status": "NOT_VERIFIED", "reason": "service describe unavailable",
+                "count": None}
+    try:
+        parsed = json.loads(service.stdout)
+        revision_name = parsed["status"]["latestReadyRevisionName"]
+        if not revision_name.startswith("life-assistant-api-"):
+            raise ValueError("Unexpected revision")
+        revision = subprocess.run(
+            ["gcloud", "run", "revisions", "describe", revision_name, *base],
+            capture_output=True, text=True)
+        if revision.returncode:
+            raise ValueError("revision describe unavailable")
+        detail = json.loads(revision.stdout)
+        spec = detail.get("spec", {})
+        status = detail.get("status", {})
+        return {"status": "PASS", "count": 1,
+                "revision": revision_name,
+                "spec_image": spec.get("containers", [{}])[0].get("image"),
+                "status_image_digest": status.get("imageDigest"),
+                "status_container_statuses": [
+                    {"imageDigest": x.get("imageDigest"),
+                     "name": x.get("name")}
+                    for x in status.get("containerStatuses", [])],
+                "ready": [
+                    {"type": x.get("type"), "status": x.get("status")}
+                    for x in status.get("conditions", [])]}
+    except (ValueError, KeyError, IndexError, TypeError):
+        return {"status": "NOT_VERIFIED", "reason": "revision parse unavailable",
+                "count": None}
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--project", required=True)
@@ -79,6 +117,7 @@ def main():
                  if o.get("name", "").startswith("life-assistant-")),
                 key=lambda entry: entry["name"] or "")
         summaries[key] = data
+    summaries["latest_life_assistant_revision"] = latest_life_assistant_revision(project, region)
     print(json.dumps({"project": project, "region": region,
                       "mode": "READ_ONLY", "checks": summaries}, indent=2))
     if any(v["status"] != "PASS" for v in summaries.values()):

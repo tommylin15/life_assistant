@@ -96,15 +96,27 @@ class CloudBuildV2Tests(unittest.TestCase):
             if workflow.name == 'v3-cutover-once-after-release.yml':
                 # Strict one-time audited Release completion is the sole
                 # exception to the legacy ban on workflow_run chains.
-                self.assertIn('workflow_run:', source)
-                self.assertIn('types:', source)
-                self.assertIn('completed', source)
-                self.assertIn(
-                    'github.event.workflow_run.id == 37795789924', source
-                )
-                self.assertIn(
-                    "github.event.workflow_run.conclusion == 'success'", source
-                )
+                if 'workflow_run:' in source:
+                    self.assertIn('types:', source)
+                    self.assertIn('completed', source)
+                    self.assertIn(
+                        'github.event.workflow_run.id == 37795789924', source
+                    )
+                    self.assertIn(
+                        "github.event.workflow_run.conclusion == 'success'", source
+                    )
+                else:
+                    # One-file push bootstrap is permitted exactly once, with
+                    # full CI and immutable release evidence before dispatch.
+                    self.assertIn('workflow_dispatch:', source)
+                    self.assertIn('push:', source)
+                    self.assertIn('branches: [main]', source)
+                    self.assertIn(
+                        '.github/workflows/v3-cutover-once-after-release.yml',
+                        source
+                    )
+                    self.assertIn("github.event_name == 'push'", source)
+                    self.assertNotIn('workflow_run:', source)
                 self.assertIn(
                     '25ff10c61abc15e557996b6070e02abf3b54a97b', source
                 )

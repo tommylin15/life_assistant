@@ -52,6 +52,15 @@ class V3PipelineContractTests(unittest.TestCase):
         self.assertIn("release", data["jobs"])
         self.assertNotIn("push:", source)
 
+    def test_drive_ai_consent_acceptance_precedes_promotion(self):
+        source, _ = load("v3-release-ghcr.yml")
+        preflight = source.index("      - name: Pre-promotion Drive AI consent runtime acceptance")
+        promote = source.index("      - name: Reconfirm source SHA and live traffic, then promote")
+        self.assertLess(preflight, promote)
+        self.assertIn("scripts.run_drive_ai_enrichment_acceptance", source[preflight:promote])
+        self.assertIn('--image "$IMAGE_REF"', source[preflight:promote])
+        self.assertIn('if: ${{ inputs.promote }}', source[preflight:promote])
+
     def test_staging_hosting_isolated_from_live_rewrites(self):
         for filename in ("v3-release-ghcr.yml",
                          "v3-firebase-preview-probe.yml"):

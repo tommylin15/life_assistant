@@ -97,11 +97,14 @@ async function semantics(page) {
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function named(page, name, timeout = 12000) {
-  const pattern = name instanceof RegExp ? name : new RegExp('^' + name + '$');
+  // Flutter Web merges event-card titles with neighboring semantic text.
+  // Keep exact button targeting, but allow substring checks for read-only text.
+  const pattern = name instanceof RegExp ? name : new RegExp(name);
+  const exact = name instanceof RegExp ? name : new RegExp('^' + name + '$');
   const end = Date.now() + timeout;
   while (Date.now() < end) {
     for (const locator of [
-      page.getByRole('button', { name: pattern }),
+      page.getByRole('button', { name: exact }),
       page.getByLabel(pattern),
       page.getByText(pattern),
     ]) {

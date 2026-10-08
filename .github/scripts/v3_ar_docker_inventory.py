@@ -125,6 +125,19 @@ def inventory(project, region):
                     # gcloud CLI JSON may expose IMAGE and DIGEST separately,
                     # rather than a combined image@sha256:<digest> URI.
                     digest = row.get("digest", "")
+                    # The current gcloud SDK exposes Artifact Registry version
+                    # resource IDs instead of the DockerImage 'uri' field.
+                    # package=.../packages/IMAGE%2FPATH
+                    # version=.../versions/sha256:DIGEST
+                    package = row.get("package", "")
+                    version = row.get("version", "")
+                    if (isinstance(package, str) and "/packages/" in package
+                            and isinstance(version, str) and "/versions/" in version):
+                        from urllib.parse import unquote
+                        package_path = unquote(package.split("/packages/", 1)[1])
+                        version_suffix = unquote(version.split("/versions/", 1)[1])
+                        if package_path and SHA.fullmatch(version_suffix):
+                            image_uri = uri + "/" + package_path + "@" + version_suffix
                     resource = row.get("name", "")
                     if isinstance(resource, str) and "/dockerImages/" in resource:
                         from urllib.parse import unquote

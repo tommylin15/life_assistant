@@ -23,7 +23,7 @@
 - **Current package：#7 — Shopping 完整產品化（已封板；依使用者指示停在 #7）**
 - **Current state：DONE / PASS — Shopping implementation、tests、CI、Firebase、Cloud Run、PostgreSQL runtime、desktop/mobile production UI evidence 完整。**
 - **Next checkpoint：#8 Calendar = NOT STARTED；留待新對話開始。**
-- **Independent cross-feature health：Drive Knowledge Runtime Acceptance #63 / run `37625447402` 兩次 attempt 皆 FAIL，Cloud Run task exit `91` = Gemini-only direct provider health failure；此 regression 保持 OPEN，不包裝為 PASS，也不回溯取消 Shopping #7 的 DONE。**
+- **Independent cross-feature health：historical Drive Knowledge #63 / run `37625447402` exit `91` = Gemini-only；newer #70 / run `37702785541` exit `93` = Gemini + OpenRouter (Groq not in mask)。diagnostic candidate `8dedf655` / CI #574 PASS；new deployment / runtime still NOT VERIFIED。Regression remains OPEN / FAIL, without undoing Shopping #7 DONE.**
 
 | # | 工作包 | 狀態 | DONE 條件 / 目前 gate |
 |---|---|---|---|
@@ -170,7 +170,7 @@
 - Deploy Cloud Run #438 / run `37622140547`：**PASS**；migration、deploy、health、DB readiness、401 protection、authenticated cloud-domain、checklist、action-id idempotency、Google failure-path、SQLite success/failure 與 image cleanup 全部通過。Authenticated cloud-domain acceptance 真實走 FastAPI + PostgreSQL，涵蓋 Shopping list/item persistence。
 - Post-deploy Runtime Acceptance #104 / run `37624483194`：**PASS**。
 - 因此 Shopping #7 的 DONE 條件（implementation / tests / CI / deployment / runtime / UI entry + 操作 flow / mobile+desktop acceptance）均有直接 evidence，Package #7 計入 DONE。
-- **不相關但必須保留的 latest-release health issue：**Drive Knowledge Runtime Acceptance #63 / run `37625447402` attempt 1、2 均 FAIL。兩次 live external AI Cloud Run task exit 都為 `91`；依 `run_drive_external_ai_acceptance.py` 的 provider failure mask，代表 Gemini bit `1` 單獨失敗。Production config、synthetic runtime、real Drive fixture、exact Firebase release、OAuth、Drive Knowledge production UI 均 PASS；該 provider-health regression 保持 **OPEN / FAIL**，不降級驗收門檻，也不宣稱 latest release 全案全綠。
+- **不相關但必須保留的 latest-release health issue：**Historical Drive Knowledge #63 / run `37625447402` task exit `91` 為 Gemini-only；newer #70 / run `37702785541` exit `93` 為 Gemini bit `1` + OpenRouter bit `2`，Groq not failed in mask。其它 production config、synthetic runtime、real Drive fixture、exact Firebase release、OAuth、UI gates PASS。Diagnostic candidate `8dedf655` adds independent two-provider reason codes; CI #574 PASS, new deployment/live still NOT VERIFIED。Provider regression **OPEN / FAIL**，不降級驗收門檻。
 
 ## 文件與 evidence 分工
 
@@ -190,5 +190,5 @@
 
 1. #7 Shopping 已 **DONE / PASS**；封板進度 **7/11 = 63.6%**。
 2. 依使用者指示，本對話停在 #7；**#8 Calendar 尚未開始**，留待新對話。
-3. Drive Knowledge #63 為獨立 cross-feature provider-health regression：兩次 attempt 皆 Gemini-only exit `91`，狀態 **OPEN / FAIL**；不得描述為已修復或全案全綠。
+3. Drive Knowledge historical #63 exit `91`（Gemini only），newer #70 exit `93`（Gemini + OpenRouter）；待 provider-specific diagnostics live evidence，維持 **OPEN / FAIL**。
 4. Phase 1 整體仍 **PARTIAL**；#8–#11 尚未完成。

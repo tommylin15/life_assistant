@@ -1,6 +1,8 @@
 import py_compile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -277,6 +279,90 @@ class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
             classifier(error),
             runtime_acceptance.STAGE_EXIT_CODES["verify_import"],
         )
+
+
+class DriveAIProviderScopedDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _settings():
+        return SimpleNamespace(
+            ai_enrichment_provider="gemini",
+            ai_enrichment_model="latest-3-flash",
+            ai_enrichment_fallback_provider="groq",
+            ai_enrichment_fallback_model="openai/gpt-oss-120b",
+            ai_enrichment_tertiary_provider="openrouter",
+            ai_enrichment_tertiary_model="openrouter/free",
+        )
+
+    async def test_combined_failure_retains_mask_93_for_gemini_and_openrouter(self):
+        seen = []
+
+        async def check(*, provider_name, model):
+            seen.append((provider_name, model))
+            if provider_name in {"gemini", "openrouter"}:
+                raise SystemExit(external_ai_acceptance.EXIT_PROVIDER_HTTP_RATE_LIMIT)
+
+        with (
+            patch.object(external_ai_acceptance.config, "settings", self._settings()),
+            patch.object(external_ai_acceptance, "run_acceptance", new=check),
+            self.assertRaises(SystemExit) as failure,
+        ):
+            await external_ai_acceptance.run_configured_providers()
+        self.assertEqual(failure.exception.code, 93)
+        self.assertEqual([name for name, _ in seen], ["gemini", "groq", "openrouter"])
+
+    async def test_scoped_gemini_failure_preserves_429_without_running_fallbacks(self):
+        seen = []
+
+        async def check(*, provider_name, model):
+            seen.append(provider_name)
+            raise SystemExit(external_ai_acceptance.EXIT_PROVIDER_HTTP_RATE_LIMIT)
+
+        with (
+            patch.object(external_ai_acceptance.config, "settings", self._settings()),
+            patch.object(external_ai_acceptance, "run_acceptance", new=check),
+            self.assertRaises(SystemExit) as failure,
+        ):
+            await external_ai_acceptance.run_configured_providers(only_provider="gemini")
+        self.assertEqual(failure.exception.code, 144)
+        self.assertEqual(seen, ["gemini"])
+
+    async def test_scoped_openrouter_failure_preserves_5xx_without_running_fallbacks(self):
+        seen = []
+
+        async def check(*, provider_name, model):
+            seen.append(provider_name)
+            raise SystemExit(external_ai_acceptance.EXIT_PROVIDER_HTTP_5XX)
+
+        with (
+            patch.object(external_ai_acceptance.config, "settings", self._settings()),
+            patch.object(external_ai_acceptance, "run_acceptance", new=check),
+            self.assertRaises(SystemExit) as failure,
+        ):
+            await external_ai_acceptance.run_configured_providers(only_provider="openrouter")
+        self.assertEqual(failure.exception.code, 160)
+        self.assertEqual(seen, ["openrouter"])
+
+    async def test_scoped_provider_missing_from_runtime_config_is_not_verified(self):
+        async def should_not_run(*, provider_name, model):
+            self.fail("unconfigured provider must not be called")
+
+        with (
+            patch.object(external_ai_acceptance.config, "settings", self._settings()),
+            patch.object(external_ai_acceptance, "run_acceptance", new=should_not_run),
+            self.assertRaises(SystemExit) as failure,
+        ):
+            await external_ai_acceptance.run_configured_providers(only_provider="openai")
+        self.assertEqual(failure.exception.code, external_ai_acceptance.EXIT_NOT_CONFIGURED)
+
+    def test_workflow_runs_bounded_provider_scoped_diagnostics_only_on_failure(self):
+        workflow = (
+            Path(__file__).parents[2] /
+            ".github/workflows/drive-knowledge-runtime-acceptance.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("--only-provider=gemini", workflow)
+        self.assertIn("--only-provider=openrouter", workflow)
+        self.assertIn("if: steps.external_ai.outcome == 'failure'", workflow)
+        self.assertIn("continue-on-error: true", workflow)
 
 
 if __name__ == "__main__":

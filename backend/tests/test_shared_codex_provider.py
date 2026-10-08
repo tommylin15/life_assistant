@@ -142,11 +142,8 @@ class SharedCodexProviderTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("omniagent-codex-life-client@", str(request.url))
             self.assertEqual(request.headers["Authorization"], "Bearer synthetic-source")
             return httpx.Response(200, json={"token": "synthetic-bound-id-token"})
-        with patch.object(ai.httpx, "AsyncClient", side_effect=lambda **kw: original(
-            transport=httpx.MockTransport(handler), **kw
-        )):
-            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-                token = await self.provider._mint_google_id_token(client)
+        async with original(transport=httpx.MockTransport(handler)) as client:
+            token = await self.provider._mint_google_id_token(client)
         self.assertEqual(token, "synthetic-bound-id-token")
         self.assertEqual(len(calls), 2)
 

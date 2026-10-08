@@ -54,6 +54,28 @@ def summarize(stdout: str, stderr: str, returncode: int) -> dict:
         result_error_length = len(source)
     else:
         vocabulary, result_error_length = [], 0
+    # For diagnosis, preserve sentence structure but replace EVERY non-whitelisted
+    # word, identifier and number. Arbitrary provider strings never reach logs.
+    grammar = set(
+        "a an and are as at be been but by can cannot could did do does each either "
+        "for from has have if in into is it its must no not of on only or other "
+        "please should that the their there these this to was were when which "
+        "will with without would you your already any exists existing set supply "
+        "specify single default deploy deployment preview channel site sites project "
+        "hosting target targets firebase cloud run revision function functions "
+        "configured configuration required need needs enabled active available "
+        "using use invalid cannot failed fail error could please not found"
+        .split()
+    )
+    if isinstance(obj, dict):
+        raw = obj.get("error")
+        raw = raw if isinstance(raw, str) else json.dumps(raw)
+        scanned = re.findall(r"[A-Za-z]{1,32}|[0-9]+|[.,:;!?()\-]", raw)
+        skeleton = " ".join(
+            word.lower() if word.lower() in grammar else "*"
+            for word in scanned[:65])
+    else:
+        skeleton = ""
     # Exact API status/code fields are included only if independently scalar/safe.
     api_status = None
     if isinstance(obj, dict) and isinstance(obj.get("status"), str):
@@ -68,6 +90,7 @@ def summarize(stdout: str, stderr: str, returncode: int) -> dict:
         "log_fingerprint": hashlib.sha256(combined.encode()).hexdigest()[:16],
         "error_payload_length": result_error_length,
         "safe_error_vocabulary": vocabulary,
+        "safe_error_skeleton": skeleton,
         "message_redacted": True,
     }
 

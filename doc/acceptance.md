@@ -430,3 +430,17 @@ execution. No mock/localhost or single Build PASS qualifies for CLOSED.
 - Firebase Preview/Live 均未發布；既有 live Hosting baseline version `7269b54b36337ed6`。尚缺 SQLite backfill success/failure、真實 HTTPS Google/DB/browser、POST/Drive/Calendar/Shared Codex/External Provider、Preview/Live UI/integration、post-deploy readback 與安全 image cleanup。
 - Provider 既有 Gemini/OpenRouter FAIL 保持獨立 blocker；本輪尚未執行 Provider gate，沒有新增 Provider PASS 證據。Image 沒有實體刪除，沒有新 GCS evidence bucket。
 - 舊 Actions 自動部署入口已改 manual；main 文件 push 只會觸發 CI，不恢复 Release。恢復前先讀回殘留 executions/traffic/Hosting、確認 main 完整 SHA、適用 CI/Ready gate；不得重跑正在執行的資料寫入型 Job或自動 downgrade DB。
+
+### CI/CD V2 resumed implementation checkpoint — 2026-10-08
+
+- User resumed CI/CD V2 after the cancelled candidate run. The previous
+  `af461348-13ee-4f43-833a-428f06f4e813` remains CANCELLED, not PASS.
+- Contract repair: backend-only release now builds a preview-only Flutter artifact
+  and verifies Firebase Preview pinned to no-traffic Candidate instead of
+  mislabeling live-frontend/live-API checks as candidate compatibility. This
+  preview is never promoted to Hosting live unless frontend source changes.
+- Added a backend-only prepare test and workflow/static coverage. No GCP
+  migration, candidate, preview or promotion is claimed by this source commit.
+- New Push CI / manual Release / runtime readback / production integration:
+  **NOT VERIFIED** until fresh per-SHA GCP evidence is observed. Provider
+  Gemini/OpenRouter FAIL remains an independent mandatory blocker.

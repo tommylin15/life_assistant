@@ -1,6 +1,6 @@
 # Life Assistant CI/CD V2 Deployment Runbook
 
-Status: **PAUSED BY USER / OPEN / NOT CLOSED** (2026-10-08). This replaces the deployment
+Status: **RESUMED / OPEN / NOT CLOSED** (2026-10-08). This replaces the deployment
 runtime release only after all V2 live gates pass. Existing product completion evidence
 and existing provider FAIL records remain authoritative.
 
@@ -60,7 +60,12 @@ intermediate commits by default.
    authenticated Google session, PostgreSQL persistence and owner-bound audit.
 7. All existing post-deploy/Drive/Calendar/provider gates run against the release
    image. Gemini/OpenRouter diagnostics preserve aggregate failure.
-8. Firebase Preview with Cloud Run `pinTag`; stamp full SHA; verify branding,
+8. Every backend-changing release gets an isolated Firebase Preview with Cloud
+   Run `pinTag`, even when Flutter source is unchanged; this preview-only
+   Flutter build is a deliberate safety cost and must never clone to Hosting
+   live for a backend-only release. This avoids misrepresenting a browser test
+   against the old live API as candidate compatibility. Stamp full candidate
+   SHA and verify branding,
    cache, manifest, auth, API and all eight existing UI scripts. Their intercepted
    API tests are explicitly UI contracts, not proof of live integration.
 9. Additional live browser reads use a real Google session and observe actual

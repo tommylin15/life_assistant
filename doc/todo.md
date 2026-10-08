@@ -8,7 +8,7 @@
 
 ### CI/CD V2 — active user-requested infrastructure work
 
-**PAUSED BY USER / OPEN / NOT CLOSED**. Cloud Build 2nd Gen main push CI only; explicit
+**RESUMED / OPEN / NOT CLOSED**. Cloud Build 2nd Gen main push CI only; explicit
 full-SHA manual Release → candidate/Preview → real acceptance → live/post-deploy.
 Runbook: `deployment_runbook.md`. True main-push and manual Release evidence,
 cost comparison, owner isolation and all existing provider/UI gates remain
@@ -17,7 +17,10 @@ mandatory. No scheduler timing changes; no OmniAgent/Janus implementation work.
 暫停 checkpoint：Release `af461348-13ee-4f43-833a-428f06f4e813` CANCELLED；
 Candidate `00174-luw` 0%，正式 `00173-gpf` 100%。Migration 與四項 core
 execution 已 PASS；Firebase Preview/Live、其餘 runtime/UI/provider gates 與
-cleanup 尚未完成。詳見 `acceptance.md` 最後 checkpoint。未經恢復指令不啟動 Release。
+cleanup 尚未完成。詳見 `acceptance.md` 最後 checkpoint。2026-10-08 使用者已要求接續
+CI/CD V2；本輪先補後端單獨變更的 Candidate Preview 安全契約。新的 Push CI、
+完整 SHA manual Release、GCP 殘留 execution/readback、Preview/Live 與 providers
+均須重新取證；不得把歷史 PASS 當成此次 release PASS。
 
 ### Paused after #7 — per user instruction
 

@@ -17,6 +17,47 @@ class CloudBuildV2Tests(unittest.TestCase):
         self.assertEqual(release.changes(['cloudbuild.yaml']), (True, True))
         self.assertEqual(release.changes(['doc/todo.md']), (False, False))
 
+    def test_backend_only_release_builds_candidate_preview_but_not_live_frontend(self):
+        config = (ROOT / 'cloudbuild.yaml').read_text()
+        self.assertIn('test -f .release/frontend-preview || exit 0', config)
+        source = (ROOT / 'scripts/cloud_build_release.py').read_text()
+        self.assertIn("(STATE / 'frontend-preview').touch()", source)
+        self.assertIn("if (STATE / 'frontend').exists() or (STATE / 'frontend-preview').exists():", source)
+        self.assertIn("http_gates(preview, hosting=True, expected_sha=os.environ['RELEASE_SHA'])", source)
+        self.assertIn("if channel and (STATE / 'frontend').exists():", source)
+
+    def test_backend_only_release_prepare_marks_preview_only(self):
+        import tempfile
+        sha = 'f' * 40
+        old_sha = 'a' * 40
+        responses = [
+            {'buildTriggerId': 'manual-release'},
+            {'name': 'life-assistant-v2-release'},
+            {'id': 'ci-trigger'},
+            [{'substitutions': {'COMMIT_SHA': sha}}],
+            [{'substitutions': {'_PIPELINE': 'release', '_PROMOTE': 'true',
+                                'COMMIT_SHA': old_sha}}],
+        ]
+        def git_run(*args, **kwargs):
+            if args[:2] == ('git', 'diff'):
+                return 'backend/app/main.py\\n'
+            return ''
+        with (
+            tempfile.TemporaryDirectory() as folder,
+            patch.object(release, 'STATE', Path(folder)),
+            patch.dict(os.environ, {'RELEASE_SHA': sha, 'BUILD_ID': 'build',
+                                    'GCP_PROJECT_ID': release.PROJECT,
+                                    'GCP_REGION': release.REGION,
+                                    'PIPELINE': 'release', 'PROMOTE': 'false'}),
+            patch.object(release, 'read_json', side_effect=responses),
+            patch.object(release, 'current_main', return_value=sha),
+            patch.object(release, 'run', side_effect=git_run),
+        ):
+            release.prepare()
+            self.assertTrue((Path(folder) / 'backend').exists())
+            self.assertTrue((Path(folder) / 'frontend-preview').exists())
+            self.assertFalse((Path(folder) / 'frontend').exists())
+
     def test_existing_gates_are_preserved(self):
         self.assertEqual(len(release.CORE), 6)
         for gate in ('run_drive_external_ai_acceptance', 'run_calendar_true_account_read_acceptance',

@@ -132,9 +132,13 @@ def prepare():
         (STATE / 'backend').touch()
     if frontend:
         (STATE / 'frontend').touch()
-    # A backend-only release still verifies API compatibility against the
-    # actual live frontend. Do not rebuild or republish unchanged Flutter.
-    if mode == 'release' and not frontend:
+    # Backend-only changes must test the existing frontend against the
+    # no-traffic candidate, not accidentally test the LIVE API. Build an
+    # isolated Preview but never publish unchanged Flutter to Hosting live.
+    if mode == 'release' and backend and not frontend:
+        (STATE / 'frontend-preview').touch()
+        record('frontend', 'PREVIEW_ONLY', reason='candidate_api_compatibility')
+    elif mode == 'release' and not frontend:
         record('frontend', 'UNCHANGED')
     record('paths', baseline=baseline, backend=backend, frontend=frontend)
 
@@ -269,7 +273,7 @@ def ui_gates(url):
         raise RuntimeError('UI gates failed: ' + ','.join(failures))
 
 
-def http_gates(url, hosting=False):
+def http_gates(url, hosting=False, expected_sha=None):
     run('curl', '--fail', '--silent', '--show-error', '--retry', '5', '--retry-all-errors', url + '/health') if not hosting else None
     if not hosting:
         run('curl', '--fail', '--silent', '--show-error', url + '/ready')
@@ -283,7 +287,7 @@ def http_gates(url, hosting=False):
     assert re.search(r'(?im)^set-cookie: __session=', headers)
     if hosting:
         for attempt in range(36):
-            if fetch(url + '/release.txt?sha=' + os.environ['RELEASE_SHA'] + f'&attempt={attempt}').decode().strip() == os.environ.get('FRONTEND_SHA', os.environ['RELEASE_SHA']):
+            if fetch(url + '/release.txt?sha=' + os.environ['RELEASE_SHA'] + f'&attempt={attempt}').decode().strip() == (expected_sha or os.environ.get('FRONTEND_SHA', os.environ['RELEASE_SHA'])):
                 break
             time.sleep(5)
         else:
@@ -291,7 +295,7 @@ def http_gates(url, hosting=False):
         headers = run('curl', '--silent', '--show-error', '--head', url + '/index.html', capture=True)
         assert re.search(r'(?im)^cache-control:.*(?:no-cache|no-store|must-revalidate)', headers)
         for path in ('icons/life-assistant-192-v8.png', 'branding/life-assistant-hero-v8.png'):
-            expected = Path('build/web') / path if (STATE / 'frontend').exists() else Path('web') / path
+            expected = Path('build/web') / path if ((STATE / 'frontend').exists() or (STATE / 'frontend-preview').exists()) else Path('web') / path
             assert fetch(url + '/' + path) == expected.read_bytes()
         assert json.loads(fetch(url + '/manifest-v6.json'))['id'] == '/life-assistant-v6'
     record('hosting_http' if hosting else 'candidate_http', url=url)
@@ -402,7 +406,7 @@ def deploy():
     # pinTag previews the no-traffic revision while keeping the official OAuth callback.
     channel = None
     os.environ['FRONTEND_SHA'] = os.environ['RELEASE_SHA'] if (STATE / 'frontend').exists() else fetch(LIVE + '/release.txt').decode().strip()
-    if (STATE / 'frontend').exists():
+    if (STATE / 'frontend').exists() or (STATE / 'frontend-preview').exists():
         config = json.loads(Path('firebase.json').read_text())
         for rewrite in config['hosting']['rewrites']:
             if 'run' in rewrite and (STATE / 'backend').exists():
@@ -413,7 +417,7 @@ def deploy():
                   '--config=firebase.v2.json', '--non-interactive', '--json', capture=True)
         preview = json.loads(raw)['result'][SITE]['url']
         record('preview', url=preview, channel=channel)
-        http_gates(preview, hosting=True)
+        http_gates(preview, hosting=True, expected_sha=os.environ['RELEASE_SHA'])
         ui_gates(preview)
         job('run_live_release_acceptance', image, preview)
     else:
@@ -433,7 +437,7 @@ def deploy():
                    '--to-revisions', revision + '=100', '--quiet')
         promoted = True
         # Clone the verified preview; never rebuild/reupload a different live artifact.
-        if channel:
+        if channel and (STATE / 'frontend').exists():
             run('firebase', 'hosting:clone', SITE + ':' + channel, SITE + ':live', '--project', PROJECT,
                 '--non-interactive')
         http_gates(LIVE, hosting=True)

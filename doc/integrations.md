@@ -263,7 +263,8 @@ Latest regression closure evidence：Habits release `02eda112...` 的 Drive Know
 ## Latest provider health after Shopping release — 2026-10-07
 
 - Shopping final release `1dd0b1f15827ae9cf50a8f4fcb69a1fa3782f40d` 的 Drive Knowledge Runtime Acceptance #63 / run `37625447402` 已執行兩次 attempt，兩次 final mandatory gate 均 FAIL。
-- 失敗只來自 live external AI execution；兩次 Cloud Run task exit code 均為 `91`。依 `backend/scripts/run_drive_external_ai_acceptance.py`：`EXIT_PROVIDER_FAILURE_MASK_BASE=90`，Gemini bit=`1`，因此 `91` 可明確分類為 **Gemini-only direct provider health failure**。
+- Historical #63 live external AI task exit `91` = Gemini only；newer Drive Knowledge #70 / run `37702785541` live external AI exit `93` = `90 + Gemini(1) + OpenRouter(2)`，Groq 不在失敗 mask。不得沿用 #63 的 Gemini-only 判讀；兩家 upstream HTTP/transport/output 分類尚未取得。
+- Diagnostic code `8dedf655f007d3e21d647f06c7a7552322c8abce` 拆出兩個 Cloud Run direct-provider execution（只在 combined live FAIL 時執行），保留原 mandatory gate；CI #574 PASS，deployment / fresh runtime **NOT VERIFIED**。
 - 同一輪 production config、synthetic Drive Knowledge runtime、real Google Drive fixture、exact Firebase release、OAuth redirect、Drive Knowledge production UI 均 PASS。
 - 現行 live acceptance 的設計刻意逐一驗證 configured providers，不允許 fallback 成功遮蔽 primary provider failure；本次不修改此標準，也不把 fallback 可用性寫成 Gemini PASS。
 - 狀態：**OPEN / FAIL**。這是獨立 cross-feature/provider-health regression，需後續另行修復或待 upstream provider 恢復後重驗；Shopping Package #7 的 direct product evidence 已完整，因此 #7 仍可封板 DONE。
@@ -276,3 +277,12 @@ Latest regression closure evidence：Habits release `02eda112...` 的 Drive Know
 - If that remembered model fails, the adapter probes the newest stable Flash candidates. Any later successful model replaces the persisted preference, so the routing can automatically move forward or recover from an older model becoming unavailable.
 - Gemini OpenAI-compatible requests use `reasoning_effort=low` to keep this bounded enrichment workload responsive. Transient 408 / 429 / 5xx / transport failures use bounded whole-model-cycle backoff rather than repeatedly spending retries on the same failing newest model.
 - Live external-AI acceptance requires the successful Gemini model to be persisted; fallback success still cannot mask a direct Gemini failure.
+
+
+### Conditional Codex CLI feasibility, not an approved fallback — 2026-10-08
+
+- Trigger: only if direct Gemini/OpenRouter provider-specific repair and live mandatory acceptance continue failing. This is a research/PoC option; **no production routing change approved**, no new secret and no IAM changes in this checkpoint.
+- Target: existing `janus-mart-codex-auth`, Codex CLI `gpt-6.1-sol` with `model_reasoning_effort=low`, using synthetic Note context, strict JSON schema/output validation, bounded timeout and token usage, no tool execution or filesystem mutation.
+- Janus source `jobs/intelligence-mart/intelligence_mart/codex_worker.py` already defaults to `gpt-6.1-sol`/low with a pinned Codex CLI. `codex_auth.py` stores ChatGPT OAuth auth cache in `janus-mart-codex-auth` and appends a new Secret version after credential refresh under a Janus PostgreSQL advisory lock.
+- Cross-project reuse requires verifying life_assistant runtime read access **without assuming it**, a single refresh owner / cross-service credential synchronization fence, eligibility/terms and model access, latency/cost, and strict project execution/data isolation. Janus local DB lock alone is not cross-service coordination.
+- Compare direct model Responses API versus Codex CLI for short structured enrichment; Codex CLI is an agent execution tool and may be an inferior operational fit for life_assistant. No Janus project runtime/source mutation was performed during this feasibility assessment.

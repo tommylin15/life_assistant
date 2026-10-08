@@ -33,6 +33,27 @@ def summarize(stdout: str, stderr: str, returncode: int) -> dict:
         obj = json.loads(stdout)
     except (json.JSONDecodeError, ValueError):
         pass
+    # Emit only a bounded, fixed vocabulary: never disclose arbitrary messages.
+    safe_dictionary = (
+        "unable failed failure error unexpected occurred authenticate authentication",
+        "login project site target hosting channel deploy preview previewchannel",
+        "firebase cloud run revision pintag permission forbidden denied required",
+        "config configuration configs missing unknown exists found invalid",
+        "not found credentials account credential expired disabled enable",
+        "service backend functions function API directory root file firebasejson",
+        "unsupported install setup select selectonly must include either both",
+        "please update upgrade api scope scopes region create release",
+        "invalid credentials quota billing upgrade resources cannot can",
+    )
+    allowed = set(" ".join(safe_dictionary).lower().split())
+    if isinstance(obj, dict):
+        error_payload = obj.get("error")
+        source = error_payload if isinstance(error_payload, str) else json.dumps(error_payload)
+        detected = {t.lower() for t in re.findall(r"[A-Za-z]{3,18}", source)}
+        vocabulary = sorted(detected & allowed)
+        result_error_length = len(source)
+    else:
+        vocabulary, result_error_length = [], 0
     # Exact API status/code fields are included only if independently scalar/safe.
     api_status = None
     if isinstance(obj, dict) and isinstance(obj.get("status"), str):
@@ -45,6 +66,8 @@ def summarize(stdout: str, stderr: str, returncode: int) -> dict:
         "http_codes": sorted(set(matches)),
         "json_status": api_status,
         "log_fingerprint": hashlib.sha256(combined.encode()).hexdigest()[:16],
+        "error_payload_length": result_error_length,
+        "safe_error_vocabulary": vocabulary,
         "message_redacted": True,
     }
 

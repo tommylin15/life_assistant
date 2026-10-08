@@ -186,8 +186,9 @@ Evidence：
 
 ### Independent latest-release Drive Knowledge health note
 
-- Drive Knowledge Runtime Acceptance #63 / run `37625447402`：attempt 1、2 均 **FAIL**。
-- 兩次 live external AI execution task exit 均為 `91`；現行 provider failure mask 定義 `90 + 1 = Gemini-only failure`。因此這不是 Shopping API/UI/runtime failure，也不是 Groq/OpenRouter 同時失敗的 evidence。
+- Historical Drive Knowledge Runtime Acceptance #63 / run `37625447402`：attempt 1、2 均 **FAIL**；當時 task exit `91` = Gemini-only failure。
+- Newer Drive Knowledge #70 / run `37702785541`（release `6331b27`）**FAIL**，live external AI task exit `93` = `90 + Gemini(1) + OpenRouter(2)`；Groq 不在 failure mask 中。#63 的單-provider 結論不得套用到 #70。尚無兩家各自 HTTP / output 根因 evidence。
+- Diagnostic code release candidate `8dedf655f007d3e21d647f06c7a7552322c8abce` adds direct Gemini / OpenRouter probes after the aggregate failure. CI #574 / run `37705390278` PASS；deployment / new live acceptance remain **NOT VERIFIED** until the workflow chain completes.
 - 同一 #63 的 production config、synthetic Drive Knowledge runtime、real Google Drive fixture、exact Firebase release、OAuth redirect、Drive Knowledge production UI 均 PASS。
 - 此 issue 維持 **OPEN / FAIL**；不更改 mandatory Drive Knowledge acceptance 標準、不以 fallback success 冒充 Gemini direct health PASS。它不取消已具完整 direct evidence 的 Shopping Package #7 DONE，但 Phase 1/latest-release cross-feature health 不得宣稱全綠。
 

@@ -116,28 +116,32 @@ jobs:
               echo "legacy_trigger_already_disabled=PASS name=$NAME id=$ID" >> "$GITHUB_STEP_SUMMARY"
               continue
             fi
-            ACCESS_TOKEN="$(gcloud auth print-access-token)"
-            # Regional PATCH requires the resourceName in the BuildTrigger body
-            # plus projectId/triggerId query parameters; update only disabled.
-            PATCH_BODY="$(jq -n --arg project "$GCP_PROJECT_ID" --arg region "$GCP_REGION" \
-              --arg id "$ID" --arg name "$NAME" \
-              '{resourceName:("projects/"+$project+"/locations/"+$region+"/triggers/"+$id),
-                id:$id,name:$name,disabled:true}')"
-            PATCH_STATUS="$(curl --silent --show-error \
-              -o "$RUNNER_TEMP/v3-trigger-$ID-after.json" -w '%{http_code}' \
-              -H "Authorization: Bearer $ACCESS_TOKEN" \
-              -H 'Content-Type: application/json' \
-              -X PATCH -d "$PATCH_BODY" \
-              "https://cloudbuild.googleapis.com/v1/projects/$GCP_PROJECT_ID/locations/$GCP_REGION/triggers/$ID?projectId=$GCP_PROJECT_ID&triggerId=$ID&updateMask=disabled")"
-            if [ "$PATCH_STATUS" != "200" ]; then
-              PATCH_CATEGORY="$(jq -r '.error.status // "UNKNOWN"' "$RUNNER_TEMP/v3-trigger-$ID-after.json" 2>/dev/null || printf UNKNOWN)"
-              PATCH_MESSAGE="$(jq -r '.error.message // "Cloud Build API failure"' "$RUNNER_TEMP/v3-trigger-$ID-after.json" 2>/dev/null | cut -c1-160 || true)"
-              if printf '%s' "$PATCH_MESSAGE" | grep -Eiq 'secret|credential|authorization|bearer|token|password'; then
-                PATCH_MESSAGE="[redacted]"
-              fi
-              echo "::error::Cloud Build PATCH code=$PATCH_STATUS category=$PATCH_CATEGORY reason=$PATCH_MESSAGE"
-              exit 1
+            umask 077
+            ORIGINAL="$RUNNER_TEMP/v3-trigger-$ID-original.yaml"
+            MODIFIED="$RUNNER_TEMP/v3-trigger-$ID-disabled.yaml"
+            # Official Cloud Build export/import keeps the original trigger
+            # configuration; only the top-level disabled field may change.
+            gcloud beta builds triggers export "$ID" \
+              --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+              --destination "$ORIGINAL" --quiet
+            test -s "$ORIGINAL"
+            if grep -Eq '^disabled:[[:space:]]*(true|false|True|False)[[:space:]]*$' "$ORIGINAL"; then
+              sed -E 's/^disabled:[[:space:]]*(true|false|True|False)[[:space:]]*$/disabled: true/' \
+                "$ORIGINAL" > "$MODIFIED"
+            else
+              cp "$ORIGINAL" "$MODIFIED"
+              printf '\ndisabled: true\n' >> "$MODIFIED"
             fi
+            test "$(grep -Ec '^disabled: true$' "$MODIFIED")" = 1
+            # Fail closed if a change beyond disabled was introduced.
+            sed '/^disabled:/d' "$ORIGINAL" | sed '/^[[:space:]]*$/d' \
+              > "$RUNNER_TEMP/v3-trigger-$ID-original-normalized"
+            sed '/^disabled:/d' "$MODIFIED" | sed '/^[[:space:]]*$/d' \
+              > "$RUNNER_TEMP/v3-trigger-$ID-disabled-normalized"
+            cmp -s "$RUNNER_TEMP/v3-trigger-$ID-original-normalized" \
+              "$RUNNER_TEMP/v3-trigger-$ID-disabled-normalized"
+            gcloud builds triggers import --source="$MODIFIED" \
+              --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --quiet
             gcloud builds triggers describe "$ID" --project "$GCP_PROJECT_ID" \
               --region "$GCP_REGION" --format=json \
               | jq -e --arg name "$NAME" '.name==$name and .disabled==true'

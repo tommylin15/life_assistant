@@ -42,8 +42,9 @@ jobs:
           echo "$JOBS" | jq -e '
             [.jobs[].steps[] |
              select(.name=="Post-promotion live health, OAuth redirect, PostgreSQL and access gates"
+             or .name=="Controlled rollback rehearsal and restore promoted live traffic"
              or .name=="Retain latest 10 revisions after all live gates PASS") |
-             select(.conclusion=="success") | .name] | unique | length==2'
+             select(.conclusion=="success") | .name] | unique | length==3'
           echo "release_run_evidence=PASS run=$RELEASE_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: google-github-actions/auth@v2

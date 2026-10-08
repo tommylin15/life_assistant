@@ -50,7 +50,8 @@ def main():
                 (o.get("metadata", {}).get("name", "") or
                  o.get("name", "").split("/")[-1])
                 for o in value["items"]
-                if "life-assistant" in json.dumps(o).lower())
+                if (o.get("metadata", {}).get("name", "") or
+                    o.get("name", "").split("/")[-1]).startswith("life-assistant-"))
         elif key == "run_jobs":
             data["life_assistant_jobs"] = sorted(
                 (o.get("metadata", {}).get("name", "") or

@@ -23,6 +23,10 @@
 
 The named existing container repository `cloud-run-source-deploy` may be shared; **never equate it with CI/CD-only** just because its name looks like a deployment repository. The previous `pilot-ledger-backups` GCS bucket (if present in actual inventory) must remain protected as backup data. Do not run recursive bucket deletion as a substitute for object-level classification.
 
+## One-time bootstrap exception for this user-authorized implementation
+
+The user expressly requested the initial end-to-end cutover. The guarded `.github/workflows/v3-initial-bootstrap.yml` is therefore a **one-time file-scoped push trigger**, not recurring auto-production deploy: only the initial commit/change to that exact workflow path can dispatch a V3 release, and it waits until **all three full SHA CI jobs PASS**. It passes the exact current-main SHA with promotion requested, but every GHCR-public/0%-candidate/Firebase Preview/real-provider/live/rollback/retention gate must still PASS before any old Cloud Build trigger may be disabled. All later routine releases retain the V3 manual SHA entrypoint. Any failure keeps old triggers and GCS/AR resources untouched.
+
 ## Pre-cutover constraints
 
 - The old `.github/workflows/deploy-cloud-run.yml` still calls `gcloud builds submit` and the legacy `cloudbuild.yaml`/Cloud Build triggers still exist until actual cutover succeeds. V3 must not dispatch them.

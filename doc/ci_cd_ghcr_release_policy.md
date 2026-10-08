@@ -1,7 +1,7 @@
 # life_assistant CI/CD V3 — GitHub Actions + public GHCR + Cloud Run digest
 
 **Decision date:** 2026-10-08  
-**State:** APPROVED TARGET / DOCUMENTATION ONLY / NOT YET IMPLEMENTED  
+**State:** V3 WORKFLOWS COMMITTED / ACTUAL GHCR-CLOUD RUN RELEASE AND INTEGRATION NOT VERIFIED  
 **Owner:** life_assistant; applies to `tommylin15/life_assistant` main.  
 **Authority:** This document and the latest V3 section of `PROJECT_RULES.md` supersede the Cloud Build-led CI/CD V2 target. Earlier V2 runbooks and acceptance records remain historical evidence, not instructions to keep operating Cloud Build in the new path.
 
@@ -31,6 +31,8 @@ Public container metadata and layers are pullable by third parties. Never bake t
 - Produce structured job summaries and masked logs. **No** GCP mutation, GHCR publishing, Cloud Run/Firebase deployment or Cloud Build trigger in this stage.
 - Missing or failed mandatory gate means FAIL; neither skipped nor cancelled is PASS. Tests may not be weakened to attain a green status.
 - The actual required-test matrix and runtime are implementation tasks; nothing in this document certifies those jobs are currently active.
+
+**One-time migration bootstrap exception (user-authorized):** The `.github/workflows/v3-initial-bootstrap.yml` push trigger is limited to edits to that workflow file alone, is gated on all three full-main-SHA CI jobs passing, and issues one exact-SHA dispatch with promotion requested to perform this initial user-authorized rollout. Production still cannot change before mandatory candidate, pinned Preview and integration gates. Subsequent routine releases remain manual exact-SHA; never broaden the bootstrap trigger to every push. The bootstrap dispatch request is not runtime deployment PASS.
 
 ### B — Immutable image publication (manual exact-SHA release)
 - A `workflow_dispatch` release accepts only a complete 40-character commit SHA verified as current/authorized `main` and with passing required quality checks for that SHA. A stale/SHA-mismatched release fails closed.

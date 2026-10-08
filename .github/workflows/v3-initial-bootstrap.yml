@@ -1,0 +1,60 @@
+name: V3 One-Time Controlled Release Bootstrap
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/v3-initial-bootstrap.yml
+
+permissions:
+  contents: read
+  checks: read
+  actions: write
+
+jobs:
+  dispatch-after-ci:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Wait for same-SHA full CI before releasing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ATTEMPT in $(seq 1 80); do
+            RESULT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100")"
+            PASSED="$(printf '%s' "$RESULT" | jq '
+              [.check_runs[] |
+               select(.name=="flutter" or .name=="backend" or .name=="deployment-scripts") |
+               select(.conclusion=="success") | .name] | unique | length')"
+            FAILED="$(printf '%s' "$RESULT" | jq '
+              [.check_runs[] |
+               select(.name=="flutter" or .name=="backend" or .name=="deployment-scripts") |
+               select(.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out")] | length')"
+            if [ "$FAILED" -gt 0 ]; then
+              echo "::error::Mandatory CI failed; no image publication or Cloud Run changes permitted"
+              exit 1
+            fi
+            if [ "$PASSED" -eq 3 ]; then
+              echo "full_ci=PASS source=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::CI not confirmed PASS for full main SHA"
+          exit 1
+
+      - name: Dispatch exactly one verified V3 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          gh workflow run v3-release-ghcr.yml --ref main \
+            --field release_sha="$GITHUB_SHA" --raw-field promote=true
+          echo "v3_release_dispatch=REQUESTED sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Actual promotion and cutover remain conditional on every candidate/Preview/live gate." \
+            >> "$GITHUB_STEP_SUMMARY"

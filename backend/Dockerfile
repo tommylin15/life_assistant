@@ -2,6 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Associate the public GHCR package with its source for permission provenance.
+LABEL org.opencontainers.image.source="https://github.com/tommylin15/life_assistant"
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

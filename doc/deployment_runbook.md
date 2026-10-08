@@ -37,6 +37,10 @@ intermediate commits by default.
 - Reuse `life-assistant-github-deployer`; no service account key.
 - FastAPI remains Cloud Run; Flutter remains Firebase Hosting. Shared Codex
   remains the existing OmniAgent service. No OmniAgent/Janus code changes.
+- Runtime identity: existing `omniagent-codex-life-client`; deployer has
+  Service Account User only on it, caller has Secret Accessor only on
+  `life-assistant-bundle`. Shared Codex uses metadata email/identity directly;
+  no default Compute token-minting grant.
 - Never mutate Scheduler configuration or execute scheduled business jobs.
   Only the three existing Life Assistant migration/acceptance jobs are updated.
 
@@ -50,7 +54,8 @@ intermediate commits by default.
 4. Serialize mutable deployment operations by Cloud Build creation order;
    refuse a superseded main SHA and skip successful duplicate SHA/phase builds.
 5. Existing migration job executes the release module, then no-traffic tagged
-   candidate. Preserve runtime identity, VPC, secrets and existing settings.
+   candidate. Set the approved dedicated caller identity on API and the three
+   existing jobs; preserve VPC, secrets and other existing settings.
 6. Candidate health/readiness/401/OAuth; six existing core gates; actual HTTPS
    authenticated Google session, PostgreSQL persistence and owner-bound audit.
 7. All existing post-deploy/Drive/Calendar/provider gates run against the release

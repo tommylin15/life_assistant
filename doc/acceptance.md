@@ -396,3 +396,11 @@ execution. No mock/localhost or single Build PASS qualifies for CLOSED.
 - User approved and applied only deployer Service Account User on existing `omniagent-codex-life-client`, and that caller Secret Accessor on `life-assistant-bundle`. No default Compute impersonation grant.
 - Candidate/API and the three existing Life Assistant jobs use this dedicated identity on the next release; shared provider checks metadata email and requests the audience-bound identity token directly. Existing live revision remains unchanged until acceptance.
 - V2 remains OPEN; Push CI, release and all mandatory live gates still require real PASS evidence.
+
+### Real Push CI evidence (2026-10-08)
+
+- SHA `02a43ebf4de5209d720506f9da165ad93f8bfe8a`, regional build `cc710f32-0e32-48f6-9471-90399e771f63`: **SUCCESS**, 04:51:46.864–04:58:35.557 UTC (408.693 seconds).
+- GCP Backend 403 tests PASS; Flutter 63 tests PASS; analyze completed with existing 109 info diagnostics and unchanged no-fatal-infos policy; Web build and branding checks PASS. Alembic verification reached `20261007_0010`.
+- No Docker push, migration job, Cloud Run deployment or Firebase publication in Push CI. Full-SHA manual Release and live gates remain pending.
+- Worker list-price estimate: 6.8116 minutes × $0.006 = **$0.04087**, before shared free allowance; not an invoice. Public standard GitHub runner remains $0 runner cost under its existing policy. V2 is not claimed cheaper. Failed build time and release/job/log costs must also be counted.
+- Earlier build `29f9f507-64d5-4a92-a0fe-3bc9350c3eba` failed on official Flutter manifest URL 404; corrected root verified against official manifest and 3.47.3 checksum.

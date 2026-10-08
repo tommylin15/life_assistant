@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import uuid
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 import httpx
@@ -97,7 +98,12 @@ async def main():
             for path in ('tasks', 'projects', 'notes', 'habits', 'shopping-lists', 'activity',
                          'integrations/google/status', 'integrations/google/calendar/events',
                          'integrations/google/gmail/messages', 'drive/documents', 'drive/picker-config'):
-                response = await client.get(base + '/api/v1/' + path)
+                params = {'limit': 1} if path.endswith('gmail/messages') else {}
+                if path.endswith('calendar/events'):
+                    start = datetime.now(timezone.utc)
+                    params = {'time_min': start.isoformat(),
+                              'time_max': (start + timedelta(days=1)).isoformat(), 'limit': 1}
+                response = await client.get(base + '/api/v1/' + path, params=params)
                 assert response.status_code == 200, 'live read failed: ' + path + ' status=' + str(response.status_code)
                 print('live_read=' + path + ':PASS', flush=True)
             response = await client.post(base + '/api/v1/tasks', json={'title': title})

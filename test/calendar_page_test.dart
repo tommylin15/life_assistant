@@ -102,7 +102,7 @@ void main() {
     expect(find.text('共 2 筆'), findsOneWidget);
   });
 
-  testWidgets('calendar create and edit send timezone-aware timestamps', (tester) async {
+  testWidgets('calendar create sends timezone-aware timestamps', (tester) async {
     final api = _FakeCalendarApi();
     await _pump(tester, api);
 
@@ -115,16 +115,24 @@ void main() {
     expect(api.created.single['summary'], '醫院回診');
     expect(DateTime.parse(api.created.single['start'] as String).isUtc, true);
     expect(find.text('醫院回診'), findsOneWidget);
+  });
 
-    await tester.ensureVisible(find.byKey(const ValueKey('calendar-edit-event-1')));
-    await tester.tap(find.byKey(const ValueKey('calendar-edit-event-1')));
+  testWidgets('calendar edit updates the selected Google event', (tester) async {
+    final api = _FakeCalendarApi();
+    await _pump(tester, api);
+
+    final edit = find.byKey(const ValueKey('calendar-edit-event-1'));
+    await tester.ensureVisible(edit);
     await tester.pumpAndSettle();
+    await tester.tap(edit);
+    await tester.pumpAndSettle();
+
     await tester.enterText(find.byKey(const ValueKey('calendar-title-field')), '工作會議');
     await tester.tap(find.text('儲存'));
     await tester.pumpAndSettle();
-
     expect(api.updated.single['id'], 'event-1');
     expect(api.updated.single['summary'], '工作會議');
+    expect(DateTime.parse(api.updated.single['start'] as String).isUtc, true);
   });
 
   testWidgets('delete requires explicit confirmation', (tester) async {

@@ -1,4 +1,4 @@
-# One-time bootstrap retry: Firebase staging Hosting Site isolation; full SHA CI mandatory.
+# One-time controlled release retry: fix jq traffic gates; full SHA CI mandatory.
 name: V3 One-Time Controlled Release Bootstrap
 
 on:
@@ -52,6 +52,33 @@ jobs:
           done
           echo "::error::CI not confirmed PASS for full main SHA"
           exit 1
+
+      - name: Test jq traffic guards before controlled promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/traffic-baseline.json" <<'JSON'
+          {"status":{"traffic":[{"revisionName":"baseline", "percent":100},{"revisionName":"candidate", "percent":0,"tag":"v3"}]}}
+          JSON
+          printf '%s\n' '{"status":{"traffic":[{"revisionName":"unexpected","percent":100}]}}' > "$RUNNER_TEMP/traffic-changed.json"
+          jq -e --slurpfile previous "$RUNNER_TEMP/traffic-baseline.json" \
+            '(.status.traffic | map(select((.percent // 0)>0) | {revisionName, percent:(.percent // 0)})) ==
+             ($previous[0].status.traffic | map(select((.percent // 0)>0) | {revisionName, percent:(.percent // 0)}))' \
+            "$RUNNER_TEMP/traffic-baseline.json" >/dev/null
+          jq -e --slurpfile previous "$RUNNER_TEMP/traffic-baseline.json" \
+            '([.status.traffic[] | select((.percent // 0)>0) |
+                 {revisionName, percent}] | sort_by(.revisionName)) ==
+             ([$previous[0].status.traffic[] | select((.percent // 0)>0) |
+                 {revisionName, percent}] | sort_by(.revisionName))' \
+            "$RUNNER_TEMP/traffic-baseline.json" >/dev/null
+          if jq -e --slurpfile previous "$RUNNER_TEMP/traffic-baseline.json" \
+            '(.status.traffic | map(select((.percent // 0)>0) | {revisionName, percent:(.percent // 0)})) ==
+             ($previous[0].status.traffic | map(select((.percent // 0)>0) | {revisionName, percent:(.percent // 0)}))' \
+            "$RUNNER_TEMP/traffic-changed.json" >/dev/null; then
+            echo "::error::Production traffic mismatch must fail closed"
+            exit 1
+          fi
+          echo "jq_traffic_compatibility=PASS positive_and_negative" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Dispatch exactly one verified V3 release
         shell: bash

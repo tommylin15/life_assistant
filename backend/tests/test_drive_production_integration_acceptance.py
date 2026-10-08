@@ -291,6 +291,8 @@ class DriveAIProviderScopedDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
             ai_enrichment_fallback_model="openai/gpt-oss-120b",
             ai_enrichment_tertiary_provider="openrouter",
             ai_enrichment_tertiary_model="openrouter/free",
+            codex_primary_enabled=False,
+            codex_shared_model="",
         )
 
     async def test_combined_failure_retains_mask_93_for_gemini_and_openrouter(self):

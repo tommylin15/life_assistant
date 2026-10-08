@@ -83,6 +83,20 @@ class V3PipelineContractTests(unittest.TestCase):
             self.assertIn(step, source)
         self.assertNotIn("gcloud builds triggers delete", source)
 
+    def test_cutover_requires_exact_serving_revision_and_ten_retained(self):
+        source, _ = load("v3-cutover-disable-triggers.yml")
+        for requirement in (
+            "VERIFIED_RELEASE_SHA",
+            "LIVE_REVISION",
+            "EXPECTED_TAG",
+            "gcloud run revisions describe",
+            "v3_image_identity.py",
+            "--resource revision",
+            'test "$REV_COUNT" -le 10',
+        ):
+            self.assertIn(requirement, source)
+        self.assertNotIn("value(spec.template.spec.containers[0].image)", source)
+
     def test_one_time_bootstrap_cannot_trigger_on_every_push(self):
         source, data = load("v3-initial-bootstrap.yml")
         self.assertIn(".github/workflows/v3-initial-bootstrap.yml",

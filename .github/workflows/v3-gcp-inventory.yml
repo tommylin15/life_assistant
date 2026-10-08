@@ -49,6 +49,38 @@ jobs:
           if any(v["status"] != "PASS" for v in d["checks"].values()):
               raise SystemExit("Inventory partial: missing GCP read permissions or API readback")
           PY
+      - name: Verify both retired life_assistant Cloud Build triggers disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/v3-gcp-inventory.json" <<'PY'
+          import json, os, sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              checks = json.load(f)["checks"]
+          observed = checks["cloud_build_triggers"]
+          expected = {
+              "life-assistant-v2-main": "70ca60f2-8519-40c4-9422-5ac78f1b355f",
+              "life-assistant-v2-release": "892a893e-173f-49b2-9055-d5a9adc21496",
+          }
+          triggers = observed.get("triggers", [])
+          actual = {t["name"]: t for t in triggers}
+          ok = (
+              observed["status"] == "PASS"
+              and len(triggers) == len(expected)
+              and set(actual) == set(expected)
+              and all(actual[name]["id"] == ident
+                      and actual[name].get("disabled") is True
+                      for name, ident in expected.items())
+          )
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              for name, ident in expected.items():
+                  t = actual.get(name, {})
+                  status = "PASS" if t.get("id") == ident and t.get("disabled") is True else "FAIL"
+                  print(f"- retired_trigger_readback={status} name={name} id={ident}", file=out)
+              print(f"- retired_triggers_all_disabled={'PASS' if ok else 'FAIL'}", file=out)
+          if not ok:
+              raise SystemExit("Retired life_assistant triggers not both confirmed disabled")
+          PY
       - name: Recheck only bounded legacy GCS CI/CD bucket object metadata
         shell: bash
         run: |

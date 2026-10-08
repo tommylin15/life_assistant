@@ -140,7 +140,7 @@ def prepare():
 
 
 def flutter_sdk():
-    releases = json.loads(fetch('https://storage.googleapis.com/flutter_infra_release/flutter/releases/releases_linux.json'))
+    releases = json.loads(fetch('https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json'))
     release = next(r for r in releases['releases'] if r['version'] == '3.47.3'
                    and r['channel'] == 'stable' and r.get('dart_sdk_arch', 'x64') == 'x64')
     archive = STATE / 'flutter.tar.xz'

@@ -1,0 +1,47 @@
+name: V3 Legacy GCS Object Inventory - Read Only
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/v3-legacy-gcs-objects.yml
+      - .github/scripts/v3_gcs_object_inventory.py
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate for bounded metadata-only object inventory
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read object names/counts privately and emit only aggregates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/v3_gcs_object_inventory.py \
+            --project "$GCP_PROJECT_ID" \
+            | tee "$RUNNER_TEMP/v3-gcs-object-inventory.json"
+          python - "$RUNNER_TEMP/v3-gcs-object-inventory.json" <<'PY'
+          import json,os,sys
+          with open(sys.argv[1], encoding="utf-8") as f:
+              o=json.load(f)
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as f:
+              print("## Legacy GCS object inventory — read only",file=f)
+              for b in o["buckets"]:
+                  print(f"- {b['bucket']}: {b['readback']}, object count={b.get('objects','UNKNOWN')}, deletion eligible=NO",file=f)
+              print("No GCS object, bucket, backup or application data was changed.",file=f)
+          PY

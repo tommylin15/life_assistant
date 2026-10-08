@@ -231,9 +231,21 @@ jobs:
           set -euo pipefail
           npm install --global firebase-tools
           CHANNEL="v3-$(printf '%s' "$RELEASE_SHA" | cut -c1-10)"
+          set +e
           firebase hosting:channel:deploy "$CHANNEL" \
             --expires 1d --project "$GCP_PROJECT_ID" --json \
-            > "$RUNNER_TEMP/v3-hosting-preview.json"
+            > "$RUNNER_TEMP/v3-hosting-preview.json" \
+            2> "$RUNNER_TEMP/v3-hosting-preview-stderr"
+          CODE=$?
+          set -e
+          if [ "$CODE" -ne 0 ]; then
+            python .github/scripts/v3_firebase_error.py \
+              "$RUNNER_TEMP/v3-hosting-preview.json" \
+              "$RUNNER_TEMP/v3-hosting-preview-stderr" "$CODE" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::error::Firebase pinned Preview deployment failed; provider message withheld"
+            exit 1
+          fi
           PREVIEW="$(jq -r '[.. | objects | .url? // empty |
                      select(type=="string" and (contains("web.app") or contains("firebaseapp.com")))] |
                      first // empty' "$RUNNER_TEMP/v3-hosting-preview.json")"

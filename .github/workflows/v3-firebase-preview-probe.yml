@@ -1,0 +1,103 @@
+name: V3 Firebase Hosting Preview Probe (no production changes)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/v3-firebase-preview-probe.yml
+      - .github/scripts/v3_firebase_error.py
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      CLOUD_RUN_SERVICE: life-assistant-api
+      CANDIDATE_REVISION: life-assistant-api-00178-xoq
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Fail closed unless expected 0 percent ready candidate exists
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            | jq -e --arg rev "$CANDIDATE_REVISION" \
+              '[.status.traffic[] | select(.revisionName==$rev and
+                (.percent // 0)==0)] | length>=1'
+          gcloud run revisions describe "$CANDIDATE_REVISION" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            | jq -e '[.status.conditions[] | select(.type=="Ready" and .status=="True")] | length==1'
+      - name: Prepare bounded static diagnostic Hosting content and pinned rewrites
+        run: |
+          set -euo pipefail
+          mkdir -p build/web
+          printf '<html><body>V3 PREVIEW PROBE ONLY</body></html>\n' \
+            > build/web/index.html
+          printf 'diagnostic-only-%s\n' "$GITHUB_SHA" > build/web/release.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path("firebase.json")
+          doc=json.loads(path.read_text())
+          for rewrite in doc["hosting"]["rewrites"]:
+              if rewrite.get("run", {}).get("serviceId") == "life-assistant-api":
+                  rewrite["run"]["pinTag"]=True
+          path.write_text(json.dumps(doc, indent=2)+"\n")
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools
+      - name: Deploy disposable pinned Preview and capture bounded diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          firebase hosting:channel:deploy v3-candidate-diagnostics \
+            --expires 1d --project "$GCP_PROJECT_ID" --json \
+            > "$RUNNER_TEMP/firebase-preview.json" \
+            2> "$RUNNER_TEMP/firebase-preview-stderr"
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            python .github/scripts/v3_firebase_error.py \
+              "$RUNNER_TEMP/firebase-preview.json" \
+              "$RUNNER_TEMP/firebase-preview-stderr" "$code" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::error::Firebase Preview deployment did not pass; sanitized categories above"
+            exit 1
+          fi
+          python - "$RUNNER_TEMP/firebase-preview.json" <<'PY'
+          import json,sys
+          with open(sys.argv[1]) as f: data=json.load(f)
+          urls = []
+          def visit(o):
+              if isinstance(o, dict):
+                  for key,value in o.items():
+                      if (key == "url" and isinstance(value,str)
+                          and value.startswith("https://")
+                          and ".web.app" in value):
+                          urls.append(value)
+                      visit(value)
+              elif isinstance(o,list):
+                  for v in o:visit(v)
+          visit(data)
+          if not urls:
+              raise SystemExit("Preview URL was not verified")
+          print("preview_probe=PASS url="+urls[0])
+          PY

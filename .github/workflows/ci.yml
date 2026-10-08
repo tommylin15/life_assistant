@@ -132,9 +132,14 @@ jobs:
           node --check .github/scripts/verify_drive_knowledge_production.mjs
           python -m py_compile backend/scripts/run_drive_knowledge_runtime_acceptance.py
           python -m py_compile backend/scripts/run_drive_google_integration_acceptance.py
+          python -m py_compile .github/scripts/v3_firebase_error.py
+          python -m py_compile .github/scripts/v3_gcs_object_inventory.py
           python -m py_compile .github/scripts/v3_image_identity.py
           python -m py_compile .github/scripts/v3_revision_retention.py
           python -m py_compile .github/scripts/v3_gcp_inventory.py
+
+      - name: Test V3 Firebase CLI diagnostics secret redaction
+        run: python -m unittest tests/test_v3_firebase_error.py -v
 
       - name: Test V3 Cloud Run GHCR digest/cache identity
         run: python -m unittest tests/test_v3_image_identity.py -v

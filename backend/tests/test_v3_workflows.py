@@ -92,7 +92,8 @@ class V3PipelineContractTests(unittest.TestCase):
         source, _ = load("v3-cutover-disable-triggers.yml")
         for step in ("Post-promotion live health", "Controlled rollback rehearsal",
                      "Retain latest 10 revisions", "conclusion==\"success\"",
-                     "updateMask=disabled", "disabled==true"):
+                     "gcloud beta builds triggers export", "gcloud builds triggers import",
+                     "disabled: true", "disabled==true"):
             self.assertIn(step, source)
         self.assertNotIn("gcloud builds triggers delete", source)
 

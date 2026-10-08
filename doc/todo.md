@@ -10,6 +10,8 @@
 
 **本輪範圍：文件先行，NOT DEPLOYED / PARTIAL**。正式設計以 `ci_cd_ghcr_release_policy.md` 為準：GitHub Actions 完整測試 → manual full-SHA GHCR 公開映像發布 → Cloud Run 固定 digest 0% 候選 → Firebase Preview / 真實 acceptance → promotion / rollback。新流程禁止 Cloud Build 呼叫及主動 GCS/Artifact Registry 寫入；歷史 Cloud Build 僅獨立 WIF 唯讀診斷＋遮罩 Actions logs。Cloud Build V2 操作文件保留歷史追溯，不再作為未來 release target。
 
+**新增核准 retention 規則**：Cloud Run `life-assistant-api` 保留最新 **10 個 Revision**（非 2）；候選／正式驗收期間暫時可超過，只有 promotion 與 live gates PASS 後才能於 release Pipeline 最後安全清理。不得刪目前流量、rollback baseline 或 active candidate，且 GHCR digest 另需保留。執行與 runtime **NOT VERIFIED**。
+
 下一輪：盤點／取代現有 Cloud Build V2 triggers 與舊 GitHub Actions 發布入口；建立 Actions tests、公開 GHCR package / immutable digest、診斷與部署分離的 WIF、Cloud Run candidate / rollback 和 Firebase Preview gates。**本輪沒有停用舊 trigger、沒有修改 IAM 或部署**。保留上述 V2 cancelled candidate 與 runtime history 於 `acceptance.md`；不得把它算成 V3 PASS。
 
 ### Paused after #7 — per user instruction

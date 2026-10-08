@@ -1,4 +1,4 @@
-# One-time bootstrap retry: support modern FastAPI router metadata, preserve route assertions; CI mandatory.
+# One-time bootstrap retry: check actual OpenAPI paths for lazy included FastAPI routers; CI mandatory.
 name: V3 One-Time Controlled Release Bootstrap
 
 on:

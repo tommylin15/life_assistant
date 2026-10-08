@@ -18,7 +18,7 @@ client = TestClient(app)
 
 class DriveProjectLinkContractTests(unittest.TestCase):
     def test_project_document_routes_are_registered_and_protected(self):
-        paths = {route.path for route in app.routes if hasattr(route, "path")}
+        paths = set(app.openapi()["paths"])
         self.assertIn("/api/v1/drive/project-documents", paths)
         self.assertIn("/api/v1/drive/documents/{document_id}/projects", paths)
         self.assertIn(

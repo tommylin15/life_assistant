@@ -52,6 +52,20 @@ class V3PipelineContractTests(unittest.TestCase):
         self.assertIn("release", data["jobs"])
         self.assertNotIn("push:", source)
 
+    def test_staging_hosting_isolated_from_live_rewrites(self):
+        for filename in ("v3-release-ghcr.yml",
+                         "v3-firebase-preview-probe.yml"):
+            source, _ = load(filename)
+            with self.subTest(workflow=filename):
+                self.assertIn("life-assistant-v3-stage-tl15", source)
+                self.assertIn('cfg["hosting"]["site"]', source)
+                self.assertIn("--no-authorized-domains", source)
+                self.assertIn('test "$STAGING_HOSTING_SITE" != "$GCP_PROJECT_ID"', source)
+                self.assertNotIn("firebase deploy --only hosting", source)
+        config = (ROOT / "firebase.json").read_text()
+        self.assertNotIn('"pinTag": true', config)
+        self.assertNotIn('"site": "life-assistant-v3-stage-tl15"', config)
+
     def test_cutover_requires_successful_promoted_and_rolled_back_release(self):
         source, _ = load("v3-cutover-disable-triggers.yml")
         for step in ("Post-promotion live health", "Controlled rollback rehearsal",

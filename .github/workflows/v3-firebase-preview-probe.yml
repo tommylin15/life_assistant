@@ -22,6 +22,7 @@ jobs:
       GCP_REGION: us-central1
       CLOUD_RUN_SERVICE: life-assistant-api
       CANDIDATE_REVISION: life-assistant-api-00178-xoq
+      STAGING_HOSTING_SITE: life-assistant-v3-stage-tl15
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
@@ -63,13 +64,54 @@ jobs:
           node-version: '22'
       - name: Install Firebase CLI
         run: npm install --global firebase-tools
+      - name: Ensure dedicated staging Hosting Site (never touch production site)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$STAGING_HOSTING_SITE" = "life-assistant-v3-stage-tl15"
+          test "$STAGING_HOSTING_SITE" != "$GCP_PROJECT_ID"
+          TOKEN="$(gcloud auth print-access-token)"
+          SITE_URL="https://firebasehosting.googleapis.com/v1beta1/projects/$GCP_PROJECT_ID/sites/$STAGING_HOSTING_SITE"
+          CODE="$(curl -sS -o "$RUNNER_TEMP/v3-stage-site-get.json" -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$SITE_URL")"
+          case "$CODE" in
+            200)
+              jq -e --arg site "$STAGING_HOSTING_SITE" '.name | endswith("/sites/"+$site)' "$RUNNER_TEMP/v3-stage-site-get.json"
+              echo "staging_hosting_site=EXISTS" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            404)
+              firebase hosting:sites:create "$STAGING_HOSTING_SITE" --project "$GCP_PROJECT_ID" --json \
+                > "$RUNNER_TEMP/v3-stage-site-create.json"
+              CODE="$(curl -sS -o "$RUNNER_TEMP/v3-stage-site-get.json" -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$SITE_URL")"
+              test "$CODE" = 200
+              jq -e --arg site "$STAGING_HOSTING_SITE" '.name | endswith("/sites/"+$site)' "$RUNNER_TEMP/v3-stage-site-get.json"
+              echo "staging_hosting_site=CREATED" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "::error::Staging Hosting site read status=$CODE; no production Hosting changes"
+              exit 1
+              ;;
+          esac
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path("firebase.json")
+          cfg=json.loads(p.read_text())
+          site=os.environ["STAGING_HOSTING_SITE"]
+          assert site=="life-assistant-v3-stage-tl15" and site!=os.environ["GCP_PROJECT_ID"]
+          assert isinstance(cfg["hosting"],dict)
+          cfg["hosting"]["site"]=site
+          rewrites=cfg["hosting"]["rewrites"]
+          assert len([x for x in rewrites if x.get("run",{}).get("serviceId")=="life-assistant-api"])==2
+          assert all(x["run"].get("pinTag") is True for x in rewrites if "run" in x)
+          p.write_text(json.dumps(cfg,indent=2)+"\n")
+          PY
       - name: Deploy disposable pinned Preview and capture bounded diagnostic
         shell: bash
         run: |
           set -euo pipefail
           set +e
           firebase hosting:channel:deploy v3-candidate-diagnostics \
-            --expires 1d --project "$GCP_PROJECT_ID" --json \
+            --expires 1d --project "$GCP_PROJECT_ID" --no-authorized-domains --json \
             > "$RUNNER_TEMP/firebase-preview.json" \
             2> "$RUNNER_TEMP/firebase-preview-stderr"
           code=$?

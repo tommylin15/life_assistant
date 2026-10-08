@@ -1,4 +1,4 @@
-# One-time bootstrap retry: verify immutable GHCR digest after Cloud Run-managed cache rewrite.
+# One-time bootstrap retry: Firebase staging Hosting Site isolation; full SHA CI mandatory.
 name: V3 One-Time Controlled Release Bootstrap
 
 on:

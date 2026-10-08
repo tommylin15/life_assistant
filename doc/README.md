@@ -1,6 +1,6 @@
 # life_assistant 文件索引與治理
 
-最後更新：2026-09-28
+最後更新：2026-10-08
 
 > 這份文件是 `doc/` 的入口與角色說明。它不取代 implementation/runtime evidence；目前程式、API、schema、migration、CI/CD、deployment、infra、bug 與實際完成狀態仍以 GitHub `main` + runtime evidence 為 Source of Truth。
 
@@ -11,6 +11,7 @@
 3. `phase1_delivery_order.md`：**目前唯一的後續執行順序來源**。
 4. `acceptance.md`：各功能目前 PASS / FAIL / NOT VERIFIED 與 evidence。
 5. `release_checklist.md`：Phase 1 Release Gate。
+6. `ci_cd_ghcr_release_policy.md`：**2026-10-08 最新正式 CI/CD V3 設計／切換驗收條件（文件已核准，尚未實作）**。
 6. 需要特定領域細節時，再讀 architecture / data / migration / integration / UI / security 等專題文件。
 
 ## 文件角色
@@ -28,6 +29,7 @@
 - `phase1_delivery_order.md`：目前執行順序；若 `todo.md` / `wbs.md` 的排列不同，以本檔為準。
 - `acceptance.md`：目前驗收狀態與 evidence truth。
 - `release_checklist.md`：Phase 1 最終 release gate。
+- `ci_cd_ghcr_release_policy.md`：最新 GitHub Actions／GHCR／Cloud Run digest 版 release policy，取代 Cloud Build V2 目標。
 - `todo.md`：精簡 active backlog；只鏡射目前執行重點，不再維護另一套優先順序。
 - `progress.md`：人類可快速閱讀的進度摘要；詳細 run / revision / runtime evidence 不重複抄寫，以 `acceptance.md` 為準。
 - `wbs.md`：工作範圍分解，不是排程，也不是目前執行順序。
@@ -61,9 +63,9 @@
 - `cloud_domain_parity_design.md`
 - `cloud_domain_parity_progress.md`
 - `sqlite_postgres_backfill_progress.md`
-- `ci_cd_artifact_strategy.md`
+- `ci_cd_artifact_strategy.md`（舊 Cloud Build/Artifact Registry 歷史證據；**非** V3 依據）
 
-`cicd_artifact_strategy.md` 為舊重複檔名，已改成 redirect/stub；CI/CD artifact 策略只維護 `ci_cd_artifact_strategy.md`。
+`cicd_artifact_strategy.md` 為舊重複檔名，已改成 redirect/stub；V2 舊 artifact 證據留存在 `ci_cd_artifact_strategy.md`，V3 設計只以 `ci_cd_ghcr_release_policy.md` 為準。
 
 ## 文件優先層級
 

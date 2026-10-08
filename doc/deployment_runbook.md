@@ -1,3 +1,7 @@
+> **歷史／已被取代（2026-10-08）**：此文件保留 CI/CD V2 Cloud Build 執行與失敗證據，**不再作為正式新部署操作手冊**。新核准目標請見 [CI/CD V3 — GitHub Actions + public GHCR + Cloud Run digest](ci_cd_ghcr_release_policy.md)。V3 尚未實作／驗收；不得照此 V2 runbook 再新增 Cloud Build 主線。舊 runtime evidence 不因設計變更而消失。
+
+---
+
 # Life Assistant CI/CD V2 Deployment Runbook
 
 Status: **RESUMED / OPEN / NOT CLOSED** (2026-10-08). This replaces the deployment

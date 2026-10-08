@@ -127,7 +127,7 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 
 ## GCP / CI/CD / IAM
 
-- 2026-10-08 CI/CD V2 與追加集中發布指令取代下列歷史 GitHub Actions 自動部署主線；目前仍在真實驗收中，不得宣稱 V2 CLOSED。
+- 2026-10-08 **CI/CD V3** 決策已取代 Cloud Build-led V2 主線；新版文件見 `ci_cd_ghcr_release_policy.md`。本次只確認正式設計，不代表 GitHub Actions/GHCR/Cloud Run 新版流程已建置或驗收。
 
 - 正式派版優先走 `GitHub main → GitHub Actions → tests/build → GCP → runtime/integration validation`。
 - GitHub Actions 對 `gen-lang-client-0593591102` 使用 OIDC / Workload Identity Federation；不得建立長效 Service Account JSON key 作為一般部署憑證。
@@ -135,6 +135,16 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 - IAM 必須遵守 least privilege，不得為方便直接授予 Owner / Editor。
 - 下列高風險操作仍需使用者明確確認：重大 IAM / Service Account 擴權、跨專案或跨組織權限、production credential / secret rotation、刪除 production GCP / database / Firebase 資源、destructive migration、可能造成重大 production outage 的權限或資源變更。
 - 可使用本機 WSL 執行 dev migration、Linux/shell 驗證（包含 `bash -n`）與 GCP dev 驗收；production 部署仍以 GitHub Actions 為主線。
+
+## CI/CD V3 — 正式目標（2026-10-08，優先於下方歷史 V2）
+
+- **單一正式目標**：`ChatGPT → GitHub main → GitHub Actions 完整測試/發布公開 GHCR digest → GCP API → GitHub Actions Logs → ChatGPT`。Push 只做完整測試；Release 以 full SHA 手動啟動、GHCR 發布、Cloud Run 0%-traffic 候選驗收、Firebase Preview、經驗收後明確切流與可回滾。
+- 新流程不得呼叫 Cloud Build、不得主動寫 GCS/Artifact Registry，也不得新增其 repo/bucket；過去 Cloud Build 僅允許獨立、WIF **唯讀** 診斷。部署採**分離的最小權限 deployer**；唯讀 WIF 無法部署。
+- Cloud Run **僅允許直接讀取公開 GHCR package 的 immutable manifest digest**；package visibility/讀取、live/candidate digest、服務身份和 0% tagged URL 安全均需實測。私人 GHCR 所需的 Artifact Registry remote repo 與本決策衝突，因此失敗關閉，不自動替換架構。
+- 禁止因寫好文件而標示 V3 DONE。切換前盤點現有 workflow/Cloud Build triggers，實作後先取得 Actions、GHCR、WIF、0% revision、真實候選/Preview/Live、rollback 及未觸發 Cloud Build/未主動寫 GCS/AR 證據；再停用舊入口，不刪歷史記錄。
+- 實作與驗收規範以 `ci_cd_ghcr_release_policy.md` 為準；下方 V2 僅供稽核過往決策，不再作為新建/變更 pipeline 的目標。
+
+### 歷史政策：CI/CD V2（已被 V3 取代，保留原文）
 
 ## CI/CD V2 — 集中發布政策（2026-10-08）
 

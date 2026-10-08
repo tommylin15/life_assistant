@@ -1,3 +1,7 @@
+> **歷史 Artifact Registry / Cloud Build 策略（已被 CI/CD V3 取代，2026-10-08）**：以下保留舊部署、digest 與 cleanup 證據供稽核。新流程使用 **GitHub Actions build → 公開 GHCR immutable digest → Cloud Run 0% candidate**，不會呼叫 Cloud Build 或主動寫入 GCS／Artifact Registry。請以 [V3 正式政策](ci_cd_ghcr_release_policy.md) 為後續實作依據；現有 Artifact Registry cleanup **不得**當作新 GHCR 清理政策，也不得因新版決策而刪除 production 舊資產。
+
+---
+
 # Life Assistant CI/CD Artifact Strategy
 
 最後更新：2026-10-07

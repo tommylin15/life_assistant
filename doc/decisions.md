@@ -132,3 +132,7 @@ manual recovery remains. Scheduler and shared OmniAgent Codex boundaries stay.
 Status: IMPLEMENTING, not operational completion. Runbook:
 `deployment_runbook.md`. Existing single-user API must enforce its owner email
 allowlist; multi-owner core data separation/collaboration stays out of scope.
+
+## CI/CD V3 replacement decision — 2026-10-08 (latest)
+
+The user has superseded the Cloud Build-led V2 target above with the GitHub Actions + **public GHCR** design. Main pushes run complete Actions quality gates; an explicitly invoked, exact-main-SHA release builds/publishes one GHCR image and deploys Cloud Run by **immutable digest** with **0% tagged candidate**, candidate/Preview/live acceptance, controlled traffic promotion and rollback. New workflows never invoke Cloud Build or proactively write GCS/Artifact Registry; Cloud Build history remains reachable through an independent WIF read-only diagnostic GitHub Actions workflow and masked logs. Read-only WIF and deployer WIF are separate permission sets. Source of truth for detailed behavior is `ci_cd_ghcr_release_policy.md` and latest `PROJECT_RULES.md`. The V2 paragraph above is history only. **Status: APPROVED SPEC / IMPLEMENTATION NOT VERIFIED**; no runtime completion claim.

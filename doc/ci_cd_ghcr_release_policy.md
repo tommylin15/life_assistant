@@ -1,0 +1,82 @@
+# life_assistant CI/CD V3 — GitHub Actions + public GHCR + Cloud Run digest
+
+**Decision date:** 2026-10-08  
+**State:** APPROVED TARGET / DOCUMENTATION ONLY / NOT YET IMPLEMENTED  
+**Owner:** life_assistant; applies to `tommylin15/life_assistant` main.  
+**Authority:** This document and the latest V3 section of `PROJECT_RULES.md` supersede the Cloud Build-led CI/CD V2 target. Earlier V2 runbooks and acceptance records remain historical evidence, not instructions to keep operating Cloud Build in the new path.
+
+## 1. Non-negotiable boundaries
+
+- Main release path: `ChatGPT → GitHub main → GitHub Actions → GCP API → GitHub Actions Logs → ChatGPT`.
+- GitHub Actions performs the complete test gates, Docker build and **public GHCR** publication. No new workflow invokes or submits Cloud Build builds/triggers or proactively writes to **GCS** or **Artifact Registry**. No new Artifact Registry repository, remote repository, bucket, paid VM, or long-lived GCP service-account key is introduced.
+- Cloud Run is deployed only from an **exact GHCR manifest digest** (e.g. `ghcr.io/OWNER/IMAGE@sha256:...`), not a mutable tag; use a **0%-traffic tagged candidate**, prove acceptance, then explicitly promote or restore captured previous traffic assignments.
+- Cloud Build remains available **only as a legacy, read-only diagnostic source**, accessed with WIF from a dedicated manual GitHub Actions workflow. Diagnostic readback is not proof of a successful new V3 build.
+- Retain Firebase Hosting/Flutter Web, FastAPI/Cloud Run, PostgreSQL/Alembic, existing OAuth/integrations/Cloud Run jobs and owner-isolation gates. Avoid scheduled business-job mutations. Do not modify omniAgent or Janus.
+- Any Google-controlled internal import/cache of a public image, or Firebase Hosting managed internal storage, is **not** the same as an explicit workflow write to a user-managed GCS bucket or Artifact Registry repository. Exact GCP billing remains subject to runtime/billing evidence.
+
+## 2. Verified feasibility and preconditions
+
+Google Cloud's Cloud Run service **and job** deployment documentation allows **direct deployment of public images from GitHub Container Registry**; a private GHCR image would require an Artifact Registry remote repository and is therefore disallowed in V3. Verify the **GHCR package** itself is public (a public repository alone does not establish package visibility). Confirm unauthenticated manifest/digest retrieval, region, amd64/OCI support, container `PORT` contract, and the actual service/job deploy readback before declaring PASS.
+
+Reference: https://docs.cloud.google.com/run/docs/deploying  
+Reference: https://docs.cloud.google.com/run/docs/create-jobs  
+Reference: https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images
+
+Public container metadata and layers are pullable by third parties. Never bake tokens, DB credentials, private fixture files or user data into build context, layers, labels, image, build args, cache, attestations or public workflow output. Perform image vulnerability/secret scanning before publication; publishing requires explicit scan PASS.
+
+## 3. Separated GitHub Actions workflows
+
+### A — Main/PR quality gate (automatic, no deployment)
+- `push: main` and relevant PR checks: checkout exact SHA, Python unit/API/integration tests, Alembic offline/preflight and migration contracts, Flutter analyze/test/web build and branding, security/dependency/secret scanning, Dockerfile/build contract, owner/auth boundaries, and required CI contract tests.
+- Produce structured job summaries and masked logs. **No** GCP mutation, GHCR publishing, Cloud Run/Firebase deployment or Cloud Build trigger in this stage.
+- Missing or failed mandatory gate means FAIL; neither skipped nor cancelled is PASS. Tests may not be weakened to attain a green status.
+- The actual required-test matrix and runtime are implementation tasks; nothing in this document certifies those jobs are currently active.
+
+### B — Immutable image publication (manual exact-SHA release)
+- A `workflow_dispatch` release accepts only a complete 40-character commit SHA verified as current/authorized `main` and with passing required quality checks for that SHA. A stale/SHA-mismatched release fails closed.
+- Build backend image **once on GitHub-hosted runner**, tag with full source SHA, use `GITHUB_TOKEN` with minimally scoped `packages: write`, publish to GHCR and resolve the immutable **registry manifest digest** from the push result. Preserve source SHA, image digest, GitHub run/job URL, SBOM/provenance (when implemented), and tool versions as evidence.
+- Validate manifest digest format and an unauthenticated pull before proceeding. Never substitute a Docker image ID, local build hash or mutable tag for the remote digest. Guard against multi-architecture manifest/index confusion; Cloud Run consumes the deployed manifest digest.
+- Use concurrency controls to serialize promotions; repeated same SHA/digest/phase is idempotent. Recheck `main` and captured live state directly before any mutation.
+
+### C — Candidate stage (manual gated release, 0% traffic)
+- Authenticate to GCP with GitHub OIDC/WIF (no downloaded persistent key), with the restricted **deployer** identity, not the diagnostic identity. Record current Cloud Run traffic percentages/revisions, active tags, service/job image digests and runtime configuration before changing anything.
+- Validate backward-compatible Alembic migration plan and existing owner/data isolation before running the approved, bounded idempotent migration job. Migrations may touch live DB even if candidate gets 0%; a DB-impacting release must have separate safety approval/gates and recovery plan. No automatic destructive migration or DB downgrade.
+- Deploy service revision with exact `ghcr.io/...@sha256:...`, `--no-traffic`, and a unique tagged candidate URL. **0% traffic does not mean inaccessible**: tagged URLs require the same authentication/access protection, no sensitive response exposure, and must be retired when no longer needed.
+- Migration runner, API candidate and acceptance runner should use the *same* release digest where the existing topology requires it. Preserve existing runtime service account, VPC, env/secrets and job configs unless an explicit reviewed change is necessary.
+- Run candidate health/readiness, 401/authorization, authenticated API, DB persistence, owner isolation, Activity/audit, migration and provider-failure/timeout contracts, with bounded retries and redacted logs. Candidate test failure halts before promotion and preserves current production traffic.
+
+### D — Firebase Preview + release promotion
+- For backend changes, create an isolated Firebase Hosting Preview targeted at the tagged candidate (pin appropriate backend route/tag); even unchanged Flutter source needs candidate-compatible browser acceptance. Never claim intercepted/mocked API UI tests demonstrate real provider integration.
+- Gate desktop/mobile browser flows, auth redirect, manifest/branding, cache, API routing, and real approved integration tests. Preview PASS is not Live PASS.
+- Only after all required candidate/Preview gates PASS may an explicitly authorized promotion allocate production Cloud Run traffic to the exact verified revision; record resulting live digest, revision, URL and traffic distribution. Publish verified Firebase Hosting content when relevant, then run live smoke, true-account OAuth/integration, frontend↔backend↔PostgreSQL and scheduled-resource readback gates.
+- Release workflows must not alter scheduler cadence or execute unrelated production business jobs.
+
+### E — Rollback and recovery
+- Persist the **pre-promotion** immutable revision IDs, traffic percentages, Hosting release ID and SHA in GitHub run evidence before mutation. A failure during promotion requires a readback of actual traffic and Hosting release state before proceeding.
+- Restore original Cloud Run traffic split precisely; restore the prior Firebase Hosting release if live web release changed; verify live readiness, 401/authorized behavior and functional/browser integration again. Rollback is an **action requiring confirmation when high-risk**; no destructive DB rollback.
+- Block superseded release SHAs, overlapping promotion and ambiguous/partial state. Existing migration/schema changes may require forward-fix rather than reverting DB.
+- Do not prune a digest referenced by live/candidate/rollback revisions or Jobs; do not delete existing GCP artifacts or Cloud Run resources as part of this migration.
+
+## 4. WIF least privilege and diagnostic log contract
+
+Two logical permission sets must stay separate:
+1. **Diagnostic reader (read only)**: GitHub OIDC/WIF provider restricted by repo, branch/ref and relevant workflow/environment claims. Cloud Build build metadata lookup: narrowly scoped `cloudbuild.builds.get` (and `list` only if discovery is required); read relevant Cloud Logging records only with `logging.logEntries.list` where approved. No `cloudbuild.builds.create`, GCS object read/write, Artifact Registry write, Cloud Run deploy or IAM administration. GCP logs stored only in GCS may not be readable under this no-GCS-read contract; in that case output `NOT AVAILABLE`, never invent failures.
+2. **Release deployer**: separate trusted workflow/environment with `id-token: write`, scoped Cloud Run deployment/traffic/job permissions plus `iam.serviceAccounts.actAs` only on reviewed runtime SAs; Firebase deployment permissions via separately scoped principal where applicable. Read-only WIF is **insufficient** for deployment. Do not use project Owner/Editor or broad IAM Policy changes; validate exact roles and bindings against deployed resources.
+
+Diagnostic GitHub Actions `workflow_dispatch` takes a validated historic Cloud Build ID, requests only GCP **metadata** via API, and returns bounded, whitelisted output:
+- build ID, status (`SUCCESS`/`FAILURE`/`CANCELLED`/`TIMEOUT`/etc as actually returned), created/finished times;
+- failing step ID/name and status **only when returned**, failureInfo/statusDetail if present;
+- sanitized and bounded error category/summary, sources masked before GitHub logs. GitHub automatic masking alone is insufficient; never print environment, raw logs, tokens or unredacted arbitrary JSON.
+- `NOT FOUND`, `PERMISSION DENIED`, `NOT VERIFIED` and `NO STEP DETAILS` are distinct evidence states. An empty step list must never be labeled PASS.
+
+ChatGPT reads **GitHub Actions run/job logs** through its connected GitHub access. WIF authenticates Actions→GCP, not ChatGPT→GCP; successful workflow run/log readback and GCP permissions must be verified independently. No passive polling/automatic ChatGPT delivery is implied.
+
+## 5. Implementation order and cutover criteria
+
+1. Inventory existing `.github/workflows/`, `cloudbuild.yaml`, Cloud Build 2nd Gen triggers and IAM. Save legacy deployment/rollback evidence; **do not delete** existing GCP assets.
+2. Implement Actions main/PR full test gate, GHCR public package/scans/digest publication, and the independent read-only legacy Cloud Build diagnostic workflow. Verify actual WIF trust conditions and permission enforcement.
+3. Implement digest-pinned migration/job/candidate, tagged URL acceptance, Firebase Preview, traffic promotion and exact-split rollback with interlocks. Use controlled dry-run and representative failure injection.
+4. Once new workflow is verified, **disable old Cloud Build push/manual release triggers** and retire legacy GitHub Actions Cloud Build submit paths, without removing past logs or artifacts. This change requires actual GCP/readback evidence and is **not performed by documentation commit**.
+5. Record Actions run, source SHA, public GHCR digest/readback, WIF identity, Cloud Run revision/0% state, candidate and Preview results, promotion/rollback simulations, live runtime/integration, plus absence of new pipeline Cloud Build/GCS/Artifact Registry API writes. Cost comparison must be measured, not assumed.
+
+**Release status:** documentation and decision may be PASS while **implementation / tests / CI / deployment / runtime / integration = NOT VERIFIED** until observed. Mark overall **PARTIAL** until all required evidence PASS. Failures and historical V2 traces must remain visible, not be relabeled green.

@@ -6,21 +6,11 @@
 
 ## Current
 
-### CI/CD V2 — active user-requested infrastructure work
+### CI/CD V3 — 已核准新設計、等待實作與全鏈驗收
 
-**RESUMED / OPEN / NOT CLOSED**. Cloud Build 2nd Gen main push CI only; explicit
-full-SHA manual Release → candidate/Preview → real acceptance → live/post-deploy.
-Runbook: `deployment_runbook.md`. True main-push and manual Release evidence,
-cost comparison, owner isolation and all existing provider/UI gates remain
-mandatory. No scheduler timing changes; no OmniAgent/Janus implementation work.
+**本輪範圍：文件先行，NOT DEPLOYED / PARTIAL**。正式設計以 `ci_cd_ghcr_release_policy.md` 為準：GitHub Actions 完整測試 → manual full-SHA GHCR 公開映像發布 → Cloud Run 固定 digest 0% 候選 → Firebase Preview / 真實 acceptance → promotion / rollback。新流程禁止 Cloud Build 呼叫及主動 GCS/Artifact Registry 寫入；歷史 Cloud Build 僅獨立 WIF 唯讀診斷＋遮罩 Actions logs。Cloud Build V2 操作文件保留歷史追溯，不再作為未來 release target。
 
-暫停 checkpoint：Release `af461348-13ee-4f43-833a-428f06f4e813` CANCELLED；
-Candidate `00174-luw` 0%，正式 `00173-gpf` 100%。Migration 與四項 core
-execution 已 PASS；Firebase Preview/Live、其餘 runtime/UI/provider gates 與
-cleanup 尚未完成。詳見 `acceptance.md` 最後 checkpoint。2026-10-08 使用者已要求接續
-CI/CD V2；本輪先補後端單獨變更的 Candidate Preview 安全契約。新的 Push CI、
-完整 SHA manual Release、GCP 殘留 execution/readback、Preview/Live 與 providers
-均須重新取證；不得把歷史 PASS 當成此次 release PASS。
+下一輪：盤點／取代現有 Cloud Build V2 triggers 與舊 GitHub Actions 發布入口；建立 Actions tests、公開 GHCR package / immutable digest、診斷與部署分離的 WIF、Cloud Run candidate / rollback 和 Firebase Preview gates。**本輪沒有停用舊 trigger、沒有修改 IAM 或部署**。保留上述 V2 cancelled candidate 與 runtime history 於 `acceptance.md`；不得把它算成 V3 PASS。
 
 ### Paused after #7 — per user instruction
 

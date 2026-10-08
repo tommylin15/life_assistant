@@ -1,6 +1,6 @@
 # life_assistant — Active TODO
 
-最後更新：2026-10-07
+最後更新：2026-10-08
 
 > 本檔只保留**目前 active / next / non-blocking backlog**。正式封板進度以 `progress.md` 為準；完成條件與 runtime evidence 以 `acceptance.md`、GitHub Actions 與 deployed runtime 為準。不要在本檔維護另一套歷史完成清單。
 
@@ -8,11 +8,16 @@
 
 ### CI/CD V2 — active user-requested infrastructure work
 
-**IMPLEMENTING / NOT CLOSED**. Cloud Build 2nd Gen main push CI only; explicit
+**PAUSED BY USER / OPEN / NOT CLOSED**. Cloud Build 2nd Gen main push CI only; explicit
 full-SHA manual Release → candidate/Preview → real acceptance → live/post-deploy.
 Runbook: `deployment_runbook.md`. True main-push and manual Release evidence,
 cost comparison, owner isolation and all existing provider/UI gates remain
 mandatory. No scheduler timing changes; no OmniAgent/Janus implementation work.
+
+暫停 checkpoint：Release `af461348-13ee-4f43-833a-428f06f4e813` CANCELLED；
+Candidate `00174-luw` 0%，正式 `00173-gpf` 100%。Migration 與四項 core
+execution 已 PASS；Firebase Preview/Live、其餘 runtime/UI/provider gates 與
+cleanup 尚未完成。詳見 `acceptance.md` 最後 checkpoint。未經恢復指令不啟動 Release。
 
 ### Paused after #7 — per user instruction
 

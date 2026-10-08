@@ -1,6 +1,6 @@
 # Life Assistant CI/CD V2 Deployment Runbook
 
-Status: **IMPLEMENTING / NOT CLOSED** (2026-10-08). This replaces the deployment
+Status: **PAUSED BY USER / OPEN / NOT CLOSED** (2026-10-08). This replaces the deployment
 runtime release only after all V2 live gates pass. Existing product completion evidence
 and existing provider FAIL records remain authoritative.
 
@@ -147,3 +147,11 @@ evidence before formal cutover. No automatic claim that V2 is cheaper.
   rejection, live gates check real owner session and invalid identity rejection.
   Shared Codex additionally retains stable owner/project isolation gates.
   This does not establish multi-owner core data isolation or add collaboration.
+
+## Resume after user pause
+
+1. Wait for explicit user resume. Read the final checkpoint in `acceptance.md`.
+2. Confirm cancelled Build status, remaining Job executions, production traffic and Hosting version. Do not launch duplicate writing executions.
+3. Confirm current main full SHA and applicable successful Push CI; a documentation push changes main SHA. Previous candidate is evidence for its original SHA, not the new SHA.
+4. Review Ready/migration/API/auth contracts and invoke candidate-only manual Release for the chosen current SHA. Preserve all unfinished gates and existing Provider blockers.
+5. Promote only after every required candidate/preview gate passes; then execute live/post-deploy gates. Do not downgrade DB or delete images merely because a Build was cancelled.

@@ -221,3 +221,29 @@ See `deployment_runbook.md`; product closure count is unchanged by CI/CD work.
 - No Docker push, migration job, Cloud Run deployment or Firebase publication in Push CI. Full-SHA manual Release and live gates remain pending.
 - Worker list-price estimate: 6.8116 minutes × $0.006 = **$0.04087**, before shared free allowance; not an invoice. Public standard GitHub runner remains $0 runner cost under its existing policy. V2 is not claimed cheaper. Failed build time and release/job/log costs must also be counted.
 - Earlier build `29f9f507-64d5-4a92-a0fe-3bc9350c3eba` failed on official Flutter manifest URL 404; corrected root verified against official manifest and 3.47.3 checksum.
+
+### Manual Release attempt evidence (2026-10-08)
+
+- Latest SHA `09e89ccd59d71a2b5d561e0b079dd863e5b3e32c`: Push CI `c84b3516-20ec-4db3-ad7f-1b3fe8af1993` SUCCESS (125.993 seconds; worker list-price $0.01260).
+- Manual candidate-only Release `b4ca14a1-c29a-44cb-9a02-ecd9fd83f5ac` FAILED at Scheduler baseline readback: deployer lacks `cloudscheduler.jobs.list`. Backend 403 / Flutter 63 tests and Web/Docker build passed; no migration, candidate deployment or Firebase Preview occurred.
+- Immutable image: `us-central1-docker.pkg.dev/gen-lang-client-0593591102/cloud-run-source-deploy/life-assistant-backend@sha256:d882d80ad30f5dc898c3b306a7c0bdacb3a68872bf0cb1526c2ebaf80d9460ff`.
+- Release worker runtime 556.119 seconds (9.26865 min), list-price $0.05561 before shared allowances; failed releases cost worker time too. Cloud Run Job costs not incurred by this attempt. This is an estimate, not billing-export evidence.
+- Existing user credential readback: us-central1 Scheduler `janus-ingestion-daily`, `30 * * * *`, Asia/Taipei, ENABLED; untouched. Life Assistant jobs remain the same three existing names. This does not satisfy automated deployer readback.
+- Auto-review rejected the additional Scheduler Viewer IAM grant because previous approvals did not include it. Exact read-only grant requested separately; no bypass or gate removal.
+- Candidate/live revision, Preview/live publication, true UI/Provider/Integration acceptance and cleanup remain pending. **V2 OPEN / NOT CLOSED**.
+
+### CI/CD V2 暫停 checkpoint — 2026-10-08
+
+狀態：**PAUSED BY USER / OPEN / NOT CLOSED**。以下為真實 runtime evidence，不代表完整 Release PASS。
+
+- Release source SHA：`09e89ccd59d71a2b5d561e0b079dd863e5b3e32c`；Push CI `c84b3516-20ec-4db3-ad7f-1b3fe8af1993` SUCCESS。
+- 使用者核准後已套用 deployer 的 `roles/cloudscheduler.viewer`；本輪 deployer Scheduler/Jobs baseline readback PASS。排程未修改，未執行生活總排程或每小時監控。
+- Manual candidate-only Build `af461348-13ee-4f43-833a-428f06f4e813` 已依使用者「先暫停」取消，讀回 **CANCELLED**。執行時間 2026-10-08 13:34:12–14:00:06 Asia/Taipei（1554.286 秒）；worker 牌價估算 US$0.15543，未扣共用免費額度、不含 Jobs/Logs/Registry，非帳單。
+- Migration `life-assistant-db-migrate-m2jcx` PASS：pre/post `20261007_0010`，`verify-current`，沒有重複 schema migration。
+- Candidate `life-assistant-api-00174-luw` 0% 流量；正式 `life-assistant-api-00173-gpf` 保持 100%。Candidate digest：`sha256:53d9a712e7a5262ce5c8a9f452d6e9cc531f38e78922fcd40f40712247b1a201`。
+- Candidate health/readiness/database、未登入 401、OAuth redirect、single-user owner allowlist PASS；這不等於全部 Auth/owner/live gates 已完成。
+- Cloud domain parity PASS：`life-assistant-core-acceptance-jgz2t`；Checklist PASS：`life-assistant-core-acceptance-d67jw`；idempotency PASS：`life-assistant-core-acceptance-mhbmk`。
+- 取消時已啟動的 Google failure execution `life-assistant-core-acceptance-h65nm` 讓它完成清理；後續唯讀 readback succeededCount=1、runningCount=0（PASS）。Cloud Build 已取消，不把此結果寫成整輪 Release PASS。
+- Firebase Preview/Live 均未發布；既有 live Hosting baseline version `7269b54b36337ed6`。尚缺 SQLite backfill success/failure、真實 HTTPS Google/DB/browser、POST/Drive/Calendar/Shared Codex/External Provider、Preview/Live UI/integration、post-deploy readback 與安全 image cleanup。
+- Provider 既有 Gemini/OpenRouter FAIL 保持獨立 blocker；本輪尚未執行 Provider gate，沒有新增 Provider PASS 證據。Image 沒有實體刪除，沒有新 GCS evidence bucket。
+- 舊 Actions 自動部署入口已改 manual；main 文件 push 只會觸發 CI，不恢复 Release。恢復前先讀回殘留 executions/traffic/Hosting、確認 main 完整 SHA、適用 CI/Ready gate；不得重跑正在執行的資料寫入型 Job或自動 downgrade DB。

@@ -86,7 +86,7 @@ jobs:
             --vpc-egress private-ranges-only \
             --max-retries 0 \
             --task-timeout 10m \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,DRIVE_ACCEPTANCE_USER_SUB=$DRIVE_ACCEPTANCE_USER_SUB,DRIVE_ACCEPTANCE_GOOGLE_FILE_ID=$DRIVE_ACCEPTANCE_GOOGLE_FILE_ID,GOOGLE_PICKER_APP_ID=$GOOGLE_PICKER_APP_ID" \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,DRIVE_ACCEPTANCE_USER_SUB=$DRIVE_ACCEPTANCE_USER_SUB,DRIVE_ACCEPTANCE_GOOGLE_FILE_ID=$DRIVE_ACCEPTANCE_GOOGLE_FILE_ID,GOOGLE_PICKER_APP_ID=$GOOGLE_PICKER_APP_ID,CODEX_PRIMARY_ENABLED=true" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --quiet
 
@@ -132,6 +132,21 @@ jobs:
             --region "$GCP_REGION" \
             --args=-m,scripts.run_drive_google_integration_acceptance \
             --task-timeout 10m \
+            --wait \
+            --quiet
+
+      - name: Run shared Codex caller identity and isolation acceptance
+        id: codex_identity
+        continue-on-error: true
+        run: |
+          # This job must use the real application-side runtime identity,
+          # not the GitHub deployer's WIF identity.
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_shared_codex_identity_acceptance \
+            --task-timeout 6m \
             --wait \
             --quiet
 
@@ -250,6 +265,7 @@ jobs:
             echo "- Deployed production UI artifact: ${{ steps.production_ui.outcome }}"
             echo "- OAuth client redirect: ${{ steps.oauth_config.outcome }}"
             echo "- Live external AI provider: ${{ steps.external_ai.outcome }}"
+            echo "- Shared Codex signed identity and isolation: ${{ steps.codex_identity.outcome }}"
             if [ "${{ steps.external_ai.outcome }}" != "success" ]; then
               echo "- Gemini direct diagnostic: ${{ steps.gemini_diagnostic.outcome }}"
               echo "- OpenRouter direct diagnostic: ${{ steps.openrouter_diagnostic.outcome }}"
@@ -287,6 +303,10 @@ jobs:
           fi
           if [ "${{ steps.external_ai.outcome }}" != "success" ]; then
             echo "::error::Live external AI production acceptance is not PASS."
+            FAILED=1
+          fi
+          if [ "${{ steps.codex_identity.outcome }}" != "success" ]; then
+            echo "::error::Private shared Codex life-assistant consumer runtime integration is not PASS."
             FAILED=1
           fi
           if [ "${{ steps.real_google.outputs.configured }}" != "true" ]; then

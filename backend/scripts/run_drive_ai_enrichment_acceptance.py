@@ -128,6 +128,16 @@ async def _acceptance_user() -> dict:
     return dict(ACCEPTANCE_USER)
 
 
+def _acceptance_provider_resolver(provider: AIEnrichmentProvider):
+    """Match the production resolver's owner_id keyword without external AI calls."""
+
+    def resolve(*, owner_id: uuid.UUID | None = None) -> AIEnrichmentProvider:
+        del owner_id
+        return provider
+
+    return resolve
+
+
 def _expect(response: httpx.Response, expected: int, label: str) -> None:
     if response.status_code != expected:
         raise AssertionError(
@@ -372,7 +382,7 @@ async def run_acceptance() -> None:
             google_file_id=google_file_id,
             label=label,
         )
-        drive_enrichment.get_ai_enrichment_provider = lambda: provider
+        drive_enrichment.get_ai_enrichment_provider = _acceptance_provider_resolver(provider)
         app.dependency_overrides[current_user] = _acceptance_user
         transport = httpx.ASGITransport(app=app)
 

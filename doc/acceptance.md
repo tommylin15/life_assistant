@@ -192,6 +192,17 @@ Evidence：
 - 同一 #63 的 production config、synthetic Drive Knowledge runtime、real Google Drive fixture、exact Firebase release、OAuth redirect、Drive Knowledge production UI 均 PASS。
 - 此 issue 維持 **OPEN / FAIL**；不更改 mandatory Drive Knowledge acceptance 標準、不以 fallback success 冒充 Gemini direct health PASS。它不取消已具完整 direct evidence 的 Shopping Package #7 DONE，但 Phase 1/latest-release cross-feature health 不得宣稱全綠。
 
+
+### Shared Codex-first consumer checkpoint — 2026-10-08
+
+- User-selected provider order for Drive AI: **omniAgent private Codex Cloud Run → Gemini → Groq → OpenRouter**, retaining explicit consent, original provider direct-health gates and local output validation. New server-side `SharedCodexEnrichmentProvider` and account-scoped stable ownerId are implemented on `main`.
+- Secret boundary: **only** the omniAgent shared service accesses the existing `omniagent-shared-codex-auth`. life_assistant has no direct access or copies; legacy `janus-mart-codex-auth` is **not** reused by life_assistant. No new Codex Secret created.
+- Runtime activation is `CODEX_PRIMARY_ENABLED=true` for Cloud Run API and Drive acceptance job; implementation supports `false` fail-closed in other contexts. Dedicated caller SA and audience-bound ID token are mandatory. Explicit Codex model remains unset until provider entitlement is verified; shared service default applies.
+- Test implementation: `backend/tests/test_shared_codex_provider.py` covers isolated owner UUID, identity audience, request envelope, 429 backoff, 400/401/403/502, bad output and fallback order. Shared runtime probe `scripts.run_shared_codex_identity_acceptance` checks anonymous denial, wrong-project 403 and actual completed HTTP 200 with response trace. The existing mandatory Drive Knowledge flow additionally directly tests Codex health when enabled.
+- Consumer status **PARTIAL**: backend unit tests in CI #583 were **PASS**; complete CI, exact release deployment, correct Cloud Run *service/job* identities and IAM, real signed HTTP 200, true product E2E, and mobile/desktop UI verification are **NOT VERIFIED** until live evidence is available. Don't infer consumer DONE from omniAgent's own service acceptance.
+- Context: historical Drive Knowledge #63 exit 91 (Gemini), newer #70 exit 93 (Gemini+OpenRouter) remain historical failures; Codex adoption alone cannot rewrite either as PASS.
+
+
 ## Backend Error / Audit
 
 - [x] API error = `error.code / message / request_id` baseline。

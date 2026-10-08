@@ -1,4 +1,4 @@
-# One-time bootstrap retry: corrected signed Trivy action tag; CI remains mandatory.
+# One-time bootstrap retry: patched python-jose and Starlette CVE findings; CI mandatory.
 name: V3 One-Time Controlled Release Bootstrap
 
 on:

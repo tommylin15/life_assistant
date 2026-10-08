@@ -24,7 +24,7 @@ Phase 1 completed packages：**7 / 11（63.6%）**；#8 尚未計入。
 | Cloud Run API / permission / runtime | NOT VERIFIED | Existing backend baseline; current release must be checked |
 | Production desktop UI | NOT VERIFIED | `calendar-ui-acceptance.yml` and Playwright candidate |
 | Production mobile UI | NOT VERIFIED | Same workflow; overflow and navigation |
-| Real Google account Calendar read/list | NOT VERIFIED | Not covered by mocked UI acceptance |
+| Real Google account Calendar read/list | NOT VERIFIED | Read-only `calendar-true-account-acceptance.yml` executes after Cloud Run deployment; requires exactly one authorized Calendar account |
 | Destructive confirmation | NOT VERIFIED | Flutter confirm dialog, confirmed header; runtime enforcement requires validation |
 | #63/#70 Drive Knowledge AI | FAIL (independent) | Gemini/OpenRouter regression; not a #8 hard blocker |
 
@@ -35,3 +35,10 @@ Package #8 **cannot** be marked DONE until tests, CI, deployment, runtime/integr
 ## Known gap
 
 Google all-day edit (preserving `date` rather than converting to `dateTime`) is not yet implemented. Resolve before claiming fully comprehensive Calendar CRUD for all event types, or explicitly scope acceptance to timed event mutations and surface all-day limitation to users.
+
+## Live Calendar read/list runner
+
+- `backend/scripts/run_calendar_true_account_read_acceptance.py` calls the real Google Calendar events API using existing encrypted owner-scoped OAuth credentials injected by Cloud Run; read-only and no event mutation.
+- The runner logs PASS / FAIL / NOT_VERIFIED plus aggregate count, never event text, user sub, or token.
+- To avoid arbitrary owner selection, missing or multiple connected Calendar owners produce NOT_VERIFIED (exit 2) rather than a fabricated PASS.
+- Workflow reuses `life-assistant-core-acceptance` Cloud Run Job after successful Cloud Run deployment; it does not create another long-lived job.

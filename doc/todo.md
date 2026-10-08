@@ -41,7 +41,7 @@
 - 真實帳號 Calendar read/list 重驗。
 - 真實歷史 SQLite migration：只有在實際 legacy SQLite source file 可定位時執行。
 - Artifact Registry latest-only retention 的最終 physical inventory evidence。
-- Drive Knowledge provider-health regression：#63 exit `91`（historical Gemini-only），後續 #70 exit `93`（Gemini + OpenRouter）；新的 provider-specific diagnostics 已 commit，部署與 live acceptance 待驗。若仍持續 FAIL，只進行 Codex CLI / `gpt-6.1-sol` low / shared existing `janus-mart-codex-auth` 的 bounded feasibility PoC；不得逕行啟用或新增 secret。
+- Drive Knowledge provider-health regression：#63 exit `91`（historical Gemini-only），#70 exit `93`（Gemini + OpenRouter），均仍為歷史 FAIL evidence。Codex-first consumer adapter 已在 main 送 CI/runtime 驗收，completion 為 PARTIAL。只呼叫 omniAgent 私有 shared Cloud Run；其認證由共用服務專屬 `omniagent-shared-codex-auth` 管理，life_assistant 不新建、不讀取、不複製任何 Codex Secret，舊 `janus-mart-codex-auth` 不作為消費端來源。
 
 ## Product DONE 規則
 

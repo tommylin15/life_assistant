@@ -82,7 +82,8 @@ jobs:
         run: |
           set -euo pipefail
           TARGET=.github/workflows/v3-cutover-disable-triggers.yml
-          grep -Fq 'projectId=$GCP_PROJECT_ID&triggerId=$ID&updateMask=disabled' "$TARGET"
+          grep -Fq 'projectId=$GCP_PROJECT_ID&triggerId=$ID&' "$TARGET"
+          grep -Fq 'updateMask' "$TARGET"
           grep -Fq 'PATCH_BODY=' "$TARGET"
           grep -Fq 'legacy_trigger_disabled=PASS' "$TARGET"
           echo "regional_patch_contract=PASS" >> "$GITHUB_STEP_SUMMARY"

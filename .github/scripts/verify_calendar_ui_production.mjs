@@ -118,6 +118,37 @@ async function named(page, name, timeout = 12000) {
   throw new Error('Calendar locator missing: ' + pattern);
 }
 
+// Flutter exposes event-card action semantics only within the scroll viewport.
+async function eventAction(page, verb, title) {
+  const expected = verb + '行程：' + title;
+  await page.mouse.move(950, 650);
+  await page.mouse.wheel(0, -3500);
+  await delay(260);
+  for (let scroll = 0; scroll < 12; scroll += 1) {
+    const locators = [
+      page.getByRole('button', { name: expected, exact: true }),
+      page.getByLabel(expected, { exact: true }),
+    ];
+    for (const locator of locators) {
+      for (let i = 0; i < await locator.count(); i += 1) {
+        const item = locator.nth(i);
+        if (await item.isVisible().catch(() => false)) {
+          await item.click();
+          return;
+        }
+      }
+    }
+    await page.mouse.wheel(0, 260);
+    await delay(260);
+  }
+  const labels = await page.locator('[aria-label]').evaluateAll(elements =>
+    elements.map(el => el.getAttribute('aria-label'))
+      .filter(s => s && /行程：/.test(s)).slice(0, 20),
+  );
+  throw new Error('Missing Calendar action ' + expected +
+    ' after scrolling; visibleLabels=' + JSON.stringify(labels));
+}
+
 async function observed(predicate, label) {
   for (let i = 0; i < 90; i++) {
     if (predicate()) return;
@@ -167,12 +198,12 @@ async function desktop(context) {
   await named(page, '更新後的會議');
   console.log('calendar_ui_check=update:PASS');
 
-  await (await named(page, '刪除行程：更新後的會議')).click();
+  await eventAction(page, '刪除', '更新後的會議');
   await named(page, '確認刪除行程');
   assert.equal(state.deletes.length, 0, 'delete happened without confirmation');
   await (await named(page, '取消')).click();
 
-  await (await named(page, '刪除行程：更新後的會議')).click();
+  await eventAction(page, '刪除', '更新後的會議');
   await (await named(page, '確認刪除')).click();
   await observed(() => state.deletes.length === 1, 'delete');
   assert.equal(state.deletes[0].confirmation, 'explicit_user:calendar.delete:calendar-1');

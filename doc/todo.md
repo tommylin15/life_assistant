@@ -10,7 +10,7 @@
 
 狀態：**#7 Shopping = DONE / PASS；7/11 = 63.6%**。本對話不啟動 #8。
 
-獨立 cross-feature health：Drive Knowledge Runtime Acceptance #63 / run `37625447402` 兩次 attempt 均 FAIL，task exit `91` = Gemini-only direct provider failure。此項保持 OPEN，不影響 #7 的直接完成證據，但代表 latest-release cross-feature health 並非全綠。
+獨立 cross-feature health：歷史 #63 / run `37625447402` exit `91` = Gemini only；更新一輪 #70 / run `37702785541` exit `93` = Gemini + OpenRouter，Groq 不在 failure mask。此項保持 OPEN，不影響 #7 的直接完成證據。Diagnostic candidate `8dedf655` 已加入分別測試，CI #574 PASS；新 deployment / live acceptance 尚待驗證。
 
 ## Just Closed
 
@@ -41,7 +41,7 @@
 - 真實帳號 Calendar read/list 重驗。
 - 真實歷史 SQLite migration：只有在實際 legacy SQLite source file 可定位時執行。
 - Artifact Registry latest-only retention 的最終 physical inventory evidence。
-- Drive Knowledge latest-release provider health regression：Runtime Acceptance #63 / run `37625447402` attempt 1、2 均 FAIL，task exit `91` = Gemini-only direct provider failure；保持 OPEN，後續獨立修復，不得誤標已解決。
+- Drive Knowledge provider-health regression：#63 exit `91`（historical Gemini-only），後續 #70 exit `93`（Gemini + OpenRouter）；新的 provider-specific diagnostics 已 commit，部署與 live acceptance 待驗。若仍持續 FAIL，只進行 Codex CLI / `gpt-6.1-sol` low / shared existing `janus-mart-codex-auth` 的 bounded feasibility PoC；不得逕行啟用或新增 secret。
 
 ## Product DONE 規則
 

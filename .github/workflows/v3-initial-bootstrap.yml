@@ -19,7 +19,12 @@ jobs:
     timeout-minutes: 35
     env:
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: tommylin15/life_assistant
     steps:
+      - name: Checkout for GitHub CLI repository context
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Wait for same-SHA full CI before releasing
         shell: bash
         run: |

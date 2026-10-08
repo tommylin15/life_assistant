@@ -148,6 +148,38 @@ jobs:
             --wait \
             --quiet
 
+      # The combined exit mask (e.g. 93 = Gemini + OpenRouter) does not
+      # reveal each upstream HTTP/transport/output category without Cloud Logging.
+      # Rerun ONLY the affected direct providers when aggregate live AI fails.
+      # Each execution emits its own byte-safe provider/reason task exit code.
+      - name: Diagnose Gemini direct provider after live AI failure
+        id: gemini_diagnostic
+        if: steps.external_ai.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_drive_external_ai_acceptance,--only-provider=gemini \
+            --task-timeout 10m \
+            --wait \
+            --quiet
+
+      - name: Diagnose OpenRouter direct provider after live AI failure
+        id: openrouter_diagnostic
+        if: steps.external_ai.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_drive_external_ai_acceptance,--only-provider=openrouter \
+            --task-timeout 10m \
+            --wait \
+            --quiet
+
       - name: Verify exact Firebase release is live
         id: firebase_release
         continue-on-error: true
@@ -218,6 +250,10 @@ jobs:
             echo "- Deployed production UI artifact: ${{ steps.production_ui.outcome }}"
             echo "- OAuth client redirect: ${{ steps.oauth_config.outcome }}"
             echo "- Live external AI provider: ${{ steps.external_ai.outcome }}"
+            if [ "${{ steps.external_ai.outcome }}" != "success" ]; then
+              echo "- Gemini direct diagnostic: ${{ steps.gemini_diagnostic.outcome }}"
+              echo "- OpenRouter direct diagnostic: ${{ steps.openrouter_diagnostic.outcome }}"
+            fi
             if [ "${{ steps.real_google.outputs.configured }}" = "true" ]; then
               echo "- Real Google Drive integration fixture: configured (${{ steps.real_google.outcome }})"
             else

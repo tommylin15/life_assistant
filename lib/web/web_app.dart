@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../app/theme/app_theme.dart';
 import 'acceptance_center_page.dart';
+import 'calendar_page.dart';
 import 'app_shell.dart';
 import 'auth_state.dart';
 import 'drive_page.dart';
@@ -38,14 +39,7 @@ final _router = GoRouter(
           ),
         ),
         GoRoute(path: '/tasks', builder: (_, __) => const TasksPage()),
-        GoRoute(
-          path: '/calendar',
-          builder: (_, __) => const _SectionPlaceholderPage(
-            title: '日曆',
-            message: '日曆內容準備中',
-            icon: Icons.calendar_month_outlined,
-          ),
-        ),
+        GoRoute(path: '/calendar', builder: (_, __) => const CalendarPage()),
         GoRoute(path: '/projects', builder: (_, __) => const ProjectsPage()),
         GoRoute(
           path: '/more/habits',

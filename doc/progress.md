@@ -20,9 +20,10 @@
 
 - **Completed packages：7 / 11**
 - **Closure progress：63.6%**
-- **Current package：#7 — Shopping 完整產品化（已封板；依使用者指示停在 #7）**
-- **Current state：DONE / PASS — Shopping implementation、tests、CI、Firebase、Cloud Run、PostgreSQL runtime、desktop/mobile production UI evidence 完整。**
-- **Next checkpoint：#8 Calendar = NOT STARTED；留待新對話開始。**
+- **Current package：#8 — Calendar 完整產品化（IN PROGRESS）**
+- **Current state：PARTIAL — Calendar backend CRUD exists；Flutter UI、tests 與 production acceptance candidate 正在推進；CI / deployment / live Google account 尚待新 evidence。**
+- **Next checkpoint：#8 Calendar implementation → CI → Firebase / Cloud Run → desktop/mobile production UI → true-account Calendar read/list → closure。**
+- **#8 gating rule：Gemini / OpenRouter #63/#70 failure is a separate known regression, not a Calendar-specific gate. Calendar still needs its own genuine provider and production evidence.**
 - **Independent cross-feature health：historical Drive Knowledge #63 / run `37625447402` exit `91` = Gemini-only；newer #70 / run `37702785541` exit `93` = Gemini + OpenRouter (Groq not in mask)。diagnostic candidate `8dedf655` / CI #574 PASS；new deployment / runtime still NOT VERIFIED。Regression remains OPEN / FAIL, without undoing Shopping #7 DONE.**
 
 | # | 工作包 | 狀態 | DONE 條件 / 目前 gate |
@@ -34,7 +35,7 @@
 | 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | ✅ DONE | historical closure release `2d08118a13c71c6fec97e8bfba0857b861eefd1e` / #47 PASS；latest health release `3b75e9e288be0d2179cd381281b55210a14ad875` / Drive Knowledge #59 PASS；Picker / live external AI / 真實 Drive / production UI 全 PASS |
 | 6 | Habits 完整產品化 | ✅ DONE | release SHA `02eda1124885846f41ca32ca185d9e1a5a5ebfe1`；CI #558、Firebase #376、Cloud Run #430、Habits UI Acceptance #7、Post-deploy Runtime #96 全 PASS；Habit list/create/update/complete/history、週期/提醒 UI、mobile/desktop production acceptance 與真實 PostgreSQL runtime evidence 完整 |
 | 7 | Shopping 完整產品化 | ✅ DONE | release SHA `1dd0b1f15827ae9cf50a8f4fcb69a1fa3782f40d`；CI #566、Firebase #384、Cloud Run #438、Shopping UI #4、Post-deploy Runtime #104 PASS；list/create item/toggle、分類/進度、mobile navigation、真實 PostgreSQL cloud-domain persistence evidence 完整 |
-| 8 | Calendar 完整產品化 | ⬜ NOT STARTED | 一般使用者 read/list/create/update/delete UX + true-account verification + 完整 vertical-slice evidence |
+| 8 | Calendar 完整產品化 | 🟡 IN PROGRESS | 一般使用者 read/list/create/update/delete UX + true-account verification + 完整 vertical-slice evidence |
 | 9 | Activity / Execution Log + Integrations 完整產品化 | ⬜ NOT STARTED | 使用者可理解的 Activity / Integration UI + 所需 runtime/integration evidence |
 | 10 | Integration / Foundation 尾項收尾 | ⬜ NOT STARTED | Attachment strategy；Bridge/MCP contract；true provider failure / partial-success；Calendar true-account read/list 重驗；historical SQLite migration 僅在 source 存在時執行 |
 | 11 | Phase 1 Final Release Gate / 封板 checkpoint | ⬜ NOT STARTED | Implementation / Tests / CI / Deployment / Runtime / Integration / UI flow / mobile+desktop acceptance 證據完整；Drive checkpoint 回寫；Phase 1 才標 DONE |

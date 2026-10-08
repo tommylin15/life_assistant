@@ -9,9 +9,9 @@
 2026-10-01 之後的 Phase 1 closure 以 `doc/progress.md` 的 11 個工作包為目前執行序；本文件後續各節保留原始 vertical-slice delivery rationale，不再被解讀成另一套平行進度表。
 
 目前：
-- Completed packages：**6/11 = 54.5%**。
-- Just closed：**#6 — Habits 完整產品化，DONE / PASS**。
-- Current package：**#7 — Shopping 完整產品化，NOT STARTED**。
+- Completed packages：**7/11 = 63.6%**。
+- Just closed：**#7 — Shopping 完整產品化，DONE / PASS**。
+- Current package：**#8 — Calendar 完整產品化，IN PROGRESS / PARTIAL**。
 - #6 final release SHA `02eda1124885846f41ca32ca185d9e1a5a5ebfe1`；CI #558、Firebase #376、Cloud Run #430、Habits UI #7、Post-deploy Runtime #96 PASS。
 - Habits production desktop/mobile list/create/edit/complete/history、真實 PostgreSQL cloud-domain runtime 與 release-level post-deploy regression均 PASS。
 - Cross-feature health：latest-release Drive Knowledge #54 為 FAIL（live external AI production acceptance）；不回滾 #6 closure，但在 final release gate 前必須重新收斂。

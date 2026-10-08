@@ -335,10 +335,10 @@ jobs:
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
             > "$RUNNER_TEMP/v3-before-promotion.json"
-          jq -e --argfile previous "$RUNNER_TEMP/v3-pre-service.json" \
+          jq -e --slurpfile previous "$RUNNER_TEMP/v3-pre-service.json" \
             '(.status.traffic |
               map(select((.percent // 0)>0) | {revisionName, percent:(.percent // 0)})) ==
-             ($previous.status.traffic |
+             ($previous[0].status.traffic |
               map(select((.percent // 0)>0) | {revisionName, percent:(.percent // 0)}))' \
             "$RUNNER_TEMP/v3-before-promotion.json"
           gcloud run services update-traffic "$CLOUD_RUN_SERVICE" \
@@ -389,10 +389,10 @@ jobs:
             --to-revisions="$PREVIOUS_REVISIONS" --quiet
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
-            | jq -e --argfile previous "$RUNNER_TEMP/v3-pre-service.json" \
+            | jq -e --slurpfile previous "$RUNNER_TEMP/v3-pre-service.json" \
                 '([.status.traffic[] | select((.percent // 0)>0) |
                    {revisionName, percent}] | sort_by(.revisionName)) ==
-                 ([$previous.status.traffic[] | select((.percent // 0)>0) |
+                 ([$previous[0].status.traffic[] | select((.percent // 0)>0) |
                    {revisionName, percent}] | sort_by(.revisionName))'
           curl -fsS --retry 5 "$SERVICE_URL/health" >/dev/null
           curl -fsS --retry 5 "$SERVICE_URL/ready" >/dev/null

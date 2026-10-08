@@ -1,0 +1,88 @@
+name: V3 One-Time Cutover Dispatch After Verified Release
+
+on:
+  workflow_run:
+    workflows:
+      - V3 Release - GHCR to Cloud Run
+    types:
+      - completed
+
+permissions:
+  contents: read
+  checks: read
+  actions: write
+
+jobs:
+  dispatch-cutover:
+    if: ${{ github.event.workflow_run.id == 37795789924 && github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: tommylin15/life_assistant
+      VERIFIED_RELEASE_RUN_ID: "37795789924"
+      VERIFIED_RELEASE_SHA: "25ff10c61abc15e557996b6070e02abf3b54a97b"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Recheck exactly this successful release and all required live gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RELEASE_RUN_ID")"
+          printf '%s' "$RUN" | jq -e \
+            --argjson id "$VERIFIED_RELEASE_RUN_ID" \
+            --arg sha "$VERIFIED_RELEASE_SHA" \
+            '.id==$id and .head_sha==$sha and .head_branch=="main" and
+             .name=="V3 Release - GHCR to Cloud Run" and
+             .status=="completed" and .conclusion=="success"'
+          JOBS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RELEASE_RUN_ID/jobs?per_page=100")"
+          printf '%s' "$JOBS" | jq -e '
+            [.jobs[].steps[] |
+             select(.name=="Post-promotion live health, OAuth redirect, PostgreSQL and access gates"
+             or .name=="Controlled rollback rehearsal and restore promoted live traffic"
+             or .name=="Retain latest 10 revisions after all live gates PASS") |
+             select(.conclusion=="success") | .name] | unique | length==3'
+          echo "verified_release=PASS run=$VERIFIED_RELEASE_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require current main full CI PASS before dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          for ATTEMPT in $(seq 1 48); do
+            CHECKS="$(gh api "repos/$GITHUB_REPOSITORY/commits/$MAIN_SHA/check-runs?per_page=100")"
+            if printf '%s' "$CHECKS" | jq -e '
+              [.check_runs[] |
+               select(.name=="flutter" or .name=="backend" or .name=="deployment-scripts") |
+               select(.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out")] |
+               length==0' >/dev/null; then
+              PASSED="$(printf '%s' "$CHECKS" | jq '
+                [.check_runs[] |
+                 select(.name=="flutter" or .name=="backend" or .name=="deployment-scripts") |
+                 select(.conclusion=="success") | .name] | unique | length')"
+              if [ "$PASSED" -eq 3 ]; then
+                echo "cutover_source_ci=PASS sha=$MAIN_SHA" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+            else
+              echo "::error::Cutover source CI failed"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "::error::Cutover source CI not confirmed PASS"
+          exit 1
+
+      - name: Dispatch guarded trigger disable workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$GITHUB_SHA"
+          gh workflow run v3-cutover-disable-triggers.yml --ref main \
+            --field verified_release_run_id="$VERIFIED_RELEASE_RUN_ID"
+          echo "cutover_dispatch=REQUESTED release=$VERIFIED_RELEASE_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "No Cloud Build trigger is changed by this dispatcher." >> "$GITHUB_STEP_SUMMARY"

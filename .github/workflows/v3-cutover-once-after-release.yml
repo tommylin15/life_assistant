@@ -85,6 +85,7 @@ jobs:
           grep -Fq 'projectId=$GCP_PROJECT_ID&triggerId=$ID&' "$TARGET"
           grep -Fq 'updateMask' "$TARGET"
           grep -Fq 'PATCH_BODY=' "$TARGET"
+          grep -Fq 'PATCH_CATEGORY=' "$TARGET"
           grep -Fq 'legacy_trigger_disabled=PASS' "$TARGET"
           echo "regional_patch_contract=PASS" >> "$GITHUB_STEP_SUMMARY"
 

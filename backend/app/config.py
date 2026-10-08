@@ -370,6 +370,15 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
+    # Shared Codex is a private omniAgent Cloud Run, not a local CLI/secret.
+    # Explicit rollout flag: default remains fail-closed until IAM/E2E passes.
+    codex_primary_enabled: bool = False
+    codex_shared_base_url: str = "https://omniagent-shared-codex-2oo7qbkd5q-uc.a.run.app"
+    codex_shared_caller_service_account: str = (
+        "omniagent-codex-life-client@gen-lang-client-0593591102.iam.gserviceaccount.com"
+    )
+    # Empty is intentional: contract requires entitlement proof for explicit models.
+    codex_shared_model: str = ""
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env", env_file_encoding="utf-8")
 

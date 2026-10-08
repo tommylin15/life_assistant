@@ -77,17 +77,16 @@ jobs:
           echo "::error::Cutover source CI not confirmed PASS"
           exit 1
 
-      - name: Require audited regional PATCH schema in target cutover workflow
+      - name: Require audited trigger export-import workflow
         shell: bash
         run: |
           set -euo pipefail
           TARGET=.github/workflows/v3-cutover-disable-triggers.yml
-          grep -Fq 'projectId=$GCP_PROJECT_ID&triggerId=$ID&' "$TARGET"
-          grep -Fq 'updateMask' "$TARGET"
-          grep -Fq 'PATCH_BODY=' "$TARGET"
-          grep -Fq 'PATCH_CATEGORY=' "$TARGET"
+          grep -Fq 'gcloud beta builds triggers export' "$TARGET"
+          grep -Fq 'gcloud builds triggers import' "$TARGET"
+          grep -Fq 'cmp -s' "$TARGET"
           grep -Fq 'legacy_trigger_disabled=PASS' "$TARGET"
-          echo "regional_patch_contract=PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "trigger_export_import_contract=PASS" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Dispatch guarded trigger disable workflow
         shell: bash

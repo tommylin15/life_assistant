@@ -26,6 +26,7 @@ from app.services.ai_enrichment_provider import (
     DocumentEnrichmentContext,
     RelatedNoteCandidate,
     compute_enrichment_fingerprint,
+    codex_owner_uuid,
     execute_provider_enrichment,
     get_ai_enrichment_provider,
 )
@@ -314,7 +315,7 @@ async def enrich_document(
         existing_tags=existing_tags,
         max_related_notes=enrichment_settings.max_related_note_suggestions,
     )
-    resolved_provider = provider or get_ai_enrichment_provider()
+    resolved_provider = provider or get_ai_enrichment_provider(owner_id=codex_owner_uuid(user_sub))
     fingerprint = compute_enrichment_fingerprint(
         context,
         candidates,

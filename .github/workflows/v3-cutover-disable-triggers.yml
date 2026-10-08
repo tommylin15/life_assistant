@@ -45,7 +45,10 @@ jobs:
              or .name=="Controlled rollback rehearsal and restore promoted live traffic"
              or .name=="Retain latest 10 revisions after all live gates PASS") |
              select(.conclusion=="success") | .name] | unique | length==3'
-          echo "release_run_evidence=PASS run=$RELEASE_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          VERIFIED_RELEASE_SHA="$(printf '%s' "$RUN" | jq -r '.head_sha')"
+          [[ "$VERIFIED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "VERIFIED_RELEASE_SHA=$VERIFIED_RELEASE_SHA" >> "$GITHUB_ENV"
+          echo "release_run_evidence=PASS run=$RELEASE_RUN_ID sha=$VERIFIED_RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: google-github-actions/auth@v2
         with:
@@ -60,15 +63,40 @@ jobs:
           set -euo pipefail
           gcloud run services describe life-assistant-api \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
-            | jq -e '
-                [.status.traffic[] | select(.percent==100)] | length==1'
-          IMAGE="$(gcloud run services describe life-assistant-api \
+            > "$RUNNER_TEMP/v3-current-service.json"
+          jq -e '[.status.traffic[] | select(.percent==100)] | length==1' \
+            "$RUNNER_TEMP/v3-current-service.json"
+          LIVE_REVISION="$(jq -r '.status.traffic[] | select(.percent==100) | .revisionName' \
+            "$RUNNER_TEMP/v3-current-service.json")"
+          [[ "$LIVE_REVISION" == life-assistant-api-* ]]
+          EXPECTED_TAG="v3-$(printf '%s' "$VERIFIED_RELEASE_SHA" | cut -c1-10)"
+          jq -e --arg rev "$LIVE_REVISION" --arg tag "$EXPECTED_TAG" \
+            '[.status.traffic[] | select(.revisionName==$rev and .tag==$tag)] | length==1' \
+            "$RUNNER_TEMP/v3-current-service.json"
+          gcloud run revisions describe "$LIVE_REVISION" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/v3-current-revision.json"
+          IMAGE="$(jq -r '.spec.containers[0].image // empty' \
+            "$RUNNER_TEMP/v3-current-revision.json")"
+          EXPECTED_IMAGE="$(python - "$IMAGE" <<'PY'
+          import sys
+          sys.path.insert(0, ".github/scripts")
+          from v3_image_identity import canonical
+          print(canonical(sys.argv[1]))
+          PY
+          )"
+          python .github/scripts/v3_image_identity.py \
+            --resource revision --json "$RUNNER_TEMP/v3-current-revision.json" \
+            --expected "$EXPECTED_IMAGE"
+          REV_COUNT="$(gcloud run revisions list --service life-assistant-api \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --format='value(spec.template.spec.containers[0].image)')"
-          [[ "$IMAGE" =~ ^ghcr[.]io/tommylin15/life_assistant-backend@sha256:[a-f0-9]{64}$ ]]
+            --format='value(metadata.name)' | grep -c . || true)"
+          [[ "$REV_COUNT" =~ ^[0-9]+$ ]]
+          test "$REV_COUNT" -ge 1 && test "$REV_COUNT" -le 10
           curl --fail --silent --show-error \
             "https://gen-lang-client-0593591102.web.app/health" >/dev/null
-          echo "serving_from_ghcr=PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "serving_from_verified_release=PASS revision=$LIVE_REVISION retained=$REV_COUNT source=$EXPECTED_IMAGE" \
+            >> "$GITHUB_STEP_SUMMARY"
 
       - name: Disable only two verified legacy life_assistant triggers
         shell: bash

@@ -10,6 +10,8 @@ import json
 import re
 import subprocess
 import sys
+import urllib.parse
+import urllib.request
 
 PROJECT = "gen-lang-client-0593591102"
 REGION = "us-central1"
@@ -28,6 +30,40 @@ def call(*args, timeout=180):
     if not isinstance(parsed, list):
         raise RuntimeError("GCP read-only list returned an unexpected type")
     return parsed
+
+
+def docker_images(resource_name):
+    """List DockerImages using the official paginated read-only REST endpoint."""
+    token = subprocess.run(
+        ["gcloud", "auth", "print-access-token"],
+        capture_output=True, text=True, timeout=30, check=True,
+    ).stdout.strip()
+    if not token:
+        raise RuntimeError("GCP token unavailable for AR read-only inventory")
+    results = []
+    cursor = ""
+    for _ in range(100):
+        query = {"pageSize": "1000"}
+        if cursor:
+            query["pageToken"] = cursor
+        url = (
+            "https://artifactregistry.googleapis.com/v1/"
+            + urllib.parse.quote(resource_name, safe="/")
+            + "/dockerImages?"
+            + urllib.parse.urlencode(query)
+        )
+        req = urllib.request.Request(
+            url, headers={"Authorization": "Bearer " + token})
+        with urllib.request.urlopen(req, timeout=60) as stream:
+            response = json.load(stream)
+        page = response.get("dockerImages", [])
+        if not isinstance(page, list):
+            raise RuntimeError("AR dockerImages response invalid")
+        results.extend(page)
+        cursor = response.get("nextPageToken", "")
+        if not cursor:
+            return results
+    raise RuntimeError("AR dockerImages pagination limit hit")
 
 
 def region_docker_image(entry):
@@ -114,10 +150,7 @@ def inventory(project, region):
         if fmt.upper() == "DOCKER":
             uri = f"{location}-docker.pkg.dev/{project}/{repo_name}"
             try:
-                rows = call("artifacts", "docker", "images", "list", uri,
-                            "--include-tags", "--limit=10000", timeout=240)
-                if len(rows) >= 10000:
-                    raise RuntimeError("image list may be truncated")
+                rows = docker_images(raw_name)
                 images = []
                 item["image_row_fields"] = sorted(rows[0]) if rows else []
                 for row in rows:

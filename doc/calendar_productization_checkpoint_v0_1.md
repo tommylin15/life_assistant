@@ -18,13 +18,13 @@ Phase 1 completed packages：**7 / 11（63.6%）**；#8 尚未計入。
 | Gate | Status | Evidence |
 |---|---|---|
 | Implementation | PARTIAL | Calendar API facade + Flutter page + `/calendar` route candidate |
-| Widget / contract tests | NOT VERIFIED | `test/calendar_page_test.dart` candidate |
-| CI Flutter analyze / tests / build | NOT VERIFIED | Requires passing CI on exact SHA |
-| Firebase release | NOT VERIFIED | Requires successful deploy on exact SHA |
-| Cloud Run API / permission / runtime | NOT VERIFIED | Existing backend baseline; current release must be checked |
-| Production desktop UI | NOT VERIFIED | `calendar-ui-acceptance.yml` and Playwright candidate |
+| Widget / contract tests | PASS | CI #578; Calendar widget and backend contract tests |
+| CI Flutter analyze / tests / build | PASS | CI #578 / run 37709427943 on candidate 1a78749 |
+| Firebase release | NOT VERIFIED | #395 PASS older candidate; latest #396 in progress |
+| Cloud Run API / permission / runtime | NOT VERIFIED | #449 previous candidate in progress; latest #450 pending |
+| Production desktop UI | NOT VERIFIED | #2/#3 FAIL due old Flutter semantics locator; correction at 1a78749 pending new acceptance |
 | Production mobile UI | NOT VERIFIED | Same workflow; overflow and navigation |
-| Real Google account Calendar read/list | NOT VERIFIED | Read-only `calendar-true-account-acceptance.yml` executes after Cloud Run deployment; requires exactly one authorized Calendar account |
+| Real Google account Calendar read/list | NOT VERIFIED | #1 skipped after previous Cloud Run cancellation; awaiting live read on successful deployment |
 | Destructive confirmation | NOT VERIFIED | Flutter confirm dialog, confirmed header; runtime enforcement requires validation |
 | #63/#70 Drive Knowledge AI | FAIL (independent) | Gemini/OpenRouter regression; not a #8 hard blocker |
 
@@ -42,3 +42,12 @@ Google all-day edit (preserving `date` rather than converting to `dateTime`) is 
 - The runner logs PASS / FAIL / NOT_VERIFIED plus aggregate count, never event text, user sub, or token.
 - To avoid arbitrary owner selection, missing or multiple connected Calendar owners produce NOT_VERIFIED (exit 2) rather than a fabricated PASS.
 - Workflow reuses `life-assistant-core-acceptance` Cloud Run Job after successful Cloud Run deployment; it does not create another long-lived job.
+
+
+2026-10-08 checkpoint update
+- CI #575 FAIL: Flutter create/edit timing. Split tests without removing behavior, CI #576 PASS, #577 PASS, #578 PASS.
+- Production Calendar UI #2 FAIL exact semantic label locator despite visible rendered UI; #3 used older script and failed. Fix commit 1a787494fecdecba33a8a231be1b22375d23b870 awaiting fresh production UI evidence.
+- Firebase #394 and #395 PASS older commits; exact latest SHA #396 NOT VERIFIED while deploying.
+- Cloud Run #448 cancelled because superseded. #449 in progress; #450 pending. Runtime and true Google account read remain NOT VERIFIED.
+- #63 and #70 Gemini/OpenRouter AI regression OPEN/FAIL, excluded from Calendar-specific gates per user decision.
+- Package #8 remains PARTIAL; completed packages 7/11 = 63.6%.

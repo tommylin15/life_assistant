@@ -75,6 +75,19 @@ class V3PipelineContractTests(unittest.TestCase):
         self.assertNotIn('"pinTag": true', config)
         self.assertNotIn('"site": "life-assistant-v3-stage-tl15"', config)
 
+    def test_cutover_trigger_disable_shell_is_syntactically_valid(self):
+        import subprocess
+        _, data = load("v3-cutover-disable-triggers.yml")
+        step = next(
+            step for step in data["jobs"]["disable-legacy"]["steps"]
+            if step.get("name") == "Disable only two verified legacy life_assistant triggers"
+        )
+        check = subprocess.run(
+            ["bash", "-n"], input=step["run"],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(check.returncode, 0, check.stderr)
+
     def test_cutover_requires_successful_promoted_and_rolled_back_release(self):
         source, _ = load("v3-cutover-disable-triggers.yml")
         for step in ("Post-promotion live health", "Controlled rollback rehearsal",

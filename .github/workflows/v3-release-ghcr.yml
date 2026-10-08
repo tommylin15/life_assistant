@@ -68,7 +68,7 @@ jobs:
           docker build --pull --platform linux/amd64 -t "$GHCR_IMAGE:$RELEASE_SHA" backend
 
       - name: Scan local image before publishing
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: ghcr.io/tommylin15/life_assistant-backend:${{ inputs.release_sha }}
@@ -272,6 +272,21 @@ jobs:
             --task-timeout 10m --wait --quiet
           echo "real_google_drive_integration=PASS" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Pin migration job to same immutable release digest (do not execute)
+        if: ${{ inputs.promote }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run jobs update life-assistant-db-migrate \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --image "$IMAGE_REF" --quiet
+          gcloud run jobs describe life-assistant-db-migrate \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            | jq -e --arg image "$IMAGE_REF" \
+                '([.spec.template.spec.template.spec.containers[].image] | index($image)) != null'
+          echo "migration_job_image=PASS no_migration_executed image=$IMAGE_REF" \
+            >> "$GITHUB_STEP_SUMMARY"
+
       - name: Require explicit promotion selection
         if: ${{ !inputs.promote }}
         run: echo "PROMOTION=NOT REQUESTED; production traffic unchanged" >> "$GITHUB_STEP_SUMMARY"
@@ -381,13 +396,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mapfile -t PREVIOUS_PROTECTED < <(jq -r '.status.traffic[] |
+            select((.percent // 0)>0) | .revisionName' "$RUNNER_TEMP/v3-pre-service.json")
+          PROTECT_ARGS=()
+          for OLD_REV in "${PREVIOUS_PROTECTED[@]}"; do
+            PROTECT_ARGS+=(--protect "$OLD_REV")
+          done
           python .github/scripts/v3_revision_retention.py \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --service "$CLOUD_RUN_SERVICE" --keep 10 \
             --expected-live-revision "$CANDIDATE_REVISION" \
-            --protect "$(jq -r '.status.traffic[] | select((.percent // 0)>0) |
-                       .revisionName' "$RUNNER_TEMP/v3-pre-service.json" | head -n1)" \
-            --apply --live-passed | tee "$RUNNER_TEMP/v3-retention.json"
+            "${PROTECT_ARGS[@]}" --apply --live-passed \
+            | tee "$RUNNER_TEMP/v3-retention.json"
           jq -r '"revision_retention=\(.status) remaining=\(.remaining_count) deleted=\(.deleted | length)"' \
             "$RUNNER_TEMP/v3-retention.json" >> "$GITHUB_STEP_SUMMARY"
 

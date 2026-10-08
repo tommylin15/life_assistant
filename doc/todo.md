@@ -8,6 +8,9 @@
 
 ### CI/CD V3 實作與 GCP/AR/GCS 清理驗收（2026-10-08）
 
+- 目前實際驗證：完整 CI 和 GCP WIF 唯讀資源盤點 PASS；首次 V3 Release 的 runner 因 Trivy action 引用錯誤而在 Set up job FAIL（沒有 Docker push、Cloud Run deployment 或 GCS/AR 刪除）。已改用官方有效 `aquasecurity/trivy-action@v0.36.0` 並重新安排受控 release；結果以後續 Actions readback 為準。
+
+
 - 使用者核准先切換 GitHub Actions → 公開 GHCR 固定 digest → Cloud Run 0% candidate → Firebase Preview → 正式流量與回滾驗收；成功後才停用兩個舊 Cloud Build triggers。舊 release 路線在切換成功前保留。
 - 新增 CI main push 完整測試、V3 manual release、GHCR scan/publish、候選/Preview/live gates、十版 revision fail-closed 清理、read-only GCP 清冊與受控 triggers disable workflow。**部署/實際驗收要由 Actions 執行紀錄證明，不因 workflow 進 main 就宣稱 DONE。**
 - 刪除範圍限已逐項證明無依賴的舊 GCS CI/CD 檔案、CI/CD 專用且無備份/應用資料的 bucket、失去所有 live/job/回滾依賴的 AR image/digest、確認全庫無共用後的 AR repository。備份/業務資料絕對保留；見 `v3_cleanup_and_cutover_inventory.md`。

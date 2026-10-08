@@ -48,6 +48,7 @@ class V3PipelineContractTests(unittest.TestCase):
                      "--keep 10", "--apply --live-passed",
                      "Restore original Cloud Run traffic"):
             self.assertIn(item, source)
+        self.assertIn("aquasecurity/trivy-action@v0.36.0", source)
         self.assertIn("release", data["jobs"])
         self.assertNotIn("push:", source)
 

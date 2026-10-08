@@ -1,3 +1,4 @@
+# One-time bootstrap retry: corrected signed Trivy action tag; CI remains mandatory.
 name: V3 One-Time Controlled Release Bootstrap
 
 on:

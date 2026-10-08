@@ -30,6 +30,7 @@ jobs:
       BACKEND_IMAGE: life-assistant-backend
       RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       CLOUD_RUN_SERVICE: life-assistant-api
+      CODEX_CALLER_SA: omniagent-codex-life-client@gen-lang-client-0593591102.iam.gserviceaccount.com
       MIGRATION_JOB: life-assistant-db-migrate
       CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance
       GCP_NETWORK: janusai-lake-poc
@@ -59,6 +60,28 @@ jobs:
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
+
+      - name: Grant bounded runtime ID-token mint on dedicated Codex caller
+        run: |
+          # Inspect the actual serving identity. Do not conflate the GitHub CI
+          # deployer with the Cloud Run runtime service account.
+          RUNTIME_SA="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format='value(spec.template.spec.serviceAccountName)')"
+          test -n "$RUNTIME_SA"
+          case "$RUNTIME_SA" in
+            *@gen-lang-client-0593591102.iam.gserviceaccount.com|*@developer.gserviceaccount.com) ;;
+            *) echo "::error::Unexpected Cloud Run runtime service account"; exit 1 ;;
+          esac
+          echo "shared_codex_runtime_identity=VERIFIED service_account=$RUNTIME_SA"
+          # OpenIdTokenCreator contains only getOpenIdToken: narrower than
+          # roles/iam.serviceAccountTokenCreator. Scope grant to this caller SA.
+          gcloud iam service-accounts add-iam-policy-binding "$CODEX_CALLER_SA" \
+            --project "$GCP_PROJECT_ID" \
+            --member "serviceAccount:$RUNTIME_SA" \
+            --role roles/iam.serviceAccountOpenIdTokenCreator \
+            --quiet >/dev/null
+          echo "shared_codex_runtime_mint_permission=PASS caller=$CODEX_CALLER_SA"
 
       - name: Verify Artifact Registry repository
         run: |
@@ -215,7 +238,7 @@ jobs:
             --vpc-egress private-ranges-only \
             --allow-unauthenticated \
             --timeout 600 \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI,GOOGLE_PICKER_APP_ID=$GOOGLE_PICKER_APP_ID" \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI,GOOGLE_PICKER_APP_ID=$GOOGLE_PICKER_APP_ID,CODEX_PRIMARY_ENABLED=true" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --quiet
 
@@ -260,7 +283,7 @@ jobs:
             --vpc-egress private-ranges-only \
             --max-retries 0 \
             --task-timeout 10m \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI" \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI,CODEX_PRIMARY_ENABLED=true" \
             --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
             --quiet
 

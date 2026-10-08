@@ -49,3 +49,31 @@ jobs:
           if any(v["status"] != "PASS" for v in d["checks"].values()):
               raise SystemExit("Inventory partial: missing GCP read permissions or API readback")
           PY
+      - name: Recheck only bounded legacy GCS CI/CD bucket object metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/v3_gcs_object_inventory.py \
+            --project "$GCP_PROJECT_ID" \
+            | tee "$RUNNER_TEMP/v3-gcs-candidates.json"
+          python - "$RUNNER_TEMP/v3-gcs-candidates.json" <<'PY'
+          import json, os, sys
+          with open(sys.argv[1], encoding="utf-8") as fh:
+              result = json.load(fh)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              print("## Bounded legacy GCS inventory — metadata only", file=out)
+              for bucket in result["buckets"]:
+                  print(
+                      f"- {bucket['bucket']}: readback={bucket['readback']}; "
+                      f"objects={bucket.get('objects','?')}; "
+                      f"candidate_build={bucket.get('categories',{}).get('POSSIBLE_CLOUD_BUILD',0)}; "
+                      f"protected={bucket.get('categories',{}).get('UNCLASSIFIED_PROTECTED',0)}; "
+                      "deletion_eligible=NO",
+                      file=out,
+                  )
+          if result["mode"] != "READ_ONLY":
+              raise SystemExit("Unsafe GCS inventory mode")
+          if any(x["readback"] != "PASS" or x.get("deletion_eligible") is not False
+                 for x in result["buckets"]):
+              raise SystemExit("GCS metadata inventory incomplete, delete forbidden")
+          PY

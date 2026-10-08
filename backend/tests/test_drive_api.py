@@ -17,7 +17,7 @@ client = TestClient(app)
 
 class DriveApiContractTests(unittest.TestCase):
     def test_drive_routes_are_registered_under_versioned_api(self):
-        paths = {route.path for route in app.routes}
+        paths = {route.path for route in app.routes if hasattr(route, "path")}
         expected = {
             "/api/v1/drive/workspaces",
             "/api/v1/drive/workspaces/{workspace_id}",

@@ -16,7 +16,7 @@ client = TestClient(app)
 
 class DriveNoteRelationshipContractTests(unittest.TestCase):
     def test_bidirectional_relationship_routes_are_registered_and_protected(self):
-        paths = {route.path for route in app.routes}
+        paths = {route.path for route in app.routes if hasattr(route, "path")}
         self.assertIn("/api/v1/drive/documents/{document_id}/notes", paths)
         self.assertIn("/api/v1/drive/documents/{document_id}/notes/{note_id}", paths)
         self.assertIn("/api/v1/drive/notes/{note_id}/documents", paths)

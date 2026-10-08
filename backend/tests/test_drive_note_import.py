@@ -17,7 +17,7 @@ client = TestClient(app)
 
 class DriveNoteImportContractTests(unittest.TestCase):
     def test_note_import_route_is_registered_and_protected(self):
-        paths = {route.path for route in app.routes}
+        paths = {route.path for route in app.routes if hasattr(route, "path")}
         self.assertIn(
             "/api/v1/drive/documents/{document_id}/note-import",
             paths,

@@ -1,4 +1,4 @@
-# One-time bootstrap retry: patched python-jose and Starlette CVE findings; CI mandatory.
+# One-time bootstrap retry: support modern FastAPI router metadata, preserve route assertions; CI mandatory.
 name: V3 One-Time Controlled Release Bootstrap
 
 on:

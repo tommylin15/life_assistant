@@ -236,7 +236,7 @@ class DriveAIEnrichmentContractTests(unittest.TestCase):
         self.assertEqual([item.note_id for item in outcome.related_notes], ["note-1"])
 
     def test_drive_enrichment_routes_are_registered(self):
-        paths = {route.path for route in app.routes}
+        paths = {route.path for route in app.routes if hasattr(route, "path")}
         expected = {
             "/api/v1/drive/enrichment/settings",
             "/api/v1/drive/documents/{document_id}/enrichment",

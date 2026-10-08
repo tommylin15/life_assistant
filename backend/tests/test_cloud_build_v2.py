@@ -89,11 +89,32 @@ class CloudBuildV2Tests(unittest.TestCase):
         for step in config['steps'][-2:]:
             self.assertIn('test -f .release/release || exit 0', step['args'][-1])
         for workflow in (ROOT / '.github/workflows').glob('*.yml'):
-            if workflow.name != 'ci.yml':
-                source = workflow.read_text()
+            if workflow.name == 'ci.yml':
+                continue
+            source = workflow.read_text()
+            self.assertNotIn('--no-dry-run', source)
+            if workflow.name == 'v3-cutover-once-after-release.yml':
+                # Strict one-time audited Release completion is the sole
+                # exception to the legacy ban on workflow_run chains.
+                self.assertIn('workflow_run:', source)
+                self.assertIn('types:', source)
+                self.assertIn('completed', source)
+                self.assertIn(
+                    'github.event.workflow_run.id == 37795789924', source
+                )
+                self.assertIn(
+                    "github.event.workflow_run.conclusion == 'success'", source
+                )
+                self.assertIn(
+                    '25ff10c61abc15e557996b6070e02abf3b54a97b', source
+                )
+                self.assertIn('Retain latest 10 revisions after all live gates PASS', source)
+                self.assertIn('gh workflow run v3-cutover-disable-triggers.yml', source)
+                self.assertNotIn('gcloud run services update-traffic', source)
+                self.assertNotIn('updateMask=disabled', source)
+            else:
                 self.assertIn('workflow_dispatch:', source)
                 self.assertNotIn('workflow_run:', source)
-                self.assertNotIn('--no-dry-run', source)
 
     def test_duplicate_sha_phase_is_idempotent_but_promotion_is_distinct(self):
         mine = {'id': 'b', 'createTime': '2'}

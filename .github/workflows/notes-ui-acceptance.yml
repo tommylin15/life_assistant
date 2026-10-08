@@ -1,10 +1,7 @@
 name: Notes UI Acceptance
 
 on:
-  workflow_run:
-    workflows: [Deploy Firebase Hosting]
-    types: [completed]
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,11 +12,11 @@ concurrency:
 
 jobs:
   accept:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102
-      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     steps:
       - name: Checkout release commit

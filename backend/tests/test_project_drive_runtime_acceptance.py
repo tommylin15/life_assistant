@@ -25,8 +25,9 @@ class ProjectDriveRuntimeAcceptanceContractTests(unittest.TestCase):
             Path(__file__).parents[2]
             / ".github/workflows/postdeploy-runtime-acceptance.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("workflows: [Deploy Cloud Run]", workflow)
-        self.assertIn("github.event.workflow_run.conclusion == 'success'", workflow)
+        self.assertNotIn("workflow_run:", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("github.event_name == 'workflow_dispatch'", workflow)
         self.assertIn("github.event.workflow_run.head_sha", workflow)
         self.assertIn(
             "POSTDEPLOY_ACCEPTANCE_JOB: life-assistant-postdeploy-acceptance",

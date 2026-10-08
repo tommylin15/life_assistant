@@ -375,3 +375,17 @@ Legacy SQLite 同名能力不等於 Cloud acceptance；上述 `[x]` 依 Cloud Do
 ## Phase 1 不阻塞項目
 
 Android/iOS 正式上架、完整 offline-first、SQLite local-cache 雙向 sync、Today Cockpit、Attention/Focus、Routine Library、Global Capture、Plan/Review、Contextual AI、People context 延後至 Phase 1.5 / Phase 2。
+# CI/CD V2 acceptance — 2026-10-08
+
+**IMPLEMENTING / NOT CLOSED**. Required: real main Push → us-central1 2nd Gen
+CI Trigger → affected backend/Alembic/Flutter tests → explicit full-SHA Manual
+Release Trigger → immutable Docker digest → verified
+migration → no-traffic candidate → Firebase Preview gates → live exact SHA →
+runtime/real UI/Drive/Calendar/providers → unchanged schedules/job readback →
+reference-aware cleanup dry-run → retire conflicting Actions entrypoints.
+Runbook and baseline evidence: `deployment_runbook.md`. New intercepted UI
+contract PASS must never stand in for true network/browser acceptance.
+Single-user owner allowlist and shared Codex isolation require actual candidate
+evidence; multi-owner collaboration is not added. Historical provider FAIL retained.
+Trigger/build/revision/release identifiers will be recorded only after actual
+execution. No mock/localhost or single Build PASS qualifies for CLOSED.

@@ -193,3 +193,16 @@
 2. 依使用者指示，本對話停在 #7；**#8 Calendar 尚未開始**，留待新對話。
 3. Drive Knowledge historical #63 exit `91`（Gemini only），newer #70 exit `93`（Gemini + OpenRouter）；待 provider-specific diagnostics live evidence，維持 **OPEN / FAIL**。
 4. Phase 1 整體仍 **PARTIAL**；#8–#11 尚未完成。
+# CI/CD V2 checkpoint — 2026-10-08
+
+**IMPLEMENTING / NOT CLOSED**. Synced main `a9a570cf29f2dd28d79c5936a18cad54a9f6b22f`;
+existing us-central1 GitHub connection/repository is COMPLETE, trigger absent
+at baseline. Added Cloud Build pipeline, immutable candidate/preview sequence,
+preserved runtime/UI gates, and real HTTPS/Google/DB/browser acceptance runner.
+Local contract validation is separate from actual main-push/live acceptance.
+Exact minimal deployer IAM grants approved/applied; extra GCS evidence removed.
+Push CI trigger `70ca60f2-8519-40c4-9422-5ac78f1b355f`, manual Release trigger
+`892a893e-173f-49b2-9055-d5a9adc21496`, both us-central1/2nd Gen. Per additional
+user policy, Actions automatic deployments changed to manual recovery entries.
+No production cutover or physical image deletion yet.
+See `deployment_runbook.md`; product closure count is unchanged by CI/CD work.

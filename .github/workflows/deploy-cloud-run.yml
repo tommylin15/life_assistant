@@ -1,10 +1,6 @@
 name: Deploy Cloud Run
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,9 +13,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: dev-test
@@ -360,5 +354,5 @@ jobs:
             --project "$GCP_PROJECT_ID" \
             --location "$GCP_REGION" \
             --policy .github/artifact-registry-cleanup-policy.json \
-            --no-dry-run \
+            --dry-run \
             --quiet

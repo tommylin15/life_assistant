@@ -119,3 +119,16 @@ life_assistant 可有一般 background worker，但不得把 Agent reasoning wor
 - `LangGraph / Global Tool Registry / Workflow Registry / Agent Runtime 屬於 life_assistant roadmap`
 
 這些內容可作為歷史背景理解，但後續新實作應以本文件、`PROJECT_RULES.md` 與 `project_boundary.md` 的最新架構為準。
+# CI/CD V2 decision — 2026-10-08
+
+User-authorized replacement target: regional Cloud Build 2nd Gen repository
+push CI trigger (`^main$`, full SHA) plus explicitly invoked full-SHA manual
+Release trigger, GCP-led tests, one immutable backend image,
+no-traffic Cloud Run candidate, Firebase Hosting Preview before live promotion,
+all existing and true live acceptance gates. Fixed us-central1 and
+CLOUD_LOGGING_ONLY. Production cutover only after actual cost comparison and
+complete live gates; latest user instruction retires Actions automatic deployments,
+manual recovery remains. Scheduler and shared OmniAgent Codex boundaries stay.
+Status: IMPLEMENTING, not operational completion. Runbook:
+`deployment_runbook.md`. Existing single-user API must enforce its owner email
+allowlist; multi-owner core data separation/collaboration stays out of scope.

@@ -1,4 +1,9 @@
 # Miscellaneous
+.release/
+.tmp/
+firebase.v2.json
+node_modules/
+package-lock.json
 *.class
 *.lock
 *.log

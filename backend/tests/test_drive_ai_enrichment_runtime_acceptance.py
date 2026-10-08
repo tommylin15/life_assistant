@@ -43,8 +43,8 @@ class DriveAIEnrichmentRuntimeAcceptanceContractTests(unittest.TestCase):
         self.assertTrue(self.workflow_path.is_file())
         source = self.workflow_path.read_text(encoding="utf-8")
         for expected in (
-            "workflows: [Deploy Cloud Run]",
-            "github.event.workflow_run.conclusion == 'success'",
+            "workflow_dispatch:",
+            "github.event_name == 'workflow_dispatch'",
             "github.event.workflow_run.head_sha || github.sha",
             "life-assistant-backend",
             "POSTDEPLOY_ACCEPTANCE_JOB: life-assistant-postdeploy-acceptance",

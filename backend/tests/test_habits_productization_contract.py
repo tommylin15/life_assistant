@@ -65,7 +65,8 @@ class HabitsProductizationContractTests(unittest.TestCase):
         ):
             self.assertIn(required, script)
 
-        self.assertIn("workflows: [Deploy Firebase Hosting]", workflow)
+        self.assertNotIn("workflow_run:", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("release.txt?habits_acceptance=$RELEASE_SHA", workflow)
         self.assertIn("verify_habits_ui_production.mjs", workflow)
 

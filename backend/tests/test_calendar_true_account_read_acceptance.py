@@ -44,7 +44,8 @@ class CalendarTrueAccountAcceptanceContractTests(unittest.TestCase):
 
     def test_independent_post_deploy_workflow_reuses_core_job(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("Deploy Cloud Run", workflow)
+        self.assertNotIn("workflow_run:", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("life-assistant-core-acceptance", workflow)
         self.assertIn("--args=-m,scripts.run_calendar_true_account_read_acceptance", workflow)
         self.assertIn("GCP_WORKLOAD_IDENTITY_PROVIDER", workflow)

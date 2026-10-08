@@ -165,6 +165,17 @@
 
 ## 13. Final Release Decision
 
+CI/CD V2 additionally requires:
+
+- [ ] Real main Push CI PASS; no automatic runtime/Live deployment.
+- [ ] Full-SHA manual Release Ready review/tests/contracts PASS.
+- [ ] Idempotent migration and no-traffic candidate PASS.
+- [ ] Firebase Preview and separate exact Live SHA acceptance PASS.
+- [ ] Existing runtime/UI/Google/provider/Shared Codex mandatory gates PASS.
+- [ ] Scheduler unchanged; Cloud Run Jobs/image references read back.
+- [ ] Measured cost comparison and recovery evidence recorded.
+- [ ] Legacy automatic deployment retired; manual diagnostics preserved.
+
 Phase 1 只有在 `acceptance.md`、本 Release Checklist、CI、deployment、runtime、migration、integration evidence 一致時，才可標記為完成。
 
 **文件更新、程式碼存在、單一測試通過或 partial success 均不得單獨宣告 release complete。**

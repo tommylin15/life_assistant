@@ -1,0 +1,89 @@
+timeout: 7200s
+options:
+  logging: CLOUD_LOGGING_ONLY
+  env:
+    - 'RELEASE_SHA=$COMMIT_SHA'
+    - 'BUILD_ID=$BUILD_ID'
+    - 'GCP_PROJECT_ID=$PROJECT_ID'
+    - 'GCP_REGION=us-central1'
+    - 'PROMOTE=${_PROMOTE}'
+    - 'PIPELINE=${_PIPELINE}'
+    - 'ACCEPTANCE_OWNER_EMAIL=${_OWNER_EMAIL}'
+    - 'DRIVE_ACCEPTANCE_USER_SUB=${_DRIVE_USER}'
+    - 'DRIVE_ACCEPTANCE_GOOGLE_FILE_ID=${_DRIVE_FILE}'
+substitutions:
+  _PROMOTE: 'false'
+  _PIPELINE: 'ci'
+  _DRIVE_USER: ''
+  _DRIVE_FILE: ''
+  _OWNER_EMAIL: 'tommylin15@gmail.com'
+steps:
+  - id: release-guard
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
+    entrypoint: python3
+    args: ['scripts/cloud_build_release.py', 'prepare']
+  - id: backend-tests
+    name: python:3.12-bookworm
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        test ! -f .release/skip || exit 0
+        test -f .release/backend || exit 0
+        pip install --disable-pip-version-check -r backend/requirements.txt pillow==11.3.0
+        python -m unittest tests/test_branding_assets.py -v
+        python scripts/prepare_branding_assets.py
+        cd backend
+        python -c 'from app.main import app'
+        alembic upgrade head --sql > ../.release/migrations.sql
+        python -m unittest discover -s tests -v
+  - id: flutter-tests-build
+    name: ubuntu:24.04
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        test ! -f .release/skip || exit 0
+        test -f .release/frontend || exit 0
+        apt-get update -qq
+        apt-get install -y -qq curl git xz-utils unzip libglu1-mesa python3 python3-pil
+        python3 -m unittest tests/test_branding_assets.py -v
+        python3 scripts/prepare_branding_assets.py
+        python3 scripts/cloud_build_release.py flutter-sdk
+        export PATH="/workspace/.release/flutter/bin:$$PATH"
+        git config --global --add safe.directory /workspace/.release/flutter
+        flutter pub get
+        flutter analyze --no-pub --no-fatal-infos
+        flutter test --no-pub --reporter expanded
+        flutter build web --target=lib/main_web.dart --no-pub
+        printf '%s\n' "$$RELEASE_SHA" > build/web/release.txt
+        python3 scripts/cloud_build_release.py verify-build
+  - id: docker-build-push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        test ! -f .release/skip || exit 0
+        test -f .release/release || exit 0
+        test -f .release/backend || exit 0
+        docker build -t "us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/life-assistant-backend:$COMMIT_SHA" backend
+        docker push "us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/life-assistant-backend:$COMMIT_SHA"
+  - id: candidate-preview-acceptance-release
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        test ! -f .release/skip || exit 0
+        test -f .release/release || exit 0
+        apt-get update -qq
+        apt-get install -y -qq curl xz-utils
+        curl --fail --silent --show-error https://nodejs.org/dist/v22.20.0/node-v22.20.0-linux-x64.tar.xz -o /tmp/node.tar.xz
+        curl --fail --silent --show-error https://nodejs.org/dist/v22.20.0/SHASUMS256.txt -o /tmp/node-shasums
+        (cd /tmp && grep ' node-v22.20.0-linux-x64.tar.xz$$' node-shasums | sed 's/node-v22.20.0-linux-x64.tar.xz/node.tar.xz/' | sha256sum -c -)
+        tar -xJf /tmp/node.tar.xz --strip-components=1 -C /usr/local
+        npm install --global firebase-tools@14.22.0
+        npm install --no-save playwright@1.55.0
+        npx playwright install --with-deps chromium
+        python3 scripts/cloud_build_release.py deploy

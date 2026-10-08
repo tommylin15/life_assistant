@@ -330,3 +330,12 @@ Phase 1 主導航先維持 Dashboard / Tasks / Calendar / Projects / More；Toda
 - AI 輸出與實際 execution result 清楚分離。
 - mutation 仍需通過 Backend validation / permission / audit。
 - 不改變 life_assistant / omniAgent 的正式責任邊界。
+# CI/CD V2 release contract — 2026-10-08
+
+Authorized infrastructure replacement retains Flutter Web/PWA on Firebase
+Hosting, FastAPI on Cloud Run and PostgreSQL/Alembic. Main-push Cloud Build
+2nd Gen runs CI only; an explicit full-SHA manual Release must separately pass
+candidate, Preview and live API/UI/provider gates
+before CLOSED; preserve existing failures and schedule timing. Full contract,
+cost gate and recovery: `deployment_runbook.md`. Implementation is pending
+real GCP/Firebase acceptance; no product capability is added by this section.

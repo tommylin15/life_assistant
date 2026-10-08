@@ -1,10 +1,6 @@
 name: Calendar True Account Acceptance
 
 on:
-  workflow_run:
-    workflows: [Deploy Cloud Run]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,9 +13,7 @@ concurrency:
 
 jobs:
   accept:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: dev-test

@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
@@ -8,6 +9,7 @@ on:
 
 jobs:
   flutter:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,6 +87,7 @@ jobs:
           grep -Fq '/icons/life-assistant-512-v8.png' build/web/manifest-v6.json
 
   backend:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -110,6 +113,7 @@ jobs:
         run: python -m unittest discover -s tests -v
 
   deployment-scripts:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

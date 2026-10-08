@@ -6,6 +6,14 @@
 
 ## Current
 
+### CI/CD V2 — active user-requested infrastructure work
+
+**IMPLEMENTING / NOT CLOSED**. Cloud Build 2nd Gen main push CI only; explicit
+full-SHA manual Release → candidate/Preview → real acceptance → live/post-deploy.
+Runbook: `deployment_runbook.md`. True main-push and manual Release evidence,
+cost comparison, owner isolation and all existing provider/UI gates remain
+mandatory. No scheduler timing changes; no OmniAgent/Janus implementation work.
+
 ### Paused after #7 — per user instruction
 
 狀態：**#7 Shopping = DONE / PASS；7/11 = 63.6%**。本對話不啟動 #8。

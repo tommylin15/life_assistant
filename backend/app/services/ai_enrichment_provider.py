@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -523,6 +524,182 @@ class ChatCompletionsEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
         return parsed
 
 
+# The omniAgent shared Codex service is a private text-only inference endpoint.
+# Never install Codex CLI or access its OAuth Secret from this consumer.
+_CODEX_PROJECT = "life-assistant"
+_CODEX_METADATA_TOKEN_URL = (
+    "http://metadata.google.internal/computeMetadata/v1/"
+    "instance/service-accounts/default/token"
+)
+_CODEX_MAX_PROMPT_BYTES = 16 * 1024
+_CODEX_MAX_RESULT_CHARS = 32000
+_CODEX_LOCAL_QUEUE = asyncio.Semaphore(1)
+
+
+def codex_owner_uuid(user_sub: str) -> str:
+    """Stable non-reversible project-scoped UUID from authenticated Google sub."""
+    if not user_sub or not user_sub.strip():
+        raise ValueError("missing authenticated user sub")
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, "life-assistant:google-sub:" + user_sub.strip()))
+
+
+class SharedCodexEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
+    """Reuse existing tag/related-note strict downstream validation.
+
+    Owner is derived by the server from the authenticated user, never the client
+    request body. Auth is a scoped GCP ID token minted for the dedicated caller.
+    """
+
+    provider_name = "codex"
+
+    def __init__(self, *, owner_id: str, model: str = "") -> None:
+        try:
+            self._owner_id = str(uuid.UUID(owner_id))
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise ValueError("invalid authenticated Codex owner UUID") from exc
+        self._model = model.strip()
+        self.model_name = self._model or "shared-default"
+        self._base_url = str(config.settings.codex_shared_base_url).rstrip("/")
+        self._caller_sa = str(config.settings.codex_shared_caller_service_account)
+        self.served_models: set[str] = set()
+
+    async def _mint_google_id_token(self, client: httpx.AsyncClient) -> str:
+        """Metadata access token only for calling IAMCredentials:generateIdToken."""
+        try:
+            metadata = await client.get(
+                _CODEX_METADATA_TOKEN_URL,
+                headers={"Metadata-Flavor": "Google"},
+            )
+            if metadata.status_code != 200:
+                raise AIProviderError("provider_auth_unavailable", status_code=metadata.status_code)
+            source_token = metadata.json().get("access_token")
+            if not isinstance(source_token, str) or not source_token:
+                raise AIProviderError("provider_auth_unavailable")
+            identity = await client.post(
+                "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/"
+                + self._caller_sa + ":generateIdToken",
+                headers={"Authorization": "Bearer " + source_token},
+                json={"audience": self._base_url, "includeEmail": True},
+            )
+        except httpx.HTTPError as exc:
+            raise AIProviderError("provider_auth_unavailable") from exc
+        if identity.status_code != 200:
+            raise AIProviderError("provider_auth_unavailable", status_code=identity.status_code)
+        try:
+            result = identity.json()["token"]
+        except (KeyError, ValueError, TypeError) as exc:
+            raise AIProviderError("provider_auth_unavailable") from exc
+        if not isinstance(result, str) or not result:
+            raise AIProviderError("provider_auth_unavailable")
+        return result
+
+    async def _structured_response(
+        self,
+        *,
+        instructions: str,
+        user_payload: dict[str, Any],
+        format_name: str,
+        schema: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not self._base_url.startswith("https://") or not self._caller_sa.endswith(
+            "@gen-lang-client-0593591102.iam.gserviceaccount.com"
+        ):
+            raise AIProviderError("provider_unavailable")
+
+        prompt = (
+            instructions + "\\nReturn ONLY a JSON object matching the exact schema "
+            + format_name + ". Do not run tools. Schema: "
+            + json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
+            + "\\nSupplied input: "
+            + json.dumps(user_payload, ensure_ascii=False, separators=(",", ":"))
+        )
+        if len(prompt.encode("utf-8")) > _CODEX_MAX_PROMPT_BYTES:
+            raise AIProviderError("provider_request_too_large")
+
+        request_id = str(uuid.uuid4())
+        payload: dict[str, str] = {
+            "project": _CODEX_PROJECT,
+            "ownerId": self._owner_id,
+            "requestId": request_id,
+            "prompt": prompt,
+        }
+        if self._model:
+            payload["model"] = self._model
+
+        # Shared service supports one concurrent turn. Queue locally, and on
+        # a genuine 429 retry once with a bounded backoff (read-only prompt).
+        timeout = httpx.Timeout(connect=10.0, read=175.0, write=15.0, pool=15.0)
+        async with _CODEX_LOCAL_QUEUE:
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    identity_token = await self._mint_google_id_token(client)
+                    response = await client.post(
+                        self._base_url + "/v1/codex/execute",
+                        headers={
+                            "Authorization": "Bearer " + identity_token,
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                    )
+                    if response.status_code == 429:
+                        logging.getLogger(__name__).warning(
+                            "drive_codex_backpressure request_id=%s status=429",
+                            request_id,
+                        )
+                        await asyncio.sleep(2)
+                        response = await client.post(
+                            self._base_url + "/v1/codex/execute",
+                            headers={
+                                "Authorization": "Bearer " + identity_token,
+                                "Content-Type": "application/json",
+                            },
+                            json=payload,
+                        )
+            except httpx.TimeoutException as exc:
+                raise AIProviderError("provider_http_error", status_code=408) from exc
+            except httpx.HTTPError as exc:
+                raise AIProviderError("provider_http_error") from exc
+
+        logging.getLogger(__name__).info(
+            "drive_codex_response request_id=%s status_code=%s",
+            request_id,
+            response.status_code,
+        )
+        if response.status_code != 200:
+            raise AIProviderError("provider_http_error", status_code=response.status_code)
+        try:
+            body = response.json()
+            if (
+                not isinstance(body, dict)
+                or body.get("status") != "completed"
+                or body.get("project") != _CODEX_PROJECT
+                or body.get("ownerId") != self._owner_id
+                or body.get("requestId") != request_id
+            ):
+                raise ValueError("invalid response envelope")
+            response_ids = body.get("providerIds")
+            if not isinstance(response_ids, dict) or any(
+                not isinstance(response_ids.get(key), str)
+                or not response_ids[key].strip()
+                for key in ("threadId", "turnId")
+            ):
+                raise ValueError("invalid response trace")
+            raw_text = body["result"]["text"]
+            if (
+                not isinstance(raw_text, str)
+                or not raw_text.strip()
+                or len(raw_text) > _CODEX_MAX_RESULT_CHARS
+            ):
+                raise ValueError("invalid response text")
+            parsed = json.loads(raw_text)
+            if not isinstance(parsed, dict):
+                raise ValueError("invalid JSON schema result")
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise AIProviderError("provider_invalid_output") from exc
+        self.served_models.add(self.model_name)
+        return parsed
+
+
 class FallbackAIEnrichmentProvider(AIEnrichmentProvider):
     """One fallback per stage; metadata identifies the configured routing policy."""
 
@@ -534,13 +711,15 @@ class FallbackAIEnrichmentProvider(AIEnrichmentProvider):
     async def suggest_tags(self, document_context):
         try:
             return await self.primary.suggest_tags(document_context)
-        except AIProviderError:
+        except AIProviderError as exc:
+            logging.getLogger(__name__).warning("drive_ai_fallback primary=%s stage=tags reason=%s status=%s", self.primary.provider_name, exc.code, exc.status_code)
             return await self.fallback.suggest_tags(document_context)
 
     async def rank_related_notes(self, document_context, candidate_notes):
         try:
             return await self.primary.rank_related_notes(document_context, candidate_notes)
-        except AIProviderError:
+        except AIProviderError as exc:
+            logging.getLogger(__name__).warning("drive_ai_fallback primary=%s stage=related_notes reason=%s status=%s", self.primary.provider_name, exc.code, exc.status_code)
             return await self.fallback.rank_related_notes(document_context, candidate_notes)
 
 
@@ -693,10 +872,14 @@ class LatestGeminiEnrichmentProvider(ChatCompletionsEnrichmentProvider):
         raise error
 
 
-def get_ai_enrichment_provider(*, provider: str | None = None, model: str | None = None) -> AIEnrichmentProvider:
+def get_ai_enrichment_provider(*, provider: str | None = None, model: str | None = None, owner_id: str | None = None) -> AIEnrichmentProvider:
     explicit = provider is not None
     provider = (provider if explicit else _setting("ai_enrichment_provider", "AI_ENRICHMENT_PROVIDER", "disabled")).casefold()
     model = model if model is not None else _setting("ai_enrichment_model", "AI_ENRICHMENT_MODEL")
+    if provider == "codex":
+        if not owner_id:
+            return UnavailableAIEnrichmentProvider()
+        return SharedCodexEnrichmentProvider(owner_id=owner_id, model=model or "")
     if provider not in {"openai", "gemini", "openrouter", "groq"}:
         return UnavailableAIEnrichmentProvider()
 
@@ -730,6 +913,15 @@ def get_ai_enrichment_provider(*, provider: str | None = None, model: str | None
         resolved = chain.pop()
         for primary in reversed(chain):
             resolved = FallbackAIEnrichmentProvider(primary, resolved)
+        if config.settings.codex_primary_enabled:
+            if not owner_id:
+                # No authenticated subject means do not send a shared inference.
+                return UnavailableAIEnrichmentProvider()
+            codex = SharedCodexEnrichmentProvider(
+                owner_id=owner_id,
+                model=str(config.settings.codex_shared_model or ""),
+            )
+            resolved = FallbackAIEnrichmentProvider(codex, resolved)
     return resolved
 
 

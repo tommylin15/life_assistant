@@ -17,6 +17,7 @@ from app.services.ai_enrichment_provider import (
     RelatedNoteCandidate,
     UnavailableAIEnrichmentProvider,
     get_ai_enrichment_provider,
+    codex_owner_uuid,
     load_ai_provider_preference,
 )
 
@@ -56,12 +57,14 @@ _PROVIDER_FAILURE_BITS = {
     "openrouter": 2,
     "groq": 4,
     "openai": 8,
+    "codex": 16,
 }
 _PROVIDER_DIAGNOSTIC_BASES = {
     "gemini": 140,
     "openrouter": 155,
     "groq": 170,
     "openai": 185,
+    "codex": 200,
 }
 
 
@@ -154,7 +157,7 @@ def _provider_error_reason(exc: AIProviderError) -> str:
 
 
 async def run_acceptance(*, provider_name: str | None = None, model: str | None = None) -> None:
-    provider = get_ai_enrichment_provider(provider=provider_name, model=model)
+    provider = get_ai_enrichment_provider(provider=provider_name, model=model, owner_id=codex_owner_uuid("synthetic-acceptance-owner"))
     if isinstance(provider, UnavailableAIEnrichmentProvider):
         exit_code = _exit_code_for_unavailable_provider(
             provider=provider_name or str(config.settings.ai_enrichment_provider or ""),
@@ -257,6 +260,10 @@ async def run_configured_providers(*, only_provider: str | None = None) -> None:
     configured = [
         (config.settings.ai_enrichment_provider, config.settings.ai_enrichment_model),
     ]
+    # Direct Codex health must pass independently: a healthy Gemini fallback
+    # does not count as a successful private shared-Codex invocation.
+    if config.settings.codex_primary_enabled:
+        configured.insert(0, ("codex", config.settings.codex_shared_model or ""))
     for tier in ("fallback", "tertiary"):
         name = getattr(config.settings, f"ai_enrichment_{tier}_provider")
         if name:

@@ -1,5 +1,8 @@
 import py_compile
 import unittest
+import uuid
+
+from scripts import run_drive_ai_enrichment_acceptance as acceptance
 from pathlib import Path
 
 
@@ -16,6 +19,15 @@ class DriveAIEnrichmentRuntimeAcceptanceContractTests(unittest.TestCase):
     def test_runtime_acceptance_script_exists_and_compiles(self):
         self.assertTrue(self.script_path.is_file())
         py_compile.compile(str(self.script_path), doraise=True)
+
+    def test_synthetic_provider_resolver_supports_owner_id_keyword(self):
+        provider = acceptance.AcceptanceProvider(
+            "existing-tag", "generated-tag", ("note-one", "note-two")
+        )
+        resolver = acceptance._acceptance_provider_resolver(provider)
+        self.assertIs(resolver(owner_id=uuid.uuid4()), provider)
+        self.assertEqual(provider.tag_calls, 0)
+        self.assertEqual(provider.note_calls, 0)
 
     def test_runner_covers_privacy_cache_tags_suggestions_and_exact_cleanup(self):
         source = self.script_path.read_text(encoding="utf-8")

@@ -101,8 +101,13 @@ def main():
                 o.get("name", "").split("/")[-1]
                 for o in value["items"])
         elif key == "gcs_buckets":
-            # Candidate enumeration only, never infer unused from bucket names.
-            # Backup, application, personal and shared data are intentionally omitted.
+            # Inventory bucket identifiers only; never enumerate their objects
+            # except in the separate bounded read-only CI/CD inventory.
+            data["bucket_names"] = sorted(
+                o.get("name", "").removeprefix("gs://")
+                for o in value["items"] if o.get("name")
+            )
+            # Names alone do not establish deletion eligibility.
             data["possible_ci_cd_buckets"] = sorted(
                 o.get("name", "").removeprefix("gs://")
                 for o in value["items"]
@@ -110,6 +115,13 @@ def main():
                        for x in ("cloudbuild", "build-staging", "cloud-build")))
             data["classification"] = "CANDIDATES_ONLY_NOT_DELETE_APPROVED"
         elif key == "cloud_build_triggers":
+            # Retain the existing life_assistant-specific acceptance output,
+            # while separately exposing *all* regional trigger readback statuses.
+            data["all_triggers"] = sorted(
+                ({"name": o.get("name"), "id": o.get("id"),
+                  "disabled": o.get("disabled", False)}
+                 for o in value["items"]),
+                key=lambda entry: entry["name"] or "")
             data["triggers"] = sorted(
                 ({"name": o.get("name"), "id": o.get("id"),
                   "disabled": o.get("disabled", False)}

@@ -84,6 +84,7 @@ jobs:
           TARGET=.github/workflows/v3-cutover-disable-triggers.yml
           grep -Fq 'gcloud beta builds triggers export' "$TARGET"
           grep -Fq 'gcloud builds triggers import' "$TARGET"
+          grep -Fq 'disabled: true' "$TARGET"
           grep -Fq 'cmp -s' "$TARGET"
           grep -Fq 'legacy_trigger_disabled=PASS' "$TARGET"
           echo "trigger_export_import_contract=PASS" >> "$GITHUB_STEP_SUMMARY"

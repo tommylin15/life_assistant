@@ -102,6 +102,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The ephemeral GitHub gcloud installation does not bundle beta.
+          gcloud components install beta --quiet
           for ITEM in \
             "70ca60f2-8519-40c4-9422-5ac78f1b355f:life-assistant-v2-main" \
             "892a893e-173f-49b2-9055-d5a9adc21496:life-assistant-v2-release"; do

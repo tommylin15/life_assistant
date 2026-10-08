@@ -18,6 +18,7 @@ import urllib.request
 PROJECT = 'gen-lang-client-0593591102'
 REGION = 'us-central1'
 SERVICE = 'life-assistant-api'
+CALLER_SA = 'omniagent-codex-life-client@gen-lang-client-0593591102.iam.gserviceaccount.com'
 SITE = PROJECT
 LIVE = f'https://{SITE}.web.app'
 IMAGE = f'{REGION}-docker.pkg.dev/{PROJECT}/cloud-run-source-deploy/life-assistant-backend'
@@ -219,7 +220,7 @@ def job(module, image, base_url=None):
     if base_url:
         env['ACCEPTANCE_BASE_URL'] = base_url
     gcloud('run', 'jobs', 'update', name, '--region', REGION, '--image', image,
-           '--command', 'python', '--args=-m,scripts.' + module,
+           '--service-account', CALLER_SA, '--command', 'python', '--args=-m,scripts.' + module,
            '--max-retries', '0', '--update-env-vars', ','.join(f'{k}={v}' for k, v in env.items()), '--quiet')
     run('bash', '.github/scripts/run_cloud_run_job_with_diagnostics.sh', name,
         'gcloud', 'run', 'jobs', 'execute', name, '--project', PROJECT,
@@ -376,7 +377,7 @@ def deploy():
         job('apply_cloud_domain_parity_release', image)
         assert_current()
         gcloud('run', 'deploy', SERVICE, '--region', REGION, '--image', image,
-               '--no-traffic', '--tag=v2-candidate', '--update-labels', 'release-sha=' + os.environ['RELEASE_SHA'],
+               '--service-account', CALLER_SA, '--no-traffic', '--tag=v2-candidate', '--update-labels', 'release-sha=' + os.environ['RELEASE_SHA'],
                '--update-env-vars', 'CODEX_PRIMARY_ENABLED=true,ALLOWED_GOOGLE_EMAIL=' + os.environ['ACCEPTANCE_OWNER_EMAIL'], '--quiet')
         service = read_json('run', 'services', 'describe', SERVICE, '--region', REGION)
     revision = service['status']['latestReadyRevisionName'] if (STATE / 'backend').exists() else next(iter(previous))

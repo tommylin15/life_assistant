@@ -389,3 +389,10 @@ Single-user owner allowlist and shared Codex isolation require actual candidate
 evidence; multi-owner collaboration is not added. Historical provider FAIL retained.
 Trigger/build/revision/release identifiers will be recorded only after actual
 execution. No mock/localhost or single Build PASS qualifies for CLOSED.
+
+### CI/CD V2 runtime identity correction (2026-10-08)
+
+- Commit `3a6941bddd7a2ba658240a1e74e255b5ee27da15` real push build `e95cee5e-2c91-44b3-ad81-baa2da1979ad` FAILED before tests: Cloud SDK image has no `python3` on PATH. No deployment executed.
+- User approved and applied only deployer Service Account User on existing `omniagent-codex-life-client`, and that caller Secret Accessor on `life-assistant-bundle`. No default Compute impersonation grant.
+- Candidate/API and the three existing Life Assistant jobs use this dedicated identity on the next release; shared provider checks metadata email and requests the audience-bound identity token directly. Existing live revision remains unchanged until acceptance.
+- V2 remains OPEN; Push CI, release and all mandatory live gates still require real PASS evidence.

@@ -20,8 +20,13 @@ substitutions:
 steps:
   - id: release-guard
     name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
-    entrypoint: python3
-    args: ['scripts/cloud_build_release.py', 'prepare']
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        apt-get update -qq
+        apt-get install -y -qq python3 git
+        python3 scripts/cloud_build_release.py prepare
   - id: backend-tests
     name: python:3.12-bookworm
     entrypoint: bash
@@ -78,7 +83,7 @@ steps:
         test ! -f .release/skip || exit 0
         test -f .release/release || exit 0
         apt-get update -qq
-        apt-get install -y -qq curl xz-utils
+        apt-get install -y -qq curl xz-utils python3 git
         curl --fail --silent --show-error https://nodejs.org/dist/v22.20.0/node-v22.20.0-linux-x64.tar.xz -o /tmp/node.tar.xz
         curl --fail --silent --show-error https://nodejs.org/dist/v22.20.0/SHASUMS256.txt -o /tmp/node-shasums
         (cd /tmp && grep ' node-v22.20.0-linux-x64.tar.xz$$' node-shasums | sed 's/node-v22.20.0-linux-x64.tar.xz/node.tar.xz/' | sha256sum -c -)

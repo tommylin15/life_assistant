@@ -529,7 +529,7 @@ class ChatCompletionsEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
 _CODEX_PROJECT = "life-assistant"
 _CODEX_METADATA_TOKEN_URL = (
     "http://metadata.google.internal/computeMetadata/v1/"
-    "instance/service-accounts/default/token"
+    "instance/service-accounts/default/"
 )
 _CODEX_MAX_PROMPT_BYTES = 16 * 1024
 _CODEX_MAX_RESULT_CHARS = 32000
@@ -564,34 +564,24 @@ class SharedCodexEnrichmentProvider(OpenAIResponsesEnrichmentProvider):
         self.served_models: set[str] = set()
 
     async def _mint_google_id_token(self, client: httpx.AsyncClient) -> str:
-        """Metadata access token only for calling IAMCredentials:generateIdToken."""
+        """Use only the dedicated runtime identity; no impersonation permission."""
         try:
             metadata = await client.get(
-                _CODEX_METADATA_TOKEN_URL,
+                _CODEX_METADATA_TOKEN_URL + "email",
                 headers={"Metadata-Flavor": "Google"},
             )
-            if metadata.status_code != 200:
-                raise AIProviderError("provider_auth_unavailable", status_code=metadata.status_code)
-            source_token = metadata.json().get("access_token")
-            if not isinstance(source_token, str) or not source_token:
+            if metadata.status_code != 200 or metadata.text.strip() != self._caller_sa:
                 raise AIProviderError("provider_auth_unavailable")
-            identity = await client.post(
-                "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/"
-                + self._caller_sa + ":generateIdToken",
-                headers={"Authorization": "Bearer " + source_token},
-                json={"audience": self._base_url, "includeEmail": True},
+            identity = await client.get(
+                _CODEX_METADATA_TOKEN_URL + "identity",
+                headers={"Metadata-Flavor": "Google"},
+                params={"audience": self._base_url, "format": "full"},
             )
         except httpx.HTTPError as exc:
             raise AIProviderError("provider_auth_unavailable") from exc
-        if identity.status_code != 200:
+        if identity.status_code != 200 or not identity.text.strip():
             raise AIProviderError("provider_auth_unavailable", status_code=identity.status_code)
-        try:
-            result = identity.json()["token"]
-        except (KeyError, ValueError, TypeError) as exc:
-            raise AIProviderError("provider_auth_unavailable") from exc
-        if not isinstance(result, str) or not result:
-            raise AIProviderError("provider_auth_unavailable")
-        return result
+        return identity.text.strip()
 
     async def _structured_response(
         self,

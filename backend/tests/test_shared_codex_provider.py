@@ -133,19 +133,26 @@ class SharedCodexProviderTests(unittest.IsolatedAsyncioTestCase):
         calls = []
         def handler(request):
             calls.append(request)
-            if request.url.host == "metadata.google.internal":
-                self.assertEqual(request.headers["Metadata-Flavor"], "Google")
-                return httpx.Response(200, json={"access_token": "synthetic-source"})
-            sent = json.loads(request.content)
-            self.assertEqual(sent["audience"], "https://omniagent-shared-codex-2oo7qbkd5q-uc.a.run.app")
-            self.assertTrue(sent["includeEmail"])
-            self.assertIn("omniagent-codex-life-client@", str(request.url))
-            self.assertEqual(request.headers["Authorization"], "Bearer synthetic-source")
-            return httpx.Response(200, json={"token": "synthetic-bound-id-token"})
+            self.assertEqual(request.url.host, "metadata.google.internal")
+            self.assertEqual(request.headers["Metadata-Flavor"], "Google")
+            if request.url.path.endswith("/email"):
+                return httpx.Response(200, text=self.provider._caller_sa)
+            self.assertTrue(request.url.path.endswith("/identity"))
+            self.assertEqual(request.url.params["audience"], self.provider._base_url)
+            self.assertEqual(request.url.params["format"], "full")
+            return httpx.Response(200, text="synthetic-bound-id-token")
         async with original(transport=httpx.MockTransport(handler)) as client:
             token = await self.provider._mint_google_id_token(client)
         self.assertEqual(token, "synthetic-bound-id-token")
         self.assertEqual(len(calls), 2)
+
+    async def test_metadata_rejects_other_runtime_identity(self):
+        def handler(request):
+            self.assertTrue(request.url.path.endswith("/email"))
+            return httpx.Response(200, text="default-compute@example.com")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with self.assertRaises(ai.AIProviderError):
+                await self.provider._mint_google_id_token(client)
 
     async def test_codex_primary_first_then_legacy_fallback(self):
         with (

@@ -51,3 +51,12 @@ Google all-day edit (preserving `date` rather than converting to `dateTime`) is 
 - Cloud Run #448 cancelled because superseded. #449 in progress; #450 pending. Runtime and true Google account read remain NOT VERIFIED.
 - #63 and #70 Gemini/OpenRouter AI regression OPEN/FAIL, excluded from Calendar-specific gates per user decision.
 - Package #8 remains PARTIAL; completed packages 7/11 = 63.6%.
+
+## 2026-10-08 Calendar #8 continued diagnostics
+
+- Exact release `84e9246b29659c6f11bcf71778af40fa3c4f7366`: CI #579 PASS, Firebase #397 PASS, Cloud Run #451 / run 37710888617 PASS (migration, cloud-domain, checklist, idempotency, Google provider failure-path, SQLite normal/failure).
+- Calendar UI #5 / run 37711145190 FAIL **after** month/all-day PASS, create/timezone PASS, update PASS. Delete button label for renamed event not found even after scrolling; confirm/delete/mobile not reached. Do not call #8 UI PASS.
+- Calendar True Account #4 / run 37712486403 FAIL: Cloud Run job task exit 1. Direct reason not established because current CI identity receives Cloud Logging PERMISSION_DENIED. No IAM changes authorized or made here.
+- Follow-up change: categorised exit codes (reauthorization 21, insufficient scope 22, upstream 23, unavailable 24, invalid output 26, DB 31, runtime 32), plus Flutter web semantic-tree diagnostics and renamed-action widget regression assertion. Fail-closed behavior remains.
+- Post-deploy #117 still ongoing at this checkpoint and must be read back separately.
+- Package status: PARTIAL (7/11 completed = 63.6%). #63 Gemini/OpenRouter remains independent OPEN/FAIL, not a Calendar gate.

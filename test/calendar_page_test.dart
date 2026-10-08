@@ -133,6 +133,9 @@ void main() {
     expect(api.updated.single['id'], 'event-1');
     expect(api.updated.single['summary'], '工作會議');
     expect(DateTime.parse(api.updated.single['start'] as String).isUtc, true);
+    // A renamed event must also expose the updated accessible action label.
+    expect(find.byTooltip('刪除行程：工作會議'), findsOneWidget);
+    expect(find.byTooltip('刪除行程：會議'), findsNothing);
   });
 
   testWidgets('delete requires explicit confirmation', (tester) async {

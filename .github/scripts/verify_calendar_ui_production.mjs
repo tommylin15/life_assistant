@@ -141,12 +141,25 @@ async function eventAction(page, verb, title) {
     await page.mouse.wheel(0, 260);
     await delay(260);
   }
-  const labels = await page.locator('[aria-label]').evaluateAll(elements =>
-    elements.map(el => el.getAttribute('aria-label'))
-      .filter(s => s && /行程：/.test(s)).slice(0, 20),
-  );
+  const diagnostics = await page.evaluate(() => ({
+    href: location.pathname,
+    flutterViews: document.querySelectorAll('flutter-view').length,
+    placeholders: document.querySelectorAll('flt-semantics-placeholder').length,
+    semantics: [...document.querySelectorAll('flt-semantics')]
+      .slice(0, 90).map(el => ({
+        role: el.getAttribute('role'),
+        aria: el.getAttribute('aria-label'),
+        text: (el.textContent || '').slice(0, 100),
+      })),
+    buttons: [...document.querySelectorAll('[role=button]')]
+      .slice(0, 50).map(el => ({
+        role: el.getAttribute('role'),
+        aria: el.getAttribute('aria-label'),
+        text: (el.textContent || '').slice(0, 70),
+      })),
+  }));
   throw new Error('Missing Calendar action ' + expected +
-    ' after scrolling; visibleLabels=' + JSON.stringify(labels));
+    ' after scrolling; diagnostics=' + JSON.stringify(diagnostics));
 }
 
 async function observed(predicate, label) {
@@ -197,7 +210,8 @@ async function desktop(context) {
   await observed(() => state.updates.some(item => item.id === 'calendar-1' && item.body.summary === '更新後的會議'), 'update');
   await named(page, '更新後的會議');
   console.log('calendar_ui_check=update:PASS');
-
+  // Modal pop/rebuild can suspend Flutter semantics on web; reactivate if needed.
+  await semantics(page);
   await eventAction(page, '刪除', '更新後的會議');
   await named(page, '確認刪除行程');
   assert.equal(state.deletes.length, 0, 'delete happened without confirmation');

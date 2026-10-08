@@ -25,6 +25,23 @@ class CalendarTrueAccountAcceptanceContractTests(unittest.TestCase):
         self.assertNotIn("print(events)", source)
         self.assertNotIn("print(user_ids)", source)
 
+    def test_failure_categories_can_be_diagnosed_without_cloud_logging(self):
+        source = RUNNER.read_text(encoding="utf-8")
+        for category in (
+            '"reauthorization": 21',
+            '"insufficient_scope": 22',
+            '"google_upstream": 23',
+            '"google_unavailable": 24',
+            '"invalid_output": 26',
+            '"database": 31',
+            '"runtime": 32',
+        ):
+            with self.subTest(category=category):
+                self.assertIn(category, source)
+        self.assertIn("except HTTPException as exc:", source)
+        self.assertIn("except SQLAlchemyError:", source)
+        self.assertNotIn("print(exc)", source)
+
     def test_independent_post_deploy_workflow_reuses_core_job(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("Deploy Cloud Run", workflow)

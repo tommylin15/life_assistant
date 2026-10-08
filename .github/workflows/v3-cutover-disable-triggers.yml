@@ -130,21 +130,12 @@ jobs:
               -X PATCH -d "$PATCH_BODY" \
               "https://cloudbuild.googleapis.com/v1/projects/$GCP_PROJECT_ID/locations/$GCP_REGION/triggers/$ID?projectId=$GCP_PROJECT_ID&triggerId=$ID&updateMask=disabled")"
             if [ "$PATCH_STATUS" != "200" ]; then
-              python - "$RUNNER_TEMP/v3-trigger-$ID-after.json" "$PATCH_STATUS" <<'PY'
-            import json,sys
-            try:
-                payload=json.load(open(sys.argv[1]))
-                error=payload.get("error",{})
-                category=str(error.get("status","UNKNOWN"))[:60]
-                message=str(error.get("message",""))[:200]
-                if any(word in message.lower() for word in
-                       ("secret","credential","authorization","token","password")):
-                    message="[redacted]"
-                print("::error::Cloud Build PATCH status="+sys.argv[2]+
-                      " category="+category+" reason="+message)
-            except (ValueError,OSError,TypeError):
-                print("::error::Cloud Build PATCH failed; response unavailable")
-            PY
+              PATCH_CATEGORY="$(jq -r '.error.status // "UNKNOWN"' "$RUNNER_TEMP/v3-trigger-$ID-after.json" 2>/dev/null || printf UNKNOWN)"
+              PATCH_MESSAGE="$(jq -r '.error.message // "Cloud Build API failure"' "$RUNNER_TEMP/v3-trigger-$ID-after.json" 2>/dev/null | cut -c1-160 || true)"
+              if printf '%s' "$PATCH_MESSAGE" | grep -Eiq 'secret|credential|authorization|bearer|token|password'; then
+                PATCH_MESSAGE="[redacted]"
+              fi
+              echo "::error::Cloud Build PATCH code=$PATCH_STATUS category=$PATCH_CATEGORY reason=$PATCH_MESSAGE"
               exit 1
             fi
             gcloud builds triggers describe "$ID" --project "$GCP_PROJECT_ID" \

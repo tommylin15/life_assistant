@@ -11,7 +11,7 @@
 ## Admin & machine integrations
 
 - Admin Center owner-only features require backend identity/role enforcement, audit logs, scoped read/write and separate confirmation of dangerous operations. The feature rollout list is an availability control, **not** data access privilege.
-- A scheduled ChatGPT task may read eligible Queue rows and submit selected/skipped decisions only through an explicitly authorized Life API/connector. It never writes Queue columns directly; source changes/races and IDempotency are validated in Backend. Private plugin integration in scheduled execution must be E2E verified before claiming it functions.
+- A ChatGPT scheduled task may submit already-selected activities via an explicitly authorized Life API/connector; it does not query/write Life Queue (cancelled). Life validates idempotent upsert and caller privileges. Private plugin integration in scheduled execution must be E2E verified before claiming it functions.
 - V3 GitHub deploy uses short-lived OIDC/WIF with separate least-privilege deployer, not long-lived keys. Production secret rotation and broad IAM changes require explicit consent.
 
 ## Revocation and failure

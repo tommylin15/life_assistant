@@ -1,29 +1,17 @@
-# Life — Approved Product Architecture (2026-10-10)
+# Life — Current Approved Product Architecture (2026-10-10)
 
-**Approved design only; not proof of implementation.** Source of truth for reality is [CURRENT_STATE.md](CURRENT_STATE.md) and Github runtime. Tracking: [activity #10](https://github.com/tommylin15/life_assistant/issues/10), [Life AI #11](https://github.com/tommylin15/life_assistant/issues/11), [navigation/home #12](https://github.com/tommylin15/life_assistant/issues/12).
+**Product direction approved; unimplemented features must not be called deployed.** GitHub code/runtime are Source of Truth: [current state](CURRENT_STATE.md).
 
-## Three distinct roles
+## Architecture
 
-1. **Life Backend** owns APIs, deterministic source adapters, PostgreSQL Queue, dedup/verification basics, operational jobs, AI consent enforcement, internal Drive AI Provider resolution, selected-pool persistence and audit.
-2. **ChatGPT Chat daily tasks** (user-managed, separate from Life AI provider configuration) analyze pending official activity Queue rows through **read-only Life API** and evaluate permitted official-site workbook URLs. They submit **select/skip decisions** via an authenticated Life API; only Life Backend updates Queue state in the same committed transaction as the decision. Stale version/fingerprint fails closed. Scheduled connector API access must pass actual E2E before being claimed.
-3. **Users** browse the terminal **selected activity pool** and decide for themselves; no extra official recommendation/registration-ready publication gate. Minor uncertainty allowed with explicit unknown labels. Nothing auto-writes personal Calendar/task/note for a viewed activity.
+Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL. Life owns Data + UI + API + Execution + Integration, not general agent reasoning.
 
-## Sources and data
+**One and only one activity data path:** ChatGPT independently finds/selects events → Life authenticated direct intake API → PostgreSQL **curated pool** → Flutter list/cards. Life does not ingest MoC/TDX, inspect official-site Excel, run a source crawler or Queue, or apply a second AI/recommendation/publication layer. User freely browses, filters and chooses. [Activity contract](taiwan_free_events_discovery_plan.md), [GitHub #10](https://github.com/tommylin15/life_assistant/issues/10).
 
-- Ministry of Culture approved fixed JSON → normalized durable Queue only; TDX only after source approval; official website list is a separate approved-source allowlist. EventGo and yii.tw **will not be crawled**. General data.gov.tw catalog remains deferred.
-- Exclude clearly stale, duplicate or unsafe source URLs; do not invent fee, deposit, benefit valuation, registration availability or timing. Retain source attribution, event identity, fingerprint, observed date and AI decision provenance. Existing MoC worker requires refactor: it currently auto-drains the Queue into legacy catalog.
+**Minimal Life admin modules:** curated items and inbound processing errors (not source/Queue operators); system health; internal Life Drive AI providers/models/quotas [#11](https://github.com/tommylin15/life_assistant/issues/11); global feature release toggles [#12](https://github.com/tommylin15/life_assistant/issues/12).
 
-## Admin Center vs personal settings
+**Each user's own settings:** Google Gmail/Calendar/Drive consent, Drive AI content processing consent, navigation bottom/left favorites/order and homepage cards. Backend auth applies separately. Admin may never read other users' Drive private content or OAuth secrets.
 
-- **Admin modules**: (1) Sources & Queue, (2) ChatGPT curation outcomes / batch visibility, (3) Operations, (4) **Life internal AI Provider health/model/configuration and budget**, (5) **feature availability** (hidden/beta/open/maintenance), with backend owner-only authorization and audit.
-- **Personal settings**: each user independently authorizes Google Drive/Gmail/Calendar and Drive AI document-consent, arranges allowed feature icons/ordering/placement, and configures their own Home dashboard cards. Admin cannot inspect user private Drive documents/Gmail or override individual AI consent.
+**Flutter UI:** Keep Material 3 responsive mobile bottom nav and desktop left rail. Per-user Home cards: tasks, schedule, attention, habits, projects and (after new API release) curated event previews; optional notes, shopping, consented Drive AI.
 
-## Flutter UI
-
-- Reuse Material 3 Flutter Web. On compact/mobile, bottom `NavigationBar` with up to five entries; on desktop, `NavigationRail` / extended left rail; responsive auto is default, with user preference for left/bottom where feasible (phone left preference via drawer). Keep Home/More discoverable, allow reordering three middle favorites and other destinations.
-- **Home** becomes a real, customizable dashboard: today's tasks, next calendar event, needs attention, habits, selected activities (after backend available), projects; optional notes, shopping, Drive AI (only consented). Per-user show/hide/order, no mandatory LLM Home inference, correct loading/empty/error/disconnected states.
-- Global effective feature list = built-in capability registry ∩ admin rollout/role policy ∩ authenticated user permissions; personal layout can reorder but never enable a blocked feature.
-
-## Release and ownership
-
-Current `/today` is a placeholder and `/more/events` is verified-only, not the planned selected pool. New admin/curation APIs and UI are **NOT IMPLEMENTED** until source, tests, CI, production deployment and real user E2E are proven. Do not conflate ChatGPT task orchestration with OmniAgent global agent runtime; no new cross-project role.
+**Current code gap:** previously added PostgreSQL source/catalog/Queue migrations 0011–0014 remain for history; legacy verified-only events API/UI still exists. New ChatGPT direct write/curated read/Flutter cards and scheduled connector E2E are NOT IMPLEMENTED/NOT VERIFIED. Deleting GitHub workflows does not verify removal of external GCP Cloud Scheduler triggers.

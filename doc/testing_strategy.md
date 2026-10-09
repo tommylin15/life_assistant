@@ -11,7 +11,7 @@ All tests must correspond to existing implementation and actual changed behavior
 ## Runtime / user integration
 
 - Exact full SHA CI → candidate health/ready/401 → migration/DB schema readback → production traffic/rollback → real Google OAuth/Calendar/Drive scope and direct provider health where relevant; verify both backend and frontend release SHA.
-- Free Events: official MoC producer **Queue-only after refactor**, separate source/job/observed counts, unapproved source fetch denied; ChatGPT GET leaves Queue untouched; decision POST selected/skip recorded atomically with server ACK; replay, stale fingerprint, concurrent task, unknown fee/date, and final selected-pool UI readback. Testing via mocked connector is insufficient for real daily scheduled ChatGPT tool E2E.
+- Free Events: No Life source crawler/Queue. Test direct ChatGPT-selected POST with auth, duplicate replay, unknown fee/date, safe URL, atomic PostgreSQL upsert and final selected-pool Flutter readback. Mocked connector is insufficient for real ChatGPT scheduled E2E.
 - Admin / personalization: real user cannot mutate/see owner-only settings; one user cannot read/write another user's preferences; a globally hidden feature denies deep-link/API; each user's Drive content-consent OFF prevents provider access regardless of admin toggles.
 - Record run IDs, commit/digest, real source data scope, failure category, state transitions, per-layer PASS/FAIL/NOT VERIFIED. A job workflow success alone never proves a PostgreSQL row count or end-user availability.
 

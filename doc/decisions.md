@@ -1,5 +1,12 @@
 # 生活助理 App v0.1 — Confirmed Decisions
 
+## 2026-10-10 — 活動流程再次精簡（最新決策，覆蓋下文 Queue 設計）
+
+- Life 活動工項**只做 ChatGPT 已精選活動 → 授權 API → 去重存 PostgreSQL 精選池 → Flutter 使用者自行挑選**。前置文化部/TDX/官網 Excel/來源清單/Queue/資料爬蟲、source Job、14 天來源觀測及後置正式推薦均取消。
+- 原 ChatGPT 台灣活動探索排程仍寫舊 Sheets/Queue，已先停用；新直接寫入排程在 API/connector E2E PASS 前不可宣稱可運作。
+- 已存在的 Alembic migrations、Cloud Run Job 歷史配置和舊活動資料保留，停用不是 destructive migration／production 資源刪除。Live GCP Scheduler 另查。
+- 其他後台 Life AI [#11](https://github.com/tommylin15/life_assistant/issues/11) 與個人化導覽/首頁 [#12](https://github.com/tommylin15/life_assistant/issues/12) 不受此次活動縮減影響。
+
 ## 2026-10-10 — 已核准新版產品決策（優先於下方衝突歷史文字）
 
 - [活動 V2 #10](https://github.com/tommylin15/life_assistant/issues/10)：核准文化部與日後授權的 TDX **Queue-only** 官方擷取；ChatGPT Chat 排程以唯讀 API 讀 Queue，透過獨立 Life 篩選 API 提交 selected / skipped，Life Backend 同筆交易寫入決定並 ACK Queue；另可掃描經審核官方網址清單。**精選池是使用者可見終點**，不做正式推薦或可報名二次發布判定。EventGo、yii.tw 禁止未來直接自動爬取；資料不足時保留未知欄位而不捏造。

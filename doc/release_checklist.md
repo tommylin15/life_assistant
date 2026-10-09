@@ -8,7 +8,7 @@ A *working CI* or a *successful V3 GHCR release* is **not** proof that the entir
 - [ ] 0%-traffic Cloud Run candidate health/ready/auth and changed API acceptance; exact SHA Firebase Preview and rewrite/matched backend candidate.
 - [ ] PostgreSQL additive migration real target version, idempotency/rollback strategy, schema consistency without Base.metadata DDL from live API.
 - [ ] Approved V3 promotion, controlled traffic/rollback, live OAuth redirects, real account read/write where relevant, strict backend role/owner isolation.
-- [ ] Source Jobs/retries/Queue row counts verified independently (no Job success → persisted events assumption), no unapproved source crawl, no cross-product data mutation.
+- [ ] Direct ChatGPT-to-curated-pool real authorized POST, idempotent dedup, PostgreSQL readback and user Flutter list. Obsolete MoC/TDX source jobs and Queue are cancelled, NOT required release gates.
 - [ ] Personal Google/Drive OAuth and consent isolated; global Life AI settings cannot override user consent; no token leakage or secret in UI/log.
 - [ ] Responsive user-facing Flutter UI, enabled/disabled feature access, navigation/Home preferences, stale/empty/error states and required real E2E.
 - [ ] Exact logs/links recorded as **PASS / FAIL / NOT VERIFIED**; any missing mandatory gate stays PARTIAL, not DONE.

@@ -1,5 +1,7 @@
 # life_assistant — Product Spec
 
+> **2026-10-10 latest activity decision:** ChatGPT directly submits selected activities to Life API/curated pool; all earlier Life upstream scanning/Queue and extra publication gates are **cancelled**. Refer to [current product contract](CURRENT_PRODUCT_ARCHITECTURE.md); dated lower sections are historical scope only.
+
 > **2026-10-10 更新：** 活動只建立使用者精選池、管理員控制 feature rollout 與 Life Provider、使用者自訂導覽／首頁的最新規格見 [CURRENT_PRODUCT_ARCHITECTURE.md](CURRENT_PRODUCT_ARCHITECTURE.md) 與 [Issues #10–#12](https://github.com/tommylin15/life_assistant/issues)。下方 2026-09/10 早期的固定五入口、嚴格可報名核實或 ChatGPT 任務終止等敘述屬歷史脈絡，不再是新的產品要求；實作仍以 runtime 為準。
 
 

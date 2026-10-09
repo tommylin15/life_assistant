@@ -12,7 +12,7 @@
 
 - Encrypt OAuth credentials in persistence and do not log/export any refresh/access token, API key, database password, private Google document body or service-account credential. Runtime secrets via Secret Manager/GitHub masked settings/short-lived WIF, no long-lived deploy SA JSON keys.
 - Life Drive AI provider usage requires user's explicit content-consent (default OFF); admin enabling provider globally never overrides it. Provider responses are untrusted, schema validated and may fail partially; fallback is not evidence that direct primary model passed.
-- ChatGPT scheduled activity curation only reads Queue via bounded auth API and POSTs a separately authorized select/skip decision; Life Backend atomically persists and ACKs Queue version, never accepts caller-supplied verified/publish flags as authoritative. No direct LLM DB access.
+- ChatGPT directly submits selected activity rows through a bounded, separately authorized Life API. Life validates HTTPS provenance, stable dedup and permitted fields, then upserts curated pool. No Life event Queue, source crawler, or user calendar auto-writes. No direct LLM DB access.
 
 ## Data / operations
 

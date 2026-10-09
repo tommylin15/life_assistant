@@ -1,24 +1,13 @@
-# life_assistant — Current State
+# life_assistant — Current State (2026-10-10)
 
-**Observed 2026-10-10; point-in-time evidence, not a live dashboard.** Current GitHub main and runtime decide actual completion. Overall product: **PARTIAL**.
+**Overall PARTIAL.** Actual GitHub main + runtime evidence outrank this snapshot.
 
-## Current architecture
+Architecture: Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL. Deployment: GitHub Actions → public GHCR digest → Cloud Run V3; previous release [37959057237](https://github.com/tommylin15/life_assistant/actions/runs/37959057237) PASS for prior SHA.
 
-Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL. GitHub `main` → Actions complete CI → public GHCR immutable digest → Cloud Run via V3. Production: https://gen-lang-client-0593591102.web.app/ ; fixed staging site: https://life-assistant-v3-stage-tl15.web.app/ (real fixed staging OAuth and safe rollback still require separate evidence).
+## New simplified activity path
 
-## Verified release and remaining blockers
+Only **ChatGPT (research/selection) → Life authenticated curated-items API → PostgreSQL → Flutter user curated pool**. All Life activity upstream (MoC/TDX/official Excel, source registry, Queue, source batch/scheduler, extra publication gate) CANCELLED. Previous ChatGPT task writing Google Sheets/Queue disabled.
 
-| Scope / gate | Status | Evidence |
-|---|---|---|
-| CI for SHA `ca23bedaa015988356b721330edd2da1fdbc43ce` (backend, Flutter, deploy scripts, real PG16) | **PASS** | [37958755185](https://github.com/tommylin15/life_assistant/actions/runs/37958755185) |
-| V3 Cloud Run release of that SHA | **PASS** (workflow conclusion, not every product feature) | [37959057237](https://github.com/tommylin15/life_assistant/actions/runs/37959057237) |
-| Free Events one-shot post-release source Job pin | **FAIL** at `Pin existing MoC source Job to promoted immutable GHCR digest` | [37958755189](https://github.com/tommylin15/life_assistant/actions/runs/37958755189) |
-| Other official MoC observation workflow | **PASS** for execution; **NOT VERIFIED** for true latest Queue row counts | [37960798513](https://github.com/tommylin15/life_assistant/actions/runs/37960798513) |
-| Owner-authenticated production Free Events Queue/selected pool readback, TDX, ChatGPT task E2E | **NOT VERIFIED** | No passing evidence available |
-| Admin UI, feature rollout settings, custom navigation, real Home dashboard | **NOT IMPLEMENTED** | `lib/web/app_shell.dart` and `lib/web/web_app.dart` still hardcode navigation; `/today` placeholder |
+Code cleanup [10335187](https://github.com/tommylin15/life_assistant/commit/10335187e3e2a338eed5c76b4d61bd2c18a605e3) removed old GitHub source workflows/crawlers and replaced MoC source-job Python entrypoint with fail-closed stub. **Legacy Alembic 0011–0014, historical DB data and legacy GET /api/v1/free-events are retained.** New direct POST/GET and Flutter pool have **NOT** been implemented or deployed. Existing Cloud Run Job configuration/scheduler runtime needs a separate readback; deletion of GitHub cron does not stop any independent GCP trigger.
 
-**Important old/new design difference:** current `backend/scripts/run_free_events_moc_batch.py` enqueues and *immediately drains* the candidate Queue into the legacy free_event catalog; this **does not** yet implement the approved Queue-only → ChatGPT Chat curation → user-selected pool flow. Backend only has verified-only `GET /api/v1/free-events` and owner-only `/status`, not the proposed ChatGPT batch read/write APIs.
-
-**AI / privacy:** Life internal provider routing exists in `backend/app/services/ai_enrichment_provider.py`; production multi-provider direct-health/cost and admin controls are **NOT VERIFIED**. Per-user Drive consent and Google OAuth are keyed by `user_sub` in code; cross-account live E2E must still be evidenced.
-
-Past test/acceptance evidence is retained in [historical archive](archive/README.md); consult [acceptance.md](acceptance.md) for up-to-date evidence gates. No new deployment or data modification follows from this file.
+Historical MoC activation [37958755189](https://github.com/tommylin15/life_assistant/actions/runs/37958755189) FAIL remains honest historical evidence but not a current release blocker. Main cleanup CI/run must be verified separately. Life Drive AI admin [#11](https://github.com/tommylin15/life_assistant/issues/11) and per-user feature/navigation/Home [#12](https://github.com/tommylin15/life_assistant/issues/12) remain independent and NOT IMPLEMENTED.

@@ -1,5 +1,7 @@
 # life_assistant — UI / UX Spec
 
+> **Current activity UI decision:** show ChatGPT-submitted selected pool directly; no source Queue management, strict verified-only filtering or second official publishing stage for the new V2 UI. Implementation is not yet verified.
+
 > **2026-10-10 導覽與首頁補充（待實作）：** 管理員開放功能集合，使用者在已允許範圍內自訂手機底部/電腦左側入口順序及首頁卡片；沿用 Flutter Material 3 與既有 responsive breakpoint，不改成額外的 UI 框架。活動 UI 最終顯示精選池，而非第二階段正式推薦。詳見 [CURRENT_PRODUCT_ARCHITECTURE.md](CURRENT_PRODUCT_ARCHITECTURE.md) 與 [Issue #12](https://github.com/tommylin15/life_assistant/issues/12)。此文件下方原始頁面稿不代表目前已完成的 API/畫面。
 
 

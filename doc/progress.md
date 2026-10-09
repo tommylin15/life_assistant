@@ -1,10 +1,9 @@
-# Life — Progress Rollup (2026-10-10)
+# Life — Progress (2026-10-10)
 
-Overall **PARTIAL**. Historical detailed state and run evidence are archived in [progress_through_2026-10-09.md](archive/progress_through_2026-10-09.md) and [acceptance_through_2026-10-09.md](archive/acceptance_through_2026-10-09.md).
+**Overall PARTIAL.** Historical V3 exact-SHA release [37959057237](https://github.com/tommylin15/life_assistant/actions/runs/37959057237) PASS, prior source activation [37958755189](https://github.com/tommylin15/life_assistant/actions/runs/37958755189) FAIL (now CANCELLED scope, not a blocker). Docs cleanup CI [37967964969](https://github.com/tommylin15/life_assistant/actions/runs/37967964969) PASS.
 
-- Current source SHA `ca23bedaa015988356b721330edd2da1fdbc43ce`: CI [37958755185](https://github.com/tommylin15/life_assistant/actions/runs/37958755185) **PASS**, V3 Release [37959057237](https://github.com/tommylin15/life_assistant/actions/runs/37959057237) **PASS**.
-- P0–P2 source activation [37958755189](https://github.com/tommylin15/life_assistant/actions/runs/37958755189) **FAIL** pinning existing MoC job to approved GHCR digest. Separate MoC observation [37960798513](https://github.com/tommylin15/life_assistant/actions/runs/37960798513) **PASS workflow only**; real persisted counts **NOT VERIFIED**.
-- Activities V2 ChatGPT selection, official workbook, TDX, curated-pool UI; admin AI settings, feature rollout, user navigation and real Home are approved **plans**, not live features.
-- Original Calendar #8 completion evidence is in archived acceptance; no claim of new full Phase 1 closure. Deployment gates must be rechecked for the newest release and affected features.
+On new user instruction, 22 obsolete source-workflow/scripts/test/registry files were removed, and the legacy MoC Cloud Run entrypoint made fail-closed (no fetch or DB writes) in [code cleanup commit](https://github.com/tommylin15/life_assistant/commit/10335187e3e2a338eed5c76b4d61bd2c18a605e3). ChatGPT prior activity task that wrote old Sheets/Queue has been disabled.
 
-Detailed actionable scope: [active delivery order](phase1_delivery_order.md), [TODO](todo.md), [Current State](CURRENT_STATE.md).
+Direct ChatGPT→curated pool POST/GET and Flutter selected-pool view: **NOT IMPLEMENTED / NOT VERIFIED**. Old Alembic migrations and past verified-only API remain for safety. Actual GCP Job/Scheduler trigger stop-state **NOT VERIFIED**; no production GCP resource deletion occurred.
+
+Separate UI feature rollout and Life AI admin issues remain open. [Next tasks](todo.md), [state](CURRENT_STATE.md).

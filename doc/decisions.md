@@ -152,8 +152,14 @@ User-approved target changed from the earlier conversational 2-revision proposal
 - 不做自動替使用者報名/付款、繞過反爬、完整票務平台或常駐 VM。MVP 的安全、授權、幂等、資料品質、真實 Google 整合、mobile/desktop 以及 runtime evidence 不可降標。
 - 原有 Phase 1 11-package 完成數與 #9–#11 封板工作保留。此次優先順序變更**不是默認修改 Phase 1 Release Gate/scope freeze**；進入實作須依現有治理紀錄是否列為 release blocker。當前 **APPROVED PLAN / NOT IMPLEMENTED**。
 
-## 2026-10-09 — 全功能 AI Routing Policy 修訂
+## 2026-10-09 — 全功能 AI Router 正式政策（最新，覆蓋歷史 Codex-first）
 
-使用者明確指定統一推論順位：**Gemini Flash 動態最新三型號 → Gemini Flash-Lite 動態最新三型號 → Groq → OpenRouter → 現有 private Shared Codex（使用者稱 Codex CLI）**。Flash / Lite 各自保存最後成功模型，下次同系列先試該模型；失效才輪替其他在官方列表內可用的穩定候選。各系列最多三個，未湊滿不得加入 Preview/TTS。來源沒變或規則可解時 AI 呼叫應為 0；這是 provider fallback 順序，不是每次掃描都逐個呼叫五家。
+**批准的順位**：Gemini `latest-3-flash` → Gemini `latest-3-flash-lite` → Groq → OpenRouter → 現有私有 Shared Codex（使用者所稱 Codex CLI）。每組 Gemini 由實際 API 模型清單選最多三個穩定文字候選，PostgreSQL 分別保存最後成功型號，下一輪本組優先用仍有效的該型號，失敗才在本組及後備供應商輪替。不以 preview/TTS 湊滿數量；不代表每次工作都必須呼叫五層。
 
-保留 Shared Codex 原私有 Cloud Run consumer、owner scoped GCP ID-token 與 Secret 隔離；現有 `CODEX_PRIMARY_ENABLED` 名稱為相容設定，實際路由改為**Codex 最後**。若未經生產驗收，不得宣稱五階段都可用；原有 Drive AI consent、cache、partial success、provider direct-health gates 不得降低。其他專案（omniAgent／Janus）不在本決策修改範圍內。
+遵守既有 consent、失敗/partial、model fingerprint/cache、個別 provider direct-health、Cloud Run owner identity 和 Secret 隔離；未經正式部署/E2E 不得標示已上線。**詳情以 [`ai_provider_policy.md`](ai_provider_policy.md) 為唯一正式政策**，不得在 `decisions.md` 和 `integrations.md` 複製另一份 fallback 演算法。
+
+## 2026-10-09 — 活動探索最小資料與 Batch AI 省用量決策
+
+Post-Calendar P0 活動探索採**公用精簡活動卡＋少量必要證據／個人選擇分離**：儲存 Event、Session、Registration Opportunity、Organizer、核心場次與報名時間／狀態、免費/資格條件、主辦來源、60–120 中文字短摘要、標籤、可合法使用的圖片 URL；不長期複製整站 HTML、圖片原始檔、完整 LLM prompt。沒有合法圖片時用 Flutter 內建主題圖示與模板資訊維持 UI 品質，詳細內容連回主辦原站。
+
+每 12 小時 06:00／18:00 只做**來源增量掃描**，不代表執行 AI；資料未改、結構化資料能規則解析、一般使用者瀏覽或建立既有摘要筆記時，AI 呼叫應為 0。批次使用內容 hash、schema/policy fingerprint、PostgreSQL idempotency/lease/backoff 避免跨輪與併發重複，昂貴例外才採 AI。活動 UI/正式 GCP 排程仍未實作，詳見 [`taiwan_free_events_discovery_plan.md`](taiwan_free_events_discovery_plan.md)。

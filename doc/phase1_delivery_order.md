@@ -1,6 +1,6 @@
 # life_assistant Phase 1 — Delivery Order
 
-最後更新：2026-10-07
+最後更新：2026-10-09（僅整理既有優先序與連結）
 
 > 本文件定義 Phase 1 後續的**執行順序**。`doc/acceptance.md` 與 `doc/release_checklist.md` 繼續定義完成條件與 Release Gate；本文件只負責「先做什麼、後做什麼」。若本文件與較舊文件的隱含先後順序不同，以本文件的執行順序為準，但不得因此降低既有 acceptance / security / migration 要求。
 
@@ -8,7 +8,7 @@
 
 **明確授權的優先級變更：Calendar 工作包 #8 全部需要的驗收完成後，下一個第一優先產品項目是「台灣免費活動探索與報名追蹤」（Post-Calendar P0），在既有 #9 Activity / Integrations、#10 Integration / Foundation tail、#11 Final Release Gate 的新增產品開發工作之前安排。** 原本 #9–#11 未取消；本功能的工作包另列，不直接更動原 11-package 完成分子或分母，不能因文件更新宣稱 #8 或新需求已完成。
 
-- 正式產品/工程規格：[`taiwan_free_events_discovery_plan.md`](taiwan_free_events_discovery_plan.md)。
+- 正式產品/工程規格：[`taiwan_free_events_discovery_plan.md`](taiwan_free_events_discovery_plan.md)，已統一最小 DB／精簡卡片／增量 Batch AI／M0–E2 驗收；共用 AI 路由的單一政策見 [`ai_provider_policy.md`](ai_provider_policy.md)。
 - 第一線官方 RSS、新聞稿、主辦網站、報名頁與合法接入的活動網站：每 12 小時（Asia/Taipei 06:00、18:00）；文化/觀光官方 API 每日補充；data.gov.tw 目錄每日只負責發現/維護來源，不作為活動即時性依據。
 - 先查證是否真正免費、是否仍有效、報名起訖時間；不可從活動日期猜測報名時間。聚合站需核對來源和授權。資料持久去重、重要變更通知、過期後禁用；預設活動結束後 30 天清除非必要內容但保留最小去重紀錄及使用者自行建立的資料。
 - 一般使用者可獨立決定加入提醒、待辦、筆記與指定筆記資料夾；來源監控/健康只給 authenticated admin，沿用既有 Flutter UI 與 FastAPI RBAC、不建立專用後台；admin email 仍待核實。

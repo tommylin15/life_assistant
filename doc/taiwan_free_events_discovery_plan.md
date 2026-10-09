@@ -1,129 +1,142 @@
-# 台灣免費活動探索與報名追蹤 — Product / Engineering Plan
+# 台灣免費活動探索與報名追蹤 — 正式產品／工程規劃
 
-狀態：**APPROVED PLAN / NOT IMPLEMENTED**（2026-10-09，競品缺口與階段範圍修訂）  
-產品優先級：**Calendar #8 完成後第一優先（P0 after Calendar）**。正式排序以 `doc/phase1_delivery_order.md` 為準。
+> 更新：2026-10-09 · **APPROVED PLAN / NOT IMPLEMENTED** · **Calendar #8 完成後第一優先（Post-Calendar P0）**
+>
+> 執行順序只以 [`phase1_delivery_order.md`](phase1_delivery_order.md) 為準；AI routing 只以 [`ai_provider_policy.md`](ai_provider_policy.md) 為準。文件核准≠程式、資料庫、排程或正式部署已完成。
 
-## 1. 產品目標與範圍
+## 1. 定位與成功標準
 
-在台灣發現**新鮮、可查證、尚可參與**的免費活動（含免費講座、展覽、導覽、課程、工作坊、社群活動）；顯示活動與報名起訖時間，讓使用者個別選擇：加入通知／加入待辦／建立筆記（選擇既有筆記資料夾）。
+此功能不是再做一個活動資訊聚合網站，而是讓使用者在報名之前，快速找到**可信、適合自己、仍可參加**的台灣免費活動，並且只在本人決定時建立提醒、待辦、行事曆或筆記。
 
-使用者只看有效候選清單；不因掃描到活動就自動建立任何個人日曆、待辦、筆記或推送通知。Admin 只在現有 Flutter Web 入口看到來源健康、更新、異常與清理狀態，不另建專用後台。必要時可見來源維護操作。未確認來源或時間一律顯示「待確認」，不虛構數值。
+使用者流程：**查看有效活動卡片 → 看清報名起始／場次／資格與費用 → 自行選擇追蹤、提醒、待辦、筆記與資料夾 → 需要完整資訊時前往主辦／報名原站**。掃描、分類與短摘要都在背景完成；使用者打開清單不必等待 AI。
 
-**優先衡量是否在報名開始前發現**，而不以收錄總量衡量成功。
+成功以**報名前發現率、精確報名資訊、有效活動率、重複通知率、資訊品質、單筆有效活動成本**衡量，而不是單純收錄頁數。**每 12 小時一次 ≠ 即時**，短期滿額的活動可能來不及發現，不得保證零延遲。
 
-## 2. 優先級／與 Phase 1 範圍邊界
+## 2. 範圍、階段與原計畫關係
 
-依使用者 2026-10-09 的明示決定：先完成 Calendar #8 的全部驗收，再將此功能作為**下一個第一優先產品開發項目**，排在既有 #9 Activity / Integrations、#10 Foundation tail、#11 Final Release Gate 的新增開發工作之前；不刪除、不宣稱已完成或跳過這些原有工作包。
+依使用者指定：先完整完成 Calendar #8 的真實帳號、API/UI、CI、deployment、runtime、mobile/desktop 驗收；活動探索為其後**第一優先**。原有 #9–#11 工作不刪除，原 11-package 完成比例不任意更改；本新工作是否納入 Phase 1 release blocker，於啟動時依 scope-freeze 與 release gate 明確決定。
 
-本功能以 **Post-Calendar Activity Discovery track** 另列里程碑，**不直接篡改現有 11-package 完成分母**；是否將其設為 Phase 1 release blocker 須在開始實作時依 scope freeze / release governance 明確記錄。現況 Calendar #8 尚未有完整最新 runtime/UI/true-account PASS 證據，本需求只是規劃，不等同已進入實作。
-
-## 3. 活動發現管線（Asia/Taipei）
-
-| 層級 | 來源 | 預設頻率 | 功能 |
-| --- | --- | --- | --- |
-| L1 高價值第一線 | 官方 RSS、新聞稿、主辦單位網站、原始報名頁 | **每日 06:00 與 18:00，每 12 小時** | 優先發現新公告；發現後核對原始資料 |
-| L1 補漏來源 | BeClass、ACCUPASS、KKTIX、EventGo、小藝行事曆、Citytalk | **每 12 小時**，來源合規與存取條件通過後才啟用 | 發現候選活動，非最終事實來源 |
-| L2 官方資料 | 文化部藝文活動、觀光署/TDX、縣市活動 API | 每日一次 | 補漏、結構化資料與交叉比對 |
-| L3 來源探索 | data.gov.tw 完整目錄與異動清單、官方網站連結發現 | 每日一次 | **發現/更新資料來源**，不能用來保證活動即時性 |
-| 既有追蹤 | 使用者已追蹤活動／報名頁 | 每日核對；接近已確認報名時間可每小時核對 | 重大變動提醒、更新個人同步物件 |
-| 清理 | 活動有效期、保留期、來源健康 | 每日一次 | 過期撤出選擇、封存／刪除 |
-
-**區分輪詢延遲與來源發布延遲**：12 小時輪詢可能漏過極短名額活動，不得宣稱即時保證。政府目錄的每日更新只代表來源登錄節奏，不代表活動/報名資訊同步速度。每筆候選保存公告時間（若可驗證）、首次發現、最後驗證、報名開放時間與來源，衡量「報名前發現率」、「資料年齡」、「發現延遲」、「活動仍有效率」。第一期至少 14 天對照原始公告與官方資料出現時間，以實測決定來源優先級。
-
-## 4. 來源登錄／合規與監控
-
-可配置的 Source Registry：`source_id`、provider、官方/聚合分級、entry_url、type（RSS/API/HTML）、adapter_version、schema_version/hash、預期更新頻率、last_checked_at、last_success_at、last_content_change_at、授權/robots/條款狀態、rate limit、enabled、health（PASS / FAIL / NOT VERIFIED）、失敗原因和修復記錄。
-
-以官方 API / Feed 優先；沒有公開 API 的站點先確認合法存取，避免把第三方未授權聚合資料當作可轉載。監控 HTTP/認證、schema、解析成功率、欄位完整率、資料量突變、長時間無新資料、原始頁消失；來源異常隔離單一 Adapter、退避重試、恢復補抓，不把來源失效當成活動取消，不因抓不到就刪除。
-
-GitHub 元件候選（實際使用前再次審核版本/安全/授權）：`feedparser` RSS/Atom、`trafilatura` 正文解析；`changedetection.io` / `RSSHub` / `Huginn` 僅二期評估，尤其 RSSHub AGPL-3.0 需法律/部署授權審核。不得只因某 repo 存在就直接導入或新增常駐 VM。
-
-## 5. 驗證、正規化、去重
-
-**資料建模以「活動 Event → 場次 Session → 報名機會 Registration Opportunity（報名區間／票種／名額）」為第一期必要設計。** 一場活動可有多個場次、同場次可有不同免費／付費票種及報名窗口，不可用單一全域報名時間覆蓋所有場次。每筆記錄保留 canonical event、session、registration opportunity、主辦單位 Organizer、原始來源 reference / fetch evidence、地區／地點、活動起訖、`registration_start_at` / `registration_end_at`、報名 URL、免費分類（完全免費／條件免費／待確認／非免費）、資格條件、押金／材料費／門票等額外成本、名額/額滿/候補狀態、`verified_at`、`valid_until`、狀態與 version。
-
-報名**日期**若缺精確時分，不得硬填 09:00；若沒有公布開放時間，顯示待公告並允許使用者**選擇追蹤公布結果**，公布後再依訂閱決策建立具體報名提醒。候選生命週期：`unannounced`（時間待公告）、`upcoming`、`open`、`full`、`waitlist_available`、`closed`、`cancelled`、`event_ended`；狀態與來源證據、檢查時間、適用場次／票種綁定，異動需版本化；不可由抓取失敗直接判定取消。搜尋結果／聚合摘要只能用來發現，入庫發布前須查證主辦單位或正式報名頁；過時、報名截止、額滿且無候補或活動結束的候選，不可讓使用者新增已失效的報名操作；仍有合法候補的活動可顯示候補選項。無需報名的活動可另提供活動日期提醒。
-
-去重優先使用 `(source, stable_external_id)` 與官方 canonical URL，輔以主辦、標題、場次、地點、時間相似度（模糊比對需要審核/可回退），避免把不同場次誤合併。使用者決策與投遞紀錄持久化；通知以 `(user_id, canonical_event_id, session_id, notification_type, version/semantic_change_key)` 冪等，普通活動僅通知一次，重大變更（延期、報名改期、取消等）可單獨通知，絕不重複建立日曆／待辦／筆記。
-
-## 6. UI 與權限
-
-一般使用者：有效免費活動列表，按縣市、日期、主題、活動型態及報名狀態篩選；MVP 提供最基本的興趣／地區篩選與排除，不提前建置大型推薦模型。可分別勾選「報名／活動提醒」、「建立待辦」、「建立筆記」，筆記需選擇其可存取的資料夾；顯示來源、最後查證時間、免費/額外費用/參加資格、場次/票種、報名起訖（沒有就明示未知），允許追蹤報名時間待公告、略過／稍後決定／取消追蹤。**查看、收藏或來源掃描都不等於同意通知或建立任何個人物件**。使用者可手動標示待報名／已報名／候補／取消；外站操作不自動假定成功。Calendar 衝突需警示，不自行覆蓋既有行程。
-
-管理員：復用現有 Flutter Web 設定/管理入口，只顯示來源監控、同步健康與手動重試選項，不另做後台；**FastAPI 端必須驗證 Google 登入主體、UID-based admin allowlist/RBAC**，任何管理 API 不得只靠前端隱藏。使用者提供 admin email `tommylin15@gmai.com`（疑似拼字錯誤）；**在使用者核實與已登入的 verified identity 對齊前不可授權此字串或任何猜測帳號**，本文件不創建 admin policy。
-
-## 7. 技術架構／過渡與正式排程
-
-目標沿用既有 Firebase Hosting → Flutter Web → Cloud Run FastAPI → PostgreSQL。使用 Cloud Scheduler（Asia/Taipei `0 6,18 * * *`）觸發受認證的 Cloud Run 任務/既有 Backend 適當工作端點，實際以目前工程實作、最小權限、成本與併發/重試安全性選型，不預設要加 VM 或獨立長駐服務。使用 PostgreSQL 保存 `event_sources`、`source_fetch_runs`、`event_candidates`、`event_sessions`、`event_source_links`、`event_versions`、`user_event_decisions`、`event_notification_deliveries`、`event_external_links` 與 retention tombstone；欄位/表名僅為設計草案，建 migration 前核對現有 schema。
-
-**目前 ChatGPT 定期掃描（06:00/18:00）只是外部過渡試行，不代表 Cloud Run job、Scheduler、資料庫與通知機制已上線。** 正式 GCP 實測穩定且去重/權限驗收 PASS 後，應先做切換與同批重複通知防護，再停用 ChatGPT 過渡任務，避免雙重發送。真實 production 排程尚未建立，NOT VERIFIED。
-
-可再利用既有 Calendar / Tasks / Notes API：每個使用者核准操作獨立執行，Calendar 保存 provider event id，Tasks 保存 task id，Notes 保存 note id / folder id；更新與撤銷走冪等交易/補償和部分失敗狀態，嚴禁系統自行完成報名或假稱已報名。
-
-## 8. 過期與刪除
-
-報名截止、額滿或活動結束時，不再允許過期報名操作；活動結束退出一般候選清單。**建議預設活動結束 30 天後**清除非必要原始內文、聚合快取與來源擷取內容；僅保留最小去重/tombstone、稽核、依法必要資料及使用者已建立的個人筆記、待辦、行事曆等外部關聯，且個人資料必須依既有授權/刪除規則處理。刪除任務需可重跑、保護使用者產出與 backups，不得直接視為 production 大量刪除授權；若涉及大量或不可逆 production 清理，需另外取得明確確認。
-
-## 9. 分期交付（依賴順序，不等同現有 11-package 分母）
-
-本功能必須在 **Calendar #8 真實產品驗收完成後**才啟動正式實作。MVP 由 M0–M4 組成，不能因 M0 研究通過就稱產品 DONE。第一版增強 E1 與第二階段 E2 是產品擴充，不是 MVP 的 release blockers。詳細排序以 `doc/phase1_delivery_order.md` 為準，所有階段遵守 `PROJECT_RULES.md`、`acceptance.md` 及既有 release governance。
-
-| Gate | 優先 | 交付範圍 | 必要驗收證據 | 狀態 |
-| --- | --- | --- | --- | --- |
-| M0 Source Baseline | MVP | 最少 14 天來源時效觀測；官方 Feed/API/公告與聚合站授權確認；固定正反測試樣本；偵測來源新增/下架 | 有可追溯公告時間／首次發現／報名開放時間與來源授權紀錄；不把每日官方資料宣稱為即時 | NOT VERIFIED |
-| M1 Discovery Core | MVP | Cloud Run/既有 Backend 適用 job、Source Registry／Adapter、PostgreSQL Event–Session–Registration Opportunity、Organizer、證據、去重、生命週期、來源安全與過期政策 | migration 可重跑；同活動多來源/場次/票種負測試；故障隔離、恢復補抓與來源異常不誤刪；安全測試 | NOT VERIFIED |
-| M2 User & Admin UI | MVP | Flutter Web 有效候選清單、基本地區／興趣篩選、免費條件、場次／報名狀態、追蹤待公告、過期不可選；僅既有設定入口顯示 admin 來源健康 | 真實 UID admin/non-admin API RBAC、401/403、mobile/desktop 操作、來源更新時 UI 一致性 | NOT VERIFIED |
-| M3 Personal Actions | MVP | 通知、待辦、筆記分別授權；筆記資料夾；精確報名提醒與報名待公告的後續通知；最小手動已報名狀態；行事曆衝突提示與使用者取消追蹤 | 真實 Google Calendar/Task/Note 整合；幂等重試、跨來源通知去重、時間異動更新、部分失敗、取消與補償 | NOT VERIFIED |
-| M4 GCP Cutover | MVP | 台灣時間 06/18 Scheduler、Cloud Run 真實掃描、PostgreSQL durable states、監控、清理、過渡期間併行去重／正式切換 | 真實 12 小時排程、權限、來源成功率、新鮮度、重試、成本、rollback/恢復、真實使用者 UI/API；通過後停用 ChatGPT 過渡任務 | NOT VERIFIED |
-| E1 Post-MVP enhancement | 第一版增強 | 主辦單位追蹤與來源擴張、進階個人興趣／距離排除、可訂閱活動摘要／靜音時間、細緻手動報名/候補管理與跨系統同步 UX | 偏好/取消訂閱、追蹤不同主辦單位與變更後去重、頻率設定、跨使用者隔離 | NOT VERIFIED |
-| E2 Advanced discovery | 第二階段 | 使用者貼連結擷取、交通時間/距離、電子報作為額外來源（遵守同意與權限）、進階個人化推薦；需要來源品質證據再擴大 | 授權/合規/成本驗收；推薦品質實測，不能自動提高寫入權限 | NOT VERIFIED |
-
-**暫時不做：** 自動替使用者報名或付款、繞過網站反爬限制、抓取有權限障礙的內部 API、大型推薦模型、完整社交/售票平台、獨立後台/常駐 VM、無證據的大規模聚合資料鏡像。
-
-## 10. 詳細業務規則與跨系統一致性
-
-1. **Activity 與 Registration 分離：** 報名機會可屬於某場次/票種（包含完全免費、限額免費、部分免費）。同一場次可能有報名起訖改期、額滿轉候補；用有來源時間戳的狀態事件維護，禁止用 LLM 推斷確切分鐘或剩餘名額。
-2. **候選發布門檻：** `verified` 才能執行實際報名提醒；只有聚合/新聞摘要時為 `unverified`，可提示待驗證或讓使用者選擇「通知我查證結果」，不可偽稱可以報名。釣魚、詐騙、受限制、無法證明免費、需另付費、已失效的項目不得以「完全免費且可報名」曝光。
-3. **個人參與狀態：** `interested` / `registration_pending` / `registered_by_user` / `waitlisted_by_user` / `cancelled_by_user`；使用者自行按「已報名」才可確認，或在將來有合法官方 integration 時依授權更新。自動探索不能生成「已報名」的事實。
-4. **通知類型與同意：** 新活動預設**只進清單不推播**；摘要訂閱屬 E1，可獨立 opt-in。報名時間公布、即將開始、重大延期/取消可在使用者選定追蹤後依各自設定觸發；普通來源內文微調靜默更新。重大異動只通知變更類型與版本一次。靜音時段/頻率設定列 E1，MVP 至少支援取消追蹤與通知通道有效性檢查。
-5. **衝突與撤銷：** 使用者已有行事曆時段行程時先顯示衝突資訊供其決定；不可擅自改既有事件。每次建立的 Calendar/Task/Note 都儲存 provider id 與 owner scope；操作過程發生部分失敗，保存成功與失敗項、提供重試，不得因 Calendar 成功就宣稱其他兩者成功。取消追蹤不等於刪除使用者自行修改或已完成的筆記／待辦；提議刪除需清楚呈現範圍並走既有 confirmation。
-6. **主辦單位長期追蹤：** M1 schema 就保存 Organizer 的 canonical identity + source aliases，E1 才提供追蹤 UI 和其新活動通知，以因應主辦單位更換報名平台。
-
-## 11. 安全、合規與可維運性（MVP 必做）
-
-- **外部 URL 安全：** 網頁擷取器以 allowlist/可配置政策管控 host、scheme、redirect；擋 private/link-local/metadata IP（含 DNS 解析與重新導向）、限制大小/逾時/併發，避免 SSRF、無限 redirect、惡意檔案或抓取攻擊。
-- **資料與 LLM 信任邊界：** 網頁、新聞稿、電子報與聚合摘要均為 untrusted input；不執行 embedded instructions；LLM 只能提出抽取候選，結構/時間/費用須以來源及 deterministic validation 確認；原文清洗與記錄最小化，不存多餘個資。
-- **平台授權：** API 優先，逐來源審核使用條款、robots、更新週期、授權與來源標示義務；不能把公開可讀直接等同允許大量擷取或任意轉載。授權不確定者維持 disabled / NOT VERIFIED。
-- **清理與隱私：** 活動過期候選立即撤出可選列表；預設結束後 30 天清理可刪的原始內容，保留最小去重 tombstone、必要 audit 及使用者既有個人資料。清理條件包含場次、報名窗口與個人追蹤關係；批次 production 不可逆刪除需另依高風險操作規則核准。
-- **資源成本：** 使用 HTTP conditional request、來源 delta/etag、hash 去重、規則過濾；僅對低信心內容送 LLM，監控每有效活動的 HTTP/LLM/Cloud Run/DB 成本，避免每次都做整站全文擷取。
-
-## 12. KPI / Acceptance Matrix（定義先於上線，門檻由觀測決定）
-
-| KPI | 定義／避免誤判 | 驗收方式 |
+| 階段 | 交付成果 | 完成 Gate |
 | --- | --- | --- |
-| 報名前發現率 | 在**正式報名窗口開始前**系統就已有來源可追溯事件／同場次機會的比例；沒有報名窗口的活動另列 | M0 14 天實測，M4 真實資料重測，按來源拆分 |
-| 新鮮度與發現延遲 | 官方原始發布至首次觀察、抓取成功至入庫，分開計算；12 小時 polling ≠ 即時 | 來源抓取歷程與 UTC/Taipei 時間比對 |
-| 免費資格誤判率 | 樣本中被標成免費但實際有必要費用/不符資格的比例 | 固定正反案例 + 抽樣回原始站核對 |
-| 報名時間正確率 | 有精確時間者與官方公告一致的比例，未知不得納入錯誤「精準度」分母 | 精確時區、日期/時分與 DST 解析案例 |
-| 重複投遞率 | 同一 user/event/session/opportunity/notification semantic key 的重複推送數 | 多來源、重試、併發、恢復與變更測試 |
-| 過期可操作率 | 截止、取消、活動已結束但 UI/API 還可建立失效報名操作的比例 | UI + server-side API 競態/時鐘邊界 |
-| 來源覆蓋與健康 | 授權可用來源中按期擷取、可核驗的比例；失效不等於沒有活動 | Admin-only 健康記錄/假來源與回復測試 |
-| 使用者採納率 | 有效推薦候選中選擇追蹤的比例；與資料品質分開看 | 僅匯總必要行為資料，不推測心理意圖 |
-| 單筆有效活動成本 | 掃描/抽取/LLM/儲存總成本除以有效非重複活動數 | 真實監測並分來源列出 |
+| **M0 來源與品質基線（MVP）** | 盤點來源存取授權；14 天真實新鮮度觀察；代表性免費／非免費／不同場次測試集；訂出成本/準確率門檻 | 每來源可追溯、來源健康與授權表、測量報表、資料模型評審 |
+| **M1 增量擷取與資料核心（MVP）** | 官方 Feed/網站 adapters、Source Registry、Event／Session／Registration Opportunity／Organizer、PostgreSQL 幂等去重、結構化欄位、批次 AI 與清理 | migration／回退、來源失效隔離、重試、快取／並發、0-AI 不變量、資料品質安全測試 |
+| **M2 Flutter 活動列表與 Admin（MVP）** | 精簡卡片＋簡要詳情＋原站連結、有效篩選／空狀態、待公告追蹤、現有 UI 內 Admin 來源健康 | mobile/desktop、圖片缺失、來源下架、非 admin 401/403、真實 auth |
+| **M3 個人化操作（MVP）** | 使用者分開選提醒／待辦／筆記、筆記資料夾、手動已報名／候補狀態、行事曆衝突提示、個人追蹤和取消 | 真實 Calendar/Task/Note provider；取消/部分成功/幂等/跨來源重複/提醒變更與 owner isolation |
+| **M4 GCP 正式排程（MVP）** | Cloud Scheduler 每日 06:00/18:00、受認證 Cloud Run Batch、PostgreSQL durable jobs、監控/恢復/成本；正式切換後停用過渡 ChatGPT 掃描 | 真實排程、Batch 故障重試/補抓、正式 UI/API/AI provider／回滾與流量、重複通知防護、成本證據 |
+| **E1 第一版增強** | 追蹤主辦者、進階興趣/地點偏好、摘要與靜音通知、更細緻報名/候補 UX | 偏好/權限/訂閱/取消/變更通知驗收 |
+| **E2 第二階段** | 使用者貼連結擷取、交通時間/距離、合法電子報來源、進階推薦/自然語言探索 | 授權、安全、推薦品質與成本效益 |
 
-**硬性不變量（應以自動測試驗證）**：非 admin 不得讀取/執行 admin API；未知精確時間不得憑空建立「準時提醒」；已截止/取消/額滿且無候補不能執行報名動作；同一通知 key 不重覆投遞；相同活動跨來源不可重複建個人物件；部分成功不可偽裝為全部成功；來源抓取失敗不得自動取消活動；個人筆記不能被來源資料清理級聯刪除。品質 KPI 的百分比目標需 M0 基線與成本測試後正式訂定，**不得捏造已達到門檻**。
+**暫時不做：** 自動報名／付款、自建完整票務網站、隨機爬受保護 API、繞過反爬、常駐 VM、新獨立 Admin 後台、大型推薦模型、不必要的向量資料庫。
 
-## 13. 開發啟動條件與狀態
+## 3. 擷取來源、掃描排程
 
-- 依 `doc/phase1_delivery_order.md`：Calendar #8 先通過適用的 implementation、tests、CI、deployment、runtime、real Google account、mobile/desktop UX gates，才啟動 Post-Calendar track 的正式產品實作。
-- 在 M0 完成前，M1 migration 的 Registration Opportunity / Organizer / tombstone 設計先可評審但不應直接對 production DB 落地；缺值、授權或 admin identity 未確認時 fail closed。
-- GitHub main 當前實作與 runtime evidence 高於本設計文件；本次只更新規格和 backlog，不新增 scheduler、不修改 DB、不發布部署。
-- 進度狀態：**planning/documentation = PASS（須文件 readback）**；**M0–M4 implementation / tests / CI / deployment / runtime / integration = NOT VERIFIED**；整體 **PARTIAL / NOT IMPLEMENTED**。
+| 類別 | 範例 | 週期 | 權限與用途 |
+| --- | --- | --- | --- |
+| L1 官方第一線 | 主辦官網、公告/新聞稿、RSS、原始報名頁 | **每 12 小時：06:00、18:00 Asia/Taipei** | 以正式公告與報名頁為事實依據 |
+| L1 聚合補漏 | EventGo、BeClass、小藝行事曆、Citytalk、ACCUPASS、KKTIX | **每 12 小時**，合法可用後才啟用 | 找候選與連回原站；不能無授權複製整站 |
+| L2 官方結構化 | 文化部藝文、觀光/TDX、各縣市活動資料 | **每日一次** | 補漏與交叉核對，不冒充即時 |
+| L3 來源探索 | data.gov.tw 資料集目錄與異動 | **每日一次** | 發現可用資料來源，不直接當即時活動列表 |
+| 重要已追蹤活動 | 官方報名頁與狀態頁 | 一般每日；已知即將開放時可配置短期提高查詢密度 | 只對該活動且不突破來源速率限制 |
+| 清理與健康 | expired sessions、來源 adapter 健康、重試佇列 | 每日一次 | 不因來源暫時斷線就刪活動 |
 
-## 14. Batch AI 模型路由與增量成本（2026-10-09 確認）
+**現有 ChatGPT 定期掃描只屬過渡來源探索，未與 app 的正式 PostgreSQL durable tasks 等同。** GCP 排程與兩邊去重/切換獲真實 PASS 後才關閉過渡掃描。
 
-高價值來源每日 06:00/18:00 掃描，但**掃描不是必然推論**。ETag／Last-Modified／正規化內容 hash 與 PostgreSQL AI fingerprint 命中時呼叫 0 次；規則／官方結構化 API 可處理者也不使用 AI。新或有意義變動且規則無法可靠抽取者才使用 **Gemini `latest-3-flash` → Gemini `latest-3-flash-lite` → Groq → OpenRouter → 私有 Shared Codex** 的備援順序，逐項上限與工作預算另依 M0 實測收斂。
+Source Registry 最少記錄：來源 ID、官方/聚合等級、URL/API 類型、adapter/schema 版本、允許的存取方法與法律審核結果、期望頻率、最近檢查/成功/內容變更、錯誤分類、退避、enabled/health、可觀測延遲。來源錯誤不可解釋成活動取消。
 
-Flash 和 Lite 各自從官方可用清單選最多三個穩定文字模型，並**分別持久保存**最後成功型號，下一輪優先選仍可用的該型號；各系列候選缺額不以 preview/TTS 充數。Shared Codex 僅複雜例外/必要備援且遵守 owner 授權，無需將 CLI 或金鑰放入本專案。批次一次產生一份精簡 UI 卡片與公用摘要（60–120 中文字）、核心報名/免費/時間證據；不存整站 HTML／大圖／完整 prompt，不因使用者觀看或選擇筆記再呼叫 AI。明確日期/費用/權限與發送操作均由可稽核來源、後端規則及使用者決策確定，AI 只產候選建議。
+候選 GitHub 元件：`feedparser`／`trafilatura` 先評估實際版本/依賴/授權；`changedetection.io`、`RSSHub`、`Huginn` 只列候選，不因存在就部署。**AGPL / robots / Terms 要逐來源確認**。
 
-M1 驗收：相同內容相同抽取規格的重試／併發只產一份有效 AI 工作；無內容異動／有完整官方結構化欄位／使用者打開清單或建立一般筆記時 AI 呼叫為 0；Lite/Flash last-known-good 互不污染；資料庫只留核心欄位、簡短摘要、來源與最低限度稽核/去重。M4 驗收：模型個別真實可用性、精度、provider 失敗後備援、p95 查詢速度、批次成本、過期清理、真實 GCP 06/18 任務均須取得證據。預算超標時延後非關鍵 AI 工作而不是停止所有活動探索。**本功能依然 NOT IMPLEMENTED**。
+## 4. 資料模型：最少必要欄位，不複製原站
+
+**公用資料共用一份；個人選擇另存，不為每位使用者複製活動全文。**
+
+| 資料 | PostgreSQL 最小必要內容 | 不要長期存 |
+| --- | --- | --- |
+| **Organizer** | 主辦單位 canonical identity／別名、可信來源 | 完整組織介紹與人員履歷 |
+| **Event** | ID、名稱、分類/標籤、主辦、短摘要、來源/官方 URL、狀態、內容 fingerprint | 整份 HTML、長篇新聞稿、講師介紹、完整 prompt |
+| **Session** | 一場活動下各場次日期/時間、縣市、場地／線上、時區、有效性 | 冗長流程、全站描述 |
+| **Registration Opportunity** | 每場次/票種各自的開放／截止時間、免費/條件免費、必要費用/資格、名額或候補狀態、報名 URL | 完整報名表與參加者名單 |
+| **Source / Evidence** | 來源 ID/URL、可核對關鍵文字片段或欄位值、取得／查證時間、hash、解析版本、重大變更紀錄 | 每輪原始回應、無限增長的完整快照 |
+| **User decision / action links** | user/sub、追蹤意願、所選提醒／待辦／筆記、provider item ID、投遞去重 key、必要的取消/重試狀態 | 不相關的個人資料與公用資訊副本 |
+| **UI presentation** | **60–120 中文字**短摘要、2–3 個主題標籤、最重要注意事項、**縮圖 URL（合法且可用時）** | 活動圖片原始檔、推論的假圖片、完整精裝介紹 |
+| **AI operational metadata** | 標準化內容 hash、抽取 schema/模型策略 fingerprint、狀態、最後 AI 時間／必要 trace | 完整輸入、LLM 全文回應及無限的 provider retry log |
+
+精確報名時間未知就留 null／待公告，不猜「09:00」。`registration_start_at` 和 `registration_end_at` 與報名票種/場次綁定；只知道日期時不可轉成精確提醒。免費/條件免費/非免費/待確認要保留判斷依據（押金、材料費、會員、戶籍、入場門票等）。
+
+原站已刪除時，保持最少已核對資訊與當時查證時間，但**立刻降低可操作信任等級**；需要再次查證才能聲稱現在仍可報名。短摘要不可優先於官方欄位或原文證據。
+
+## 5. 活動生命週期、去重與資格
+
+- 報名機會：`unannounced` → `upcoming` → `open` → `full / waitlist_available / closed`；任何階段可因官方證據轉 `cancelled`；活動結束時 `event_ended`。額滿不代表沒有候補；沒有正式報名流程的活動可只追蹤活動日期。
+- 系統狀態要區分 `verified`／`unverified`／`stale`／`invalid`。只由聚合站發現或 AI 猜測的項目，不得宣稱「已核實可報名」。
+- 去重先用 `source + external_id`、canonical URL、官方 ID，其次場次/主辦/日期/地點；需要時才用語意模型評估疑似重複，**不可自動把不同場次合併**。
+- 相同 user/event/session/opportunity/notification semantic version 只能投遞一次；延期、報名時間更動或取消才產生新語意版本，普通文案更正靜默更新。
+- 使用者的 `interested`／`registration_pending`／`registered_by_user`／`waitlisted_by_user`／`cancelled_by_user` 必須與官方報名狀態分開。不能因點了連結就宣稱「已報名」。
+
+## 6. 增量擷取與最小 AI 使用量（硬性政策）
+
+**12 小時掃描不等於 12 小時跑 AI。沒有有意義的變更就應是 AI 0 次。**
+
+1. **網路/來源 L0**：優先 API delta、`ETag`、`Last-Modified`、來源唯一 ID；來源內容變動先抽取活動相關區段、去掉廣告/動態時間再做正規化 hash，但費用/時間/取消等關鍵欄位必須獨立比對。
+2. **規則/資料庫 L0**：已結構化官方資料、日期/有效期、報名狀態、canonical 去重、清理和提醒計算，直接經後端處理；不呼叫 AI。
+3. **AI 條件觸發**：有新的有價值活動或**實際影響欄位**的變化，且 deterministic extraction 無法可靠處理，才建立 Batch AI 任務；**同內容 fingerprint + schema 版本 + AI routing policy 對應的結果重用**。
+4. **Durable claim/lease/重試**：同一工作 key 即使 Cloud Run 重啟、兩輪掃描重疊或相同活動被不同來源找到，最多僅一個有效分析者；冷卻、超時回收與重試上限，不每 12 小時反覆重做同一失敗。
+5. **批次預產出**：共用 60–120 字卡片摘要與結構化欄位；用戶看卡片、選筆記資料夾或設定提醒不觸發模型。
+6. **成本保護**：按來源、模型、有效事件計量及每日預算設 hard limit；超額先延後非關鍵候選，不阻塞已驗證活動瀏覽或關鍵取消通知。
+
+Provider fallback 的正式序列與 Flash/Lite 各最多三個、最後成功優先規則由 [`ai_provider_policy.md`](ai_provider_policy.md) 統一定義；**並不表示 Batch 每次都呼叫 Gemini、Groq、OpenRouter、Shared Codex**。既有 Drive AI 的 consent/cache/partial/error contract 可借用工程模式，活動另有自己的 `EventAIEnrichmentService` schema/資料模型；不得把 Drive-specific 的標籤/相關筆記 schema 原封不動套用。
+
+Shared Codex 是已存在的私有服務而不是 life_assistant 本機 CLI；僅有 project-scoped authenticated owner／caller permission 時才可用，公開 Batch 不可自行虛造 owner。Adapter 故障的複雜診斷可由 Admin 使用 Codex 協助**提出建議**，不能從網站文字直接修改程式或自動部署。網頁不可信資料不得控制模型工具／動作。
+
+## 7. Flutter UX：資料少但卡片仍完整
+
+- **列表卡片**：標題、活動類別圖示/標籤、60–120 字摘要、日期時間、城市/場地、免費或附帶成本、報名開放時間／狀態；重要注意事項最多一項、最後核對時間與原站 link。
+- **詳細畫面**：同資料的易讀排版、場次/資格／額外費用、來源驗證說明、原始活動官網與「前往報名」兩個合法連結；不直接轉載原始整篇內容。
+- **圖片策略**：只用來源允許且技術可用的縮圖 URL，使用 link validity / fallback；無圖片改用內建主題圖示／配色，**不為了美觀生成不存在的官方照片**，也不儲存圖片二進位。
+- **空/例外狀態**：摘要缺失、來源失效、沒有報名時分、候補、活動延期、沒有興趣匹配，均需有完整呈現。缺摘要可用結構化欄位組出簡短模板，避免卡片空洞，不能假造描述。
+- **操作**：通知、待辦、筆記分別 opt-in；筆記資料夾由使用者選擇。追蹤「報名時間待公布」和真正建立精確報名提醒要分開。Calendar 行程衝突先提示，不擅自覆寫；個人「已報名」只由使用者或未來經授權的正式平台事件確認。
+- **User 端不展示模型名稱、prompt 或模型預測 confidence**；Admin 才看來源健康、抽取失敗、審核/回查證據與模型用量。
+
+## 8. GCP 架構與權限
+
+正式目標：**Cloud Scheduler（Asia/Taipei 06:00/18:00）→ authenticated Cloud Run Batch/既有 FastAPI 適當端點 → PostgreSQL operational tables → Flutter Web / PWA**。以實際部署架構和 GitHub V3 release policy 為準，不為此功能預設 VM/額外常駐服務；Jobs 與原 API 如何復用須經 M1/M4 成本/併發測試決定。
+
+Admin 採現有 Flutter UI／FastAPI API、**後端 verified UID allowlist/RBAC**。過往文件中收到 `tommylin15@gmai.com` 字串有疑似拼寫問題；**核實使用者登入 identity 前不能授權**，不能只隱藏前端管理按鈕。
+
+所有外部頁面經 Adapter 限制來源、解析、HTTP 超時/回應大小、DNS/rebind、redirect、private/link-local/metadata IP 防 SSRF；站外資料包括 prompt 注入都當 untrusted。存取 robots / ToS / RSS/API 條件需逐來源確認，長文/個資不持久保存；私人資料送第三方 AI 需明確同意。
+
+任何新增用戶筆記/任務/Calendar event 必須走既有 Backend validation 與 idempotent execution log；發生部分成功分別顯示並保留成功者 provider IDs，不能假裝三個動作都成功。取消追蹤/過期不擅自刪使用者手動修改的資料。
+
+## 9. 過期與保留（精簡 DB）
+
+1. 報名截止、取消、額滿且無候補，立即從可執行報名清單撤出；活動結束退出一般候選頁。
+2. **建議但未最終驗收的保留提案**：活動結束約 30 天後清理非必要原始片段、短期快取/擷取內文，只保留最小去重 tombstone、必要稽核及合法保留資料；原始大 HTML/完整回應正常流程中不應長期入庫。
+3. 已由使用者建立的 Calendar、Notes、Tasks 與對應外部 provider IDs 依個人物件本身的生命週期保留，不受公用來源內容清理連帶刪除。
+4. 任何 production 大量或不可逆刪除需另經高風險操作明確確認，不能把規劃視為已獲准執行清理。
+
+## 10. 指標與驗收矩陣
+
+| KPI / 硬性不變量 | M0/M1/M4 驗收方法 |
+| --- | --- |
+| 報名前發現率、來源發布→首次發現延遲 | 至少 14 天來源樣本、活動/報名窗口分母與時區清楚 |
+| 免費／資格錯判率、報名時間正確率 | 官方來源/報名頁正反 fixture；未知不是已確認 |
+| 過期仍可操作／重複來源／重複通知 | Session/Opportunity/semantic notification key、併發重試與 UI/API 邊界案例 |
+| **來源未變／結構化資料／用戶瀏覽時 AI 呼叫 = 0** | instrumented test，覆蓋兩輪 12 小時批次、快取／部分故障 |
+| **同一 fingerprint/schema 一次有效 AI 工作** | PostgreSQL concurrency/lease/idempotency／失敗退避與回收測試 |
+| Gemini Flash 與 Flash-Lite sticky last-success 獨立 | 兩組最多三模型、各自 preferences、無效型號、429、模型清單故障與 fallback 測試 |
+| AI 容量、模型花費、單筆有效活動成本 | 按來源/模型/日期記錄 token 用量和實際費用（資料不足列 NOT VERIFIED） |
+| Flutter 空卡／斷圖／原站掛掉 | desktop/mobile UI 回歸及無圖片 fallback 視覺測試 |
+| 身分、私人資料/AI consent、外部 URL 安全 | 非 admin 401/403、owner isolation、SSRF、含 prompt injection 網頁輸入 |
+| deployment／runtime／provider live | exact SHA CI → V3 release candidate/live/rollback → GCP Scheduler/Job 真實觸發及 provider direct-health 各別證據 |
+| 過期資料清理而不傷個人物件 | retention dry-run、外鍵/個人資料保留、重試/復原測試 |
+
+所有百分比/費用目標由 M0 量測與基線決定，**不捏造實際數值**。需要 implementation、tests、CI、deployment、runtime、integration、UI/permission 全部相關 gate PASS 才能宣稱此功能 DONE；任何缺漏維持 PARTIAL。
+
+## 11. 目前狀態與限制
+
+- **規劃/文件：** APPROVED PLAN（完成 readback 才算本次文件修改 PASS）。
+- **既有通用 AI Provider 路由：** GitHub `main` 已有程式；2026-10-09 CI 有 PASS；部署與真實 Flash/Lite/Groq/OpenRouter/Shared Codex 多模型 E2E **NOT VERIFIED**。
+- **活動專用掃描、Event/Session/Opportunity PostgreSQL tables、Flutter 活動 UI、Admin 健康、GCP 06/18 排程：** **NOT IMPLEMENTED / NOT VERIFIED**。
+- **ChatGPT 定時掃描：** 僅過渡，與正式產品來源入庫和用戶操作無關；真實 GCP 切換 PASS 後再停用。
+- **M0–M4 / E1–E2 進度：** 尚未開始，不能因新增文件或既有 Drive AI CI 通過標為 DONE。
+
+**相關文件：** [`ai_provider_policy.md`](ai_provider_policy.md)、[`phase1_delivery_order.md`](phase1_delivery_order.md)、[`decisions.md`](decisions.md)、[`acceptance.md`](acceptance.md)、[`PROJECT_RULES.md`](PROJECT_RULES.md)。

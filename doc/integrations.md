@@ -1,5 +1,7 @@
 # 生活助理 App v0.1 — Integrations
 
+> **AI Provider 現行正式政策（2026-10-09）**：見 [`ai_provider_policy.md`](ai_provider_policy.md)。有效順位 **Gemini Flash → Gemini Flash-Lite → Groq → OpenRouter → 私有 Shared Codex**；Flash/Lite 各最多三個、各自記住最後成功模型。下方 2026-10-07/08 的 Codex-first/三層備援設定保留為**歷史證據，不得作為新部署設定**。程式碼/CI PASS 不等於 live provider E2E PASS。
+
 ## 1. Google Sign-In
 
 用途：
@@ -229,7 +231,7 @@ App 可提供「ChatGPT Bridge / MCP 設定」入口。
 為準。
 
 實作時不得以 README prose 取代 schema 驗證。
-# Drive AI provider configuration — 2026-10-07
+## 歷史紀錄 — Drive AI provider configuration（2026-10-07，路由順位已被取代）
 
 使用者已選擇 Gemini 主用、Groq 第二順位、OpenRouter 免費第三順位。Backend 保留既有 OpenAI adapter，三個服務共用 Chat Completions 傳輸與既有 Tag / related Note 驗證；Gemini / Groq 使用嚴格 JSON Schema，OpenRouter 使用 JSON mode + schema prompt，因符合隱私限制的免費 endpoint 不一定支援 JSON Schema；不新增 SDK。
 
@@ -279,7 +281,7 @@ Latest regression closure evidence：Habits release `02eda112...` 的 Drive Know
 - Live external-AI acceptance requires the successful Gemini model to be persisted; fallback success still cannot mask a direct Gemini failure.
 
 
-### Shared Codex Cloud Run — consumer integration and Secret boundary (2026-10-08)
+### Shared Codex Cloud Run — consumer integration and Secret boundary (2026-10-08，**Codex-first 僅為歷史紀錄**)
 
 - The user selected shared Codex as **first priority** for Drive AI enrichment with the original Gemini → Groq → OpenRouter fallback chain. The existing mandatory **individual provider** acceptance remains strict; fallback does not turn Codex/Gemini/OpenRouter direct FAIL into PASS.
 - **Secret is shared only within the owner service:** omniAgent's private `omniagent-shared-codex` Cloud Run reads the existing `omniagent-shared-codex-auth` Secret. life_assistant neither creates another Codex Secret nor reads, copies, mounts or rotates either `omniagent-shared-codex-auth` or the old `janus-mart-codex-auth`. The old Janus Secret is **not** the source for the new consumer contract. Source: the two user-supplied `01_共用服務介接規格與驗收.md` and `02_life_assistant_開發AI指示.md`, plus omniAgent `docs/shared-codex-consumer-handoff.md`.
@@ -289,11 +291,11 @@ Latest regression closure evidence：Habits release `02eda112...` 的 Drive Know
 - consumer acceptance: tests + CI + Cloud Run deploy + signed real HTTP 200 + 403 project mismatch + anonymous rejection + real Drive/Notes UI flow + owner isolation. Use `backend/scripts/run_shared_codex_identity_acceptance.py` for synthetic signed runtime probe. New provider direct health must be verified separately. None of the consumer DONE claims are valid before the exact-runtime gates pass.
 - Shared-service own readiness is separate evidence: omniAgent GitHub Actions `37709954944` (attempt 3), `37712799145`, `37710625658`; those do **not** establish life_assistant deployment/runtime PASS.
 
-## 2026-10-09 — AI Provider 單一新優先序（覆蓋上述歷史路由順序）
+## 2026-10-09 — 現行 AI Provider 規範（唯一正式來源）
 
-- 使用者統一指定 **Gemini `latest-3-flash` → Gemini `latest-3-flash-lite` → Groq → OpenRouter → private Shared Codex**。Codex CLI 在本專案語意**指現有 private Shared Codex**，不可於 life_assistant 安裝另一套 CLI 或跨越 Secret/OAuth 權限邊界。
-- 兩組 Gemini **分別**從可用且支援 `generateContent` 的穩定文字模型中選**最多最新三個**（不含 Preview／TTS／Image），彼此分離最後成功的偏好：PostgreSQL `ai_provider_preferences` 使用 `gemini` 與 `gemini_lite` 兩筆。下次優先選仍可用的最後成功型號；失敗時依該系列其它候選再切下一家。即使成功型號較舊，最多只保留三個候選位置；不可硬湊不存在的型號。
-- 兩組 Gemini 使用同一現有 `GEMINI_API_KEY`；Lite 的 `latest-3-flash-lite` 是應用程式內的**動態選擇策略**，不是 Google API 的原生模型 ID。仍須先查官方 model list，解析為真正模型 ID 再呼叫。
-- Legacy `CODEX_PRIMARY_ENABLED` config key 保留相容，但路由語意改為**最後備援的開關**；僅在 authenticated owner_id 與有效私有 caller identity 同時成立才可呼叫，共用專用 Cloud Run 與 Secret 隔離不變。沒有 owner 時不呼叫 Shared Codex，也不讓公開資料的基本 Gemini 處理全數失效。
-- Groq / OpenRouter 使用原有配置模型/憑證，依**固定順序**執行；未配置的 provider 跳過並以警告記錄，不造假可用性。所有模型均須遵守原有 consent、stage-level partial、bounded retry、provider-by-provider direct acceptance；fallback PASS 不能遮蔽任一家配置的 direct FAIL。
-- 這是設計/程式路由調整；**部署及真實 runtime E2E 仍依新 release 的 Actions/Cloud Run evidence 個別驗收**，未取得不得宣稱完成。
+完整路由/候選模型/快取/隱私/成本及驗收規則已整理至 [`ai_provider_policy.md`](ai_provider_policy.md)，**本節僅為連結，不再維護第二套易衝突的模型政策**。
+
+- 正式順位：Gemini `latest-3-flash` → Gemini `latest-3-flash-lite` → Groq → OpenRouter → private Shared Codex。
+- Flash／Lite 各最多三個合格候選、各自保留 last-success `gemini`／`gemini_lite`；舊 `CODEX_PRIMARY_ENABLED` 設定名僅為相容，語意已是 **Codex 最後備援**。
+- 只有符合既有 owner scope / 身分授權時才使用 Shared Codex；不在 life_assistant 裝 CLI、讀取/複製 Codex OAuth Secret，也不將歷史 2026-10-07/08 的設定誤作現行來源。
+- 正式 production 多模型 direct-health / E2E 證據與本次文件修改分開驗收，未驗證維持 NOT VERIFIED。

@@ -36,7 +36,7 @@ class FreeEventCliAcceptanceTests(unittest.TestCase):
         self.assertEqual(payload["network_requests"], 0)
         self.assertEqual(payload["ai_calls"], 0)
         self.assertEqual(payload["status_counts"], {
-            "quarantined_source_permission": 1,
+            "needs_official_review": 1,
         })
         self.assertFalse(payload["candidates"][0]["publishable"])
         self.assertEqual(payload["candidates"][0]["unknown_fee_count"], 1)

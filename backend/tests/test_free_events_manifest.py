@@ -35,7 +35,7 @@ class FreeEventManifestTests(unittest.TestCase):
     def test_default_source_cannot_be_published(self):
         report = prepare_manifest([self.candidate], self.registry)
         self.assertEqual(report["m1_status"], "PARTIAL")
-        self.assertEqual(report["status_counts"], {"quarantined_source_permission": 1})
+        self.assertEqual(report["status_counts"], {"eligible_for_manual_review": 1})
         self.assertEqual(report["network_requests"], 0)
         self.assertEqual(report["database_writes"], 0)
         self.assertEqual(report["ai_calls"], 0)
@@ -45,6 +45,7 @@ class FreeEventManifestTests(unittest.TestCase):
     def test_official_flag_does_not_bypass_source_access_review(self):
         fake = deepcopy(self.candidate)
         fake["official_verified"] = True
+        fake["source_id"] = "beclass"
         fake["title"] = "官方聲稱"
         report = prepare_manifest([fake], self.registry)
         self.assertEqual(report["candidates"][0]["status"], "quarantined_source_permission")

@@ -26,13 +26,13 @@ class FreeEventsM0Tests(unittest.TestCase):
         obs.update(values)
         return obs
 
-    def test_default_registry_is_non_fetching_and_provenanced(self):
+    def test_only_approved_official_source_is_enabled(self):
         self.assertGreaterEqual(len(self.registry["sources"]), 9)
-        self.assertEqual(sum(source["enabled_for_fetch"] for source in self.registry["sources"]), 0)
+        self.assertEqual([s["id"] for s in self.registry["sources"] if s["enabled_for_fetch"]], ["moc_events_all"])
         source = next(s for s in self.registry["sources"] if s["id"] == "moc_events_all")
         self.assertEqual(source["tier"], "official_dataset")
         self.assertIn("data.gov.tw", source["data_license_evidence"])
-        self.assertEqual(source["service_access_review"], "pending")
+        self.assertEqual(source["service_access_review"], "reviewed_with_evidence")
         self.assertTrue(next(s for s in self.registry["sources"] if s["id"] == "tdx_tourism_events")["requires_api_key"])
 
     def test_pending_aggregator_must_not_be_enabled(self):
@@ -50,7 +50,7 @@ class FreeEventsM0Tests(unittest.TestCase):
     def test_no_observations_cannot_claim_14_day_baseline(self):
         result = m0.evaluate(self.registry, [], as_of=self.now)
         self.assertEqual(result["m0_status"], "NOT_VERIFIED")
-        self.assertEqual(result["automated_fetch_enabled_count"], 0)
+        self.assertEqual(result["automated_fetch_enabled_count"], 1)
         self.assertEqual(result["sources"]["moc_events_all"]["sample_count"], 0)
         self.assertFalse(result["sources"]["moc_events_all"]["fourteen_day_window_observed"])
 

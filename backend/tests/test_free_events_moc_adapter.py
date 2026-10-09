@@ -110,7 +110,7 @@ class FreeEventMoCAdapterTests(unittest.TestCase):
             )
         report = json.loads(result.stdout)
         self.assertEqual(report["rejected_by_adapter"], 0)
-        self.assertEqual(report["status_counts"], {"quarantined_source_permission": 1})
+        self.assertEqual(report["status_counts"], {"needs_official_review": 1})
         self.assertEqual(report["network_requests"], 0)
         self.assertEqual(report["database_writes"], 0)
         self.assertEqual(report["ai_calls"], 0)

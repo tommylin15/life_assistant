@@ -14,7 +14,7 @@
       "service_access_review": "reviewed_with_evidence",
       "requires_api_key": false,
       "enabled_for_fetch": true,
-      "expected_interval_hours": 24
+      "expected_interval_hours": 12
     },
     {
       "id": "moc_event_detail",

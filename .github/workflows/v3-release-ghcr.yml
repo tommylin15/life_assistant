@@ -340,6 +340,19 @@ jobs:
           echo "migration_job_image=PASS no_migration_executed image=$IMAGE_REF" \
             >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Apply additive 0013 schema before production cutover
+        if: ${{ inputs.promote }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Migrations 0011/0012/0013 are additive and checked against exact head.
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-db-migrate \
+            gcloud run jobs execute life-assistant-db-migrate \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.apply_cloud_domain_parity_release \
+            --task-timeout 10m --wait --quiet
+          echo "free_events_schema_migration=PASS alembic=20261009_0013" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Require explicit promotion selection
         if: ${{ !inputs.promote }}
         run: echo "PROMOTION=NOT REQUESTED; production traffic unchanged" >> "$GITHUB_STEP_SUMMARY"
@@ -374,6 +387,7 @@ jobs:
           curl --fail --silent --show-error --retry 5 "$SERVICE_URL/health" >/dev/null
           curl --fail --silent --show-error --retry 3 "$SERVICE_URL/ready" >/dev/null
           test "$(curl -s -o /dev/null -w '%{http_code}' "$SERVICE_URL/api/v1/tasks")" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$SERVICE_URL/api/v1/free-events")" = 401
           curl -sS -D "$RUNNER_TEMP/v3-live-login-headers" -o /dev/null \
             "$FRONTEND_URL/auth/login"
           grep -Fq 'redirect_uri=https%3A%2F%2Fgen-lang-client-0593591102.web.app%2Fauth%2Fcallback' \

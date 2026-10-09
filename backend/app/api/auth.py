@@ -30,7 +30,17 @@ def oauth_redirect_for_request(request: Request) -> str:
     supply X-Forwarded-Host through an unauthenticated Cloud Run request.
     """
     hostname = request.headers.get("host", "").split(":", 1)[0].lower()
-    if hostname == STAGING_HOST:
+    forwarded = request.headers.get("x-forwarded-host", "").split(":", 1)[0].lower()
+    # Firebase Hosting typically forwards to a Cloud Run *.run.app Host, while
+    # retaining the fixed public domain in X-Forwarded-Host. Trust this header
+    # only for a known Cloud Run service hostname and exact staging allowlist.
+    cloud_run_proxy = (
+        hostname.endswith(".run.app")
+        and (hostname.startswith("life-assistant-api-")
+             or hostname.startswith("life-assistant-api."))
+        and request.headers.get("x-forwarded-proto", "").lower() == "https"
+    )
+    if hostname == STAGING_HOST or (cloud_run_proxy and forwarded == STAGING_HOST):
         return STAGING_REDIRECT_URI
     return settings.google_redirect_uri
 

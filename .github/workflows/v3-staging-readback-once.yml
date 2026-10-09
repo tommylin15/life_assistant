@@ -1,0 +1,93 @@
+name: V3 Staging and Free Events - Read-only Live Inventory
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/v3-staging-readback-once.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  stage-and-events-readback:
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev-test
+    env:
+      PROJECT: gen-lang-client-0593591102
+      STAGE: life-assistant-v3-stage-tl15
+      REGION: us-central1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Inspect dedicated Hosting, live channel, production and Cloud Run (read only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          ROOT="https://firebasehosting.googleapis.com/v1beta1"
+          fetch_status() {
+            curl -sS -o "$2" -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$ROOT/$1"
+          }
+          stage_site="$(fetch_status "projects/$PROJECT/sites/$STAGE" "$RUNNER_TEMP/site.json")"
+          test "$stage_site" = 200
+          jq -e --arg site "$STAGE" '.name | endswith("/sites/"+$site)' "$RUNNER_TEMP/site.json"
+          stage_status="$(fetch_status "sites/$STAGE/channels/live/releases?pageSize=2" "$RUNNER_TEMP/stage-live.json")"
+          case "$stage_status" in
+            200)
+              count="$(jq -r '.releases // [] | length' "$RUNNER_TEMP/stage-live.json")"
+              if [ "$count" -gt 0 ]; then
+                version="$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/stage-live.json")"
+                [[ "$version" == "sites/$STAGE/versions/"* ]]
+                test "$(fetch_status "$version" "$RUNNER_TEMP/stage-version.json")" = 200
+                python - "$RUNNER_TEMP/stage-version.json" <<'PY'
+          import json,sys
+          version=json.load(open(sys.argv[1]))
+          print("stage_version_status="+str(version.get("status")))
+          for path in ("/api/**", "/auth/**"):
+              rows=[x for x in version.get("config",{}).get("rewrites",[]) if x.get("glob")==path]
+              print(f"rewrite_{path}="+("PINNED" if len(rows)==1 and rows[0].get("run",{}).get("tag") else "NOT_VERIFIED"))
+          PY
+                echo "stage_live=EXISTS version=$version" >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo "stage_live=NO_RELEASE; bootstrap_needed=TRUE" >> "$GITHUB_STEP_SUMMARY"
+              fi
+              ;;
+            404)
+              echo "stage_live=NOT_FOUND; bootstrap_needed=TRUE" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "::error::Firebase staging live readback failure status=$stage_status"
+              exit 1 ;;
+          esac
+          test "$(fetch_status "sites/$PROJECT/channels/live/releases?pageSize=2" "$RUNNER_TEMP/prod.json")" = 200
+          jq -e '.releases | length>=1' "$RUNNER_TEMP/prod.json"
+          echo "production_hosting_version=$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod.json")" >> "$GITHUB_STEP_SUMMARY"
+          gcloud run services describe life-assistant-api --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/cloudrun.json"
+          jq -e '[.status.traffic[] | select((.percent//0)>0) | .percent] | add==100' "$RUNNER_TEMP/cloudrun.json"
+          echo "production_cloud_run_readback=PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "readback_only=PASS no_changes_to_hosting_or_cloud_run" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Probe staging public URL and free-event owner boundary without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE_URL="https://$STAGE.web.app"
+          for path in /release.txt /api/v1/free-events /api/v1/free-events/status /auth/me /auth/login; do
+            result="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$STAGE_URL$path" || true)"
+            echo "stage_.github/workflows/v3-staging-readback-once.yml=$result" >> "$GITHUB_STEP_SUMMARY"
+          done
+          PROD_URL="https://$PROJECT.web.app"
+          PROD_401="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$PROD_URL/api/v1/free-events/status")"
+          test "$PROD_401" = 401 || { echo "production_free_events_owner_boundary=NOT_VERIFIED status=$PROD_401" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+          echo "production_free_events_owner_boundary=PASS unauthenticated_401" >> "$GITHUB_STEP_SUMMARY"
+          echo "Aggregate owner counts and full OAuth callback remain NOT VERIFIED without real owner session" >> "$GITHUB_STEP_SUMMARY"

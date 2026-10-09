@@ -45,7 +45,7 @@ class FreeEventManifestTests(unittest.TestCase):
     def test_official_flag_does_not_bypass_source_access_review(self):
         fake = deepcopy(self.candidate)
         fake["official_verified"] = True
-        fake["source_id"] = "beclass"
+        fake["source_id"] = "eventgo"
         fake["title"] = "官方聲稱"
         report = prepare_manifest([fake], self.registry)
         self.assertEqual(report["candidates"][0]["status"], "quarantined_source_permission")
@@ -63,9 +63,9 @@ class FreeEventManifestTests(unittest.TestCase):
     def test_verified_same_official_content_from_two_sources_deduplicates(self):
         a = deepcopy(self.candidate)
         b = deepcopy(a)
-        b["source_id"] = "beclass"
-        b["external_event_key"] = "beclass-other"
-        b["source_url"] = "https://www.beclass.com/rid/other"
+        b["source_id"] = "eventgo"
+        b["external_event_key"] = "eventgo-other"
+        b["source_url"] = "https://eventgo.tw/events/other"
         report = prepare_manifest([a, b], self.registry)
         self.assertEqual(report["deduplicated_count"], 1)
         self.assertEqual(len(report["candidates"]), 1)

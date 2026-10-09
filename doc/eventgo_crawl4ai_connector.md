@@ -19,7 +19,7 @@ EventGo homepage and actual page links were checked 2026-10-09. Date and free ba
 - scripts/eventgo_connector.py — stdlib offline HTML parser, optional Crawl4AI headless browser, bounded seed/pagination/detail scanning, canonical UUID dedup, outbound referral retention (including BeClass), atomic JSONL.
 - scripts/eventgo-requirements.txt — separately pinned Crawl4AI 0.9.4 (September 2026 security fixes). Do **not** install it in the production FastAPI requirements.
 - backend/tests/test_eventgo_connector.py — offline permissions, URL scope, listing/detail, pagination, dedup and misleading free badge tests.
-- data/free_events_m0_sources.json — EventGo remains disabled/pending source permission; BeClass removed.
+- data/free_events_m0_sources.json — EventGo remains disabled/pending source permission; BeClass is omitted as a **direct crawl source**, while inbound registration referrals are retained.
 
 ## Offline validation
 

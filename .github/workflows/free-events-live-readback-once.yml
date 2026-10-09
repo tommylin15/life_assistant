@@ -1,0 +1,147 @@
+name: Free Events - One-Time Production Readback
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/free-events-live-readback-once.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: life-assistant-free-events-live-readback
+  cancel-in-progress: false
+
+jobs:
+  readback:
+    # A manual trigger does not re-run this one-shot DB acceptance.
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    environment: dev-test
+    timeout-minutes: 25
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      READBACK_MARKER: FREE_EVENTS_READBACK_V1_${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate existing deployer (no new IAM or secrets)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify DB job image, command and narrowly scoped DB env
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run jobs describe life-assistant-db-migrate \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format=json > "$RUNNER_TEMP/job.json"
+          python - "$RUNNER_TEMP/job.json" <<'PY'
+          import json,sys
+          job=json.load(open(sys.argv[1],encoding='utf-8'))
+          spec=job['spec']['template']['spec']['template']['spec']
+          containers=spec['containers']
+          assert len(containers)==1
+          c=containers[0]
+          assert c.get('image','').startswith('ghcr.io/tommylin15/life_assistant-backend@sha256:')
+          assert c.get('command') in (['python'], ['python3']), 'unexpected job entrypoint'
+          assert any(e['name'] in ('DATABASE_URL','LIFE_ASSISTANT_BUNDLE')
+                     for e in c.get('env',[])), 'DB connection configuration missing'
+          print('readback_job_config=PASS immutable_GHCR_python_and_existing_DB_channel')
+          PY
+
+      - name: Execute strictly read-only aggregate PostgreSQL readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f backend/scripts/read_free_events_status.py
+          python -m py_compile backend/scripts/read_free_events_status.py
+          PAYLOAD="$(python - <<'PY'
+          import base64,os
+          from pathlib import Path
+          src=Path('backend/scripts/read_free_events_status.py').read_text(encoding='utf-8')
+          old='READBACK_MARKER = "FREE_EVENTS_READBACK_V1"'
+          assert src.count(old)==1
+          marker=os.environ['READBACK_MARKER']
+          assert marker.startswith('FREE_EVENTS_READBACK_V1_') and marker[24:].isdigit()
+          src=src.replace(old, 'READBACK_MARKER = "'+marker+'"')
+          print(base64.b64encode(src.encode('utf-8')).decode('ascii'))
+          PY
+          )"
+          # Task-specific argument override does not mutate Job definition or DB.
+          RUN_JOB_MAX_WAIT_SECONDS=720 \
+            .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-db-migrate \
+            gcloud run jobs execute life-assistant-db-migrate \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args="-c,exec(__import__('base64').b64decode('$PAYLOAD'))" \
+            --task-timeout 5m --wait --quiet
+          echo 'production_read_only_cloud_run_execution=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retrieve sanitized aggregate report from Cloud Logging
+        shell: bash
+        run: |
+          set -euo pipefail
+          FOUND=0
+          for ATTEMPT in $(seq 1 15); do
+            gcloud logging read \
+              "resource.type=\"cloud_run_job\" AND resource.labels.job_name=\"life-assistant-db-migrate\" AND (textPayload=~\"$READBACK_MARKER\" OR jsonPayload.message=~\"$READBACK_MARKER\")" \
+              --project "$GCP_PROJECT_ID" --freshness=30m --limit=20 \
+              --format=json > "$RUNNER_TEMP/events-readback-logs.json"
+            if python - "$RUNNER_TEMP/events-readback-logs.json" "$READBACK_MARKER" "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json,sys
+          from pathlib import Path
+          logs=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          marker=sys.argv[2]
+          matches=[]
+          for log in logs:
+              message=log.get('textPayload') or (log.get('jsonPayload') or {}).get('message','')
+              if marker not in message:
+                  continue
+              data=json.loads(message.split(marker,1)[1].strip())
+              if data.get('status')=='PASS_READ_ONLY' and data.get('alembic_revision')=='20261009_0013':
+                  matches.append(data)
+          if len(matches)!=1:
+              raise SystemExit(1)
+          d=matches[0]
+          required=('observation_runs','accepted_attempts_sum','current_source_events',
+                    'current_duplicate_canonical_keys','ui_verified_opportunity_rows',
+                    'ui_unique_visible_events','last_14_days_coverage_pass')
+          if any(k not in d for k in required):
+              raise SystemExit(1)
+          if d['current_duplicate_canonical_keys']!=0 or d['observation_runs']<1:
+              raise SystemExit(2)
+          lines=[
+            '### Production DB readback (aggregate only)',
+            '- DB readback: **PASS**; source: `moc_events_all`',
+            f"- Observation executions with persisted evidence: **{d['observation_runs']}**",
+            f"- Total successful candidate ingestion attempts across observations: **{d['accepted_attempts_sum']}**",
+            f"- Current distinct stored source events: **{d['current_source_events']}**",
+            f"- Current source sessions/opportunities: **{d['current_source_sessions']} / {d['current_source_opportunities']}**",
+            f"- Duplicate stored canonical keys (DB constraint check): **{d['current_duplicate_canonical_keys']}**",
+            f"- Repeat-upsert suppression count: **NOT VERIFIED** (requires before/after per-run counters)",
+            f"- Latest batch: **{d['latest_observation']}**",
+            f"- Strict read-API eligible opportunities / unique events: **{d['ui_verified_opportunity_rows']} / {d['ui_unique_visible_events']}**",
+            f"- Observed calendar days: **{d['observed_distinct_days']}**",
+            f"- 14-day continuous date coverage: **{'PASS' if d['last_14_days_coverage_pass'] else 'PARTIAL'}**",
+            '- Event eligibility quality, original registration availability and real browser E2E: **NOT VERIFIED**',
+          ]
+          Path(sys.argv[3]).open('a',encoding='utf-8').write('\n'.join(lines)+'\n')
+          print('\n'.join(lines))
+          PY
+            then
+              FOUND=1
+              break
+            fi
+            sleep 8
+          done
+          if [ "$FOUND" -ne 1 ]; then
+            echo "::error::Production aggregate readback unavailable or inconsistent; NOT VERIFIED"
+            exit 1
+          fi

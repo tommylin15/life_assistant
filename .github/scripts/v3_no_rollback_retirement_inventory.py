@@ -13,6 +13,7 @@ import json
 import re
 import subprocess
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -209,7 +210,9 @@ def gcs_candidates():
                 if not isinstance(key, str) or not key:
                     raise RuntimeError("GCS metadata lacks object identifier")
                 prefix = key.split("/", 1)[0]
-                g = groups[prefix]
+                # Never print arbitrary private object name components.
+                group_key = prefix if prefix in SAFE_CI_PREFIXES else "<unclassified>"
+                g = groups[group_key]
                 size = int(item.get("size") or 0)
                 lower = key.lower()
                 protected = any(term in lower for term in PROTECTED_TERMS)
@@ -232,7 +235,8 @@ def gcs_candidates():
                 "prefixes": [{"prefix": prefix, **d} for prefix, d in sorted(groups.items())],
                 "object_names_disclosed": False,
             })
-        except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as exc:
+        except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError,
+                urllib.error.HTTPError) as exc:
             failures.append(bucket + ":" + type(exc).__name__)
             reports.append({"bucket": bucket, "status": "NOT_VERIFIED"})
     return reports, failures

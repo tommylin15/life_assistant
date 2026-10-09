@@ -164,7 +164,7 @@ async def run_acceptance(*, provider_name: str | None = None, model: str | None 
         exit_code = _exit_code_for_unavailable_provider(
             provider=provider_name or str(config.settings.ai_enrichment_provider or ""),
             model=model if model is not None else str(config.settings.ai_enrichment_model or ""),
-            api_key=str(getattr(config.settings, f"{("gemini" if provider_name == "gemini_lite" else (provider_name or config.settings.ai_enrichment_provider))}_api_key", "") or ""),
+            api_key=str(getattr(config.settings, f"{provider_name if provider_name != 'gemini_lite' else 'gemini'}_api_key", "") or ""),
             base_url=str(config.settings.openai_base_url or "") if (provider_name or config.settings.ai_enrichment_provider) == "openai" else "vendor_endpoint",
         )
         print(

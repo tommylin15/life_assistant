@@ -33,11 +33,13 @@
 | 類別 | 範例 | 週期 | 權限與用途 |
 | --- | --- | --- | --- |
 | L1 官方第一線 | 主辦官網、公告/新聞稿、RSS、原始報名頁 | **每 12 小時：06:00、18:00 Asia/Taipei** | 以正式公告與報名頁為事實依據 |
-| L1 聚合補漏 | EventGo、BeClass、小藝行事曆、Citytalk、ACCUPASS、KKTIX | **每 12 小時**，合法可用後才啟用 | 找候選與連回原站；不能無授權複製整站 |
+| L1 聚合補漏 | EventGo、小藝行事曆、Citytalk、ACCUPASS、KKTIX | **每 12 小時**，合法可用後才啟用 | 找候選與連回原站；不能無授權複製整站 |
 | L2 官方結構化 | 文化部藝文、觀光/TDX、各縣市活動資料 | **每日一次** | 補漏與交叉核對，不冒充即時 |
 | L3 來源探索 | data.gov.tw 資料集目錄與異動 | **每日一次** | 發現可用資料來源，不直接當即時活動列表 |
 | 重要已追蹤活動 | 官方報名頁與狀態頁 | 一般每日；已知即將開放時可配置短期提高查詢密度 | 只對該活動且不突破來源速率限制 |
 | 清理與健康 | expired sessions、來源 adapter 健康、重試佇列 | 每日一次 | 不因來源暫時斷線就刪活動 |
+
+**2026-10-09 新來源決策：BeClass（beclass.com）完全不採用，包含透過 EventGo 間接發現但原始連結導向 BeClass 的候選。** EventGo 僅先建立隔離 Crawl4AI Python 連結器，見 [eventgo_crawl4ai_connector.md](eventgo_crawl4ai_connector.md)。EventGo ToS 禁止自動化工具大量存取；其來源權限／robots 尚未獲核實，M0 registry 保持 enabled_for_fetch=false，正式自動抓取／DB/排程整合禁止先行啟動，直到有書面授權與存取審核。這是獨立開發 checkpoint，不代表現場觀測 PASS。
 
 **現有 ChatGPT 定期掃描只屬過渡來源探索，未與 app 的正式 PostgreSQL durable tasks 等同。** GCP 排程與兩邊去重/切換獲真實 PASS 後才關閉過渡掃描。
 

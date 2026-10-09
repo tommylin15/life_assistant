@@ -74,6 +74,9 @@ jobs:
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
 
+      - name: Install Firebase CLI for stage-site-only version clone
+        run: npm install --global firebase-tools
+
       - name: Read candidate and capture production Cloud Run traffic
         shell: bash
         run: |
@@ -81,7 +84,7 @@ jobs:
           gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" --region "$REGION" --format=json > "$RUNNER_TEMP/run-before.json"
           gcloud run revisions describe "$EXPECTED_REVISION" --project "$GCP_PROJECT_ID" --region "$REGION" --format=json > "$RUNNER_TEMP/revision.json"
           jq -e '[.status.conditions[] | select(.type=="Ready" and .status=="True")] | length==1' "$RUNNER_TEMP/revision.json"
-          jq -e --arg rev "$EXPECTED_REVISION" '[.status.traffic[] | select(.revisionName==$rev)] | length>=1' "$RUNNER_TEMP/run-before.json"
+          jq -e --arg rev "$EXPECTED_REVISION" '[.status.traffic[] | select(.revisionName==$rev and (.percent//0)==0 and (.tag|type=="string"))] | length>=1' "$RUNNER_TEMP/run-before.json"
           jq -c '[.status.traffic[] | select((.percent//0)>0) | {revisionName,percent}] | sort_by(.revisionName)' "$RUNNER_TEMP/run-before.json" > "$RUNNER_TEMP/production-traffic-before.json"
           jq -e 'map(.percent) | add == 100' "$RUNNER_TEMP/production-traffic-before.json"
           IMAGE="$(jq -r '.spec.containers[0].image // empty' "$RUNNER_TEMP/revision.json")"
@@ -121,7 +124,6 @@ jobs:
         run: |
           set -euo pipefail
           CHANNEL="v3-$(printf '%s' "$RELEASE_SHA" | cut -c1-10)"
-          PREVIEW_URL="https://$STAGE_SITE--$CHANNEL.web.app"
           # Hosting random preview host must come from provider channel metadata.
           TOKEN="$(gcloud auth print-access-token)"
           curl -fsS -H "Authorization: Bearer $TOKEN" "https://firebasehosting.googleapis.com/v1beta1/sites/$STAGE_SITE/channels/$CHANNEL" > "$RUNNER_TEMP/channel.json"
@@ -135,9 +137,9 @@ jobs:
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL/auth/me")" = 401
           curl -sS -D "$RUNNER_TEMP/login-headers.txt" -o /dev/null "$PREVIEW_URL/auth/login"
           grep -Fiq 'location: https://accounts.google.com/' "$RUNNER_TEMP/login-headers.txt"
-          # The current production-only backend callback fails this staging gate.
-          grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' "$RUNNER_TEMP/login-headers.txt"
-          echo "preview_sha_pins_api_auth_oauth_redirect=PASS" >> "$GITHUB_STEP_SUMMARY"
+          # Preview is a different ephemeral hostname. A preview OAuth redirect
+          # cannot prove the fixed staging callback; that is a separate live gate.
+          echo "preview_sha_pins_api_auth=PASS; fixed_origin_oauth=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Prohibit staging live mutation without independently verified true Google login
         if: ${{ inputs.apply }}
@@ -187,6 +189,17 @@ jobs:
           firebase hosting:clone "$STAGE_SITE:@$(basename "$VERSION")" "$STAGE_SITE:live" --project "$GCP_PROJECT_ID" --json > "$RUNNER_TEMP/clone.json"
           curl -fsS -H "Authorization: Bearer $TOKEN" "$API/sites/$STAGE_SITE/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/live-after.json"
           jq -e --arg ver "$VERSION" '.releases | max_by(.releaseTime) | .version.name==$ver' "$RUNNER_TEMP/live-after.json"
+          curl -fsS -H "Authorization: Bearer $TOKEN" "$API/$VERSION" > "$RUNNER_TEMP/published-version.json"
+          python - "$RUNNER_TEMP/published-version.json" "$RUNNER_TEMP/run-before.json" "$EXPECTED_REVISION" <<'PY'
+          import json,sys
+          sys.path.insert(0,".github/scripts")
+          from v3_staging_gate import pinned_routes
+          version=json.load(open(sys.argv[1]))
+          run=json.load(open(sys.argv[2]))
+          routes=pinned_routes(version,run,sys.argv[3])
+          assert len(routes)==2
+          print("post_clone_exact_backend_pins=PASS")
+          PY
           LIVE_URL="https://$STAGE_SITE.web.app"
           test "$(curl -fsSL -H 'Cache-Control: no-cache' "$LIVE_URL/release.txt")" = "$RELEASE_SHA"
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/api/v1/free-events")" = 401

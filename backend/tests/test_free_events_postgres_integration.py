@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.models.free_events import (
     FreeEvent, FreeEventEvidence, FreeEventOrganizer,
     FreeEventRegistrationOpportunity, FreeEventSession, FreeEventSource,
-    FreeEventIngestionLease,
+    FreeEventIngestionLease, FreeEventSourceObservation,
 )
 from app.services.free_events_normalization import EventCandidate, canonical_event_key
 from app.services.free_events_ingest import (
@@ -175,6 +175,42 @@ class FreeEventPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("free_event_registration_opportunities", rows)
             other = await conn.scalar(text("SELECT to_regclass('public.tasks')"))
             self.assertIsNotNone(other)
+
+    async def test_true_observation_row_has_bounded_counts_and_source_fk(self):
+        await self.seed_source()
+        async with self.session_factory() as db:
+            async with db.begin():
+                db.add(FreeEventSourceObservation(
+                    id=str(uuid.uuid4()), source_id=self.source_id,
+                    observed_at=self.now,
+                    endpoint_key="moc_all_categories_json",
+                    response_fingerprint="b" * 64,
+                    record_count=200, accepted_count=20, rejected_count=2,
+                    fee_unknown_count=21,
+                    registration_start_unknown_count=21,
+                    complete_source=False,
+                ))
+        async with self.session_factory() as db:
+            rows = (await db.execute(
+                select(FreeEventSourceObservation).where(
+                    FreeEventSourceObservation.source_id == self.source_id
+                )
+            )).scalars().all()
+            self.assertEqual(len(rows), 1)
+            self.assertFalse(rows[0].complete_source)
+            self.assertEqual(rows[0].record_count, 200)
+        async with self.session_factory() as db:
+            with self.assertRaises(IntegrityError):
+                async with db.begin():
+                    db.add(FreeEventSourceObservation(
+                        id=str(uuid.uuid4()), source_id=self.source_id,
+                        observed_at=self.now, endpoint_key="moc_all_categories_json",
+                        response_fingerprint="c" * 64,
+                        record_count=1, accepted_count=2, rejected_count=0,
+                        fee_unknown_count=1, registration_start_unknown_count=1,
+                        complete_source=True,
+                    ))
+                    await db.flush()
 
     async def test_database_disallows_unreviewed_source_fetch(self):
         async with self.session_factory() as db:

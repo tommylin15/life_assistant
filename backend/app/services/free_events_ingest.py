@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 import hashlib
 import uuid
 
-from sqlalchemy import case, select
+from sqlalchemy import and_, case, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,13 +40,13 @@ def _organizer_key(candidate: EventCandidate) -> str:
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()
 
 
-def _event_upsert(candidate: EventCandidate, fingerprint: str):
+def _event_upsert(candidate: EventCandidate, fingerprint: str, organizer_id: str | None = None):
     """Generate an atomic ON CONFLICT statement that invalidates changed verification."""
     incoming = pg_insert(FreeEvent).values(
         id=_uuid(),
         canonical_key=canonical_event_key(candidate),
         source_id=candidate.source_id,
-        organizer_id=None,
+        organizer_id=organizer_id,
         title=candidate.title,
         summary=candidate.summary,
         category=candidate.category,
@@ -59,6 +59,10 @@ def _event_upsert(candidate: EventCandidate, fingerprint: str):
         index_elements=[FreeEvent.canonical_key],
         set_={
             "title": incoming.excluded.title,
+            "organizer_id": case(
+                (FreeEvent.organizer_id.is_(None), incoming.excluded.organizer_id),
+                else_=FreeEvent.organizer_id,
+            ),
             "summary": incoming.excluded.summary,
             "category": incoming.excluded.category,
             "source_url": incoming.excluded.source_url,
@@ -126,7 +130,9 @@ async def ingest_approved_candidate(
             ).returning(FreeEventOrganizer.id)
             organizer_id = (await db.execute(org_insert)).scalar_one()
 
-        event_id = (await db.execute(_event_upsert(candidate, fingerprint))).scalar_one()
+        event_id = (await db.execute(
+            _event_upsert(candidate, fingerprint, organizer_id=organizer_id)
+        )).scalar_one()
         # Preserve the originally verified organizer identity unless a reviewer
         # explicitly revisits it; no automatic mass reassociation is attempted.
         session_count = opportunity_count = 0
@@ -175,6 +181,25 @@ async def ingest_approved_candidate(
                     registration_status=opportunity.registration_status,
                     official_verified=False,
                 )
+                # Preserve an actual review only if every meaningful
+                # opportunity field is unchanged (including nullable fields).
+                unchanged_opportunity = and_(
+                    FreeEventRegistrationOpportunity.registration_url.is_not_distinct_from(
+                        opp_insert.excluded.registration_url),
+                    FreeEventRegistrationOpportunity.registration_opens_at.is_not_distinct_from(
+                        opp_insert.excluded.registration_opens_at),
+                    FreeEventRegistrationOpportunity.registration_closes_at.is_not_distinct_from(
+                        opp_insert.excluded.registration_closes_at),
+                    FreeEventRegistrationOpportunity.fee_kind == opp_insert.excluded.fee_kind,
+                    FreeEventRegistrationOpportunity.fee_amount.is_not_distinct_from(
+                        opp_insert.excluded.fee_amount),
+                    FreeEventRegistrationOpportunity.fee_currency.is_not_distinct_from(
+                        opp_insert.excluded.fee_currency),
+                    FreeEventRegistrationOpportunity.eligibility_note.is_not_distinct_from(
+                        opp_insert.excluded.eligibility_note),
+                    FreeEventRegistrationOpportunity.registration_status ==
+                    opp_insert.excluded.registration_status,
+                )
                 opp_insert = opp_insert.on_conflict_do_update(
                     index_elements=[
                         FreeEventRegistrationOpportunity.session_id,
@@ -189,8 +214,16 @@ async def ingest_approved_candidate(
                         "fee_currency": opp_insert.excluded.fee_currency,
                         "eligibility_note": opp_insert.excluded.eligibility_note,
                         "registration_status": opp_insert.excluded.registration_status,
-                        "official_verified": False,
-                        "last_verified_at": None,
+                        "official_verified": case(
+                            (unchanged_opportunity,
+                             FreeEventRegistrationOpportunity.official_verified),
+                            else_=False,
+                        ),
+                        "last_verified_at": case(
+                            (unchanged_opportunity,
+                             FreeEventRegistrationOpportunity.last_verified_at),
+                            else_=None,
+                        ),
                     },
                 )
                 await db.execute(opp_insert)

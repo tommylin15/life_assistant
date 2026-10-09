@@ -12,11 +12,11 @@ Updated 2026-10-09. **Development checkpoint PARTIAL: live crawl, CI and 14-day 
 
 EventGo homepage and actual page links were checked 2026-10-09. Date and free badges are *discovery hints*, never official validation of price, eligibility or registration windows. Details link out to an organizer/registration page.
 
-**Permissions:** https://eventgo.tw/terms §2 (last updated 2026-04-23) says not to access the service at scale with automated tools. Public robots.txt access could not be verified. Do not run a live automated crawl without written website permission and robots/egress review. The M0 source registry sets EventGo enabled_for_fetch=false, and the script requires an approved registry state before it even imports Crawl4AI. This work has **not** granted permission. BeClass is removed as a direct source **and** excluded when it is EventGo's indirect registration/original site.
+**Permissions:** https://eventgo.tw/terms §2 (last updated 2026-04-23) says not to access the service at scale with automated tools. Public robots.txt access could not be verified. Do not run a live automated crawl without written website permission and robots/egress review. The M0 source registry sets EventGo enabled_for_fetch=false, and the script requires an approved registry state before it even imports Crawl4AI. This work has **not** granted permission. BeClass is **not a direct discovery/crawl source**. However, events discovered on EventGo or other approved sources that link to BeClass **must be retained** with the BeClass URL as `original_url`. The connector does not navigate to BeClass and does not treat its existence as proof of fee/registration validity.
 
 ## Files
 
-- scripts/eventgo_connector.py — stdlib offline HTML parser, optional Crawl4AI headless browser, bounded seed/pagination/detail scanning, canonical UUID dedup, BeClass exclusions, atomic JSONL.
+- scripts/eventgo_connector.py — stdlib offline HTML parser, optional Crawl4AI headless browser, bounded seed/pagination/detail scanning, canonical UUID dedup, outbound referral retention (including BeClass), atomic JSONL.
 - scripts/eventgo-requirements.txt — separately pinned Crawl4AI 0.9.4 (September 2026 security fixes). Do **not** install it in the production FastAPI requirements.
 - backend/tests/test_eventgo_connector.py — offline permissions, URL scope, listing/detail, pagination, dedup and misleading free badge tests.
 - data/free_events_m0_sources.json — EventGo remains disabled/pending source permission; BeClass removed.
@@ -30,7 +30,7 @@ python -m unittest discover -s backend/tests -p 'test_eventgo_connector.py'
 python scripts/eventgo_connector.py --offline-fixture /path/to/eventgo-fixture.json --output /tmp/eventgo-candidates.jsonl
 ~~~
 
-Fixture JSON must contain a listings object mapping configured seed names to HTML and a details object mapping canonical EventGo detail URLs to HTML. Optional observed_at should be an ISO8601 timestamp. If original activity URL is absent or BeClass, the item is dropped. No network dependency is needed for offline tests.
+Fixture JSON must contain a listings object mapping configured seed names to HTML and a details object mapping canonical EventGo detail URLs to HTML. Optional observed_at should be an ISO8601 timestamp. If the original activity URL is absent, the item is dropped. A BeClass registration URL is retained as unverified provenance; never auto-fetch its content. No network dependency is needed for offline tests.
 
 ## Live command (currently **DENIED**, do not run before permission)
 
@@ -48,7 +48,7 @@ Even with --live, the unapproved registry causes PermissionError before browser/
 
 Each output record includes schema_version=1, source=eventgo, source_tier=aggregator, eventgo_id, detail_url, title, labels, free_badge_hint, original_url, listing_seed, observed_at, content_fingerprint, official_verified=false, fee_status=unverified, registration_status=unverified.
 
-- Only HTTPS external original URLs from detail actions qualify, and BeClass routes are excluded.
+- Only HTTPS external original URLs from detail actions qualify. BeClass URLs are permitted as outbound `original_url` references but are not crawled or verified.
 - Same EventGo UUID yields one candidate across seeds. Cross-platform duplicates and multiple sessions are **not** automatically merged.
 - A free badge is not a verified zero-price claim. Fee/benefit ratio requires official original-site confirmation, including nonrefundable fees.
 - The original page's long article text, source HTML, images, tokens and PII are not persisted.
@@ -62,5 +62,5 @@ Each output record includes schema_version=1, source=eventgo, source_tier=aggreg
 | Offline tests | To be verified from CI/test run |
 | CI | NOT VERIFIED pending latest workflow readback |
 | EventGo site authorization / robots | NOT VERIFIED; live disabled |
-| Live listing / detail / pagination / BeClass filter | NOT VERIFIED |
+| Live listing / detail / pagination / outbound BeClass URL retention | NOT VERIFIED |
 | PostgreSQL / API / UI / scheduler integration | NOT IMPLEMENTED by request |

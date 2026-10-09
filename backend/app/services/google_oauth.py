@@ -159,7 +159,7 @@ def _machine_error(response: httpx.Response) -> str:
     return value
 
 
-async def _exchange_code(code: str) -> dict:
+async def _exchange_code(code: str, redirect_uri: str | None = None) -> dict:
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
@@ -168,7 +168,7 @@ async def _exchange_code(code: str) -> dict:
                     "code": code,
                     "client_id": settings.google_client_id,
                     "client_secret": settings.google_client_secret,
-                    "redirect_uri": settings.google_redirect_uri,
+                    "redirect_uri": redirect_uri or settings.google_redirect_uri,
                     "grant_type": "authorization_code",
                 },
             )
@@ -187,6 +187,7 @@ async def complete_authorization(
     state: str,
     code: str,
     current_user: dict,
+    redirect_uri: str | None = None,
 ) -> tuple[str, ...]:
     state_row = await db.get(GoogleOAuthState, _state_hash(state))
     if not state_row or state_row.expires_at <= _now():
@@ -194,7 +195,7 @@ async def complete_authorization(
     if state_row.user_sub != current_user["sub"] or state_row.email != current_user["email"]:
         raise HTTPException(400, "Invalid OAuth state")
 
-    payload = await _exchange_code(code)
+    payload = await _exchange_code(code, redirect_uri)
     claims = await verify_google_id_token(str(payload["id_token"]))
     if claims["sub"] != current_user["sub"] or claims["email"] != current_user["email"]:
         raise HTTPException(403, "Google authorization account does not match signed-in account")

@@ -37,3 +37,12 @@
 - **證據**：來源 commit `0f55fe239e3742d4e1fe6bb93aaf63f91167a6da`，GitHub [CI #37904115588](https://github.com/tommylin15/life_assistant/actions/runs/37904115588) `free-events-postgres` + backend + deployment-scripts **PASS**；在此文件更新時 Flutter 工作仍待 CI 最終 readback。先前 [CI #37903633583](https://github.com/tommylin15/life_assistant/actions/runs/37903633583) PostgreSQL 0011／7 integration tests 全 PASS。先前中間測試因跨方法計數干擾產生 FAIL，已改為按來源/event ID 的 test-level assertions；`0012` 的真實 PostgreSQL CI PASS 不是以 mock 代替。
 - **運作限制**：`backend/app/services/free_events_lease.py` **只含供未來正式 executor 使用的 claim/finish primitives**，沒有排程工作、沒有自動 HTTP、沒有 API endpoint、沒有變更 GCP Secrets/IAM；租約 `last_checked_at` 只算 attempted check，不是 M0 的獨立有效來源觀測。所有 registry `enabled_for_fetch=false`，production PostgreSQL 0012 / V3 runtime / Firebase hosting / M2 UI E2E 仍 **NOT VERIFIED**。
 - **source of truth**：GitHub main 與 Actions 真實 readback。既有已部署 Cloud Run 最後驗證仍為 Calendar release SHA `5c8d2fca8c9b`，**不宣稱新活動功能已在正式環境上線**。
+
+## 2026-10-09 正式部署與真實來源觀測啟動 gate
+
+- 使用者已核准：先以既有 V3 GitHub Actions → public GHCR → Cloud Run 發布 M1/M2，同步擷取合法官方真實活動，14 天實測品質驗收持續累積而不阻塞修正。
+- **官方來源審核 PASS（僅 `moc_events_all`）**：文化部 `https://data.gov.tw/dataset/6478` 公告開放授權條款第 1 版、每日更新，提供 JSON 資源連結 `https://cloud.culture.tw/frontsite/trans/SearchShowAction.do?method=doFindTypeJ&category=all`；該公開 dataset JSON 不等於另份需申請 `uk` 的介接 API。只用固定 HTTPS JSON URL，無 HTML scraper、無 API key、禁止 redirect／代理、30 秒 request timeout 與 16MiB response cap。其餘 9 個來源維持停用／待查。
+- **真實觀測 Ledger**：Alembic `20261009_0013` 新增 `free_event_source_observations`，含真實觀測時間、回應 fingerprint、來源總筆數／候選接受／拒絕／未知費用／未知報名時刻、是否完整覆蓋來源；日期不能從合成 fixture 回填。每輪來源最多抽樣匯入 400 筆（超過為不完整抽樣）；費用/報名開始未核實絕不標「free/open」。
+- **觀測執行**：`backend/scripts/run_free_events_moc_batch.py` 以 PostgreSQL source lease 鎖定 12h，不重複攝取、失敗分級退避；`free-events-moc-observations.yml` GitHub cron UTC 22:00／10:00，即 Asia/Taipei 06:00／18:00（暫代正式 GCP Scheduler M4）。必須在 Cloud Run Job 正式執行成功、資料庫實際 observation readback 後，才能標示首輪「開始」PASS。排程定義提交不等於已執行。
+- **正式發布 Gate**：V3 workflow 更新為 candidate/preview/真實 provider 前置驗收 PASS → 由 `life-assistant-db-migrate` 同 release image 執行 additive 0013 + table revision check → 100% promotion → live runtime/rollback/revision-retention；Firebase Hosting 另依正式 Hosting workflow 發布。不能因 CI PASS 當做已部署。
+- **逐日判定**：M0 初始日期以第一筆正式 `free_event_source_observations` 的真實 `observed_at` 為準，不能倒填；連續 14 天＋人工來源/費用/報名品質檢查均 PASS 才可封板。M2 對未人工核實的報名與免費活動仍保持空清單。

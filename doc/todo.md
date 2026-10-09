@@ -51,3 +51,8 @@
 7. mobile / desktop UX acceptance
 
 Backend-only PASS 可標 foundation PASS，但不能等同產品功能 DONE。
+
+## Deployment-first live-source checkpoint — 2026-10-09
+
+- 來源目前僅核准文化部官方藝文活動 JSON（資料集政府資料開放授權條款第 1 版）；其他九站 disabled。觀測批次／PostgreSQL 0013 source observations、新 CI 已寫入 main；正式部署與來源首次執行須以對應 workflow/job logs 確認，否則仍 NOT VERIFIED。
+- 實際排程：GitHub Actions UTC 22:00/10:00（台灣 06:00/18:00）暫行，待 GCP Cloud Scheduler M4 完成可再移交；14 天有效樣本自真正 DB observed_at 累積，不能補日期。

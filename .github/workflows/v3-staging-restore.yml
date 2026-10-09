@@ -1,0 +1,110 @@
+name: V3 Staging Live - Explicit Prior Version Restore
+
+on:
+  workflow_dispatch:
+    inputs:
+      current_version:
+        description: Staging live Hosting version ID observed immediately before recovery
+        type: string
+        required: true
+      restore_version:
+        description: Prior staging Hosting version ID already verified in release history
+        type: string
+        required: true
+      expected_current_sha:
+        description: Current source SHA (40 hex)
+        type: string
+        required: true
+      expected_restore_sha:
+        description: SHA served by the prior Hosting version (40 hex)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: life-assistant-v3-production-release
+  cancel-in-progress: false
+
+jobs:
+  staging-restore:
+    runs-on: ubuntu-latest
+    environment: dev-test
+    timeout-minutes: 20
+    env:
+      PROJECT: gen-lang-client-0593591102
+      STAGE: life-assistant-v3-stage-tl15
+      REGION: us-central1
+      CURRENT: ${{ inputs.current_version }}
+      RESTORE: ${{ inputs.restore_version }}
+      CURRENT_SHA: ${{ inputs.expected_current_sha }}
+      RESTORE_SHA: ${{ inputs.expected_restore_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Reject unsafe target or untrusted version identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CURRENT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$RESTORE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$CURRENT" =~ ^sites/life-assistant-v3-stage-tl15/versions/[A-Za-z0-9_-]+$ ]]
+          [[ "$RESTORE" =~ ^sites/life-assistant-v3-stage-tl15/versions/[A-Za-z0-9_-]+$ ]]
+          test "$CURRENT" != "$RESTORE"
+          test "$STAGE" != "$PROJECT"
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Record production and validate prior pinned stage version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          ROOT="https://firebasehosting.googleapis.com/v1beta1"
+          get_json() { curl -fsS --max-time 25 -H "Authorization: Bearer $TOKEN" "$ROOT/$1" > "$2"; }
+          get_json "sites/$STAGE/channels/live/releases?pageSize=100" "$RUNNER_TEMP/stage-releases.json"
+          jq -e --arg current "$CURRENT" '.releases | max_by(.releaseTime) | .version.name==$current' "$RUNNER_TEMP/stage-releases.json"
+          jq -e --arg restore "$RESTORE" '[.releases[]|select(.version.name==$restore)]|length>=1' "$RUNNER_TEMP/stage-releases.json"
+          get_json "$RESTORE" "$RUNNER_TEMP/restore-version.json"
+          get_json "sites/$PROJECT/channels/live/releases?pageSize=2" "$RUNNER_TEMP/prod-before.json"
+          jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod-before.json" > "$RUNNER_TEMP/prod-before-id"
+          gcloud run services describe life-assistant-api --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/service-before.json"
+          jq -c '[.status.traffic[]|select((.percent//0)>0)|{revisionName,percent}]|sort_by(.revisionName)' "$RUNNER_TEMP/service-before.json" > "$RUNNER_TEMP/traffic-before"
+          python - "$RUNNER_TEMP/restore-version.json" "$RUNNER_TEMP/service-before.json" <<'PY'
+          import json,sys
+          sys.path.insert(0,".github/scripts")
+          from v3_staging_gate import pinned_routes
+          a=json.load(open(sys.argv[1]));b=json.load(open(sys.argv[2]))
+          pins=pinned_routes(a,b)
+          assert len(pins)==2
+          print("previous_pinned_backend=PASS")
+          PY
+          test "$(curl -fsSL -H 'Cache-Control: no-cache' "https://$STAGE.web.app/release.txt")" = "$CURRENT_SHA"
+          echo "pre_restore_version=PASS current=$CURRENT restore=$RESTORE" >> "$GITHUB_STEP_SUMMARY"
+      - name: Restore exact prior version to staging live only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global firebase-tools
+          TOKEN="$(gcloud auth print-access-token)"
+          ROOT="https://firebasehosting.googleapis.com/v1beta1"
+          curl -fsS --max-time 25 -H "Authorization: Bearer $TOKEN" "$ROOT/sites/$STAGE/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/stage-before-restore.json"
+          jq -e --arg current "$CURRENT" '.releases | max_by(.releaseTime) | .version.name==$current' "$RUNNER_TEMP/stage-before-restore.json"
+          firebase hosting:clone "$STAGE:@$(basename "$RESTORE")" "$STAGE:live" --project "$PROJECT" --json > "$RUNNER_TEMP/restore-result.json"
+          curl -fsS --max-time 25 -H "Authorization: Bearer $(gcloud auth print-access-token)" "$ROOT/sites/$STAGE/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/stage-after-restore.json"
+          jq -e --arg restore "$RESTORE" '.releases | max_by(.releaseTime) | .version.name==$restore' "$RUNNER_TEMP/stage-after-restore.json"
+          test "$(curl -fsSL -H 'Cache-Control: no-cache' "https://$STAGE.web.app/release.txt")" = "$RESTORE_SHA"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "https://$STAGE.web.app/api/v1/free-events")" = 401
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "https://$STAGE.web.app/auth/me")" = 401
+          gcloud run services describe life-assistant-api --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/service-after.json"
+          jq -c '[.status.traffic[]|select((.percent//0)>0)|{revisionName,percent}]|sort_by(.revisionName)' "$RUNNER_TEMP/service-after.json" > "$RUNNER_TEMP/traffic-after"
+          cmp "$RUNNER_TEMP/traffic-before" "$RUNNER_TEMP/traffic-after"
+          curl -fsS --max-time 25 -H "Authorization: Bearer $(gcloud auth print-access-token)" "$ROOT/sites/$PROJECT/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/prod-after.json"
+          test "$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod-after.json")" = "$(cat "$RUNNER_TEMP/prod-before-id")"
+          echo "staging_restore_technical=PASS version=$RESTORE sha=$RESTORE_SHA production_unchanged=PASS; true_google_login=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"

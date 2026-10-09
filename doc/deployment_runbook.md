@@ -43,6 +43,15 @@
 
 不在 evidence 中輸出 OAuth secret、cookie、session、credential 或使用者敏感資料。**發布成功、路由核實、正式網址不可受影響及 staging live E2E 是分開驗收項目。**
 
+## 2026-10-09 staging live 現場 readback／OAuth 隔離修正（本輪最新）
+
+- GitHub Actions 唯讀現場盤點 [37944737101](https://github.com/tommylin15/life_assistant/actions/runs/37944737101) **PASS**：staging site **live** 已存在，Hosting version `sites/life-assistant-v3-stage-tl15/versions/e3a6dd23aec06848`；固定 URL `/release.txt` 讀出 `eb9f60c3413a8e5216318888a6456a1c464d8cab`；Hosting REST `/api/**`、`/auth/**` 各有單一 pinned tag `v3-eb9f60c341` 並精確對應 Cloud Run revision `life-assistant-api-00197-fug`。此版本只確定靜態 SHA、pins 及未登入存取控制，**尚不是「真實 Google OAuth 已驗證」的 fallback 認證**。
+- 後續唯讀 OAuth probe [37945021056](https://github.com/tommylin15/life_assistant/actions/runs/37945021056) **PASS（盤點）**：目前 staging `/auth/login` 實際產生 **PRODUCTION_CALLBACK**，不是固定 staging callback；`/api/v1/free-events/status` 在 staging 和 production 目前皆是 **404**，所以最新 P0 owner-only API **尚未正式部署**，不能宣稱已取得 DB aggregate。
+- 已補 `backend/app/api/auth.py` 固定 staging host／可辨識的 Cloud Run 代理來源白名單及 callback / frontend return URL；`backend/app/api/google_integrations.py` 和 `backend/app/services/google_oauth.py` 的增量授權／token exchange 也以同一 whitelist-derived callback 處理。正式站原本 callback 不變；Preview 的暫時網域不冒充固定 staging。安全回歸測試已加入 `backend/tests/test_auth.py`。
+- staging 發布 workflow `.github/workflows/v3-staging-live.yml`：改為候選 0% tagged revision 檢查、真正的 Hosting REST pinned 後端 readback；必要時使用現有可回復版本 clone 並核對回復 SHA + API/Auth。CLI 已安裝，`apply` 預設關閉，**沒有觸發實際 staging live promotion**。目前仍以獨立成功的真實 Google login E2E 證據作為 `apply=true` 必要門檻（此證據尚無）；不得填造 run ID 或移除門檻。
+- 新增 `.github/workflows/v3-p0-p1-joint-acceptance.yml` 手動唯讀聯合驗收：同版 SHA、Hosting pins、固定 staging OAuth redirect、P0 owner-only API 401、正式 Hosting 與 Cloud Run 交通不變。**其本身不能證明真實 Google 授權碼完成或 owner 已讀到 DB 統計數字**；兩者需另外真實帳號與應用驗收。
+- **尚未封板：** 新後端需通過本次 exact-SHA V3 candidate / GHCR / Cloud Run、Firebase Preview 與 stage live 正式部署；Google Cloud Console OAuth 2.0 Client 必須**保留正式 redirect** 並確認追加 `https://life-assistant-v3-stage-tl15.web.app/auth/callback` 白名單，按實際使用確認 Firebase Auth domain（若使用）；再真實 Google login → callback → cookie session、desktop/mobile UI、roll back/production isolation 與 P0 owner-only PostgreSQL live readback。這些 **NOT VERIFIED**，不能只因 CI 綠燈或 workflow 已寫好就標 DONE。
+
 ## 2026-10-09 staging 工程續作紀錄（與原規則同步）
 
 - 已在 GitHub `main` 新增 `.github/scripts/v3_staging_gate.py`、`tests/test_v3_staging_gate.py`，加入必要 `deployment-scripts` CI。其 readback 驗證 **本次完整 SHA、Preview／前版 staging live 的 Hosting version ID、`/api/**` 與 `/auth/**` 的 pin tag→Cloud Run revision 以及前版 SHA**，任一證據缺失即拒絕發布。

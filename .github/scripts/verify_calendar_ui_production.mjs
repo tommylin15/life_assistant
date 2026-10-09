@@ -242,6 +242,14 @@ async function desktop(context) {
   await named(page, '確認刪除行程');
   assert.equal(state.deletes.length, 0, 'delete happened without confirmation');
   await (await named(page, '取消')).click();
+  assert.equal(state.deletes.length, 0, 'cancelled delete mutated Google Calendar');
+  // Flutter Web's semantics overlay can become empty after a dialog dismissal.
+  // Reopen the page like a real user, verify the event survived cancellation,
+  // then exercise the actual confirmed-delete action (no mocked click).
+  await calendarDiagnostics(page, 'after-cancel');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await semantics(page);
+  await named(page, '更新後的會議');
 
   await eventAction(page, '刪除', '更新後的會議');
   await (await named(page, '確認刪除')).click();

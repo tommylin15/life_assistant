@@ -13,7 +13,8 @@
 5. `release_checklist.md`：Phase 1 Release Gate。
 6. `ci_cd_ghcr_release_policy.md`：正式 V3 GitHub Actions → GHCR → Cloud Run 發布政策；**新部署已上線、舊 GCS/AR 清理已驗證**。
 7. `v3_cleanup_and_cutover_inventory.md`：**2026-10-09 GCP 清理後 readback、保留資產及未驗證依賴清單**。
-8. 需要特定領域細節時，再讀 architecture / data / migration / integration / UI / security 等專題文件。
+8. `deployment_runbook.md`：**現行 V3 固定備選 staging Hosting site live 發布／恢復規則及實作差距**（2026-10-09）；下方 V2 Cloud Build 操作內容為歷史紀錄，**短期 Preview 不是固定 staging 網址**。
+9. 需要特定領域細節時，再讀 architecture / data / migration / integration / UI / security 等專題文件。
 
 ## 文件角色
 
@@ -32,6 +33,7 @@
 - `release_checklist.md`：Phase 1 最終 release gate。
 - `ci_cd_ghcr_release_policy.md`：已實施的 GitHub Actions／GHCR／Cloud Run digest 版 release policy，取代 Cloud Build V2 目標。
 - `v3_cleanup_and_cutover_inventory.md`：V3 切流與舊 AR/GCS 清理後的現場資產 readback、保留及未驗證事項（2026-10-09）。
+- `deployment_runbook.md`：V3 固定備選網址 `https://life-assistant-v3-stage-tl15.web.app/`、SHA Preview → 已驗證 Hosting version → staging live、backend pinned rewrites/OAuth/失敗恢復規則；**規則已記錄，staging live 發布與真實 E2E 仍待實作驗收**。本檔其餘 V2 操作部分保留供稽核，非新部署指令。
 - `todo.md`：精簡 active backlog；只鏡射目前執行重點，不再維護另一套優先順序。
 - `progress.md`：人類可快速閱讀的進度摘要；詳細 run / revision / runtime evidence 不重複抄寫，以 `acceptance.md` 為準。
 - `wbs.md`：工作範圍分解，不是排程，也不是目前執行順序。

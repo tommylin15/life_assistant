@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "updated_on": "2026-10-09",
-  "policy": "Source allowlist: Ministry of Culture datasets, data.gov.tw catalog discovery, TDX tourism API, EventGo and yii.tw only (2026-10-09 Drive source selection). Direct BeClass, Citytalk, ACCUPASS and KKTIX discovery are excluded; preserve third-party BeClass registration references without fetching BeClass. Only reviewed MoC dataset may fetch now. EventGo bulk automated access requires written permission and robots review; all other retained sources remain denied pending source-specific terms/API approval. Never store API credentials in the registry.",
+  "policy": "Source allowlist: Ministry of Culture datasets, data.gov.tw catalog discovery (DEFERRED, no discovery/schedule), TDX tourism API, EventGo and yii.tw only (2026-10-09 Drive source selection). Direct BeClass, Citytalk, ACCUPASS and KKTIX discovery are excluded; preserve third-party BeClass registration references without fetching BeClass. Only reviewed MoC dataset may fetch now. EventGo bulk automated access requires written permission and robots review; all other retained sources remain denied pending source-specific terms/API approval. Never store API credentials in the registry.",
   "sources": [
     {
       "id": "moc_events_all",
@@ -50,10 +50,12 @@
       "endpoint_documentation_url": "https://data.gov.tw/",
       "data_license": "varies_by_dataset",
       "data_license_evidence": null,
-      "service_access_review": "pending",
+      "service_access_review": "deferred",
       "requires_api_key": false,
       "enabled_for_fetch": false,
-      "expected_interval_hours": 24
+      "expected_interval_hours": 24,
+      "deferral_reason": "2026-10-09 user decision: open-data directory discovery deferred pending dataset-specific evidence of new-event discovery lag, field correctness and registration freshness over >=14 real observation days. A portal update timestamp alone is insufficient.",
+      "resumption_gate": "Explicit renewed approval, dataset-level license/endpoint review, measured first-seen lag vs organizer publication, registration validity and duplicate-rate acceptance; never auto-enable newly discovered datasets."
     },
     {
       "id": "eventgo",

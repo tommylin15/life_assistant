@@ -41,6 +41,27 @@ class FreeEventsM0Tests(unittest.TestCase):
         self.assertEqual(source["service_access_review"], "reviewed_with_evidence")
         self.assertTrue(next(s for s in self.registry["sources"] if s["id"] == "tdx_tourism_events")["requires_api_key"])
 
+    def test_data_gov_catalog_is_deferred_and_cannot_fetch(self):
+        import json
+        import tempfile
+        from copy import deepcopy
+        catalog = next(
+            s for s in self.registry["sources"] if s["id"] == "data_gov_catalog"
+        )
+        self.assertEqual(catalog["service_access_review"], "deferred")
+        self.assertFalse(catalog["enabled_for_fetch"])
+        self.assertIn("14", catalog["deferral_reason"])
+        # Fail closed even if someone flips the fetch flag without re-review.
+        unreviewed = deepcopy(self.registry)
+        next(s for s in unreviewed["sources"] if s["id"] == "data_gov_catalog")[
+            "enabled_for_fetch"
+        ] = True
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sources.json"
+            path.write_text(json.dumps(unreviewed), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                m0.load_registry(path)
+
     def test_cancelled_discovery_sources_are_not_admitted(self):
         for source_id in ("citytalk", "accupass", "kktix", "beclass"):
             with self.subTest(source_id=source_id), self.assertRaises(ValueError):

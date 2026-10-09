@@ -74,3 +74,9 @@
 - Preserve third-party BeClass registration links as unverified URL references, but do not fetch BeClass. Source allowlist removal does not delete PostgreSQL historical events/observations or imply production DB source rows are already changed; application source gate and production state require separate verification.
 - Source TXT lists sensitive TDX API/MQTT credentials; no secret values are copied into GitHub. Operational secret storage / rotation remains a separate task requiring explicit approval for production credential rotation.
 - EventGo 3-day latest-publication filter is a **future candidate rule only when a verifiable published/posted timestamp exists**; never infer published date from event date or an example fixture. EventGo and yii.tw live crawl/production DB ingestion remain **NOT VERIFIED**.
+
+## 2026-10-09 — Open-data catalog deferred / deterministic structured-source processing
+
+- The registry retains `data_gov_catalog` solely as a **deferred inventory entry**, with `service_access_review=deferred` and `enabled_for_fetch=false`. No directory discovery, arbitrary per-dataset polling, AI extraction or scheduled enablement is authorized. The already-approved Ministry of Culture dataset is a separate fixed-source connection and remains unaffected.
+- Ministry of Culture and future reviewed TDX feed should share normalization, staged candidate dedup/queue and official evidence checks, but **structured inputs should not invoke AI by default**. The universal durable queue, multi-source executor and TDX live adapter are still **NOT IMPLEMENTED / NOT VERIFIED**; do not misdescribe the deployed MoC batch as the new queue.
+- Reconsider general government open data only after measured event-level freshness, official registration accuracy, duplication, null-field rates and explicit renewed source approval. EventGo/yii.tw three-times-weekly collection remains a requirement, not a running authorized production schedule.

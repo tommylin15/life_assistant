@@ -35,7 +35,7 @@
 | L1 主辦／報名頁核實 | 已由保留來源找到之活動的主辦官網、公告及原始報名頁 | 視來源許可與核實需求，最多按排程查驗 | 作為已發現活動的事實依據，不列為獨立全站探索來源 |
 | L1 聚合補漏 | **EventGo、小藝行事曆（yii.tw）** | 規劃每 12 小時；**目前皆停用**，完成來源授權／robots 審查後才可啟用 | EventGo 優先近 3 日上架候選（只有來源真實提供上架時間才能判斷）；不可把活動日期視為上架日期、不可無授權爬整站 |
 | L2 官方結構化 | **文化部藝文（唯一啟用）、TDX 觀光活動 API（待核准）** | 文化部現有每日 06:00／18:00；TDX 預計每日一次，仍停用 | 固定授權端點、限制用量；其它縣市來源不得自行新增或擷取 |
-| L3 來源探索 | **政府開放資料（data.gov.tw）目錄** | 規劃每日一次；目前停用 | 目錄只供發現候選資料集；新增資料集仍須逐一審核，不能因此自動擴大來源清冊 |
+| L3 來源探索 | **政府開放資料（data.gov.tw）目錄 — 暫緩** | **不排程、不擷取** | 不以平台「每日更新」宣稱取代各資料集實際上架延遲；待使用者核准、完成資料集逐項時效驗收後再評估 |
 | 重要已追蹤活動 | 官方報名頁與狀態頁 | 一般每日；已知即將開放時可配置短期提高查詢密度 | 只對該活動且不突破來源速率限制 |
 | 清理與健康 | expired sessions、來源 adapter 健康、重試佇列 | 每日一次 | 不因來源暫時斷線就刪活動 |
 
@@ -144,3 +144,10 @@ Admin 採現有 Flutter UI／FastAPI API、**後端 verified UID allowlist/RBAC*
 - **M0–M4 / E1–E2 進度：** M0 與 M1 低風險研發並行；M1 六表 migration 0011、資料契約、離線 JSONL 清洗/去重及文化部資料 Adapter 已 commit 至 main，資料庫 migration 尚未正式執行且 live ingestion **NOT VERIFIED**（詳見 `free_events_m1_checkpoint.md`）。M0 已啟動：`data/free_events_m0_sources.json`、`scripts/free_events_m0_baseline.py`、`backend/tests/test_free_events_m0_baseline.py`（8 tests）已在 commit `ea8264562e3f260bb56f52500d3d917104e86a69` 實作並通過 [CI #37892185617](https://github.com/tommylin15/life_assistant/actions/runs/37892185617)；但**尚無 14 天真實觀測、逐站 service 授權審核，M0 整體 PARTIAL / NOT VERIFIED**。M1–M4 及 E1–E2 尚未實作；不能因文件或測試 PASS 封板。
 
 **相關文件：** [`ai_provider_policy.md`](ai_provider_policy.md)、[`phase1_delivery_order.md`](phase1_delivery_order.md)、[`decisions.md`](decisions.md)、[`acceptance.md`](acceptance.md)、[`PROJECT_RULES.md`](PROJECT_RULES.md)。
+
+## 2026-10-09 — 政府開放資料目錄暫緩與共用清洗決策
+
+- **暫緩範圍**：僅 `data_gov_catalog`（data.gov.tw 開放資料集目錄的新增來源探索）；`service_access_review=deferred`、`enabled_for_fetch=false`，不得執行目錄掃描、以目錄搜尋結果自動新增來源或派發 AI 工作。這不等於停用已獨立核准且以文化部固定端點取得的 `moc_events_all` 資料集；`moc_event_detail` 及 `tdx_tourism_events` 仍各自保持原有未核准／停用狀態。
+- **時效驗證方法**：若未來重新評估 data.gov.tw 所發現的每個資料集，先核對授權、固定端點、欄位／活動 ID，再以至少 14 個真實觀測日建立「主辦公告日／來源活動發布日／首次看到日／報名開放及截止日」可追溯紀錄。計算具樣本分母的首次發現延遲分布、過期／取消／已截止率、費用與資格錯誤率、重複率和缺值率。來源沒有發布日期就標 `unknown`，不可用資料集修改時間、活動舉辦日或第一次看見日期冒充發布時間。門檻待實測與使用者核准，沒有樣本不得判 PASS。
+- **共同處理管線（設計，非當前完整實作）**：已獲授權的文化部及未來 TDX 走來源 JSON/API Adapter → 正規化 → 候選去重/Queue → 官方報名頁交叉驗證 → Life PostgreSQL；結構化欄位預設 **AI 呼叫 0**，僅自由文本模糊且變更內容指紋時才考慮 AI。EventGo／yii.tw 只在授權後用輕量索引發現，再由獲准原始來源擷取／必要時 AI；**不同來源共用同一候選閘門與去重規則，不宣稱 Queue、跨來源工作流或 AI E2E 已上線。**
+- **EventGo／yii.tw 待授權排程決策**：週一 18:00、週三 12:00、週五 16:00（Asia/Taipei），上架日期以「天」篩選、重疊時段靠去重；無可信上架日則待查，不以活動日替代。該排程是需求，並非已上線自動爬蟲。BeClass 只留間接報名連結，不爬取其網站。

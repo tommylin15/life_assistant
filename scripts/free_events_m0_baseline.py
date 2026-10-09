@@ -18,7 +18,7 @@ DEFAULT_REGISTRY = ROOT / "data/free_events_m0_sources.json"
 APPROVED_STATES = {"reviewed_with_evidence"}
 SERVICE_STATES = APPROVED_STATES | {
     "pending", "pending_api_credentials_and_rate_limits",
-    "pending_robots_terms_or_authorized_api",
+    "pending_robots_terms_or_authorized_api", "deferred",
 }
 TIERS = {"official_dataset", "official_api", "official_catalog", "aggregator"}
 
@@ -52,6 +52,8 @@ def load_registry(path: Path = DEFAULT_REGISTRY) -> dict:
             raise ValueError("unknown access review state")
         if type(source.get("enabled_for_fetch")) is not bool:
             raise ValueError("enabled_for_fetch must be boolean")
+        if source.get("service_access_review") == "deferred" and source["enabled_for_fetch"]:
+            raise ValueError("deferred source cannot fetch")
         if source["enabled_for_fetch"]:
             if source["service_access_review"] not in APPROVED_STATES:
                 raise ValueError("unreviewed source cannot fetch")

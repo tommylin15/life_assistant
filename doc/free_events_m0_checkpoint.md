@@ -48,3 +48,9 @@ The M0 script never publishes an overall `PASS`; operator acceptance is mandator
 - Only `moc_events_all` remains enabled for network fetching; no API/robots/terms permission is inferred for TDX, data.gov.tw discovery, EventGo, yii.tw or MoC detail. No production DB rows, prior observations, or source evidence are deleted by this source-registry change.
 - TDX credentials exposed in the private Drive TXT are not to be copied to source code, test fixtures or logs. Secret-storage migration and credential rotation remain separate, not executed by this change.
 - Existing checkpoints above are historical evidence and may list superseded source counts; this section and the current registry determine the latest scope.
+
+## 2026-10-09 — data.gov.tw catalog put on hold
+
+- The user deferred the **general data.gov.tw directory** (`data_gov_catalog`) because dataset update labels do not demonstrate actual event publication/registration freshness. Registry access review becomes `deferred`; `enabled_for_fetch=false`, no catalog crawler/scheduler/dataset auto-enrollment. This is distinct from the independently reviewed MoC official data endpoint, which remains the one permitted fetch source.
+- Reopen only after dataset-specific official authorization and at least 14 days of actual observations, with field-level evidence for first-seen lag, registration validity, unknown publication date, duplicates and stale events. No synthetic timestamps or numerical PASS claims. TDX remains pending credentials/terms and its own source-specific evidence.
+- Shared candidate queue and source normalization remain an **implementation target**, not a production-verified replacement for the current MoC direct ingestion job. Structured MoC/TDX processing defaults to deterministic rules and zero AI; fuzzy text may be escalated later, without bypassing verified-only publication.

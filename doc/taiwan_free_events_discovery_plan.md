@@ -119,3 +119,11 @@ GitHub 元件候選（實際使用前再次審核版本/安全/授權）：`feed
 - 在 M0 完成前，M1 migration 的 Registration Opportunity / Organizer / tombstone 設計先可評審但不應直接對 production DB 落地；缺值、授權或 admin identity 未確認時 fail closed。
 - GitHub main 當前實作與 runtime evidence 高於本設計文件；本次只更新規格和 backlog，不新增 scheduler、不修改 DB、不發布部署。
 - 進度狀態：**planning/documentation = PASS（須文件 readback）**；**M0–M4 implementation / tests / CI / deployment / runtime / integration = NOT VERIFIED**；整體 **PARTIAL / NOT IMPLEMENTED**。
+
+## 14. Batch AI 模型路由與增量成本（2026-10-09 確認）
+
+高價值來源每日 06:00/18:00 掃描，但**掃描不是必然推論**。ETag／Last-Modified／正規化內容 hash 與 PostgreSQL AI fingerprint 命中時呼叫 0 次；規則／官方結構化 API 可處理者也不使用 AI。新或有意義變動且規則無法可靠抽取者才使用 **Gemini `latest-3-flash` → Gemini `latest-3-flash-lite` → Groq → OpenRouter → 私有 Shared Codex** 的備援順序，逐項上限與工作預算另依 M0 實測收斂。
+
+Flash 和 Lite 各自從官方可用清單選最多三個穩定文字模型，並**分別持久保存**最後成功型號，下一輪優先選仍可用的該型號；各系列候選缺額不以 preview/TTS 充數。Shared Codex 僅複雜例外/必要備援且遵守 owner 授權，無需將 CLI 或金鑰放入本專案。批次一次產生一份精簡 UI 卡片與公用摘要（60–120 中文字）、核心報名/免費/時間證據；不存整站 HTML／大圖／完整 prompt，不因使用者觀看或選擇筆記再呼叫 AI。明確日期/費用/權限與發送操作均由可稽核來源、後端規則及使用者決策確定，AI 只產候選建議。
+
+M1 驗收：相同內容相同抽取規格的重試／併發只產一份有效 AI 工作；無內容異動／有完整官方結構化欄位／使用者打開清單或建立一般筆記時 AI 呼叫為 0；Lite/Flash last-known-good 互不污染；資料庫只留核心欄位、簡短摘要、來源與最低限度稽核/去重。M4 驗收：模型個別真實可用性、精度、provider 失敗後備援、p95 查詢速度、批次成本、過期清理、真實 GCP 06/18 任務均須取得證據。預算超標時延後非關鍵 AI 工作而不是停止所有活動探索。**本功能依然 NOT IMPLEMENTED**。

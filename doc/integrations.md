@@ -288,3 +288,12 @@ Latest regression closure evidence：Habits release `02eda112...` 的 Drive Know
 - Runtime routing activation: `CODEX_PRIMARY_ENABLED=true` on Cloud Run API and Drive acceptance runner; absent flag is disabled for local safety. Existing provider bundle remains unchanged. Caller must never read the shared Secret.
 - consumer acceptance: tests + CI + Cloud Run deploy + signed real HTTP 200 + 403 project mismatch + anonymous rejection + real Drive/Notes UI flow + owner isolation. Use `backend/scripts/run_shared_codex_identity_acceptance.py` for synthetic signed runtime probe. New provider direct health must be verified separately. None of the consumer DONE claims are valid before the exact-runtime gates pass.
 - Shared-service own readiness is separate evidence: omniAgent GitHub Actions `37709954944` (attempt 3), `37712799145`, `37710625658`; those do **not** establish life_assistant deployment/runtime PASS.
+
+## 2026-10-09 — AI Provider 單一新優先序（覆蓋上述歷史路由順序）
+
+- 使用者統一指定 **Gemini `latest-3-flash` → Gemini `latest-3-flash-lite` → Groq → OpenRouter → private Shared Codex**。Codex CLI 在本專案語意**指現有 private Shared Codex**，不可於 life_assistant 安裝另一套 CLI 或跨越 Secret/OAuth 權限邊界。
+- 兩組 Gemini **分別**從可用且支援 `generateContent` 的穩定文字模型中選**最多最新三個**（不含 Preview／TTS／Image），彼此分離最後成功的偏好：PostgreSQL `ai_provider_preferences` 使用 `gemini` 與 `gemini_lite` 兩筆。下次優先選仍可用的最後成功型號；失敗時依該系列其它候選再切下一家。即使成功型號較舊，最多只保留三個候選位置；不可硬湊不存在的型號。
+- 兩組 Gemini 使用同一現有 `GEMINI_API_KEY`；Lite 的 `latest-3-flash-lite` 是應用程式內的**動態選擇策略**，不是 Google API 的原生模型 ID。仍須先查官方 model list，解析為真正模型 ID 再呼叫。
+- Legacy `CODEX_PRIMARY_ENABLED` config key 保留相容，但路由語意改為**最後備援的開關**；僅在 authenticated owner_id 與有效私有 caller identity 同時成立才可呼叫，共用專用 Cloud Run 與 Secret 隔離不變。沒有 owner 時不呼叫 Shared Codex，也不讓公開資料的基本 Gemini 處理全數失效。
+- Groq / OpenRouter 使用原有配置模型/憑證，依**固定順序**執行；未配置的 provider 跳過並以警告記錄，不造假可用性。所有模型均須遵守原有 consent、stage-level partial、bounded retry、provider-by-provider direct acceptance；fallback PASS 不能遮蔽任一家配置的 direct FAIL。
+- 這是設計/程式路由調整；**部署及真實 runtime E2E 仍依新 release 的 Actions/Cloud Run evidence 個別驗收**，未取得不得宣稱完成。

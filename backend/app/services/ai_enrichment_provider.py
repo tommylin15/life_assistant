@@ -714,16 +714,21 @@ class FallbackAIEnrichmentProvider(AIEnrichmentProvider):
 
 
 class LatestGeminiEnrichmentProvider(ChatCompletionsEnrichmentProvider):
-    """Prefer the last successful stable Flash model, then probe newest stable models."""
+    """Sticky last-successful model within at most three available stable candidates per family."""
 
-    def __init__(self, *, api_key: str) -> None:
+    def __init__(self, *, api_key: str, variant: str = "flash") -> None:
+        if variant not in {"flash", "flash-lite"}:
+            raise ValueError("unsupported Gemini model family")
+        self._variant = variant
+        self._preference_key = "gemini" if variant == "flash" else "gemini_lite"
         super().__init__(
             provider="gemini",
             api_key=api_key,
-            model="latest-3-flash",
+            model="latest-3-flash" if variant == "flash" else "latest-3-flash-lite",
             base_url="https://generativelanguage.googleapis.com/v1beta/openai",
             retry_delays_seconds=(),
         )
+        self.provider_name = self._preference_key
         self._models: list[str] | None = None
         self._available_models: list[str] | None = None
         self._preferred_model: str | None = None
@@ -775,7 +780,9 @@ class LatestGeminiEnrichmentProvider(ChatCompletionsEnrichmentProvider):
             versions: dict[str, tuple[int, ...]] = {}
             for item in models:
                 name = item.get("name", "").removeprefix("models/")
-                match = re.fullmatch(r"gemini-(\d+(?:\.\d+)+)-flash", name)
+                match = re.fullmatch(
+                    rf"gemini-(\d+(?:\.\d+)*)-{re.escape(self._variant)}", name
+                )
                 if match and "generateContent" in item.get("supportedGenerationMethods", []):
                     versions[name] = tuple(map(int, match.group(1).split(".")))
             self._available_models = sorted(versions, key=versions.get, reverse=True)
@@ -789,12 +796,12 @@ class LatestGeminiEnrichmentProvider(ChatCompletionsEnrichmentProvider):
         if self._preference_loaded:
             return
         self._preference_loaded = True
-        preferred = await load_ai_provider_preference("gemini")
+        preferred = await load_ai_provider_preference(self._preference_key)
         if not preferred or preferred not in (self._available_models or ()):
             return
         self._preferred_model = preferred
-        if preferred not in (self._models or ()):
-            self._models = [preferred, *(self._models or ())]
+        # Keep three slots maximum even when the remembered model becomes older.
+        self._models = [preferred, *(name for name in (self._models or ()) if name != preferred)][:3]
 
     def _ordered_models(self) -> list[str]:
         models = list(self._models or ())
@@ -823,9 +830,10 @@ class LatestGeminiEnrichmentProvider(ChatCompletionsEnrichmentProvider):
                     result = await candidate._structured_response(**kwargs)
                     self._preferred_model = model
                     self.served_models.add(model)
-                    await remember_ai_provider_preference("gemini", model)
+                    await remember_ai_provider_preference(self._preference_key, model)
                     logging.getLogger(__name__).info(
-                        "drive_ai_provider_selected provider=gemini model=%s",
+                        "drive_ai_provider_selected provider=%s model=%s",
+                        self._preference_key,
                         model,
                     )
                     return result
@@ -863,56 +871,80 @@ class LatestGeminiEnrichmentProvider(ChatCompletionsEnrichmentProvider):
 
 
 def get_ai_enrichment_provider(*, provider: str | None = None, model: str | None = None, owner_id: str | None = None) -> AIEnrichmentProvider:
+    """Resolve explicit adapters or the configured ordered Gemini-first fallback policy.
+
+    Public batch work must not depend on a private Codex owner. The shared Codex
+    consumer is added *last* only with an authenticated, project-scoped owner.
+    """
     explicit = provider is not None
-    provider = (provider if explicit else _setting("ai_enrichment_provider", "AI_ENRICHMENT_PROVIDER", "disabled")).casefold()
+    provider = (provider if explicit else _setting("ai_enrichment_provider", "AI_ENRICHMENT_PROVIDER", "disabled")).strip().casefold()
     model = model if model is not None else _setting("ai_enrichment_model", "AI_ENRICHMENT_MODEL")
     if provider == "codex":
         if not owner_id:
             return UnavailableAIEnrichmentProvider()
         return SharedCodexEnrichmentProvider(owner_id=owner_id, model=model or "")
-    if provider not in {"openai", "gemini", "openrouter", "groq"}:
+    if provider not in {"openai", "gemini", "gemini_lite", "openrouter", "groq"}:
         return UnavailableAIEnrichmentProvider()
 
-    api_key = _setting(f"{provider}_api_key", f"{provider.upper()}_API_KEY")
+    key_provider = "gemini" if provider == "gemini_lite" else provider
+    api_key = _setting(f"{key_provider}_api_key", f"{key_provider.upper()}_API_KEY")
     base_url = {
         "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "gemini_lite": "https://generativelanguage.googleapis.com/v1beta/openai",
         "openrouter": "https://openrouter.ai/api/v1",
         "groq": "https://api.groq.com/openai/v1",
         "openai": _setting("openai_base_url", "OPENAI_BASE_URL", "https://api.openai.com/v1"),
     }[provider]
     if not model or not api_key or not base_url:
         return UnavailableAIEnrichmentProvider()
+
     if provider == "gemini" and model == "latest-3-flash":
-        resolved = LatestGeminiEnrichmentProvider(api_key=api_key)
+        resolved: AIEnrichmentProvider = LatestGeminiEnrichmentProvider(api_key=api_key)
+    elif provider in {"gemini", "gemini_lite"} and model == "latest-3-flash-lite":
+        resolved = LatestGeminiEnrichmentProvider(api_key=api_key, variant="flash-lite")
+    elif provider == "gemini_lite":
+        return UnavailableAIEnrichmentProvider()
     elif provider == "openai":
         resolved = OpenAIResponsesEnrichmentProvider(api_key=api_key, model=model, base_url=base_url)
     else:
         resolved = ChatCompletionsEnrichmentProvider(provider=provider, api_key=api_key, model=model, base_url=base_url)
-    if not explicit:
-        chain = [resolved]
-        for tier in ("fallback", "tertiary"):
-            name = _setting(f"ai_enrichment_{tier}_provider", f"AI_ENRICHMENT_{tier.upper()}_PROVIDER").casefold()
-            if name:
-                backup = get_ai_enrichment_provider(
-                    provider=name,
-                    model=_setting(f"ai_enrichment_{tier}_model", f"AI_ENRICHMENT_{tier.upper()}_MODEL"),
-                )
-                if isinstance(backup, UnavailableAIEnrichmentProvider):
-                    return backup
+
+    if explicit:
+        return resolved
+
+    chain: list[AIEnrichmentProvider] = [resolved]
+    if provider == "gemini" and model == "latest-3-flash":
+        # Both Gemini families use the same API key but have separate three-slot
+        # candidate lists and independent persisted last-success preferences.
+        chain.append(LatestGeminiEnrichmentProvider(api_key=api_key, variant="flash-lite"))
+
+    configured_backups: dict[str, str] = {}
+    for tier in ("fallback", "tertiary"):
+        name = _setting(f"ai_enrichment_{tier}_provider", f"AI_ENRICHMENT_{tier.upper()}_PROVIDER").casefold()
+        backup_model = _setting(f"ai_enrichment_{tier}_model", f"AI_ENRICHMENT_{tier.upper()}_MODEL")
+        if name in {"groq", "openrouter"} and name not in configured_backups:
+            configured_backups[name] = backup_model
+    # Fixed order regardless of the legacy fallback/tertiary env ordering.
+    for name in ("groq", "openrouter"):
+        if name in configured_backups:
+            backup = get_ai_enrichment_provider(provider=name, model=configured_backups[name])
+            if not isinstance(backup, UnavailableAIEnrichmentProvider):
                 chain.append(backup)
-        resolved = chain.pop()
-        for primary in reversed(chain):
-            resolved = FallbackAIEnrichmentProvider(primary, resolved)
-        if config.settings.codex_primary_enabled:
-            if not owner_id:
-                # No authenticated subject means do not send a shared inference.
-                return UnavailableAIEnrichmentProvider()
-            codex = SharedCodexEnrichmentProvider(
-                owner_id=owner_id,
-                model=str(config.settings.codex_shared_model or ""),
-            )
-            resolved = FallbackAIEnrichmentProvider(codex, resolved)
-    return resolved
+            else:
+                logging.getLogger(__name__).warning("drive_ai_provider_not_configured provider=%s", name)
+
+    # The old rollout flag name is retained for runtime backward compatibility;
+    # it now enables Codex as the LAST tier, never the first.
+    if config.settings.codex_primary_enabled and owner_id:
+        chain.append(SharedCodexEnrichmentProvider(
+            owner_id=owner_id,
+            model=str(config.settings.codex_shared_model or ""),
+        ))
+
+    ordered = chain.pop()
+    for primary in reversed(chain):
+        ordered = FallbackAIEnrichmentProvider(primary, ordered)
+    return ordered
 
 
 def compute_enrichment_fingerprint(

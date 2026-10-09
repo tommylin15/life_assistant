@@ -154,7 +154,7 @@ class SharedCodexProviderTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ai.AIProviderError):
                 await self.provider._mint_google_id_token(client)
 
-    async def test_codex_primary_first_then_legacy_fallback(self):
+    async def test_gemini_flash_then_lite_then_groq_openrouter_then_private_codex(self):
         with (
             patch.object(config.settings,"ai_enrichment_provider","gemini"),
             patch.object(config.settings,"ai_enrichment_model","latest-3-flash"),
@@ -168,15 +168,24 @@ class SharedCodexProviderTests(unittest.IsolatedAsyncioTestCase):
             patch.object(config.settings,"codex_primary_enabled",True),
         ):
             routed=ai.get_ai_enrichment_provider(owner_id=self.owner)
-        self.assertEqual(routed.primary.provider_name,"codex")
-        self.assertEqual(routed.fallback.primary.provider_name,"gemini")
+        self.assertEqual(routed.primary.provider_name,"gemini")
+        self.assertEqual(routed.fallback.primary.provider_name,"gemini_lite")
         self.assertEqual(routed.fallback.fallback.primary.provider_name,"groq")
-        self.assertEqual(routed.fallback.fallback.fallback.provider_name,"openrouter")
+        self.assertEqual(routed.fallback.fallback.fallback.primary.provider_name,"openrouter")
+        self.assertEqual(routed.fallback.fallback.fallback.fallback.provider_name,"codex")
 
-    async def test_no_owner_fail_closed_when_primary_enabled(self):
-        with patch.object(config.settings,"codex_primary_enabled",True):
+    async def test_no_owner_skips_codex_without_blocking_gemini(self):
+        with (
+            patch.object(config.settings,"codex_primary_enabled",True),
+            patch.object(config.settings,"ai_enrichment_provider","gemini"),
+            patch.object(config.settings,"ai_enrichment_model","latest-3-flash"),
+            patch.object(config.settings,"gemini_api_key","test"),
+            patch.object(config.settings,"ai_enrichment_fallback_provider",""),
+            patch.object(config.settings,"ai_enrichment_tertiary_provider",""),
+        ):
             p = ai.get_ai_enrichment_provider()
-        self.assertEqual(p.provider_name,"disabled")
+        self.assertEqual(p.primary.provider_name, "gemini")
+        self.assertEqual(p.fallback.provider_name, "gemini_lite")
 
 
 if __name__ == "__main__":

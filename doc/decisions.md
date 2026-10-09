@@ -151,3 +151,9 @@ User-approved target changed from the earlier conversational 2-revision proposal
 - 活動過期停止可操作、30 天後清理非必要內容並保留最小去重與使用者自有資料；真實 production 大量不可逆清理不因本規劃自動授權。
 - 不做自動替使用者報名/付款、繞過反爬、完整票務平台或常駐 VM。MVP 的安全、授權、幂等、資料品質、真實 Google 整合、mobile/desktop 以及 runtime evidence 不可降標。
 - 原有 Phase 1 11-package 完成數與 #9–#11 封板工作保留。此次優先順序變更**不是默認修改 Phase 1 Release Gate/scope freeze**；進入實作須依現有治理紀錄是否列為 release blocker。當前 **APPROVED PLAN / NOT IMPLEMENTED**。
+
+## 2026-10-09 — 全功能 AI Routing Policy 修訂
+
+使用者明確指定統一推論順位：**Gemini Flash 動態最新三型號 → Gemini Flash-Lite 動態最新三型號 → Groq → OpenRouter → 現有 private Shared Codex（使用者稱 Codex CLI）**。Flash / Lite 各自保存最後成功模型，下次同系列先試該模型；失效才輪替其他在官方列表內可用的穩定候選。各系列最多三個，未湊滿不得加入 Preview/TTS。來源沒變或規則可解時 AI 呼叫應為 0；這是 provider fallback 順序，不是每次掃描都逐個呼叫五家。
+
+保留 Shared Codex 原私有 Cloud Run consumer、owner scoped GCP ID-token 與 Secret 隔離；現有 `CODEX_PRIMARY_ENABLED` 名稱為相容設定，實際路由改為**Codex 最後**。若未經生產驗收，不得宣稱五階段都可用；原有 Drive AI consent、cache、partial success、provider direct-health gates 不得降低。其他專案（omniAgent／Janus）不在本決策修改範圍內。

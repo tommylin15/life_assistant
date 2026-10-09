@@ -115,6 +115,54 @@ class ProductionProviderContractTests(unittest.IsolatedAsyncioTestCase):
                 await provider.suggest_tags(self.context)
             self.assertEqual(len(calls), 9)
 
+    async def test_gemini_flash_lite_has_independent_sticky_preference_and_three_slots(self):
+        calls = []
+        def handle(request):
+            if request.method == "GET":
+                return providers.httpx.Response(200, json={"models": [
+                    {"name": "models/" + name, "supportedGenerationMethods": ["generateContent"]}
+                    for name in (
+                        "gemini-3.5-flash-lite", "gemini-3.1-flash-lite",
+                        "gemini-3.0-flash-lite", "gemini-4.0-flash-lite-preview",
+                        "gemini-3.8-flash", "gemini-3.8-flash-lite-tts",
+                    )
+                ]})
+            model = json.loads(request.content)["model"]
+            calls.append(model)
+            if model != "gemini-3.0-flash-lite":
+                return providers.httpx.Response(503, json={})
+            return providers.httpx.Response(200, json={"choices": [
+                {"finish_reason": "stop", "message": {"content": '{"tags":[]}'}}]})
+        original = providers.httpx.AsyncClient
+        with (
+            patch.object(providers.httpx, "AsyncClient", side_effect=lambda **kw: original(
+                transport=providers.httpx.MockTransport(handle), **kw)),
+            patch.object(providers.asyncio, "sleep", new=AsyncMock()),
+            patch.object(providers, "load_ai_provider_preference", new=AsyncMock(
+                side_effect=lambda key: "gemini-3.0-flash-lite" if key == "gemini_lite" else None)),
+            patch.object(providers, "remember_ai_provider_preference", new=AsyncMock()) as remember,
+        ):
+            lite = providers.LatestGeminiEnrichmentProvider(api_key="test-key", variant="flash-lite")
+            self.assertEqual(await lite.suggest_tags(self.context), [])
+            self.assertEqual(calls, ["gemini-3.0-flash-lite"])
+            self.assertEqual(lite._models, [
+                "gemini-3.0-flash-lite", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"])
+            remember.assert_awaited_once_with("gemini_lite", "gemini-3.0-flash-lite")
+            calls.clear()
+            self.assertEqual(await lite.suggest_tags(self.context), [])
+            self.assertEqual(calls, ["gemini-3.0-flash-lite"])
+
+    async def test_gemini_lite_explicit_adapter_reuses_gemini_api_key(self):
+        with (
+            patch.object(config.settings, "gemini_api_key", "test-key"),
+            patch.object(config.settings, "codex_primary_enabled", False),
+        ):
+            provider = providers.get_ai_enrichment_provider(
+                provider="gemini_lite", model="latest-3-flash-lite")
+        self.assertIsInstance(provider, providers.LatestGeminiEnrichmentProvider)
+        self.assertEqual(provider.provider_name, "gemini_lite")
+        self.assertEqual(provider.model_name, "latest-3-flash-lite")
+
     async def test_latest_gemini_stops_model_sweep_on_rate_limit(self):
         calls = []
 

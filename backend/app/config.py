@@ -371,7 +371,8 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     # Shared Codex is a private omniAgent Cloud Run, not a local CLI/secret.
-    # Explicit rollout flag: default remains fail-closed until IAM/E2E passes.
+    # Historical config key: enables private Shared Codex as LAST fallback only.
+    # Default remains off until IAM/E2E acceptance passes.
     codex_primary_enabled: bool = False
     codex_shared_base_url: str = "https://omniagent-shared-codex-2oo7qbkd5q-uc.a.run.app"
     codex_shared_caller_service_account: str = (

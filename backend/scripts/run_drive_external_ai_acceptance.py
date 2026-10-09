@@ -58,6 +58,7 @@ _PROVIDER_FAILURE_BITS = {
     "groq": 4,
     "openai": 8,
     "codex": 16,
+    "gemini_lite": 32,
 }
 _PROVIDER_DIAGNOSTIC_BASES = {
     "gemini": 140,
@@ -65,6 +66,7 @@ _PROVIDER_DIAGNOSTIC_BASES = {
     "groq": 170,
     "openai": 185,
     "codex": 200,
+    "gemini_lite": 215,
 }
 
 
@@ -76,7 +78,7 @@ def _exit_code_for_unavailable_provider(
     base_url: str,
 ) -> int:
     mask = 0
-    if provider.strip().casefold() not in {"openai", "gemini", "openrouter", "groq"}:
+    if provider.strip().casefold() not in {"openai", "gemini", "gemini_lite", "openrouter", "groq"}:
         mask |= 1
     if not model.strip():
         mask |= 2
@@ -162,7 +164,7 @@ async def run_acceptance(*, provider_name: str | None = None, model: str | None 
         exit_code = _exit_code_for_unavailable_provider(
             provider=provider_name or str(config.settings.ai_enrichment_provider or ""),
             model=model if model is not None else str(config.settings.ai_enrichment_model or ""),
-            api_key=str(getattr(config.settings, f"{provider_name or config.settings.ai_enrichment_provider}_api_key", "") or ""),
+            api_key=str(getattr(config.settings, f"{("gemini" if provider_name == "gemini_lite" else (provider_name or config.settings.ai_enrichment_provider))}_api_key", "") or ""),
             base_url=str(config.settings.openai_base_url or "") if (provider_name or config.settings.ai_enrichment_provider) == "openai" else "vendor_endpoint",
         )
         print(
@@ -232,8 +234,8 @@ async def run_acceptance(*, provider_name: str | None = None, model: str | None 
 
     provider_name = provider.provider_name or "unknown"
     model_name = provider.model_name or "unknown"
-    if provider_name == "gemini":
-        persisted_model = await load_ai_provider_preference("gemini")
+    if provider_name in {"gemini", "gemini_lite"}:
+        persisted_model = await load_ai_provider_preference(provider_name)
         served_models = set(getattr(provider, "served_models", ()))
         if not persisted_model or persisted_model not in served_models:
             print(
@@ -260,16 +262,22 @@ async def run_configured_providers(*, only_provider: str | None = None) -> None:
     configured = [
         (config.settings.ai_enrichment_provider, config.settings.ai_enrichment_model),
     ]
-    # Direct Codex health must pass independently: a healthy Gemini fallback
-    # does not count as a successful private shared-Codex invocation.
-    if config.settings.codex_primary_enabled:
-        configured.insert(0, ("codex", config.settings.codex_shared_model or ""))
+    if (
+        config.settings.ai_enrichment_provider == "gemini"
+        and config.settings.ai_enrichment_model == "latest-3-flash"
+    ):
+        configured.append(("gemini_lite", "latest-3-flash-lite"))
+    additional = {}
     for tier in ("fallback", "tertiary"):
         name = getattr(config.settings, f"ai_enrichment_{tier}_provider")
-        if name:
-            configured.append(
-                (name, getattr(config.settings, f"ai_enrichment_{tier}_model"))
-            )
+        if name in {"groq", "openrouter"}:
+            additional[name] = getattr(config.settings, f"ai_enrichment_{tier}_model")
+    for name in ("groq", "openrouter"):
+        if name in additional:
+            configured.append((name, additional[name]))
+    # Direct Codex health must pass independently, and is checked LAST.
+    if config.settings.codex_primary_enabled:
+        configured.append(("codex", config.settings.codex_shared_model or ""))
 
     if only_provider is not None:
         requested = only_provider.strip().casefold()

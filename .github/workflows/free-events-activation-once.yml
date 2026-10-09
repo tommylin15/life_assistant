@@ -126,19 +126,26 @@ jobs:
           image=container['image']
           assert image.startswith('ghcr.io/tommylin15/life_assistant-backend@sha256:'), 'Unexpected template image'
           existing=container.get('env',[])
-          # Production DB credentials may be passed as a single existing Secret
-          # bundle, rather than a separately materialized DATABASE_URL. Reuse
-          # only the minimal available database channel; never print values.
+          # Reuse the verified DB connection channel WITHOUT exposing values.
+          # A legacy password-bundle needs its non-secret DATABASE_* parameters
+          # to assemble the URL; excluding them silently routes to localhost.
           explicit=[v for v in existing if v.get('name')=='DATABASE_URL']
           bundle=[v for v in existing if v.get('name')=='LIFE_ASSISTANT_BUNDLE']
+          database_keys={
+              'DATABASE_HOST','DATABASE_NAME','DATABASE_PORT','DATABASE_USER',
+              'DATABASE_SSLMODE'
+          }
+          db_parameters=[v for v in existing if v.get('name') in database_keys]
           if len(explicit)==1:
               chosen=explicit
               print('observer_db_channel=separate_database_url')
-          elif len(bundle)==1:
-              chosen=bundle
-              print('observer_db_channel=existing_bundle_reference')
+          elif len(bundle)==1 and {v.get('name') for v in db_parameters} >= {
+              'DATABASE_HOST','DATABASE_NAME','DATABASE_USER'
+          }:
+              chosen=bundle+db_parameters
+              print('observer_db_channel=existing_bundle_plus_database_parameters')
           else:
-              raise SystemExit('No known database credential channel in job; fail closed')
+              raise SystemExit('No complete approved DB connection in template; fail closed')
           container['env']=chosen
           container['args']=['-m','scripts.run_free_events_moc_batch']
           template['metadata']['name']='life-assistant-free-events'

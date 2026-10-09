@@ -36,3 +36,8 @@ The M0 script never publishes an overall `PASS`; operator acceptance is mandator
 - Source commit [`ea8264562e3f260bb56f52500d3d917104e86a69`](https://github.com/tommylin15/life_assistant/commit/ea8264562e3f260bb56f52500d3d917104e86a69): source registry, offline M0 audit tool, 8 deterministic Python tests, this checkpoint.
 - [CI run 37892185617](https://github.com/tommylin15/life_assistant/actions/runs/37892185617): **PASS** backend (428 tests including 8 M0-specific tests), Flutter Web, deployment-scripts. No M0 runtime deployment, scheduled network fetch or actual 14-day evidence was part of this CI.
 - Current closure count for the original Phase 1 11 packages remains **8/11 (72.7%)**, with Calendar #8 closed. M0 is an additional approved priority, not a redefinition of that denominator.
+
+
+## 并行 M1 說明（2026-10-09）
+
+使用者要求不等待 14 天觀測結束，先開發後面需要的 M1，並保留修正追蹤。已新增 additive 0011 六表與離線 MoC Adapter / JSONL 去重，請見 `free_events_m1_checkpoint.md`；**M0 14 天真實連續來源觀測尚未驗收，不因 M1 程式存在而視作完成**。

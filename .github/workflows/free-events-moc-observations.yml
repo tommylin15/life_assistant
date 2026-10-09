@@ -1,0 +1,52 @@
+name: Taiwan Free Events - Official MoC Observations
+
+on:
+  schedule:
+    - cron: '0 10,22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: life-assistant-moc-official-observation
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: dev-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate existing deployer WIF
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: gen-lang-client-0593591102
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Require only the authorized Ministry of Culture source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          obj=json.loads(Path('data/free_events_m0_sources.json').read_text())
+          approved=[s['id'] for s in obj['sources'] if s['enabled_for_fetch']]
+          assert approved==['moc_events_all'], 'Unexpected fetch authorization change'
+          assert obj['sources'][0]['service_access_review']=='reviewed_with_evidence'
+          print('source_allowlist=PASS one_public_moc_dataset')
+          PY
+      - name: Execute official observation via Cloud Run Job
+        shell: bash
+        run: |
+          set -euo pipefail
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-free-events \
+            gcloud run jobs execute life-assistant-free-events \
+            --project gen-lang-client-0593591102 --region us-central1 \
+            --args=-m,scripts.run_free_events_moc_batch \
+            --task-timeout 25m --wait --quiet
+          echo "moc_observation_execution=PASS; real database observation readback required" >> "$GITHUB_STEP_SUMMARY"

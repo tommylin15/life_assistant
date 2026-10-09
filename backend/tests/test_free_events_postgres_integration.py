@@ -135,6 +135,29 @@ class FreeEventPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 )
         return event.id
 
+    async def assert_exactly_one_chain(self, candidate):
+        """Count only this test's unique source/event; other tests share sidecar."""
+        event, session, _ = await self.records(candidate)
+        async with self.session_factory() as db:
+            conditions = (
+                (FreeEvent, FreeEvent.source_id == self.source_id),
+                (FreeEventSession, FreeEventSession.event_id == event.id),
+                (FreeEventRegistrationOpportunity,
+                 FreeEventRegistrationOpportunity.session_id == session.id),
+                (FreeEventEvidence, FreeEventEvidence.event_id == event.id),
+                (FreeEventOrganizer, FreeEventOrganizer.id == event.organizer_id),
+            )
+            for table, where in conditions:
+                value = await db.scalar(
+                    select(func.count()).select_from(table).where(where)
+                )
+                self.assertEqual(value, 1, table.__tablename__)
+
+    async def mine(self, event_id):
+        async with self.session_factory() as db:
+            cards = await list_verified_public_events(db, now=self.now)
+            return [card for card in cards if card.event_id == event_id]
+
     async def test_exact_alembic_head_and_additive_tables(self):
         async with self.engine.connect() as conn:
             revision = await conn.scalar(text("SELECT version_num FROM alembic_version"))
@@ -167,7 +190,9 @@ class FreeEventPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(FreeEventSourceNotApproved):
             await self.ingest(candidate)
         async with self.engine.connect() as conn:
-            count = await conn.scalar(select(func.count()).select_from(FreeEvent))
+            count = await conn.scalar(select(func.count()).select_from(FreeEvent).where(
+                FreeEvent.source_id == self.source_id
+            ))
             self.assertEqual(count, 0)
 
     async def test_idempotent_upsert_has_exactly_one_event_session_registration_evidence(self):
@@ -176,32 +201,11 @@ class FreeEventPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         first = await self.ingest(candidate)
         second = await self.ingest(candidate)
         self.assertEqual(first["event_id"], second["event_id"])
-        async with self.session_factory() as db:
-            event, session, opp = await self.records(candidate)
-            self.assertEqual(opp.fee_kind, "free")
-            self.assertEqual(event.verification_status, "unverified")
-            self.assertFalse(opp.official_verified)
-            self.assertEqual(
-                await db.scalar(select(func.count()).select_from(FreeEvent)),
-                1,
-            )
-            self.assertEqual(
-                await db.scalar(select(func.count()).select_from(FreeEventSession)),
-                1,
-            )
-            self.assertEqual(
-                await db.scalar(select(func.count()).select_from(
-                    FreeEventRegistrationOpportunity
-                )), 1,
-            )
-            self.assertEqual(
-                await db.scalar(select(func.count()).select_from(FreeEventEvidence)),
-                1,
-            )
-            self.assertEqual(
-                await db.scalar(select(func.count()).select_from(FreeEventOrganizer)),
-                1,
-            )
+        event, _, opp = await self.records(candidate)
+        self.assertEqual(opp.fee_kind, "free")
+        self.assertEqual(event.verification_status, "unverified")
+        self.assertFalse(opp.official_verified)
+        await self.assert_exactly_one_chain(candidate)
 
     async def test_four_concurrent_retries_cannot_double_insert(self):
         await self.seed_source()
@@ -211,38 +215,28 @@ class FreeEventPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             timeout=20,
         )
         self.assertEqual(len({item["event_id"] for item in results}), 1)
-        async with self.session_factory() as db:
-            for table in (
-                FreeEvent, FreeEventSession,
-                FreeEventRegistrationOpportunity, FreeEventEvidence,
-            ):
-                count = await db.scalar(select(func.count()).select_from(table))
-                self.assertEqual(count, 1, table.__tablename__)
+        await self.assert_exactly_one_chain(candidate)
 
     async def test_reverification_and_real_read_filter_are_fresh_and_fail_closed(self):
         await self.seed_source()
         candidate = self.candidate()
-        await self.ingest(candidate)
-        async with self.session_factory() as db:
-            self.assertEqual(await list_verified_public_events(db, now=self.now), [])
+        stored = await self.ingest(candidate)
+        event_id = stored["event_id"]
+        self.assertEqual(await self.mine(event_id), [])
         await self.verify_event_and_opportunity(candidate)
-        async with self.session_factory() as db:
-            cards = await list_verified_public_events(db, now=self.now)
-            self.assertEqual(len(cards), 1)
-            self.assertTrue(cards[0].window_confirmed_open)
-            self.assertEqual(cards[0].fee_kind, "free")
+        cards = await self.mine(event_id)
+        self.assertEqual(len(cards), 1)
+        self.assertTrue(cards[0].window_confirmed_open)
+        self.assertEqual(cards[0].fee_kind, "free")
         # Unchanged reingestion cannot silently lose explicit review.
         await self.ingest(candidate)
-        async with self.session_factory() as db:
-            cards = await list_verified_public_events(db, now=self.now)
-            self.assertEqual(len(cards), 1)
+        self.assertEqual(len(await self.mine(event_id)), 1)
         # An updated verified source item must retract prior verification.
         changed = self.candidate(title="Corrected program")
         await self.ingest(changed)
         event, _, reg = await self.records(changed)
         self.assertEqual(event.verification_status, "stale")
-        async with self.session_factory() as db:
-            self.assertEqual(await list_verified_public_events(db, now=self.now), [])
+        self.assertEqual(await self.mine(event_id), [])
         await self.verify_event_and_opportunity(changed)
         # Opportunity fee/status changed => its prior verified flag must be removed.
         await self.ingest(self.candidate(title="Corrected program", status="waitlist_available"))
@@ -255,10 +249,8 @@ class FreeEventPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         candidate = self.candidate()
         await self.ingest(candidate)
         stale = self.now - timedelta(days=3)
-        await self.verify_event_and_opportunity(candidate, verified_at=stale)
-        async with self.session_factory() as db:
-            cards = await list_verified_public_events(db, now=self.now)
-            self.assertEqual(cards, [], "Three-day-old manual review must expire")
+        event_id = await self.verify_event_and_opportunity(candidate, verified_at=stale)
+        self.assertEqual(await self.mine(event_id), [], "Old review must expire")
 
 
 if __name__ == "__main__":

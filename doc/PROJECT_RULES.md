@@ -143,7 +143,7 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 - Cloud Run **僅允許直接讀取公開 GHCR package 的 immutable manifest digest**；package visibility/讀取、live/candidate digest、服務身份和 0% tagged URL 安全均需實測。私人 GHCR 所需的 Artifact Registry remote repo 與本決策衝突，因此失敗關閉，不自動替換架構。
 - 禁止因寫好文件而標示 V3 DONE。切換前盤點現有 workflow/Cloud Build triggers，實作後先取得 Actions、GHCR、WIF、0% revision、真實候選/Preview/Live、rollback 及未觸發 Cloud Build/未主動寫 GCS/AR 證據；再停用舊入口，不刪歷史記錄。
 - **Cloud Run Revision 保留最新 10 個**：V3 promotion + live gates 全數 PASS 後，於成功 release pipeline 最後安全清理舊版；含流量、回滾 baseline、候選 tag 的版本不可刪。保護條件使數量超過 10 時必須 PARTIAL，禁止強行刪除。無流量且無最小實例的版本通常不計運算費；GHCR image digest 與 Jobs 所需映像另行保留。
-- 實作與驗收規範以 `ci_cd_ghcr_release_policy.md` 為準；下方 V2 僅供稽核過往決策，不再作為新建/變更 pipeline 的目標。
+- 實作與驗收規範以 `ci_cd_ghcr_release_policy.md` 為準；V2 已歸檔至 [archive/ci_cd_v2_policy.md](archive/ci_cd_v2_policy.md)，只供稽核，不再作為新建/變更 pipeline 的目標。
 
 ## 歷史政策
 

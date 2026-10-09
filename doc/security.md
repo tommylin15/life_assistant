@@ -1,74 +1,25 @@
-# 生活助理 App v0.1 — Security & Privacy
+# Life — Current Security & Privacy Contract (2026-10-10)
 
-## 1. 原則
+**Operational source of truth:** GitHub `main` and current runtime, not legacy SQLite mobile assumptions. Current architecture: Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL. Earlier local-first phone/PIN/SQLite notes are historical Git revisions and apply only to a future native offline app when explicitly scoped.
 
-- Local-first
-- 最小權限
-- 使用者可理解
-- 敏感資料不明文保存
-- 外部整合失敗不可破壞本機主資料
+## Auth & ownership
 
-## 2. App Lock
+- Authenticate every protected FastAPI API; allow Google Sign-In with verified identity / scoped OAuth where implemented. GoogleConnection and Drive records use `user_sub`; user owns and chooses own Drive/Gmail/Calendar grants and AI document-content consent. Test actual cross-user denial in live E2E before marking multiuser isolation PASS.
+- Admin is a distinct backend-enforced permission/allowlist, not a hidden client route or an arbitrary email string. Admin may view sanitized system aggregates, approved source policy, job status, internal Life AI Provider config and UI feature rollout but **not** other users' email, Drive documents, AI prompts, calendar records, OAuth tokens or personal UI preferences.
+- Feature rollout policy and personal preferences are separate. Hiding a feature cannot delete stored user data, grant new role/Google scope, disable a background collector by accident, or bypass API permission checks.
 
-可選擇啟用：
+## Tokens / secrets / external AI
 
-- 生物辨識
-- PIN fallback
+- Encrypt OAuth credentials in persistence and do not log/export any refresh/access token, API key, database password, private Google document body or service-account credential. Runtime secrets via Secret Manager/GitHub masked settings/short-lived WIF, no long-lived deploy SA JSON keys.
+- Life Drive AI provider usage requires user's explicit content-consent (default OFF); admin enabling provider globally never overrides it. Provider responses are untrusted, schema validated and may fail partially; fallback is not evidence that direct primary model passed.
+- ChatGPT scheduled activity curation only reads Queue via bounded auth API and POSTs a separately authorized select/skip decision; Life Backend atomically persists and ACKs Queue version, never accepts caller-supplied verified/publish flags as authoritative. No direct LLM DB access.
 
-PIN：
+## Data / operations
 
-- 不得以明文存 SQLite
-- 使用安全儲存
-- 避免寫入 log
+- PostgreSQL schema changes only via Alembic migration, preserve current production records; destructive migration, major IAM change, production credential rotation, force-push/history rewrite or broad production resource deletion require explicit approval.
+- Validate original/official source domains and allowlisted access before any background fetch; no anti-bot bypass or crawling EventGo/yii.tw. Protect intake APIs against SSRF, duplicate events, expired leases, stale versions, unbounded batch size and replay.
+- Explicit confirmation for destructive user actions (Calendar/Project delete, backup overwrite). Activity logs record sanitized actor/action/request ID and error category, not personal content or credentials.
 
-## 3. Token
+## Required tests
 
-Google OAuth token：
-
-- 使用平台安全儲存
-- 不寫入一般 log
-- 不匯出到 CSV / JSON
-- 不放入 Drive Bridge
-
-## 4. SQLite
-
-- App 私有目錄
-- 不允許其他 App 直接存取
-- 若未來支援 DB encryption，可列 v0.2
-
-## 5. 附件
-
-- 存 App 私有目錄
-- 匯出時需使用者明確操作
-- 不自動上傳 Drive
-
-## 6. Gmail
-
-只保存必要 metadata。
-
-不建議長期保存：
-
-- 完整郵件正文
-- 敏感附件
-- OAuth token
-
-## 7. Google Drive Bridge
-
-Bridge 只允許 App 指定資料夾。
-
-原則：
-
-- 不把整個 Drive 當 App 資料來源
-- Bridge 檔案不得包含 OAuth token
-- proposed actions 匯入前必須驗證
-- Schema 不符合則拒絕匯入
-
-## 8. 刪除與破壞性操作
-
-以下應要求確認：
-
-- Calendar 刪除
-- Project 刪除
-- 批次刪除
-- 還原備份覆蓋目前資料
-- 匯入 ChatGPT proposed actions 中的 delete action
+401/403, owner-vs-user boundaries, Google consent OFF=zero content sent to AI, source license revoke, Queue write isolation, idempotent exact-fingerprint ACK, retained records on feature disable, per-user layout separation, secret redaction and PII-safe logging; confirm tests/CI/deployment/runtime independently. See [PROJECT_RULES.md](PROJECT_RULES.md), [permissions.md](permissions.md), [CURRENT_STATE.md](CURRENT_STATE.md).

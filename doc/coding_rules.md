@@ -1,29 +1,10 @@
-# 生活助理 App v0.1 — Coding Rules for Codex
+# Life — Coding Rules (2026-10-10)
 
-## 1. 目的
+1. Read [AGENTS.md](../AGENTS.md) and [PROJECT_RULES.md](PROJECT_RULES.md) before modifying Life. Never load or apply forbidden Superpowers skills. Implement only currently approved scope; conflicts follow user decisions, actual code/runtime and [decisions.md](decisions.md).
+2. Use existing Flutter Material 3 design tokens and Riverpod/go_router where currently appropriate. UI interacts with **FastAPI through API clients/repositories**, not directly with PostgreSQL, SQLite DAOs, Google API or secret storage.
+3. FastAPI validates user identity/owner/admin roles, schema, source permission, per-user consent and idempotency. Treat provider/model and ChatGPT outputs as untrusted; no AI final permission or numeric publication authority.
+4. Versioned Alembic for schema changes; no production data drop or fake timestamps. Preserve `user_sub` tenant isolation, request/execution logs with no raw secrets/private content, verified error semantics and safe rollback.
+5. GitHub Actions main push runs CI; audited V3 full-SHA release uses public GHCR digest, 0% candidate, real migrations, auth/readiness and Preview/production gates. Do not use old Cloud Build V2 for new deployment.
+6. Check existing callers before changing a shared contract; add bounded backend, PostgreSQL and Flutter regression tests for affected behavior. Avoid decorative abstraction layers, silent fallback, unbounded crawling/model calls and fabricated PASS results.
 
-提供 Codex / 開發者一致的實作約束。
-
-## 2. 規則
-
-- 不新增未在 spec / decisions 中定義的大功能
-- 若規格衝突，以 decisions.md + spec.md + 對應專項 spec 為準
-- UI 不直接操作 DB / API
-- 新 schema 變更必須有 migration
-- 所有 destructive operation 必須符合 security / sync / bridge 規格
-- 所有 Google integration 透過 adapter
-- 所有 Bridge JSON 必須 validator 驗證
-- 所有可追蹤的重要動作寫 Activity Log
-- 不將 secret 寫入 log
-- 不為方便開發而清空使用者 DB
-
-## 3. Definition of Done
-
-一個 feature 完成至少包含：
-
-- implementation
-- basic tests
-- error state
-- empty state
-- activity log（若適用）
-- documentation update（若改變 contract）
+**Definition of Done**: implementation + tests + CI + deployment + runtime/integration evidence required by the change, with **PASS / FAIL / NOT VERIFIED** per layer; missing mandatory evidence means PARTIAL. Update [CURRENT_STATE.md](CURRENT_STATE.md), [acceptance.md](acceptance.md) and [todo.md](todo.md) when facts actually change. Do not alter non-Life projects.

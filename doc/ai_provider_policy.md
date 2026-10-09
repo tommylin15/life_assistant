@@ -1,5 +1,8 @@
 # life_assistant — AI Provider Routing & Cost Policy
 
+> **2026-10-10 現行權限分離：** 本文只管理 Life Backend 自身 Drive AI Provider 的 Gemini/Groq/OpenRouter/Shared Codex 路由。使用者自行建立的 **ChatGPT Chat 活動精選排程**是完全獨立的 AI 呼叫與計費途徑，不由 Life Provider fallback 控制。平台管理頁面見 [Issue #11](https://github.com/tommylin15/life_assistant/issues/11)，每位使用者的 Drive OAuth 與 AI 同意仍個別受保護。Provider live 測試與正式成本仍須實際驗證。
+
+
 > **現行核准政策** · 2026-10-09 · 適用範圍：life_assistant 本身的 AI enrichment／未來活動 Batch AI；不直接改變 omniAgent、Janus 等其他專案。
 >
 > **狀態分離：** GitHub `main` 已有 Provider 路由與測試，CI run [37874176801](https://github.com/tommylin15/life_assistant/actions/runs/37874176801) 為 PASS；**新路由的 production deployment／真實多模型連通性、成本及 owner E2E 均 NOT VERIFIED**。活動探索的 AI pipeline 仍是規格，未實作。

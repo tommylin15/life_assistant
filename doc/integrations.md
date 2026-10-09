@@ -1,5 +1,8 @@
 # 生活助理 App v0.1 — Integrations
 
+> **2026-10-10 現行說明：** 每位使用者自行授權 Google Drive/Gmail/Calendar 及自己的 Drive AI consent；平台管理員只管理 Life **內部** AI Provider、成本與健康，不可看私人 Drive 內容。ChatGPT Chat 活動掃描是使用者個別的排程，不與 Life Drive AI 路由混淆。下方 2026-10-07/08 provider 與 secret 版本紀錄是歷史證據，**不得照舊更換正式 secret/設定**。請先讀 [ai_provider_policy.md](ai_provider_policy.md) 與 [CURRENT_STATE.md](CURRENT_STATE.md)。
+
+
 > **AI Provider 現行正式政策（2026-10-09）**：見 [`ai_provider_policy.md`](ai_provider_policy.md)。有效順位 **Gemini Flash → Gemini Flash-Lite → Groq → OpenRouter → 私有 Shared Codex**；Flash/Lite 各最多三個、各自記住最後成功模型。下方 2026-10-07/08 的 Codex-first/三層備援設定保留為**歷史證據，不得作為新部署設定**。程式碼/CI PASS 不等於 live provider E2E PASS。
 
 ## 1. Google Sign-In
@@ -209,7 +212,7 @@ App 可提供「ChatGPT Bridge / MCP 設定」入口。
 - destructive sync 需可追蹤
 - PostgreSQL 主資料與 Bridge / sync 檔案角色不得混淆
 
-完整舊規格見 `sync_spec.md`。
+完整舊規格已歸檔：[`archive/sync_spec_legacy_local.md`](archive/sync_spec_legacy_local.md)。目前主線不是 local folder 雙向同步。
 
 ---
 
@@ -217,7 +220,7 @@ App 可提供「ChatGPT Bridge / MCP 設定」入口。
 
 既有 Drive Bridge JSON schema、action registry、版本相容與驗證規則見：
 
-`bridge_schema.md`
+[`archive/bridge_schema_legacy_sqlite.md`](archive/bridge_schema_legacy_sqlite.md)
 
 該文件保留作既有 Drive Bridge contract；若其中出現「SQLite 是主資料來源」等舊架構描述，屬 legacy context。
 

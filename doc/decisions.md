@@ -1,5 +1,13 @@
 # 生活助理 App v0.1 — Confirmed Decisions
 
+## 2026-10-10 — 已核准新版產品決策（優先於下方衝突歷史文字）
+
+- [活動 V2 #10](https://github.com/tommylin15/life_assistant/issues/10)：核准文化部與日後授權的 TDX **Queue-only** 官方擷取；ChatGPT Chat 排程以唯讀 API 讀 Queue，透過獨立 Life 篩選 API 提交 selected / skipped，Life Backend 同筆交易寫入決定並 ACK Queue；另可掃描經審核官方網址清單。**精選池是使用者可見終點**，不做正式推薦或可報名二次發布判定。EventGo、yii.tw 禁止未來直接自動爬取；資料不足時保留未知欄位而不捏造。
+- [Life 平台 AI 管理 #11](https://github.com/tommylin15/life_assistant/issues/11)：管理員控制 **Life 自有** Drive AI Provider／模型／健康／配額，不控制 ChatGPT Chat 排程；各使用者獨立授權 Google 帳戶、Drive AI consent，管理員不得讀私人文件與 token。
+- [功能開放、個人化導覽和首頁 #12](https://github.com/tommylin15/life_assistant/issues/12)：共用管理後台提供 feature rollout（hide/beta/enable/maintenance），使用者各自設定手機底部／電腦左側導覽偏好、功能位置順序及首頁卡片；權限須由 Backend 強制而非只隱藏前端。
+- 此處是**正式方向，NOT IMPLEMENTED 不等於已部署**；[CURRENT_STATE.md](CURRENT_STATE.md) 記錄最近 V3 CI PASS 與 MoC Job 更新 FAIL，最新事實仍由實際 GitHub main/runtime 決定。早期討論的 Cloud Build V2、EventGo 擷取、正式推薦關卡、固定五入口不可覆蓋此新增決策。
+
+
 ## 目前已確認
 
 - Flutter / Dart 繼續作為主要前端技術。

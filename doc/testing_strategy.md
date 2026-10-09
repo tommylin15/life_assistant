@@ -1,91 +1,20 @@
-# 生活助理 App v0.1 — Testing Strategy
+# Life — Current Testing & Verification Strategy (2026-10-10)
 
-## 1. Unit Tests
+All tests must correspond to existing implementation and actual changed behavior. **CI PASS does not mean production or provider PASS**. Never mark a feature DONE without sufficient independent evidence; classify implementation/tests/CI/deployment/runtime/integration as **PASS / FAIL / NOT VERIFIED**.
 
-至少覆蓋：
+## Local + CI
 
-- Quick input parser
-- Rule engine
-- Priority sorting
-- Date handling
-- Bridge schema validator
-- Sync change detection
-- Conflict detection
-- Backup metadata
-- Migration
+1. Backend: Python unit/API/security tests, sanitized error handling, schema validation and replay; real ephemeral PostgreSQL 16 for Alembic migration, transactions, concurrency and uniqueness; no production writes from tests.
+2. Flutter: analyzer, widget/route/responsive tests and production build; cover loading/empty/error/disconnected, deep links, role/availability route denial, keyboard/drag reorder and Home card preferences when implemented.
+3. Deployment scripts/workflows: syntax/contract tests for immutable GHCR digest, 0%-traffic candidate, preview/backend parity, WIF least privilege, migration before cutover, rollback, old revisions/Job pin and deterministic env metadata.
 
-## 2. Repository Tests
+## Runtime / user integration
 
-- Task CRUD
-- Project CRUD
-- Notes FTS
-- Habit recurrence
-- Activity log
-- Preferences
+- Exact full SHA CI → candidate health/ready/401 → migration/DB schema readback → production traffic/rollback → real Google OAuth/Calendar/Drive scope and direct provider health where relevant; verify both backend and frontend release SHA.
+- Free Events: official MoC producer **Queue-only after refactor**, separate source/job/observed counts, unapproved source fetch denied; ChatGPT GET leaves Queue untouched; decision POST selected/skip recorded atomically with server ACK; replay, stale fingerprint, concurrent task, unknown fee/date, and final selected-pool UI readback. Testing via mocked connector is insufficient for real daily scheduled ChatGPT tool E2E.
+- Admin / personalization: real user cannot mutate/see owner-only settings; one user cannot read/write another user's preferences; a globally hidden feature denies deep-link/API; each user's Drive content-consent OFF prevents provider access regardless of admin toggles.
+- Record run IDs, commit/digest, real source data scope, failure category, state transitions, per-layer PASS/FAIL/NOT VERIFIED. A job workflow success alone never proves a PostgreSQL row count or end-user availability.
 
-## 3. Integration Tests
+## Legacy
 
-### Google
-
-- Sign-in
-- Calendar read/create/update/delete
-- Gmail metadata
-- Drive folder access
-
-### Sync
-
-- Initial Drive → Local
-- Local modify → Drive
-- Drive modify → Local
-- Local delete → Drive delete
-- Drive delete → Local delete
-- Both modify → conflict
-- Delete vs modify → conflict
-- Partial failure
-
-### Bridge
-
-- valid actions
-- invalid bridge_id
-- unsupported action
-- duplicate action
-- schema mismatch
-- action result generation
-
-## 4. UI Tests
-
-核心流程：
-
-```text
-Open App
-→ Dashboard
-→ Create Task
-→ Edit
-→ Complete
-→ Log visible
-```
-
-以及：
-
-```text
-Gmail item
-→ Convert to Task
-```
-
-```text
-Drive Bridge
-→ Import Proposed Actions
-→ Review
-→ Accept
-```
-
-## 5. Offline Tests
-
-- 開飛航仍能管理本機資料
-- 離線編輯 Markdown
-- 離線建立待辦
-- 網路恢復後手動同步
-
-## 6. Release Gate
-
-P0 測試不得有 known blocker。
+Historic SQLite local-folder sync, native biometric/PIN and old Drive Bridge action tests remain subject to their actual implementation and future scoped release, not a reason to reintroduce old CI/CD V2 or require all mobile-native features as current Web release blockers. See [archive](archive/README.md), [release_checklist](release_checklist.md) and [CURRENT_STATE.md](CURRENT_STATE.md).

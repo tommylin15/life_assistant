@@ -1,5 +1,8 @@
 # life_assistant — Product Spec
 
+> **2026-10-10 更新：** 活動只建立使用者精選池、管理員控制 feature rollout 與 Life Provider、使用者自訂導覽／首頁的最新規格見 [CURRENT_PRODUCT_ARCHITECTURE.md](CURRENT_PRODUCT_ARCHITECTURE.md) 與 [Issues #10–#12](https://github.com/tommylin15/life_assistant/issues)。下方 2026-09/10 早期的固定五入口、嚴格可報名核實或 ChatGPT 任務終止等敘述屬歷史脈絡，不再是新的產品要求；實作仍以 runtime 為準。
+
+
 最後更新：2026-09-24
 
 ## 1. 產品定位
@@ -236,7 +239,7 @@ ChatGPT Bridge Backend 是 life_assistant 的正式能力，**不得移除**。
 
 既有 Google Drive Bridge 保留作 legacy / fallback integration。
 
-舊版 `bridge_schema.md` 可繼續定義 Drive 檔案交換格式，但其中 SQLite 為主資料來源的歷史描述不再代表現行架構；現行主資料來源為 PostgreSQL。
+舊版 `archive/bridge_schema_legacy_sqlite.md` 可繼續定義 Drive 檔案交換格式，但其中 SQLite 為主資料來源的歷史描述不再代表現行架構；現行主資料來源為 PostgreSQL。
 
 ### 15.2 MCP / Integration API
 

@@ -60,6 +60,30 @@ class AuthApiTests(IsolatedAsyncioTestCase):
         self.assertEqual(auth.frontend_for_request(request),
                          "https://life-assistant-v3-stage-tl15.web.app")
 
+    async def test_firebase_proxy_exact_fixed_origin_selects_staging(self):
+        request = Request({"type": "http", "headers": [
+            (b"host", b"life-assistant-api-abc-uc.a.run.app"),
+            (b"x-forwarded-host", b"life-assistant-v3-stage-tl15.web.app"),
+            (b"x-forwarded-proto", b"https"),
+        ]})
+        self.assertEqual(auth.oauth_redirect_for_request(request),
+                         auth.STAGING_REDIRECT_URI)
+
+    async def test_firebase_proxy_host_spoof_and_scheme_are_rejected(self):
+        for hostname, forwarded, proto in (
+            ("attacker.run.app", auth.STAGING_HOST, "https"),
+            ("life-assistant-api-abc-uc.a.run.app", "evil.example", "https"),
+            ("life-assistant-api-abc-uc.a.run.app", auth.STAGING_HOST, "http"),
+        ):
+            with self.subTest(hostname=hostname, proto=proto):
+                request = Request({"type": "http", "headers": [
+                    (b"host", hostname.encode()),
+                    (b"x-forwarded-host", forwarded.encode()),
+                    (b"x-forwarded-proto", proto.encode()),
+                ]})
+                self.assertEqual(auth.oauth_redirect_for_request(request),
+                                 auth.settings.google_redirect_uri)
+
     async def test_forwarded_host_spoof_cannot_enable_staging_oauth(self):
         request = Request({"type": "http", "headers": [
             (b"host", b"life-assistant-api-xyz.a.run.app"),

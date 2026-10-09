@@ -100,7 +100,7 @@ class FreeEventManifestTests(unittest.TestCase):
         a = deepcopy(self.candidate)
         a["official_verified"] = False
         b = deepcopy(a)
-        b["source_id"] = "beclass"
+        b["source_id"] = "eventgo"
         report = prepare_manifest([a, b], self.registry)
         self.assertEqual(len(report["candidates"]), 2)
 

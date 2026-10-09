@@ -21,3 +21,11 @@
 3. 為已授權的 Batch 加入 bounded concurrency、durable lease/claim、相同 fingerprint 無 AI 重算、錯誤／退避、暫時源故障不得當活動取消。
 4. 由真正 verified event source 與官方 registration 證據開放 M2 Read API/Flutter；勿在 NULL 開放時間時建立精確提醒。
 5. M0 14 天正式觀測照常進行；驗收證據不足維持 NOT VERIFIED，不延後其它低風險程式開發。
+
+## Parallel M2 verified-only preview (2026-10-09)
+
+- **Backend implementation:** authenticated GET `/api/v1/free-events?limit=20&offset=0`，唯讀且 `Cache-Control: no-store`。SQL 只允許 `verification_status=verified`、核實時間與官方來源、來源 fetch 已獲審核授權、未取消且未結束的場次，以及已人工核實的免費／條件免費報名機會；未核實與資料已撤銷者不能曝光。
+- **不假造報名可用性：** `window_confirmed_open` 必須官方 `open` 狀態和兩個明確時間邊界都核實且現在處於期間；不代表尚有名額，API 永遠附上原站二次確認提示，NULL 開放時間維持未知。
+- **Flutter:** `/more/events`（「更多」→「免費活動探索」）唯讀清單、空資料/錯誤狀態、含來源/資格/時間的精簡卡片、明示外站連結。沒有個人提醒/待辦/筆記/Calendar mutation，也不自動開啟報名網址。已補模擬資料的桌面/手機 widget tests。
+- **驗收分級：** 最新 M2 Flutter + Backend CI [run 37896364737](https://github.com/tommylin15/life_assistant/actions/runs/37896364737) 在 checkpoint 時尚在執行，**整輪結果 NOT VERIFIED**；早期後端修正 commit `dbef01a9e547a6e199f62f217cfd4b750a20b184` [CI 37896041000](https://github.com/tommylin15/life_assistant/actions/runs/37896041000) PASS（Backend 472 tests、Flutter、deployment-scripts），但該 commit 尚未包含 Flutter UI。
+- **不要將程式碼候選冒充正式產品化：** PostgreSQL 0011 尚未證實套用正式 DB，來源 registry 全部 fetch=false，因而目前線上不應宣稱有任何可報名活動；M2 production UI/E2E + live provider/來源 freshness 與 M0 14 天真實觀測均 **NOT VERIFIED**。

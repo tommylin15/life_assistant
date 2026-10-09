@@ -213,7 +213,7 @@ def gcs_candidates():
                 # Never print arbitrary private object name components.
                 lower = key.lower()
                 is_root_log = bool(re.fullmatch(
-                    r"log-[0-9a-f]{8}-[0-9a-f-]{20,50}(?:\\.txt|\\.log)?", lower))
+                    r"log-[0-9a-f]{8}-[0-9a-f-]{20,50}(?:[.]txt|[.]log)?", lower))
                 if prefix in SAFE_CI_PREFIXES:
                     group_key = prefix
                 elif is_root_log:

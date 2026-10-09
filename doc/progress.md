@@ -32,7 +32,7 @@
 - **Completed packages：8 / 11**
 - **Closure progress：72.7%**
 - **Just closed：#8 — Calendar 完整產品化（DONE / PASS）**
-- **Current priority（已核准）：台灣免費活動探索 M0 觀測與 M1 資料核心並行，均 PARTIAL。** M0 Registry / 離線品質 8 tests [CI #37892185617](https://github.com/tommylin15/life_assistant/actions/runs/37892185617) PASS；M1 六表 0011 migration、正規化、去重/安全、離線 manifest 與文化部 Adapter 亦已實作並通過 backend CI（最新完整 CI 待 readback），詳見 `free_events_m1_checkpoint.md`。正式來源/14 天觀測/DB migration/online batch 仍 NOT VERIFIED / NOT IMPLEMENTED。原 Phase 1 工作包仍 **8/11**。
+- **Current priority（已核准）：台灣免費活動探索 M0 觀測與 M1 資料核心並行，均 PARTIAL。** M0 Registry / 離線品質 8 tests [CI #37892185617](https://github.com/tommylin15/life_assistant/actions/runs/37892185617) PASS；M1 六表 0011 migration、正規化、去重/安全、離線 manifest、文化部 Adapter 及不對外開放的原子 PostgreSQL upsert service 亦已實作；最新 backend 463 tests PASS（SQL mock），完整 CI / 真實 PostgreSQL runtime 待驗證，詳見 `free_events_m1_checkpoint.md`。正式來源/14 天觀測/DB migration/online batch 仍 NOT VERIFIED / NOT IMPLEMENTED。原 Phase 1 工作包仍 **8/11**。
 - **Next remaining original Phase 1 package：#9 Activity / Execution Log + Integrations（按核准順序暫排在活動探索 MVP 後）。**
 - **#8 gating rule：Gemini / OpenRouter #63/#70 failure is a separate known regression, not a Calendar-specific gate. Calendar still needs its own genuine provider and production evidence.**
 - **Independent cross-feature health：historical Drive Knowledge #63 / run `37625447402` exit `91` = Gemini-only；newer #70 / run `37702785541` exit `93` = Gemini + OpenRouter (Groq not in mask)。diagnostic candidate `8dedf655` / CI #574 PASS；new deployment / runtime still NOT VERIFIED。Regression remains OPEN / FAIL, without undoing Shopping #7 DONE.**

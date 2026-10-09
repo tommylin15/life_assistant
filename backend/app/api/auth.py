@@ -173,7 +173,7 @@ async def callback(
     # Incremental Gmail/Calendar/Drive authorization keeps the authenticated
     # session cookie intact and stores its one-time state server-side.
     user = await current_user(request)
-    services = await complete_authorization(db, state, code, user)
+    services = await complete_authorization(db, state, code, user, oauth_redirect_for_request(request))
     query = urlencode({"google": "connected", "services": ",".join(services)})
     return RedirectResponse(f"{frontend_for_request(request)}/integrations?{query}")
 

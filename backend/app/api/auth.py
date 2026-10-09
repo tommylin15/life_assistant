@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import secrets
 import time
@@ -13,6 +14,7 @@ from app.config import settings
 from app.db.session import get_db
 from app.services.google_identity import verify_google_id_token
 from app.services.google_oauth import IDENTITY_SCOPES, complete_authorization
+from app.services.execution_log import start_execution, finish_execution
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -74,6 +76,30 @@ def _google_error_code(response: httpx.Response) -> str:
     if not error or not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", error):
         return "unknown_error"
     return error
+
+
+async def _audit_staging_e2e(
+    db: AsyncSession, request: Request, user: dict, action_type: str,
+) -> None:
+    """Proof is written only after Google's verified owner authentication.
+
+    The paired callback + subsequent session request are required by the
+    staging acceptance job. No OAuth code/token/cookie or email is logged.
+    """
+    allowed = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().lower()
+    revision = os.environ.get("K_REVISION", "").strip()
+    if not (
+        allowed and str(user.get("email", "")).strip().lower() == allowed
+        and revision.startswith("life-assistant-api-")
+        and oauth_redirect_for_request(request) == STAGING_REDIRECT_URI
+    ):
+        return
+    log = await start_execution(
+        db, user_sub=user["sub"], action_type=action_type,
+        entity_type="cloud_run_revision", entity_id=revision,
+        provider="google", summary="fixed_staging_google_oauth_acceptance",
+    )
+    await finish_execution(db, log)
 
 
 async def current_user(request: Request) -> dict:
@@ -156,6 +182,7 @@ async def callback(
             raise _http_error(400, "Invalid OAuth state")
 
         id_token, user = await _complete_login(code, oauth_redirect_for_request(request))
+        await _audit_staging_e2e(db, request, user, "staging_google_callback")
         max_age = max(1, min(3600, int(user["exp"]) - int(time.time())))
         frontend_url = frontend_for_request(request) + "/"
         response = RedirectResponse(frontend_url)
@@ -179,7 +206,14 @@ async def callback(
 
 
 @router.get("/me")
-async def me(user: dict = Depends(current_user)):
+async def me(
+    request: Request,
+    staging_e2e: bool = False,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if staging_e2e:
+        await _audit_staging_e2e(db, request, user, "staging_google_session")
     return {
         "email": user["email"],
         "name": user["name"],

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "updated_on": "2026-10-09",
-  "policy": "No automated network fetch until source-specific service-access review; dataset open-data license alone is not endpoint permission.",
+  "policy": "No automated network fetch until source-specific service-access review. EventGo terms (2026-04-23) prohibit bulk automated access; written permission and robots review required. BeClass is excluded.",
   "sources": [
     {
       "id": "moc_events_all",
@@ -66,20 +66,9 @@
       "service_access_review": "pending_robots_terms_or_authorized_api",
       "requires_api_key": null,
       "enabled_for_fetch": false,
-      "expected_interval_hours": 12
-    },
-    {
-      "id": "beclass",
-      "tier": "aggregator",
-      "purpose": "candidate_discovery_only",
-      "reference_url": "https://www.beclass.com/",
-      "endpoint_documentation_url": null,
-      "data_license": "not_verified",
-      "data_license_evidence": null,
-      "service_access_review": "pending_robots_terms_or_authorized_api",
-      "requires_api_key": null,
-      "enabled_for_fetch": false,
-      "expected_interval_hours": 12
+      "expected_interval_hours": 12,
+      "terms_url": "https://eventgo.tw/terms",
+      "access_review_note": "2026-10-09: ToS §2 prohibits large-scale automated tool access; permission is not verified; robots.txt was not obtainable via public web retrieval. Connector is offline-only by policy until reviewed."
     },
     {
       "id": "yii_calendar",

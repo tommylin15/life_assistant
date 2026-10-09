@@ -16,6 +16,7 @@ import 'more_page.dart';
 import 'notes_page.dart';
 import 'projects_page.dart';
 import 'shopping_page.dart';
+import 'free_events_page.dart';
 import 'tasks_page.dart';
 
 final _router = GoRouter(
@@ -61,6 +62,7 @@ final _router = GoRouter(
           path: '/more/drive',
           builder: (_, __) => const DrivePage(),
         ),
+        GoRoute(path: '/more/events', builder: (_, __) => const FreeEventsPage()),
         GoRoute(path: '/more', builder: (_, __) => const MorePage()),
       ],
     ),

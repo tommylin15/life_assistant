@@ -25,6 +25,13 @@ class MorePage extends StatelessWidget {
               onTap: () => context.go('/more/habits'),
             ),
             ListTile(
+              leading: const Icon(Icons.event_available_outlined),
+              title: const Text('免費活動探索'),
+              subtitle: const Text('只顯示已核實免費活動與原站報名資訊'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go('/more/events'),
+            ),
+            ListTile(
               leading: const Icon(Icons.shopping_cart_outlined),
               title: const Text('購物清單'),
               subtitle: const Text('清單、分類與採買完成狀態'),

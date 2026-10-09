@@ -48,6 +48,12 @@
 - **逐日判定**：M0 初始日期以第一筆正式 `free_event_source_observations` 的真實 `observed_at` 為準，不能倒填；連續 14 天＋人工來源/費用/報名品質檢查均 PASS 才可封板。M2 對未人工核實的報名與免費活動仍保持空清單。
 
 
+## 2026-10-09 Owner-only log-free DB readback implementation (not runtime closure)
+
+- 新增 `GET /api/v1/free-events/status` owner-only 聚合讀取，重用現有 `scripts.read_free_events_status.readback`：必要條件是真實已驗證 Google session 且 `ALLOWED_GOOGLE_EMAIL` 有設定並完全相符；未登入 401、非 owner 或 allowlist 缺失 403，`Cache-Control: no-store`。只讀已存在 PostgreSQL 聚合數量、日期與嚴格 verified-only UI predicate，不修改 DB／個人資料，不新增 GCP IAM／Secrets／Log 權限。
+- 新增 `backend/tests/test_free_events_owner_status.py` 驗證拒絕非 owner、deny-by-default、只讀回覆；這提供替代 Cloud Logging 的最小 owner-visible evidence path，**不是讓 GitHub Actions 的 deployer 自動取得 end-user session**。
+- **仍未驗證：** 新 API 的正式 V3 release / production runtime / 真實 owner HTTPS readback 尚待獨立驗收；舊 GitHub Actions Cloud Logging 讀回依舊 FAIL，不能稱既有 Issue #8 已解除。須在正式 Owner session 讀到實際統計數字及對應頁面／稽核紀錄後才將 DB count 標 PASS。
+
 ## 2026-10-09 Production factual readback attempt — explicit blocker
 
 - **Deployment evidence PASS:** V3 [run 37919689731](https://github.com/tommylin15/life_assistant/actions/runs/37919689731), Firebase Hosting [run 37923455110](https://github.com/tommylin15/life_assistant/actions/runs/37923455110), Ministry of Culture source Cloud Run Job [run 37923457846](https://github.com/tommylin15/life_assistant/actions/runs/37923457846) all completed successfully. Source Job success is **not** accepted row count.

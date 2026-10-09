@@ -17,7 +17,7 @@ class AuthApiTests(IsolatedAsyncioTestCase):
             auth.settings.google_client_id = "client-id"
             auth.settings.google_redirect_uri = "https://example.test/auth/callback"
 
-            response = await auth.login()
+            response = await auth.login(Request({"type": "http", "headers": [(b"host", b"example.test")]}))
 
             location = response.headers["location"]
             query = parse_qs(urlparse(location).query)
@@ -42,10 +42,38 @@ class AuthApiTests(IsolatedAsyncioTestCase):
         try:
             auth.settings.google_client_id = ""
             with self.assertRaises(HTTPException) as ctx:
-                await auth.login()
+                await auth.login(Request({"type": "http", "headers": [(b"host", b"example.test")]}))
             self.assertEqual(ctx.exception.status_code, 503)
         finally:
             auth.settings.google_client_id = original_client_id
+
+    async def test_fixed_staging_domain_uses_staging_google_callback(self):
+        request = Request({"type": "http", "headers": [
+            (b"host", b"life-assistant-v3-stage-tl15.web.app"),
+        ]})
+        with patch.object(auth.settings, "google_client_id", "client-id"):
+            response = await auth.login(request)
+        params = parse_qs(urlparse(response.headers["location"]).query)
+        self.assertEqual(params["redirect_uri"], [
+            "https://life-assistant-v3-stage-tl15.web.app/auth/callback"
+        ])
+        self.assertEqual(auth.frontend_for_request(request),
+                         "https://life-assistant-v3-stage-tl15.web.app")
+
+    async def test_forwarded_host_spoof_cannot_enable_staging_oauth(self):
+        request = Request({"type": "http", "headers": [
+            (b"host", b"life-assistant-api-xyz.a.run.app"),
+            (b"x-forwarded-host", b"life-assistant-v3-stage-tl15.web.app"),
+        ]})
+        self.assertEqual(auth.oauth_redirect_for_request(request),
+                         auth.settings.google_redirect_uri)
+
+    async def test_preview_channel_cannot_impersonate_fixed_staging_oauth(self):
+        request = Request({"type": "http", "headers": [
+            (b"host", b"life-assistant-v3-stage-tl15--v3-aaaaaaaaaa.web.app"),
+        ]})
+        self.assertEqual(auth.oauth_redirect_for_request(request),
+                         auth.settings.google_redirect_uri)
 
     async def test_current_user_rejects_missing_session(self):
         request = Request({"type": "http", "headers": []})

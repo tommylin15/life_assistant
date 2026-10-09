@@ -10,6 +10,7 @@ on:
       - .github/scripts/v3_revision_retention.py
       - .github/scripts/v3_gcp_inventory.py
       - .github/scripts/v3_ar_docker_inventory.py
+      - .github/scripts/v3_no_rollback_retirement_inventory.py
 
 permissions:
   contents: read
@@ -136,4 +137,31 @@ jobs:
               print("No image/tag/digest/repository was deleted or approved for deletion.",file=out)
           if obj["status"] != "PASS":
               raise SystemExit("AR reference assessment incomplete; deletion forbidden")
+          PY
+
+      - name: List no-rollback latest-CI-only AR/GCS deletion candidates (READ ONLY)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/v3_no_rollback_retirement_inventory.py \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            | tee "$RUNNER_TEMP/v3-no-rollback-inventory.json"
+          python - "$RUNNER_TEMP/v3-no-rollback-inventory.json" <<'PY'
+          import json, os, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              data = json.load(stream)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              print("## Latest CI/CD only — NO ROLLBACK retirement candidates", file=out)
+              print(f"- status={data['status']}; no_deletion_performed={data['no_deletion_performed']}", file=out)
+              for r in data["artifact_registry"]:
+                  if r.get("type") == "DOCKER":
+                      print(f"- AR/{r['repository']}: total={r['total']}, keep={r['keep']}, "
+                            f"old_digest_candidates={r['old_delete_candidates']}", file=out)
+              for b in data["gcs"]:
+                  print(f"- GCS/{b['bucket']}: total={b.get('objects','?')}, "
+                        f"ci_build_candidates={b.get('delete_candidates','?')}, "
+                        f"protected={b.get('protected','?')}", file=out)
+              print("Candidate listing only; no image, object, bucket, backup or app data deleted.", file=out)
+          if data['status'] != 'PASS' or data['no_deletion_performed'] is not True:
+              raise SystemExit("Latest-only cleanup assessment not verified")
           PY

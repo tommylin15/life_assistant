@@ -43,6 +43,13 @@
 
 不在 evidence 中輸出 OAuth secret、cookie、session、credential 或使用者敏感資料。**發布成功、路由核實、正式網址不可受影響及 staging live E2E 是分開驗收項目。**
 
+## 2026-10-09 staging 工程續作紀錄（與原規則同步）
+
+- 已在 GitHub `main` 新增 `.github/scripts/v3_staging_gate.py`、`tests/test_v3_staging_gate.py`，加入必要 `deployment-scripts` CI。其 readback 驗證 **本次完整 SHA、Preview／前版 staging live 的 Hosting version ID、`/api/**` 與 `/auth/**` 的 pin tag→Cloud Run revision 以及前版 SHA**，任一證據缺失即拒絕發布。
+- 新增 `.github/workflows/v3-staging-live.yml` 作為 **manual only / 同 V3 release concurrency lock** 的 staging-only 前置驗證及受控同版 clone、post-readback、失敗回復路徑；預設 `apply=false`。它不能部署正式 Hosting，不能改正式 backend 流量，且以 Google 真實 staging OAuth E2E 之獨立成功執行紀錄為 `apply=true` 必要條件。沒有經核實的該紀錄，或 callback 仍回 production，fail closed；不能填個布林值就繞過。
+- **未封板：** staging 真實 OAuth 前後端配置／登入 E2E 目前不存在；新 workflow 的 **live clone 與 rollback 尚無 GCP runtime PASS**，固定 staging 版本也尚未證實能使用。因此這是 implementation / CI 層新增安全閘，不是固定備選正式可用的證據。首版 staging 若沒有可核實的「上一已驗證版本」，需要另設安全 bootstrap 設計，不能刪掉基線保護偷渡首次發布。
+- **相容性風險：** 短期 SHA Preview 的 hostname 每次不同，Google OAuth callback 無法直接假設和固定 staging live 互通；要讓真實 staging 授權成立，須分別設計並驗證固定 hostname callback、cookies、後端來源判定及實際 Google OAuth Client 白名單。**不能在未取得這些真實證據前執行 live promotion。**
+
 ## 2026-10-09 GitHub 實作差距與後續工項
 
 | 檢查來源／工項 | 核對到的實作與缺口 | 判定 |

@@ -54,6 +54,7 @@
 - `ui.md`：UI 流程與畫面需求。
 - `design_system.md`：設計系統與視覺/互動規範。
 - `future_product_enhancements.md`：Phase 1.5 / Phase 2 候選能力；不得自動變成 Phase 1 blocker。
+- `eventgo_crawl4ai_connector.md`：EventGo 獨立 Python Crawl4AI 連結器、BeClass 排除與 ToS/robots 自動抓取 Gate；**目前未授權、未整合、live NOT VERIFIED**。
 - `taiwan_free_events_discovery_plan.md`：**Calendar #8 完成後第一優先**的台灣免費活動探索完整規格；M0–M4 MVP、E1/E2 增強、精簡 DB／UI 卡片、12 小時增量掃描、Batch AI 省用量及 GCP 切換；目前 **APPROVED PLAN / NOT IMPLEMENTED**。
 - `ai_provider_policy.md`：**目前唯一有效的 AI Provider Routing / 模型黏著偏好／備援／用量治理規範**；Gemini Flash → Flash-Lite → Groq → OpenRouter → private Shared Codex。
 

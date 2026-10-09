@@ -174,7 +174,7 @@ jobs:
                   if test "$(curl -fsSL -H 'Cache-Control: no-cache' "https://$STAGE_SITE.web.app/release.txt")" = "$OLD_SHA" &&
                      test "$(curl -sS -o /dev/null -w '%{http_code}' "https://$STAGE_SITE.web.app/api/v1/free-events")" = 401 &&
                      test "$(curl -sS -o /dev/null -w '%{http_code}' "https://$STAGE_SITE.web.app/auth/me")" = 401; then
-                    echo "staging_rollback=PASS previous=$OLD_VERSION old_sha=$OLD_SHA api_auth=PASS" >> "$GITHUB_STEP_SUMMARY"
+                    echo "staging_rollback_technical=PASS previous=$OLD_VERSION old_sha=$OLD_SHA api_auth=PASS; prior_true_oauth=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
                   else
                     echo "::error::ROLLBACK FAIL: prior static release/API/auth behavior not restored"
                   fi

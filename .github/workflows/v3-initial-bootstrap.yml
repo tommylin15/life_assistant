@@ -1,4 +1,4 @@
-# Calendar #8 explicit one-time release request: preserve full-SHA CI and all existing V3 candidate, Preview, promotion, rollback, and retention gates.
+# Calendar #8 nested-Navigator dialog fix: final guarded one-time V3 + Firebase + true account + browser E2E verification.
 name: V3 One-Time Controlled Release Bootstrap
 
 on:

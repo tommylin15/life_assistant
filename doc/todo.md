@@ -44,7 +44,7 @@
 ## Next
 
 1. **#8 — Calendar 完整產品化**：依 `doc/calendar_productization_checkpoint_v0_1.md` 的 implementation / tests / CI / deployment / runtime / true Google account / mobile+desktop UI gates 完成封板；不能因規劃新需求降低 Calendar gate。最新狀態須依 GitHub/runtime evidence，不沿用本檔較舊的「NOT STARTED」快照。
-2. **日曆後第一優先（P0 after Calendar）— 台灣免費活動探索與報名追蹤**：**PLANNED / NOT IMPLEMENTED**；[完整規格](taiwan_free_events_discovery_plan.md)。正式 GCP 定時工作尚未建置，ChatGPT 06:00/18:00 只是過渡；來源需先完成授權、時效、可用性、資料去重與保留規則確認。
+2. **日曆後第一優先（P0 after Calendar）— 台灣免費活動探索與報名追蹤**：**APPROVED PLAN / NOT IMPLEMENTED**；[分階段完整規格](taiwan_free_events_discovery_plan.md)。MVP 順序：**M0 來源時效／授權 14 天觀測 → M1 Event/Session/Registration Opportunity、來源與安全/去重 → M2 Flutter 候選清單及 admin-only 健康 → M3 通知/待辦/筆記獨立操作及 Google 整合 → M4 GCP 每 12 小時正式排程切換**。接續 **E1**：主辦單位追蹤、進階偏好、摘要/靜音、報名狀態；**E2**：貼連結、交通距離、電子報來源與進階個人化。正式 GCP 定時工作尚未建置，ChatGPT 06:00/18:00 只是過渡；每個階段都不得以文件當作 deployment/runtime PASS。
 3. #9 — Activity / Execution Log + Integrations productization（保留，延後於上述新項目）。
 4. #10 — Integration / foundation tail closure（保留）。
 5. #11 — Phase 1 final Release Gate / 封板 checkpoint（保留原有必需驗收、不跳過）。

@@ -1,4 +1,5 @@
 name: Free Events - One-Time Verified Production Activation
+# Retry pinned verified schema-reconciliation release after superseded pre-cutover V3 cancellation.
 
 on:
   workflow_dispatch:

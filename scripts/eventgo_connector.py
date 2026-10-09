@@ -37,7 +37,7 @@ SEEDS = {
     "kaohsiung": BASE + "/explore/cities/kaohsiung",
     "tainan": BASE + "/explore/cities/tainan",
 }
-EVENT_ID = re.compile(r"^/event/([0-9a-fA-F-]{36})/?$")
+EVENT_ID = re.compile(r"^/event/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/?$")
 MAX_HTML_CHARS = 2_000_000
 MAX_ROBOTS_BYTES = 256 * 1024
 MAX_OUTPUT_ROWS = 100
@@ -314,9 +314,9 @@ async def crawl_live(
     # Optional dependency: never pulled into API's production requirements.
     from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 
-    run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, page_timeout=20000)
+    run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, page_timeout=20000,\n                               delay_before_return_html=1.0)
     results, details = {}, {}
-    async with AsyncWebCrawler(config=BrowserConfig(headless=True)) as crawler:
+    async with AsyncWebCrawler(config=BrowserConfig(headless=True, text_mode=True)) as crawler:
         requests = 0
 
         async def read(url: str) -> str:
@@ -329,6 +329,8 @@ async def crawl_live(
             requests += 1
             if not result.success or not result.html:
                 raise RuntimeError("EventGo request unsuccessful")
+            if _source_url(result.url) != _source_url(url):
+                raise PermissionError("Crawl redirected outside exact authorized URL")
             if len(result.html) > MAX_HTML_CHARS:
                 raise ValueError("HTML response exceeds cap")
             return result.html

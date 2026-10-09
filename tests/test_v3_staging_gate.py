@@ -44,7 +44,7 @@ class StagingVersionGateTest(unittest.TestCase):
         d = dict(preview_releases=release("v3-aaaaaaaaaa", self.new),
                  preview_version=self.new, stage_releases=release("live", self.old),
                  stage_version=self.old, cloud_run=self.svc,
-                 expected_sha=SHA, candidate_revision=REV, preview_visible_sha=SHA)
+                 expected_sha=SHA, candidate_revision=REV, preview_visible_sha=SHA, stage_visible_sha="b" * 40)
         d.update(kwargs)
         return verify_snapshot(**d)
 
@@ -74,6 +74,10 @@ class StagingVersionGateTest(unittest.TestCase):
     def test_candidate_wrong_revision_fails(self):
         with self.assertRaises(ValueError):
             self.check(candidate_revision=OLD)
+
+    def test_prior_live_sha_must_be_valid(self):
+        with self.assertRaises(ValueError):
+            self.check(stage_visible_sha="unknown")
 
     def test_preview_wrong_sha_fails(self):
         with self.assertRaises(ValueError):

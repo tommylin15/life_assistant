@@ -1,6 +1,7 @@
 name: Free Events - One-Time Verified Production Activation
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -18,6 +19,7 @@ concurrency:
 
 jobs:
   activate:
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     environment: dev-test
     timeout-minutes: 210

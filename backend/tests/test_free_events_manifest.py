@@ -70,7 +70,8 @@ class FreeEventManifestTests(unittest.TestCase):
         self.assertEqual(report["deduplicated_count"], 1)
         self.assertEqual(len(report["candidates"]), 1)
         self.assertFalse(report["candidates"][0]["content_conflict"])
-        self.assertEqual(report["candidates"][0]["status"], "quarantined_source_permission")
+        self.assertEqual(report["candidates"][0]["status"], "eligible_for_manual_review")
+        self.assertFalse(report["candidates"][0]["publishable"])
 
     def test_deterministic_dedup_and_conflict_quarantine(self):
         a = deepcopy(self.candidate)

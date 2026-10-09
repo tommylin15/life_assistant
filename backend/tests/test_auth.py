@@ -68,6 +68,13 @@ class AuthApiTests(IsolatedAsyncioTestCase):
         ]})
         self.assertEqual(auth.oauth_redirect_for_request(request),
                          auth.STAGING_REDIRECT_URI)
+        request_url_header = Request({"type": "http", "headers": [
+            (b"host", b"life-assistant-api-abc-uc.a.run.app"),
+            (b"x-forwarded-host", b"https://life-assistant-v3-stage-tl15.web.app"),
+            (b"x-forwarded-proto", b"https"),
+        ]})
+        self.assertEqual(auth.oauth_redirect_for_request(request_url_header),
+                         auth.STAGING_REDIRECT_URI)
 
     async def test_firebase_proxy_host_spoof_and_scheme_are_rejected(self):
         for hostname, forwarded, proto in (

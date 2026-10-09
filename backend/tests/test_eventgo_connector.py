@@ -28,7 +28,7 @@ LISTING = f"""
   </div>
   <div>
    <a href="/event/{EVENT2}"><img src="https://www.beclass.com/photo.jpg">
-     <h3>不應納入的來源</h3>
+     <h3>來源圖片為 BeClass 的活動</h3>
    </a>
   </div>
   <div><a href="/event/{EVENT3}"><h3>原站為 BeClass 的活動</h3></a></div>
@@ -43,7 +43,7 @@ DETAIL1 = """<main><h1>紙風車劇團《寶莉回家》</h1>
   <p>2026/10/9 19:00 實際須官網查證</p>
   <a href="https://www.cultural.pthg.gov.tw/page?id=42">前往活動</a>
 </main>"""
-DETAIL3 = """<main><h1>來源須排除</h1>
+DETAIL3 = """<main><h1>BeClass 報名連結須保留</h1>
   <a href="https://www.beclass.com/rid=100">前往活動</a>
 </main>"""
 
@@ -57,7 +57,7 @@ class EventGoTests(unittest.TestCase):
 
     def test_listing_and_page_discovery(self):
         items, pages = eg.parse_listing(LISTING, eg.SEEDS["free"])
-        self.assertEqual({i["eventgo_id"] for i in items}, {EVENT1, EVENT3})
+        self.assertEqual({i["eventgo_id"] for i in items}, {EVENT1, EVENT2, EVENT3})
         first = next(i for i in items if i["eventgo_id"] == EVENT1)
         self.assertTrue(first["free_badge_hint"])
         self.assertEqual(first["title"], "紙風車劇團 《寶莉回家》")
@@ -68,18 +68,21 @@ class EventGoTests(unittest.TestCase):
         self.assertEqual(eg._next_page(pages, 1, eg.SEEDS["free"]), pages[1])
         self.assertIsNone(eg._next_page(pages, 2, eg.SEEDS["free"]))
 
-    def test_detail_provenance_and_beclass_indirect_exclusion(self):
+    def test_detail_provenance_keeps_beclass_referral(self):
         items, _ = eg.parse_listing(LISTING, eg.SEEDS["free"])
         rows = eg.normalize(items, {U1: DETAIL1, U3: DETAIL3},
                             "2026-10-09T10:00:00+00:00")
-        self.assertEqual(len(rows), 1)
-        row = rows[0]
-        self.assertEqual(row["eventgo_id"], EVENT1)
-        self.assertEqual(row["original_url"], "https://www.cultural.pthg.gov.tw/page?id=42")
-        self.assertFalse(row["official_verified"])
-        self.assertEqual(row["fee_status"], "unverified")
-        self.assertEqual(row["registration_status"], "unverified")
-        self.assertEqual(len(row["content_fingerprint"]), 64)
+        self.assertEqual(len(rows), 2)
+        by_id = {row["eventgo_id"]: row for row in rows}
+        self.assertEqual(by_id[EVENT1]["original_url"],
+                         "https://www.cultural.pthg.gov.tw/page?id=42")
+        self.assertEqual(by_id[EVENT3]["original_url"], "https://www.beclass.com/rid=100")
+        self.assertEqual(by_id[EVENT3]["detail_url"], U3)
+        for row in rows:
+            self.assertFalse(row["official_verified"])
+            self.assertEqual(row["fee_status"], "unverified")
+            self.assertEqual(row["registration_status"], "unverified")
+            self.assertEqual(len(row["content_fingerprint"]), 64)
 
     def test_duplicate_seed_and_unknown_original_skip(self):
         items, _ = eg.parse_listing(LISTING, eg.SEEDS["free"])
@@ -97,7 +100,9 @@ class EventGoTests(unittest.TestCase):
         self.assertIsNone(eg._source_url("https://eventgo.tw:8080/search"))
         self.assertIsNone(eg._external_url("file:///etc/passwd"))
         self.assertIsNone(eg._external_url("http://www.beclass.com/x"))
-        self.assertTrue(eg._is_beclass("https://sub.beclass.com/foo"))
+        self.assertIsNone(eg._source_url("https://www.beclass.com/rid=100"))
+        self.assertEqual(eg._external_url("https://www.beclass.com/rid=100"),
+                         "https://www.beclass.com/rid=100")
 
     def test_registry_denies_network_by_default(self):
         with self.assertRaises(PermissionError):
@@ -121,9 +126,11 @@ class EventGoTests(unittest.TestCase):
             self.assertEqual(eg.main(["--offline-fixture", str(fixture),
                                       "--output", str(output)]), 0)
             objs = [json.loads(x) for x in output.read_text(encoding="utf-8").splitlines()]
-            self.assertEqual(len(objs), 1)
-            self.assertFalse(objs[0]["official_verified"])
-            self.assertEqual(objs[0]["source"], "eventgo")
+            self.assertEqual(len(objs), 2)
+            self.assertTrue(all(not obj["official_verified"] for obj in objs))
+            self.assertTrue(all(obj["source"] == "eventgo" for obj in objs))
+            self.assertIn("https://www.beclass.com/rid=100",
+                          {obj["original_url"] for obj in objs})
 
     def test_bounded_html(self):
         with self.assertRaises(ValueError):

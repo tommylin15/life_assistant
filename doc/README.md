@@ -52,7 +52,7 @@
 - `ui.md`：UI 流程與畫面需求。
 - `design_system.md`：設計系統與視覺/互動規範。
 - `future_product_enhancements.md`：Phase 1.5 / Phase 2 候選能力；不得自動變成 Phase 1 blocker。
-- `taiwan_free_events_discovery_plan.md`：**Calendar #8 完成後第一優先**的台灣免費活動探索、報名追蹤、每 12 小時來源掃描與 GCP 正式化設計；目前僅 PLANNED / NOT IMPLEMENTED。
+- `taiwan_free_events_discovery_plan.md`：**Calendar #8 完成後第一優先**的台灣免費活動探索規格；M0–M4 MVP、E1 第一版增強、E2 第二階段，每 12 小時來源掃描、GCP 正式化與完整驗收；目前 **APPROVED PLAN / NOT IMPLEMENTED**。
 
 ### E. Integrations / Bridge / MCP
 

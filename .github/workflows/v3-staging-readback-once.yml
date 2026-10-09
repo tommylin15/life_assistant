@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   stage-and-events-readback:
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: dev-test
@@ -104,6 +104,26 @@ jobs:
             result="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$STAGE_URL$path" || true)"
             echo "stage_${path}=$result" | tee -a "$GITHUB_STEP_SUMMARY"
           done
+          curl -sS -D "$RUNNER_TEMP/oauth-headers" -o /dev/null --max-time 20 "$STAGE_URL/auth/login"
+          python - "$RUNNER_TEMP/oauth-headers" <<'PY'
+          import sys
+          from urllib.parse import parse_qs,urlparse
+          text=open(sys.argv[1],encoding="utf-8").read()
+          urls=[line.split(":",1)[1].strip() for line in text.splitlines()
+                if line.lower().startswith("location:")]
+          if not urls:
+              result="NOT_VERIFIED"
+          else:
+              query=parse_qs(urlparse(urls[-1]).query)
+              value=query.get("redirect_uri",[""])[0]
+              if value == "https://life-assistant-v3-stage-tl15.web.app/auth/callback":
+                  result="STAGING_CALLBACK"
+              elif value == "https://gen-lang-client-0593591102.web.app/auth/callback":
+                  result="PRODUCTION_CALLBACK"
+              else:
+                  result="OTHER_NOT_VERIFIED"
+          print("staging_oauth_redirect="+result)
+          PY
           PROD_URL="https://$PROJECT.web.app"
           PROD_401="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$PROD_URL/api/v1/free-events/status")"
           if [ "$PROD_401" != 401 ]; then echo "production_free_events_owner_boundary=NOT_VERIFIED status=$PROD_401" | tee -a "$GITHUB_STEP_SUMMARY"; else echo "production_free_events_owner_boundary=PASS unauthenticated_401" | tee -a "$GITHUB_STEP_SUMMARY"; fi

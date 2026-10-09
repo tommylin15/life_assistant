@@ -212,6 +212,7 @@ jobs:
           python -m py_compile .github/scripts/v3_image_identity.py
           python -m py_compile .github/scripts/v3_revision_retention.py
           python -m py_compile .github/scripts/v3_gcp_inventory.py
+          python -m py_compile .github/scripts/v3_staging_gate.py
 
       - name: Test V3 Firebase CLI diagnostics secret redaction
         run: python -m unittest tests/test_v3_firebase_error.py -v
@@ -221,3 +222,6 @@ jobs:
 
       - name: Test V3 revision retention fail-closed contracts
         run: python -m unittest tests/test_v3_revision_retention.py -v
+
+      - name: Test V3 staging version and pinned Cloud Run revision gates
+        run: python -m unittest tests/test_v3_staging_gate.py -v

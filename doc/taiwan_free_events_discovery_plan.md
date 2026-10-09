@@ -1,6 +1,6 @@
 # 台灣免費活動探索與報名追蹤 — 正式產品／工程規劃
 
-> 更新：2026-10-09 · **APPROVED PLAN / NOT IMPLEMENTED** · **Calendar #8 完成後第一優先（Post-Calendar P0）**
+> 更新：2026-10-09 · **APPROVED PLAN / M0 PARTIAL（來源清冊／離線品質工具 CI PASS，14 天真實觀測 NOT VERIFIED；M1–M4 NOT IMPLEMENTED）** · **Calendar #8 DONE 後第一優先（Post-Calendar P0）**
 >
 > 執行順序只以 [`phase1_delivery_order.md`](phase1_delivery_order.md) 為準；AI routing 只以 [`ai_provider_policy.md`](ai_provider_policy.md) 為準。文件核准≠程式、資料庫、排程或正式部署已完成。
 
@@ -137,6 +137,6 @@ Admin 採現有 Flutter UI／FastAPI API、**後端 verified UID allowlist/RBAC*
 - **既有通用 AI Provider 路由：** GitHub `main` 已有程式；2026-10-09 CI 有 PASS；部署與真實 Flash/Lite/Groq/OpenRouter/Shared Codex 多模型 E2E **NOT VERIFIED**。
 - **活動專用掃描、Event/Session/Opportunity PostgreSQL tables、Flutter 活動 UI、Admin 健康、GCP 06/18 排程：** **NOT IMPLEMENTED / NOT VERIFIED**。
 - **ChatGPT 定時掃描：** 僅過渡，與正式產品來源入庫和用戶操作無關；真實 GCP 切換 PASS 後再停用。
-- **M0–M4 / E1–E2 進度：** 尚未開始，不能因新增文件或既有 Drive AI CI 通過標為 DONE。
+- **M0–M4 / E1–E2 進度：** M0 已啟動：`data/free_events_m0_sources.json`、`scripts/free_events_m0_baseline.py`、`backend/tests/test_free_events_m0_baseline.py`（8 tests）已在 commit `ea8264562e3f260bb56f52500d3d917104e86a69` 實作並通過 [CI #37892185617](https://github.com/tommylin15/life_assistant/actions/runs/37892185617)；但**尚無 14 天真實觀測、逐站 service 授權審核，M0 整體 PARTIAL / NOT VERIFIED**。M1–M4 及 E1–E2 尚未實作；不能因文件或測試 PASS 封板。
 
 **相關文件：** [`ai_provider_policy.md`](ai_provider_policy.md)、[`phase1_delivery_order.md`](phase1_delivery_order.md)、[`decisions.md`](decisions.md)、[`acceptance.md`](acceptance.md)、[`PROJECT_RULES.md`](PROJECT_RULES.md)。

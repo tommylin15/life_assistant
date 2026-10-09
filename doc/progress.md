@@ -32,7 +32,7 @@
 - **Completed packages：8 / 11**
 - **Closure progress：72.7%**
 - **Just closed：#8 — Calendar 完整產品化（DONE / PASS）**
-- **Current priority（已核准）：Post-Calendar P0 台灣免費活動探索，M0 來源授權／14 天時效與品質基線，尚未實作（NOT VERIFIED）。**
+- **Current priority（已核准）：Post-Calendar P0 台灣免費活動探索 M0 = PARTIAL。** 來源清冊與離線 14 天品質/新鮮度量測腳本已實作（commit `ea8264562e3f260bb56f52500d3d917104e86a69`），[完整 CI #37892185617](https://github.com/tommylin15/life_assistant/actions/runs/37892185617) backend（含新增 8 tests）、Flutter、部署腳本 PASS；但來源逐站授權、14 天真實觀測與可部署採集器皆 NOT VERIFIED / NOT IMPLEMENTED，所有來源 fetch 預設停用。詳見 `free_events_m0_checkpoint.md`。
 - **Next remaining original Phase 1 package：#9 Activity / Execution Log + Integrations（按核准順序暫排在活動探索 MVP 後）。**
 - **#8 gating rule：Gemini / OpenRouter #63/#70 failure is a separate known regression, not a Calendar-specific gate. Calendar still needs its own genuine provider and production evidence.**
 - **Independent cross-feature health：historical Drive Knowledge #63 / run `37625447402` exit `91` = Gemini-only；newer #70 / run `37702785541` exit `93` = Gemini + OpenRouter (Groq not in mask)。diagnostic candidate `8dedf655` / CI #574 PASS；new deployment / runtime still NOT VERIFIED。Regression remains OPEN / FAIL, without undoing Shopping #7 DONE.**

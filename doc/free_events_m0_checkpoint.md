@@ -1,6 +1,6 @@
 # Taiwan Free Events — M0 Source & Freshness Baseline Checkpoint
 
-Date: 2026-10-09. Status: **PARTIAL / NOT VERIFIED**. Calendar #8 is closed; M0 is the next approved priority.
+Date: 2026-10-09. Status: **PARTIAL** (source registry, offline evaluator, 8 regression tests and full CI = **PASS**; 14-day actual observations / service authorization / ingestion runtime = **NOT VERIFIED**). Calendar #8 DONE; M0 is the next approved priority.
 
 ## Explicit evidence and access decisions
 
@@ -30,3 +30,9 @@ The Government Open Data License listing is verified as metadata, but no request
 5. Accept explicit cost/precision/freshness thresholds using real baseline; decide Phase 1 final-gate scope freeze explicitly. Existing temporary ChatGPT scans are not the app ingestion pipeline.
 
 The M0 script never publishes an overall `PASS`; operator acceptance is mandatory after 14-day evidence and source reviews. Implementation + tests alone = **PARTIAL**. Date 2026-10-09 is the registry creation day, not a fabricated observation day.
+
+## GitHub verification on 2026-10-09
+
+- Source commit [`ea8264562e3f260bb56f52500d3d917104e86a69`](https://github.com/tommylin15/life_assistant/commit/ea8264562e3f260bb56f52500d3d917104e86a69): source registry, offline M0 audit tool, 8 deterministic Python tests, this checkpoint.
+- [CI run 37892185617](https://github.com/tommylin15/life_assistant/actions/runs/37892185617): **PASS** backend (428 tests including 8 M0-specific tests), Flutter Web, deployment-scripts. No M0 runtime deployment, scheduled network fetch or actual 14-day evidence was part of this CI.
+- Current closure count for the original Phase 1 11 packages remains **8/11 (72.7%)**, with Calendar #8 closed. M0 is an additional approved priority, not a redefinition of that denominator.

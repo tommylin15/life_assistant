@@ -3,12 +3,12 @@ from datetime import date, datetime, timezone
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import current_user
+from app.api.auth import current_user, oauth_redirect_for_request
 from app.db.session import get_db
 from app.models.google_integration import GoogleConnection
 from app.models.task import Task, TaskPriority
@@ -258,13 +258,14 @@ async def google_status(
 
 @router.get("/authorize")
 async def authorize_google(
+    request: Request,
     services: str | None = Query(default=None),
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     selected = normalize_services(services)
     state = await create_authorization_state(db, user, selected)
-    return RedirectResponse(build_authorization_url(state, selected))
+    return RedirectResponse(build_authorization_url(state, selected, oauth_redirect_for_request(request)))
 
 
 @router.get("/capabilities")

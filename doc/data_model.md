@@ -1,6 +1,6 @@
 # 生活助理 App v0.1 — Data Model
 
-> **2026-10-10 更新：** 這份早期 schema 規劃不可用來判斷 production migration 是否已執行。Alembic 0014 的 Queue 在 GitHub 已有程式，活動 selected/skip decisions、使用者 UI preferences、功能 rollout 仍是新設計、尚無實作；實際 DB schema 以 [CURRENT_STATE.md](CURRENT_STATE.md)、`backend/alembic/versions/`、`backend/app/models/` 和 runtime evidence 為準。
+> **2026-10-10 更新：** 這份早期 schema 規劃不可用來判斷 production migration 是否已執行。Alembic 0011–0014 活動來源/Queue migration 僅作已存在歷史資料表保留；來源 Worker 與 Queue API 工項已取消。新需求只有 ChatGPT 已選資料入獨立 PostgreSQL 精選表（未實作）；使用者 UI preferences 與功能 rollout 也是待實作；實際 DB schema 以 [CURRENT_STATE.md](CURRENT_STATE.md)、`backend/alembic/versions/`、`backend/app/models/` 和 runtime evidence 為準。
 
 
 最後更新：2026-09-25

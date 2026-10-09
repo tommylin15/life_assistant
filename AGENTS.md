@@ -12,7 +12,7 @@
    - `spec.md`：產品範圍
    - `architecture.md`、`project_structure.md`：架構與邊界
    - `coding_rules.md`：實作與 Definition of Done
-   - `migration_spec.md`、`error_handling.md`、`security.md`、`permissions.md`、`bridge_schema.md`、`sync_spec.md`：專項規則
+   - `migration_spec.md`、`error_handling.md`、`security.md`、`permissions.md`（舊 `bridge_schema.md`/`sync_spec.md` 已歸檔）：專項規則
    - `testing_strategy.md`、`release_checklist.md`：驗證與發版門檻
 3. 先檢查現有實作、呼叫者與測試，再修改最少必要檔案。
 4. 完成後執行適用驗證，並檢查規格是否需要同步更新。

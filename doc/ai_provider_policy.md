@@ -35,18 +35,16 @@
 
 - **絕對不**在 consumer 複製、mount、讀取、輪換共用 Codex OAuth Secret，也不新增另一套 Codex CLI。
 - `CODEX_PRIMARY_ENABLED` 是**歷史相容的設定鍵名稱**，現在語意是**是否允許最後一層 Shared Codex fallback**；名字不代表優先權第一。
-- Private Codex 的佇列/回覆時間與 IAM 成本不適合大量逐筆活動掃描；僅在 owner 可以合法授權、前四層無法處理及業務確實值得時呼叫。公用 Batch 不可以憑空造私人 owner 身分以繞過驗證。
+- Private Codex 的佇列/回覆時間與 IAM 成本只應適用於 Life 內部有 owner 授權的 Drive AI 工作；不得讓外部 ChatGPT 活動排程繞過授權使用。
 - **不**把 Codex 運作邏輯移進 life_assistant 的 Agent runtime；模型仍只提出受 schema 約束的文字候選，操作由 FastAPI/權限/審核負責。
 
-## 3. 應用呼叫原則：L0 規則優先，模型備援 ≠ 每次全部呼叫
+## 3. Drive AI 呼叫原則（不包含活動分析）
 
-1. **L0 零模型：** 官方 JSON/RSS 結構化解析、有效期判斷、時間計算、來源健康、權限、去重、通知投遞與 UI 查詢走傳統程式。
-2. **只有需要語意解析才進 AI：** 正規化後的內容 Hash／關鍵欄位差異／抽取版本／模型策略 fingerprint 均命中，直接重用既有結果。不能只用標題 Hash 而漏掉報名時間、費用及取消。
-3. **一次成功即停：** 先 Gemini Flash 同系列可用成功模型；該系列失敗再到 Flash-Lite、Groq、OpenRouter、Shared Codex。不要每次常規批次都呼叫五層。任何角色不得憑網頁內容下達工具／命令。
-4. **相同來源版本與抽取 schema 只建一個有效 AI Job：** durable idempotency key、transactional claim/lease、併發隔離、失敗 backoff 與上限；避免兩輪掃描、Cloud Run retry 或相同活動跨平台造成重複請求。
-5. **公用 Batch 共享結果：** 生成可重用的活動欄位與 60–120 字中文摘要，使用者讀取清單、建立一般筆記、通知／待辦時不得再重跑 AI。
-6. **私有資料需明確同意：** 目前 Drive AI user content consent 預設 OFF；活動的公開來源授權不能覆蓋使用者個人筆記、行事曆、偏好或第三方 provider 的隱私同意。
-7. **失敗可降級：** 來源資料仍可保存待確認候選，已驗證活動繼續正常顯示；沒有證據不得宣稱報名時間或費用已確認。支援 `succeeded`／`partial`／`failed`／`skipped` 並留下最低必要審計資訊。
+1. **L0 零模型**：權限檢查、文件清單、指紋比對、快取、資料搬移及狀態查詢走普通程式，不因使用者打開頁面就呼叫 AI。
+2. **只有經使用者明確同意的文件內容才可分析**；同一文件版本、context 與模型/抽取策略 fingerprint 可以重用快取；不得把別人的 Drive/Google 資料交給 Provider。
+3. **依序備援，一次成功即停**：Gemini Flash → Flash-Lite → Groq → OpenRouter → private Shared Codex。各 Provider 真實健康個別驗收，後備成功不得掩蓋主用失敗。
+4. **限額與可恢復錯誤**：有界時間、429/backoff、批次數上限、耗費可稽核；錯誤只記錄脫敏 metadata，不記錄 OAuth token、原始文件正文或金鑰。
+5. **活動精選不使用本文 AI 路由**：ChatGPT Chat 自行分析，Life 只接收精選資料並存入 PostgreSQL；無 Life 活動 Queue、Batch AI、source crawler 或第二次語意判定。
 
 ## 4. 實作對應與驗收
 
@@ -56,8 +54,7 @@
 | `backend/app/services/drive_enrichment.py` | consent、fingerprint/cache、partial outcome 的參考實作 | 文件專屬 schema 不應直接拿來塞活動 |
 | `backend/app/models/ai_provider_preference.py` | 單表中兩個 provider key 的 last-success | 現有 schema 即可，無須另建 migration |
 | `backend/scripts/run_drive_external_ai_acceptance.py` | 分 provider 真實 smoke/回傳失敗 mask | 必須兩組 Gemini 分開核對，不能用整體 PASS 代替 |
-| `doc/taiwan_free_events_discovery_plan.md` | 未來 Event AI Enrichment 的增量管線與 M0–M4 gates | 規劃，不冒充已上線 |
 
-驗收至少包含兩組模型池完全隔離、最多三個、記住上次成功、型號已移除的回復策略、模型列表失敗、429 不暴衝、所有後備順序、provider 健康不遮蔽、consent OFF 零送出、內容未變零 AI 呼叫、Cloud Run 併發去重、owner isolation、正式成本上限與真實 release SHA 的 deployment/runtime 證據。
+驗收至少包含兩組模型池完全隔離、最多三個、記住上次成功、型號已移除的回復策略、模型列表失敗、429 不暴衝、所有後備順序、provider 健康不遮蔽、consent OFF 零送出、內容未變零 AI 呼叫、Drive AI cache 併發去重、owner isolation、正式成本上限與真實 release SHA 的 deployment/runtime 證據。
 
 **完成判定：** 文件整頓和 CI 可各自 PASS；新版五層路由 deployment、真實外部 Provider / Codex E2E 未取得新一輪證據前仍 **NOT VERIFIED**。歷史討論和 2026-10-07/08 的 Codex-first/Gemini-only 設定**不是目前政策**，但其當時的失敗與驗收紀錄仍保留於 `doc/integrations.md` 供稽核。

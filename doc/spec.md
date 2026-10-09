@@ -335,20 +335,7 @@ Phase 1 主導航先維持 Dashboard / Tasks / Calendar / Projects / More；Toda
 - AI 輸出與實際 execution result 清楚分離。
 - mutation 仍需通過 Backend validation / permission / audit。
 - 不改變 life_assistant / omniAgent 的正式責任邊界。
-# CI/CD V2 release contract — 2026-10-08
 
-Authorized infrastructure replacement retains Flutter Web/PWA on Firebase
-Hosting, FastAPI on Cloud Run and PostgreSQL/Alembic. Main-push Cloud Build
-2nd Gen runs CI only; an explicit full-SHA manual Release must separately pass
-candidate, Preview and live API/UI/provider gates
-before CLOSED; preserve existing failures and schedule timing. Full contract,
-cost gate and recovery: `deployment_runbook.md`. Implementation is pending
-real GCP/Firebase acceptance; no product capability is added by this section.
+## 2026-10-10 活動精選最小介面
 
-## Post-Calendar 台灣免費活動探索（核准規劃）
-
-使用者核准在 Calendar #8 產品驗收完成後，以此項目為下一個第一優先產品開發。**MVP M0–M4**：來源 14 天新鮮度與授權、Event/Session/Registration Opportunity/Organizer 與來源安全/去重、Flutter 有效候選列表與 admin-only 來源健康、通知/待辦/筆記分別授權、GCP 每日 06:00/18:00 正式掃描切換。**E1**：主辦追蹤、進階偏好、摘要/靜音和報名管理；**E2**：使用者貼連結、交通距離、電子報和進階個人化。
-
-採**精簡 PostgreSQL 活動卡**：核心活動/場次/報名窗口與資格、60–120 中文字摘要、標籤、官方連結、最低必要稽核；整站介紹與照片回主辦頁，缺圖採內建分類圖示。**12 小時增量掃描與 AI 推論解耦**：沒變動／規則足夠則 0 模型呼叫，AI 先在 Batch 產出可重用結果；一般使用者瀏覽或使用摘要建筆記不呼叫模型。統一模型備援政策見 [`ai_provider_policy.md`](ai_provider_policy.md)。
-
-詳細規格、用例、工作切分與驗收見 [`taiwan_free_events_discovery_plan.md`](taiwan_free_events_discovery_plan.md)，正式排序見 [`phase1_delivery_order.md`](phase1_delivery_order.md)。此處僅為經同意的產品規劃，不代表已修改 PostgreSQL、部署 GCP 或新增 Flutter UI；也不自動覆蓋本規格既有 Phase 1 scope freeze / Release Gate。狀態：**APPROVED PLAN / NOT IMPLEMENTED**。
+只接收 ChatGPT 已選活動，經 Life FastAPI 授權驗證、來源 HTTPS 校驗及去重，直接 upsert 到 PostgreSQL 精選池，Flutter 顯示活動卡讓使用者自行篩選。**不建 Life 的文化部/TDX/Excel 擷取、Queue、掃描排程、AI 第二道審核或正式推薦流程**。實際 API/schema/UI 尚未完成；以 [活動規格](taiwan_free_events_discovery_plan.md) 和 [API 契約](free_events_candidate_ingestion_contract.md) 為準。

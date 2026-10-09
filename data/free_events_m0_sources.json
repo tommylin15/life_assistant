@@ -8,12 +8,12 @@
       "tier": "official_dataset",
       "purpose": "events_daily",
       "reference_url": "https://data.gov.tw/dataset/6478",
-      "endpoint_documentation_url": "https://cloud.culture.tw/frontsite/trans/SearchShowAction.do?method=doFindTypeJOpenApi&category=all",
+      "endpoint_documentation_url": "https://data.gov.tw/dataset/6478",
       "data_license": "taiwan_government_open_data_license_v1_listed",
       "data_license_evidence": "https://data.gov.tw/dataset/6478",
-      "service_access_review": "pending",
+      "service_access_review": "reviewed_with_evidence",
       "requires_api_key": false,
-      "enabled_for_fetch": false,
+      "enabled_for_fetch": true,
       "expected_interval_hours": 24
     },
     {

@@ -4,6 +4,21 @@
 
 > 本文件定義 Phase 1 Platform Release Gate。`[x]` 只代表該條要求層級已有足夠 evidence；Implementation / CI / Deployment PASS 不自動等於 Runtime / Integration PASS。
 
+## 2026-10-09 P1 staging / P0 免費活動聯合驗收 — PARTIAL
+
+這是 **run-specific** 真實證據，和 Calendar #8 歷史 DONE 不衝突；不以 source commit 或 CI PASS 替代尚未執行的 staging / production release。
+
+- [x] **PASS（staging 固定 live 的現有版本 readback）** — [read-only run 37944737101](https://github.com/tommylin15/life_assistant/actions/runs/37944737101)：獨立 staging live Hosting version `e3a6dd23aec06848`、前端完整 SHA `eb9f60c3413a8e5216318888a6456a1c464d8cab`；REST Hosting 的 `/api/**`、`/auth/**` 同 tag `v3-eb9f60c341` 精確對應 `life-assistant-api-00197-fug`，未登入 API/Auth 401 PASS。
+- [x] **PASS（現場問題分類）** — [read-only run 37945021056](https://github.com/tommylin15/life_assistant/actions/runs/37945021056)：目前 staging `/auth/login` 回 **PRODUCTION_CALLBACK**，P1 真實固定 staging Google OAuth **FAIL／尚未通過**；P0 `/api/v1/free-events/status` staging 和 production **404**，新 owner-only 聚合 API 尚未發布，不可說 production row count 已驗證。
+- [x] **PASS（source/CI 層，有效範圍僅限 code）** — staging Host whitelist/OAuth + incremental token exchange、SHA Preview→同版 staging live 受控 clone / 版本級 pinned rewrite readback / 技術回復、單獨 `v3-staging-restore.yml`、read-only `v3-p0-p1-joint-acceptance.yml` 已加入 GitHub main。CI [37945673591](https://github.com/tommylin15/life_assistant/actions/runs/37945673591) 成功；後續每次 main SHA 需再核對同版 CI，不能挪用舊 PASS。
+- [ ] **NOT VERIFIED — 本次新 SHA V3 candidate / Preview**：沒有新 source SHA 對應 GHCR digest + 0%-traffic candidate + pinned Preview 真實成功證據。
+- [ ] **NOT VERIFIED — staging live 新版／回復演練**：workflow 的 `apply` 尚未實際執行；保留目前既存 staging version，未改 production Hosting 或 Cloud Run 流量。
+- [ ] **NOT VERIFIED — Google OAuth 真實 E2E**：必須確認現有 Google OAuth Web Client 同時允許 production 與固定 staging callback，經真正 Google 登入、callback、session cookie、`/auth/me` 驗證，且有可稽核的 staging OAuth acceptance evidence；不得用單純 307/401 或 CI test 取代。
+- [ ] **NOT VERIFIED — P0 真實資料**：Owner session 需實際取得 aggregate observation / events / opportunities / strict verified-only UI rows 和去重證據；現行 Cloud Logging permission FAIL 仍是獨立問題。14 天品質仍 PARTIAL。
+- [ ] **NOT VERIFIED — P0/P1 一起驗收**：run `v3-p0-p1-joint-acceptance.yml` 必須驗證本次實際 live SHA / pins、staging OAuth redirect、P0 401、安全及正式流量不變；其成功本身也**不等於** OAuth 真登入或 owner PostgreSQL 統計已通過。
+
+**Overall:** P1 = PARTIAL；P0 = PARTIAL；Phase 1 原 11 包仍 8/11（72.7%），不得標示 DONE。
+
 ## Package #8 — Calendar 正式封板（2026-10-09）
 
 - [x] **DONE / PASS — Calendar #8**，原 11 個 Phase 1 工作包完成數：**8/11（72.7%）**。所有以下 Gate 綁定同一 release SHA `5c8d2fca8c9b17f6e4a013c02ba5d2b9fba86aa7`。

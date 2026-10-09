@@ -17,12 +17,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.models.free_events import (
     FreeEvent, FreeEventEvidence, FreeEventOrganizer,
     FreeEventRegistrationOpportunity, FreeEventSession, FreeEventSource,
+    FreeEventIngestionLease,
 )
 from app.services.free_events_normalization import EventCandidate, canonical_event_key
 from app.services.free_events_ingest import (
     FreeEventSourceNotApproved, ingest_approved_candidate,
 )
 from app.services.free_events_discovery import list_verified_public_events
+from app.services.free_events_lease import claim_source_batch, finish_source_batch
 
 
 def _test_dsn():
@@ -252,6 +254,114 @@ class FreeEventPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         stale = self.now - timedelta(days=3)
         event_id = await self.verify_event_and_opportunity(candidate, verified_at=stale)
         self.assertEqual(await self.mine(event_id), [], "Old review must expire")
+
+    async def source_is_due(self):
+        """The ingestion job is not live: locally mark only synthetic source due."""
+        async with self.session_factory() as db:
+            async with db.begin():
+                await db.execute(update(FreeEventSource).where(
+                    FreeEventSource.id == self.source_id
+                ).values(last_success_at=None))
+
+    async def claim(self, at=None):
+        async with self.session_factory() as db:
+            return await claim_source_batch(
+                db, source_id=self.source_id, now=at or self.now
+            )
+
+    async def finish(self, token, *, at=None, success=True, failure_kind=None):
+        async with self.session_factory() as db:
+            return await finish_source_batch(
+                db, source_id=self.source_id, token=token,
+                now=at or self.now, success=success, failure_kind=failure_kind,
+            )
+
+    async def test_lease_only_one_owner_can_claim_and_success_enforces_interval(self):
+        await self.seed_source()
+        await self.source_is_due()
+        token = await self.claim()
+        self.assertEqual(len(token), 32)
+        self.assertIsNone(await self.claim())
+        self.assertFalse(await self.finish("0" * 32))
+        self.assertTrue(await self.finish(token))
+        self.assertIsNone(await self.claim(at=self.now + timedelta(hours=11)))
+        next_token = await self.claim(at=self.now + timedelta(hours=13))
+        self.assertIsNotNone(next_token)
+        self.assertNotEqual(next_token, token)
+        async with self.session_factory() as db:
+            lease = await db.get(FreeEventIngestionLease, self.source_id)
+            self.assertEqual(lease.consecutive_failures, 0)
+            self.assertIsNone(lease.next_retry_at)
+
+    async def test_four_workers_claim_one_durable_source_lease(self):
+        await self.seed_source()
+        await self.source_is_due()
+        results = await asyncio.wait_for(
+            asyncio.gather(*(self.claim() for _ in range(4))),
+            timeout=20,
+        )
+        owners = [token for token in results if token is not None]
+        self.assertEqual(len(owners), 1, results)
+        self.assertTrue(await self.finish(owners[0]))
+
+    async def test_exponential_retry_and_old_token_cannot_finish_new_claim(self):
+        await self.seed_source()
+        await self.source_is_due()
+        first = await self.claim()
+        self.assertTrue(await self.finish(
+            first, success=False, failure_kind="network_timeout"
+        ))
+        async with self.session_factory() as db:
+            source = await db.get(FreeEventSource, self.source_id)
+            self.assertIsNone(source.last_success_at)
+            self.assertEqual(source.last_error_kind, "network_timeout")
+        self.assertIsNone(await self.claim(at=self.now + timedelta(minutes=4)))
+        second_at = self.now + timedelta(minutes=6)
+        second = await self.claim(at=second_at)
+        self.assertIsNotNone(second)
+        self.assertFalse(await self.finish(first, at=second_at))
+        self.assertTrue(await self.finish(
+            second, at=second_at, success=False, failure_kind="http_429"
+        ))
+        self.assertIsNone(await self.claim(
+            at=self.now + timedelta(minutes=15)
+        ))
+        third = await self.claim(at=self.now + timedelta(minutes=17))
+        self.assertIsNotNone(third)
+        async with self.session_factory() as db:
+            lease = await db.get(FreeEventIngestionLease, self.source_id)
+            self.assertEqual(lease.consecutive_failures, 2)
+
+    async def test_revoked_permission_rejects_successful_ack(self):
+        await self.seed_source()
+        await self.source_is_due()
+        token = await self.claim()
+        async with self.session_factory() as db:
+            async with db.begin():
+                await db.execute(update(FreeEventSource).where(
+                    FreeEventSource.id == self.source_id
+                ).values(fetch_enabled=False))
+        self.assertTrue(await self.finish(token, success=True))
+        async with self.session_factory() as db:
+            source = await db.get(FreeEventSource, self.source_id)
+            lease = await db.get(FreeEventIngestionLease, self.source_id)
+            self.assertIsNone(source.last_success_at)
+            self.assertEqual(lease.last_error_kind, "source_revoked")
+        with self.assertRaises(FreeEventSourceNotApproved):
+            await self.claim(at=self.now + timedelta(hours=15))
+
+    async def test_lease_validation_never_persists_untrusted_failure_text(self):
+        await self.seed_source()
+        await self.source_is_due()
+        token = await self.claim()
+        with self.assertRaisesRegex(ValueError, "unsafe failure"):
+            await self.finish(token, success=False,
+                              failure_kind="database password=secret-value")
+        with self.assertRaisesRegex(ValueError, "invalid lease token"):
+            await self.finish("not-a-token")
+        self.assertTrue(await self.finish(
+            token, success=False, failure_kind="unknown"
+        ))
 
 
 if __name__ == "__main__":

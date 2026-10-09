@@ -39,7 +39,7 @@ class FreeEventsPage extends ConsumerWidget {
         error: (error, _) => AppStatePanel(
           title: '無法載入活動',
           message: '目前無法取得已驗證活動。請檢查網路或稍後重試。',
-          icon: Icons.cloud_off_outlined,
+          icon: const Icon(Icons.cloud_off_outlined),
           action: OutlinedButton.icon(
             onPressed: reload,
             icon: const Icon(Icons.refresh),
@@ -66,7 +66,7 @@ class FreeEventsPage extends ConsumerWidget {
                       const AppStatePanel(
                         title: '目前沒有已核實的免費活動',
                         message: '來源尚在查證或目前沒有符合條件的活動。未核實候選不會顯示。',
-                        icon: Icons.event_busy_outlined,
+                        icon: Icon(Icons.event_busy_outlined),
                       )
                     else
                       for (final item in events) ...[

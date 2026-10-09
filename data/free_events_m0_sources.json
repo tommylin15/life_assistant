@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "updated_on": "2026-10-09",
-  "policy": "No automated network fetch until source-specific service-access review. EventGo terms (2026-04-23) restrict bulk automated access; written permission and robots review required. BeClass is not a direct crawl source; third-party-discovered BeClass registration links must be preserved without fetching BeClass.",
+  "policy": "Source allowlist: Ministry of Culture datasets, data.gov.tw catalog discovery, TDX tourism API, EventGo and yii.tw only (2026-10-09 Drive source selection). Direct BeClass, Citytalk, ACCUPASS and KKTIX discovery are excluded; preserve third-party BeClass registration references without fetching BeClass. Only reviewed MoC dataset may fetch now. EventGo bulk automated access requires written permission and robots review; all other retained sources remain denied pending source-specific terms/API approval. Never store API credentials in the registry.",
   "sources": [
     {
       "id": "moc_events_all",
@@ -75,45 +75,6 @@
       "tier": "aggregator",
       "purpose": "candidate_discovery_only",
       "reference_url": "https://yii.tw/",
-      "endpoint_documentation_url": null,
-      "data_license": "not_verified",
-      "data_license_evidence": null,
-      "service_access_review": "pending_robots_terms_or_authorized_api",
-      "requires_api_key": null,
-      "enabled_for_fetch": false,
-      "expected_interval_hours": 12
-    },
-    {
-      "id": "citytalk",
-      "tier": "aggregator",
-      "purpose": "candidate_discovery_only",
-      "reference_url": "https://www.citytalk.tw/",
-      "endpoint_documentation_url": null,
-      "data_license": "not_verified",
-      "data_license_evidence": null,
-      "service_access_review": "pending_robots_terms_or_authorized_api",
-      "requires_api_key": null,
-      "enabled_for_fetch": false,
-      "expected_interval_hours": 12
-    },
-    {
-      "id": "accupass",
-      "tier": "aggregator",
-      "purpose": "candidate_discovery_only",
-      "reference_url": "https://www.accupass.com/",
-      "endpoint_documentation_url": null,
-      "data_license": "not_verified",
-      "data_license_evidence": null,
-      "service_access_review": "pending_robots_terms_or_authorized_api",
-      "requires_api_key": null,
-      "enabled_for_fetch": false,
-      "expected_interval_hours": 12
-    },
-    {
-      "id": "kktix",
-      "tier": "aggregator",
-      "purpose": "candidate_discovery_only",
-      "reference_url": "https://kktix.com/",
       "endpoint_documentation_url": null,
       "data_license": "not_verified",
       "data_license_evidence": null,

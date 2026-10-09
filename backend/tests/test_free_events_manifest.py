@@ -84,6 +84,18 @@ class FreeEventManifestTests(unittest.TestCase):
         report = prepare_manifest([a, conflict], self.registry)
         self.assertEqual(report["status_counts"], {"conflict_requires_review": 1})
 
+    def test_cancelled_discovery_sources_are_rejected(self):
+        from copy import deepcopy
+        candidates = []
+        for source_id in ("citytalk", "accupass", "kktix", "beclass"):
+            row = deepcopy(self.candidate)
+            row["source_id"] = source_id
+            candidates.append(row)
+        report = prepare_manifest(candidates, self.registry)
+        self.assertEqual(report["input_count"], 4)
+        self.assertEqual(report["rejected"], {"unknown_source": 4})
+        self.assertEqual(report["candidates"], [])
+
     def test_bad_row_or_unknown_source_is_rejected_without_echo(self):
         bad = deepcopy(self.candidate)
         bad["source_id"] = "unknown"

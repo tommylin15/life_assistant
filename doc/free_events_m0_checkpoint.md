@@ -10,7 +10,7 @@ Date: 2026-10-09. Status: **PARTIAL** (source registry, offline evaluator, 8 reg
 | Ministry of Culture per-event detail | https://opendata.culture.tw/frontsite/openData/detail?datasetId=311 | Official licensed dataset; do not conflate permission for dataset use with unlimited site requests | CATALOGUED / FETCH DISABLED |
 | TDX tourism events | https://tdx.transportdata.tw/api-service/swagger/tourism/0aed433a-9e95-404d-974c-4e70e29ae460 | Official Tourism V2 API; API credentials, quota and access terms required | CATALOGUED / FETCH DISABLED |
 | data.gov.tw directory | https://data.gov.tw/ | Dataset discovery only; individual dataset terms must be checked | CATALOGUED / FETCH DISABLED |
-| EventGo / BeClass / yii.tw / Citytalk / ACCUPASS / KKTIX | User-requested candidate URLs in `data/free_events_m0_sources.json` | robots, ToS, API, RSS and individual host permission **NOT VERIFIED**; may supply candidates only after lawful access, never sole proof that registration is open | CANDIDATES / FETCH DISABLED |
+| EventGo / yii.tw | Retained in Drive `life_assistantGPT/各官網連結方式.txt` | robots, ToS and site access **NOT VERIFIED**; may supply candidates only after lawful access, never sole proof that registration is open | CANDIDATES / FETCH DISABLED |
 
 The Government Open Data License listing is verified as metadata, but no request quota or repeated automated fetch authorization is inferred. No runtime ingestion or Cloud Scheduler has been enabled by this checkpoint.
 
@@ -41,3 +41,10 @@ The M0 script never publishes an overall `PASS`; operator acceptance is mandator
 ## 并行 M1 說明（2026-10-09）
 
 使用者要求不等待 14 天觀測結束，先開發後面需要的 M1，並保留修正追蹤。已新增 additive 0011 六表與離線 MoC Adapter / JSONL 去重，請見 `free_events_m1_checkpoint.md`；**M0 14 天真實連續來源觀測尚未驗收，不因 M1 程式存在而視作完成**。
+
+## 2026-10-09 — Drive source selection supersedes earlier broader M0 inventory
+
+- User narrowed prospective discovery sources to **five groups / six registry IDs**: Ministry of Culture all events and detail datasets, data.gov.tw catalog, TDX tourism API, EventGo, and yii.tw. Three previous source IDs (`citytalk`, `accupass`, `kktix`) are **removed from the active source allowlist**. BeClass was never a direct source; outbound BeClass registration links found elsewhere remain stored as unverified referrals and must not be fetched.
+- Only `moc_events_all` remains enabled for network fetching; no API/robots/terms permission is inferred for TDX, data.gov.tw discovery, EventGo, yii.tw or MoC detail. No production DB rows, prior observations, or source evidence are deleted by this source-registry change.
+- TDX credentials exposed in the private Drive TXT are not to be copied to source code, test fixtures or logs. Secret-storage migration and credential rotation remain separate, not executed by this change.
+- Existing checkpoints above are historical evidence and may list superseded source counts; this section and the current registry determine the latest scope.

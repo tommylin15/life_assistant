@@ -27,7 +27,11 @@ class FreeEventsM0Tests(unittest.TestCase):
         return obs
 
     def test_only_approved_official_source_is_enabled(self):
-        self.assertEqual(len(self.registry["sources"]), 9)
+        self.assertEqual(
+            {s["id"] for s in self.registry["sources"]},
+            {"moc_events_all", "moc_event_detail", "data_gov_catalog",
+             "tdx_tourism_events", "eventgo", "yii_calendar"},
+        )
         self.assertNotIn("beclass", {s["id"] for s in self.registry["sources"]})
         self.assertFalse(next(s for s in self.registry["sources"] if s["id"] == "eventgo")["enabled_for_fetch"])
         self.assertEqual([s["id"] for s in self.registry["sources"] if s["enabled_for_fetch"]], ["moc_events_all"])
@@ -36,6 +40,12 @@ class FreeEventsM0Tests(unittest.TestCase):
         self.assertIn("data.gov.tw", source["data_license_evidence"])
         self.assertEqual(source["service_access_review"], "reviewed_with_evidence")
         self.assertTrue(next(s for s in self.registry["sources"] if s["id"] == "tdx_tourism_events")["requires_api_key"])
+
+    def test_cancelled_discovery_sources_are_not_admitted(self):
+        for source_id in ("citytalk", "accupass", "kktix", "beclass"):
+            with self.subTest(source_id=source_id), self.assertRaises(ValueError):
+                m0.evaluate(self.registry, [self.sample(0, source_id=source_id)],
+                            as_of=self.now)
 
     def test_pending_aggregator_must_not_be_enabled(self):
         from copy import deepcopy

@@ -32,14 +32,16 @@
 
 | 類別 | 範例 | 週期 | 權限與用途 |
 | --- | --- | --- | --- |
-| L1 官方第一線 | 主辦官網、公告/新聞稿、RSS、原始報名頁 | **每 12 小時：06:00、18:00 Asia/Taipei** | 以正式公告與報名頁為事實依據 |
-| L1 聚合補漏 | EventGo、小藝行事曆、Citytalk、ACCUPASS、KKTIX | **每 12 小時**，合法可用後才啟用 | 找候選與連回原站；不能無授權複製整站 |
-| L2 官方結構化 | 文化部藝文、觀光/TDX、各縣市活動資料 | **每日一次** | 補漏與交叉核對，不冒充即時 |
-| L3 來源探索 | data.gov.tw 資料集目錄與異動 | **每日一次** | 發現可用資料來源，不直接當即時活動列表 |
+| L1 主辦／報名頁核實 | 已由保留來源找到之活動的主辦官網、公告及原始報名頁 | 視來源許可與核實需求，最多按排程查驗 | 作為已發現活動的事實依據，不列為獨立全站探索來源 |
+| L1 聚合補漏 | **EventGo、小藝行事曆（yii.tw）** | 規劃每 12 小時；**目前皆停用**，完成來源授權／robots 審查後才可啟用 | EventGo 優先近 3 日上架候選（只有來源真實提供上架時間才能判斷）；不可把活動日期視為上架日期、不可無授權爬整站 |
+| L2 官方結構化 | **文化部藝文（唯一啟用）、TDX 觀光活動 API（待核准）** | 文化部現有每日 06:00／18:00；TDX 預計每日一次，仍停用 | 固定授權端點、限制用量；其它縣市來源不得自行新增或擷取 |
+| L3 來源探索 | **政府開放資料（data.gov.tw）目錄** | 規劃每日一次；目前停用 | 目錄只供發現候選資料集；新增資料集仍須逐一審核，不能因此自動擴大來源清冊 |
 | 重要已追蹤活動 | 官方報名頁與狀態頁 | 一般每日；已知即將開放時可配置短期提高查詢密度 | 只對該活動且不突破來源速率限制 |
 | 清理與健康 | expired sessions、來源 adapter 健康、重試佇列 | 每日一次 | 不因來源暫時斷線就刪活動 |
 
-**2026-10-09 新來源決策：BeClass（beclass.com）完全不採用，包含透過 EventGo 間接發現但原始連結導向 BeClass 的候選。** EventGo 僅先建立隔離 Crawl4AI Python 連結器，見 [eventgo_crawl4ai_connector.md](eventgo_crawl4ai_connector.md)。EventGo ToS 禁止自動化工具大量存取；其來源權限／robots 尚未獲核實，M0 registry 保持 enabled_for_fetch=false，正式自動抓取／DB/排程整合禁止先行啟動，直到有書面授權與存取審核。這是獨立開發 checkpoint，不代表現場觀測 PASS。
+**2026-10-09 最新來源裁減決策（以 Drive `life_assistantGPT/各官網連結方式.txt` 為篩選依據）：** 只保留文化部（`moc_events_all`、`moc_event_detail`）、政府開放資料目錄（`data_gov_catalog`）、TDX（`tdx_tourism_events`）、EventGo（`eventgo`）、小藝行事曆（`yii_calendar`），合計 6 個 registry ID／5 組來源。**Citytalk、ACCUPASS、KKTIX 取消列管，不得由排程／候選入庫接納；歷史活動與來源證據不刪除。** 不將 Drive TXT 的 TDX ID、API secret 或 MQTT 憑證寫入 GitHub、日誌或範例；憑證應使用安全儲存並另行處理輪替。
+
+**BeClass 邊界：** 只取消直接掃描 BeClass 官網；由保留來源發現，且報名網址指向 BeClass 的候選仍**保留該 URL**，不主動爬取／驗證 BeClass 頁面，也不據此認定可免費報名。EventGo 隔離 Crawl4AI 連結器見 [eventgo_crawl4ai_connector.md](eventgo_crawl4ai_connector.md)；其 ToS 限制大量自動化存取且 robots/書面授權尚未通過，`enabled_for_fetch=false`。小藝行事曆和 TDX 也不得因在 Drive 文件列出而推定授權，均維持停用。Drive 內活動 JSON 僅是格式示例，不視為已核實事件或真實上架時間。
 
 **現有 ChatGPT 定期掃描只屬過渡來源探索，未與 app 的正式 PostgreSQL durable tasks 等同。** GCP 排程與兩邊去重/切換獲真實 PASS 後才關閉過渡掃描。
 

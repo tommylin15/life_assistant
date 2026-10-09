@@ -92,7 +92,7 @@ def protected_traffic(cloud_run: dict) -> list:
 def verify_snapshot(
     preview_releases: dict, preview_version: dict, stage_releases: dict,
     stage_version: dict, cloud_run: dict, expected_sha: str, candidate_revision: str,
-    preview_visible_sha: str, stage_visible_sha: str | None = None,
+    preview_visible_sha: str, stage_visible_sha: str,
 ) -> dict:
     require(bool(SHA_PATTERN.fullmatch(expected_sha)), "Expected full source SHA")
     preview_id = release_version(preview_releases, STAGE_SITE, f"v3-{expected_sha[:10]}")
@@ -102,14 +102,14 @@ def verify_snapshot(
     old_id = release_version(stage_releases, STAGE_SITE, "live")
     require(stage_version.get("name") == old_id, "Prior staging live version mismatch")
     old_routes = pinned_routes(stage_version, cloud_run)
-    if stage_visible_sha is not None:
-        require(bool(SHA_PATTERN.fullmatch(stage_visible_sha.strip())),
-                "Previous staging live SHA is not a full SHA")
+    require(bool(SHA_PATTERN.fullmatch(stage_visible_sha.strip())),
+            "Previous staging live SHA is not a full SHA")
     require(old_id != preview_id, "Already live: do not overwrite without readback")
     return {
         "status": "PASS",
         "preview_version": preview_id,
         "previous_live_version": old_id,
+        "previous_live_sha": stage_visible_sha.strip(),
         "candidate_routes": candidate_routes,
         "previous_routes": old_routes,
     }
@@ -125,6 +125,7 @@ def main() -> None:
     parser.add_argument("--sha", required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--preview-sha", required=True)
+    parser.add_argument("--stage-sha", required=True)
     args = parser.parse_args()
     def load(file: Path) -> dict:
         return json.loads(file.read_text(encoding="utf-8"))
@@ -132,7 +133,7 @@ def main() -> None:
         evidence = verify_snapshot(
             load(args.preview_releases), load(args.preview_version),
             load(args.stage_releases), load(args.stage_version),
-            load(args.cloud_run), args.sha, args.revision, args.preview_sha,
+            load(args.cloud_run), args.sha, args.revision, args.preview_sha, args.stage_sha,
         )
     except (ValueError, KeyError, TypeError, OSError, json.JSONDecodeError) as exc:
         print(json.dumps({"status": "FAIL", "reason": str(exc)[:160]}))

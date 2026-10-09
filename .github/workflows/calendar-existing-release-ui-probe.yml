@@ -1,4 +1,4 @@
-# Replay: trace the second modal confirmation and actual Calendar DELETE request.
+# Replay: exercise actual keyboard activation of the Calendar confirmation button.
 # The push trigger applies only to the initial creation of this file.
 name: Calendar Existing Release UI Probe
 

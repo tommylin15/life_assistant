@@ -260,7 +260,10 @@ async function desktop(context) {
 
   await eventAction(page, '刪除', '更新後的會議');
   const confirm = await named(page, '確認刪除');
-  await confirm.click();
+  // Exercise keyboard activation as a real user would. Flutter Web's
+  // semantics overlay sometimes consumes pointer clicks during dialog pop.
+  await confirm.focus();
+  await confirm.press('Enter');
   await delay(500);
   await calendarDiagnostics(page, 'post-confirm');
   console.log('calendar_delete_request_count=' + state.deletes.length);

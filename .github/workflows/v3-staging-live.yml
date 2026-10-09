@@ -1,0 +1,207 @@
+name: V3 Staging Live - Pinned Version Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        required: true
+        description: Exact 40-character source SHA already verified in V3
+        type: string
+      candidate_revision:
+        required: true
+        description: Exact Cloud Run revision for the already-verified Preview
+        type: string
+      staging_oauth_e2e_run_id:
+        required: false
+        description: Successful separate true staging Google login acceptance run (apply only)
+        type: string
+      apply:
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  checks: read
+  actions: read
+  id-token: write
+
+# Staging is serialized with V3 production release: do not race candidate
+# promotion, pinned Hosting deployment or revision retention.
+concurrency:
+  group: life-assistant-v3-production-release
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    environment: dev-test
+    timeout-minutes: 35
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      REGION: us-central1
+      SERVICE: life-assistant-api
+      STAGE_SITE: life-assistant-v3-stage-tl15
+      PROD_SITE: gen-lang-client-0593591102
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      EXPECTED_REVISION: ${{ inputs.candidate_revision }}
+      STAGING_OAUTH_RUN_ID: ${{ inputs.staging_oauth_e2e_run_id }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          persist-credentials: false
+
+      - name: Fail closed on wrong main SHA, CI, unsafe site or revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$EXPECTED_REVISION" =~ ^life-assistant-api-[a-zA-Z0-9-]+$ ]]
+          test "$STAGE_SITE" = "life-assistant-v3-stage-tl15"
+          test "$PROD_SITE" = "gen-lang-client-0593591102"
+          test "$STAGE_SITE" != "$PROD_SITE"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/check-runs?per_page=100" |
+            jq -e '[.check_runs[] | select(.name=="flutter" or .name=="backend" or .name=="deployment-scripts") | select(.conclusion=="success") | .name] | unique | length==3'
+
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Read candidate and capture production Cloud Run traffic
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" --region "$REGION" --format=json > "$RUNNER_TEMP/run-before.json"
+          gcloud run revisions describe "$EXPECTED_REVISION" --project "$GCP_PROJECT_ID" --region "$REGION" --format=json > "$RUNNER_TEMP/revision.json"
+          jq -e '[.status.conditions[] | select(.type=="Ready" and .status=="True")] | length==1' "$RUNNER_TEMP/revision.json"
+          jq -e --arg rev "$EXPECTED_REVISION" '[.status.traffic[] | select(.revisionName==$rev)] | length>=1' "$RUNNER_TEMP/run-before.json"
+          jq -c '[.status.traffic[] | select((.percent//0)>0) | {revisionName,percent}] | sort_by(.revisionName)' "$RUNNER_TEMP/run-before.json" > "$RUNNER_TEMP/production-traffic-before.json"
+          jq -e 'map(.percent) | add == 100' "$RUNNER_TEMP/production-traffic-before.json"
+          IMAGE="$(jq -r '.spec.containers[0].image // empty' "$RUNNER_TEMP/revision.json")"
+          [[ "$IMAGE" =~ ^ghcr[.]io/tommylin15/life_assistant-backend@sha256:[0-9a-f]{64}$ ]]
+          DIGEST="$(docker buildx imagetools inspect "ghcr.io/tommylin15/life_assistant-backend:$RELEASE_SHA" --format '{{.Manifest.Digest}}')"
+          test "$IMAGE" = "ghcr.io/tommylin15/life_assistant-backend@$DIGEST"
+          echo "candidate_revision=PASS immutable_sha=$RELEASE_SHA rev=$EXPECTED_REVISION" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Read immutable Preview, previous staging live and production Hosting version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          API="https://firebasehosting.googleapis.com/v1beta1"
+          CHANNEL="v3-$(printf '%s' "$RELEASE_SHA" | cut -c1-10)"
+          get_json() {
+            curl --fail --silent --show-error --retry 3 --header "Authorization: Bearer $TOKEN" "$API/$1" -o "$2"
+          }
+          get_json "projects/$GCP_PROJECT_ID/sites/$STAGE_SITE" "$RUNNER_TEMP/site.json"
+          jq -e --arg site "$STAGE_SITE" '.name | endswith("/sites/"+$site)' "$RUNNER_TEMP/site.json"
+          get_json "sites/$STAGE_SITE/channels/$CHANNEL/releases?pageSize=5" "$RUNNER_TEMP/preview-releases.json"
+          get_json "sites/$STAGE_SITE/channels/live/releases?pageSize=5" "$RUNNER_TEMP/stage-releases.json"
+          get_json "sites/$PROD_SITE/channels/live/releases?pageSize=2" "$RUNNER_TEMP/prod-releases-before.json"
+          jq -e '.releases | length>=1' "$RUNNER_TEMP/prod-releases-before.json"
+          jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod-releases-before.json" > "$RUNNER_TEMP/prod-version-before.txt"
+          jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/preview-releases.json" > "$RUNNER_TEMP/preview-version-id.txt"
+          jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/stage-releases.json" > "$RUNNER_TEMP/stage-version-id.txt"
+          PREVIEW_ID="$(cat "$RUNNER_TEMP/preview-version-id.txt")"
+          STAGE_ID="$(cat "$RUNNER_TEMP/stage-version-id.txt")"
+          [[ "$PREVIEW_ID" == "sites/$STAGE_SITE/versions/"* ]]
+          [[ "$STAGE_ID" == "sites/$STAGE_SITE/versions/"* ]]
+          get_json "$PREVIEW_ID" "$RUNNER_TEMP/preview-version.json"
+          get_json "$STAGE_ID" "$RUNNER_TEMP/stage-version.json"
+
+      - name: Verify exact Preview version and both pinned backend rewrites
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANNEL="v3-$(printf '%s' "$RELEASE_SHA" | cut -c1-10)"
+          PREVIEW_URL="https://$STAGE_SITE--$CHANNEL.web.app"
+          # Hosting random preview host must come from provider channel metadata.
+          TOKEN="$(gcloud auth print-access-token)"
+          curl -fsS -H "Authorization: Bearer $TOKEN" "https://firebasehosting.googleapis.com/v1beta1/sites/$STAGE_SITE/channels/$CHANNEL" > "$RUNNER_TEMP/channel.json"
+          PREVIEW_URL="$(jq -r '.url // empty' "$RUNNER_TEMP/channel.json")"
+          [[ "$PREVIEW_URL" == https://"$STAGE_SITE"--*.web.app ]]
+          PREVIEW_SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "$PREVIEW_URL/release.txt")"
+          python .github/scripts/v3_staging_gate.py --preview-releases "$RUNNER_TEMP/preview-releases.json"             --preview-version "$RUNNER_TEMP/preview-version.json"             --stage-releases "$RUNNER_TEMP/stage-releases.json"             --stage-version "$RUNNER_TEMP/stage-version.json"             --cloud-run "$RUNNER_TEMP/run-before.json" --sha "$RELEASE_SHA"             --revision "$EXPECTED_REVISION" --preview-sha "$PREVIEW_SHA" > "$RUNNER_TEMP/gate.json"
+          jq -e '.status=="PASS"' "$RUNNER_TEMP/gate.json"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL/api/v1/free-events")" = 401
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL/auth/me")" = 401
+          curl -sS -D "$RUNNER_TEMP/login-headers.txt" -o /dev/null "$PREVIEW_URL/auth/login"
+          grep -Fiq 'location: https://accounts.google.com/' "$RUNNER_TEMP/login-headers.txt"
+          # The current production-only backend callback fails this staging gate.
+          grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' "$RUNNER_TEMP/login-headers.txt"
+          echo "preview_sha_pins_api_auth_oauth_redirect=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prohibit staging live mutation without independently verified true Google login
+        if: ${{ inputs.apply }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$STAGING_OAUTH_RUN_ID" =~ ^[0-9]{6,15}$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_OAUTH_RUN_ID" > "$RUNNER_TEMP/oauth-e2e-run.json"
+          jq -e --arg sha "$RELEASE_SHA" '.head_sha==$sha and .conclusion=="success" and .name=="V3 Staging Google OAuth E2E"' "$RUNNER_TEMP/oauth-e2e-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_OAUTH_RUN_ID/jobs?per_page=100" |
+            jq -e '[.jobs[] | select(.name=="staging-google-oauth-e2e" and .conclusion=="success")] | length==1'
+          echo "staging_real_oauth_e2e_preapproval=PASS run=$STAGING_OAUTH_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Release exact verified Preview Hosting version to staging live with rollback
+        if: ${{ inputs.apply }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          VERSION="$(cat "$RUNNER_TEMP/preview-version-id.txt")"
+          OLD_VERSION="$(cat "$RUNNER_TEMP/stage-version-id.txt")"
+          TOKEN="$(gcloud auth print-access-token)"
+          API="https://firebasehosting.googleapis.com/v1beta1"
+          mutated=0
+          rollback() {
+            code=$?
+            trap - ERR
+            if [ "$mutated" -eq 1 ]; then
+              if firebase hosting:clone "$STAGE_SITE:@$(basename "$OLD_VERSION")" "$STAGE_SITE:live" --project "$GCP_PROJECT_ID" --json > "$RUNNER_TEMP/rollback.json"; then
+                curl -fsS -H "Authorization: Bearer $(gcloud auth print-access-token)" "$API/sites/$STAGE_SITE/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/restored.json" || true
+                if jq -e --arg ver "$OLD_VERSION" '.releases | max_by(.releaseTime) | .version.name==$ver' "$RUNNER_TEMP/restored.json"; then
+                  echo "staging_rollback=PASS previous=$OLD_VERSION" >> "$GITHUB_STEP_SUMMARY"
+                else
+                  echo "::error::ROLLBACK FAIL: old version not confirmed"
+                fi
+              else
+                echo "::error::ROLLBACK FAIL: cloning previous verified version failed"
+              fi
+            fi
+            exit "$code"
+          }
+          trap rollback ERR
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_SHA"
+          # Recheck the previous live release to guard concurrent/unobserved changes.
+          curl -fsS -H "Authorization: Bearer $TOKEN" "$API/sites/$STAGE_SITE/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/live-pre-mutation.json"
+          jq -e --arg ver "$OLD_VERSION" '.releases | max_by(.releaseTime) | .version.name==$ver' "$RUNNER_TEMP/live-pre-mutation.json"
+          mutated=1
+          firebase hosting:clone "$STAGE_SITE:@$(basename "$VERSION")" "$STAGE_SITE:live" --project "$GCP_PROJECT_ID" --json > "$RUNNER_TEMP/clone.json"
+          curl -fsS -H "Authorization: Bearer $TOKEN" "$API/sites/$STAGE_SITE/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/live-after.json"
+          jq -e --arg ver "$VERSION" '.releases | max_by(.releaseTime) | .version.name==$ver' "$RUNNER_TEMP/live-after.json"
+          LIVE_URL="https://$STAGE_SITE.web.app"
+          test "$(curl -fsSL -H 'Cache-Control: no-cache' "$LIVE_URL/release.txt")" = "$RELEASE_SHA"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/api/v1/free-events")" = 401
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/auth/me")" = 401
+          curl -sS -D "$RUNNER_TEMP/live-login.txt" -o /dev/null "$LIVE_URL/auth/login"
+          grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' "$RUNNER_TEMP/live-login.txt"
+          gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" --region "$REGION" --format=json > "$RUNNER_TEMP/run-after.json"
+          jq -c '[.status.traffic[] | select((.percent//0)>0) | {revisionName,percent}] | sort_by(.revisionName)' "$RUNNER_TEMP/run-after.json" > "$RUNNER_TEMP/production-traffic-after.json"
+          cmp "$RUNNER_TEMP/production-traffic-before.json" "$RUNNER_TEMP/production-traffic-after.json"
+          curl -fsS -H "Authorization: Bearer $(gcloud auth print-access-token)" "$API/sites/$PROD_SITE/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/prod-releases-after.json"
+          test "$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod-releases-after.json")" = "$(cat "$RUNNER_TEMP/prod-version-before.txt")"
+          mutated=0
+          trap - ERR
+          echo "staging_live=PASS sha=$RELEASE_SHA version=$VERSION; production_hosting_and_traffic=UNCHANGED" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record preflight-only result when not publishing
+        if: ${{ !inputs.apply }}
+        run: |
+          echo "staging_live=NOT MODIFIED; guarded preflight only; true OAuth E2E not claimed" >> "$GITHUB_STEP_SUMMARY"

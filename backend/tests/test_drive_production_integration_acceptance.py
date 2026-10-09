@@ -310,7 +310,7 @@ class DriveAIProviderScopedDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
         ):
             await external_ai_acceptance.run_configured_providers()
         self.assertEqual(failure.exception.code, 93)
-        self.assertEqual([name for name, _ in seen], ["gemini", "groq", "openrouter"])
+        self.assertEqual([name for name, _ in seen], ["gemini", "gemini_lite", "groq", "openrouter"])
 
     async def test_scoped_gemini_failure_preserves_429_without_running_fallbacks(self):
         seen = []

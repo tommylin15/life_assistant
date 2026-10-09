@@ -101,7 +101,7 @@ class DriveAITransientRetryTests(unittest.IsolatedAsyncioTestCase):
 
 class DriveAIAcceptanceDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
     async def test_all_providers_run_and_failure_mask_identifies_gemini(self) -> None:
-        fake_run = AsyncMock(side_effect=[SystemExit(acceptance.EXIT_PROVIDER_FAILURE), None, None])
+        fake_run = AsyncMock(side_effect=[SystemExit(acceptance.EXIT_PROVIDER_FAILURE), None, None, None])
         with (
             patch.object(config.settings, "ai_enrichment_provider", "gemini"),
             patch.object(config.settings, "ai_enrichment_model", "latest-3-flash"),
@@ -115,14 +115,14 @@ class DriveAIAcceptanceDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
                 await acceptance.run_configured_providers()
 
         self.assertEqual(raised.exception.code, 91)
-        self.assertEqual(fake_run.await_count, 3)
+        self.assertEqual(fake_run.await_count, 4)
         self.assertEqual(
             [call.kwargs["provider_name"] for call in fake_run.await_args_list],
-            ["gemini", "openrouter", "groq"],
+            ["gemini", "gemini_lite", "groq", "openrouter"],
         )
 
     async def test_configuration_failure_keeps_specific_exit_code(self) -> None:
-        fake_run = AsyncMock(side_effect=[SystemExit(acceptance.EXIT_API_KEY_MISSING), None, None])
+        fake_run = AsyncMock(side_effect=[SystemExit(acceptance.EXIT_API_KEY_MISSING), None, None, None])
         with (
             patch.object(config.settings, "ai_enrichment_provider", "gemini"),
             patch.object(config.settings, "ai_enrichment_model", "latest-3-flash"),
@@ -136,7 +136,7 @@ class DriveAIAcceptanceDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
                 await acceptance.run_configured_providers()
 
         self.assertEqual(raised.exception.code, acceptance.EXIT_API_KEY_MISSING)
-        self.assertEqual(fake_run.await_count, 3)
+        self.assertEqual(fake_run.await_count, 4)
 
 
 if __name__ == "__main__":

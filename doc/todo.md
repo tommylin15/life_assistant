@@ -43,10 +43,13 @@
 
 ## Next
 
-1. #8 — Calendar 完整產品化：**NOT STARTED；新對話才開始**。
-2. #9 — Activity / Execution Log + Integrations productization。
-3. #10 — Integration / foundation tail closure。
-4. #11 — Phase 1 final Release Gate / 封板 checkpoint。
+1. **#8 — Calendar 完整產品化**：依 `doc/calendar_productization_checkpoint_v0_1.md` 的 implementation / tests / CI / deployment / runtime / true Google account / mobile+desktop UI gates 完成封板；不能因規劃新需求降低 Calendar gate。最新狀態須依 GitHub/runtime evidence，不沿用本檔較舊的「NOT STARTED」快照。
+2. **日曆後第一優先（P0 after Calendar）— 台灣免費活動探索與報名追蹤**：**PLANNED / NOT IMPLEMENTED**；[完整規格](taiwan_free_events_discovery_plan.md)。正式 GCP 定時工作尚未建置，ChatGPT 06:00/18:00 只是過渡；來源需先完成授權、時效、可用性、資料去重與保留規則確認。
+3. #9 — Activity / Execution Log + Integrations productization（保留，延後於上述新項目）。
+4. #10 — Integration / foundation tail closure（保留）。
+5. #11 — Phase 1 final Release Gate / 封板 checkpoint（保留原有必需驗收、不跳過）。
+
+> 本優先級異動由 `phase1_delivery_order.md` 單一正式排序文件維護。新增 Post-Calendar 工作軌不重算原 11-package 已完成比例；正式納入 release blocker 與否須另依 scope freeze 治理明示。
 
 ## Non-blocking backlog
 

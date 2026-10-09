@@ -60,3 +60,15 @@ Google all-day edit (preserving `date` rather than converting to `dateTime`) is 
 - Follow-up change: categorised exit codes (reauthorization 21, insufficient scope 22, upstream 23, unavailable 24, invalid output 26, DB 31, runtime 32), plus Flutter web semantic-tree diagnostics and renamed-action widget regression assertion. Fail-closed behavior remains.
 - Post-deploy #117 still ongoing at this checkpoint and must be read back separately.
 - Package status: PARTIAL (7/11 completed = 63.6%). #63 Gemini/OpenRouter remains independent OPEN/FAIL, not a Calendar gate.
+
+## 2026-10-09 V3 Calendar release and nested-Navigator defect
+
+- Exact V3 release SHA: `22a7ce68b18ee8b3a63bee630687ef0f4372240e`.
+- [V3 Release #37877453040](https://github.com/tommylin15/life_assistant/actions/runs/37877453040): **PASS**. Immutable GHCR image, 0% candidate, health/ready/auth, real database acceptance, hosting Preview, promoted live gates, rollback rehearsal, and latest-10 revision retention PASS.
+- [Firebase Hosting #37879523958](https://github.com/tommylin15/life_assistant/actions/runs/37879523958): **PASS** on same SHA.
+- [Calendar True Account #37879525880](https://github.com/tommylin15/life_assistant/actions/runs/37879525880): **PASS** on same SHA (real authorized read/list, no mutations). Historical True Account #4 FAIL is superseded by this success; do not mislabel prior failure as permanent.
+- [Calendar UI #37879748204](https://github.com/tommylin15/life_assistant/actions/runs/37879748204): **FAIL** after list/all-day, create/timezone and update PASS. Production browser could not complete confirmed delete.
+- Read-only same-production browser probes `37882121944`, `37882239050`, `37882379553` confirmed first delete action exists and works, cancel leaves no provider mutation, but subsequent confirmation did not dispatch DELETE; after dialog dismissal Flutter semantic tree could be empty.
+- Root-cause code finding: `lib/web/calendar_page.dart` constructed dialog with root Navigator default, but used the Calendar page's possibly nested `context` to `Navigator.pop`. Product fix `3e607ca146184e778613cf28b80ec7db6566efdb` now pops with `dialogContext`; adds nested-Navigator widget regression plus browser no-reload cancel-confirm acceptance.
+- All-day event create/update preservation of `date` and exclusive `end.date` implemented in commits `44f9d6d` and `97c6bf3`; local/CI tests were PASS, but new root-Navigator fix requires a fresh CI + V3 release and UI acceptance.
+- **Package #8 = PARTIAL, Phase 1 remains 7/11 (63.6%).** No DONE until new exact-SHA CI, V3/Firebase production, desktop/mobile UI delete/cancel/all-day and real account acceptance all PASS. Distinguish mocked UI provider test from true Google read/list.

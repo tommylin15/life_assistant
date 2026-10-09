@@ -1,5 +1,5 @@
-# Replay: exercise actual keyboard activation of the Calendar confirmation button.
-# The push trigger applies only to the initial creation of this file.
+# Manual, read-only browser probe for a user-specified already deployed release.
+# No automatic push triggers, and never performs deployment.
 name: Calendar Existing Release UI Probe
 
 on:
@@ -9,10 +9,6 @@ on:
         description: "Existing Firebase release SHA; this probe does not deploy"
         required: true
         type: string
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/calendar-existing-release-ui-probe.yml
 
 permissions:
   contents: read
@@ -23,7 +19,7 @@ jobs:
     timeout-minutes: 20
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102
-      EXPECTED_RELEASE_SHA: ${{ inputs.expected_release_sha || '22a7ce68b18ee8b3a63bee630687ef0f4372240e' }}
+      EXPECTED_RELEASE_SHA: ${{ inputs.expected_release_sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

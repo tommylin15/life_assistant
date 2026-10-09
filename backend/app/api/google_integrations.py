@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.parse import quote
 
 import httpx
@@ -122,14 +122,28 @@ def _validate_calendar_times(start: datetime, end: datetime) -> None:
 
 class CalendarEventCreate(BaseModel):
     summary: str = Field(min_length=1, max_length=500)
-    start: datetime
-    end: datetime
+    start: datetime | None = None
+    end: datetime | None = None
+    start_date: date | None = None
+    end_date: date | None = None
     description: str | None = Field(default=None, max_length=5000)
     location: str | None = Field(default=None, max_length=1000)
 
     @model_validator(mode="after")
     def validate_times(self):
-        _validate_calendar_times(self.start, self.end)
+        timed = self.start is not None or self.end is not None
+        all_day = self.start_date is not None or self.end_date is not None
+        if timed == all_day:
+            raise ValueError("Provide either timed or all-day Calendar dates")
+        if timed:
+            if self.start is None or self.end is None:
+                raise ValueError("Calendar timed start and end must be paired")
+            _validate_calendar_times(self.start, self.end)
+        else:
+            if self.start_date is None or self.end_date is None:
+                raise ValueError("Calendar all-day dates must be paired")
+            if self.end_date <= self.start_date:
+                raise ValueError("Calendar all-day end date must be exclusive and later")
         return self
 
 
@@ -137,6 +151,8 @@ class CalendarEventUpdate(BaseModel):
     summary: str | None = Field(default=None, min_length=1, max_length=500)
     start: datetime | None = None
     end: datetime | None = None
+    start_date: date | None = None
+    end_date: date | None = None
     description: str | None = Field(default=None, max_length=5000)
     location: str | None = Field(default=None, max_length=1000)
 
@@ -147,14 +163,19 @@ class CalendarEventUpdate(BaseModel):
             raise ValueError("At least one Calendar event field must be provided")
         if "summary" in fields and self.summary is None:
             raise ValueError("Calendar event summary cannot be null")
-        has_start = "start" in fields
-        has_end = "end" in fields
-        if has_start != has_end:
-            raise ValueError("Calendar event start and end must be updated together")
-        if has_start:
-            if self.start is None or self.end is None:
-                raise ValueError("Calendar event start and end cannot be null")
+        timed = bool({"start", "end"} & fields)
+        all_day = bool({"start_date", "end_date"} & fields)
+        if timed and all_day:
+            raise ValueError("Calendar dates and dateTimes cannot be mixed")
+        if timed:
+            if not {"start", "end"} <= fields or self.start is None or self.end is None:
+                raise ValueError("Calendar timed start/end must be paired")
             _validate_calendar_times(self.start, self.end)
+        if all_day:
+            if not {"start_date", "end_date"} <= fields or self.start_date is None or self.end_date is None:
+                raise ValueError("Calendar all-day start/end dates must be paired")
+            if self.end_date <= self.start_date:
+                raise ValueError("Calendar all-day end date must be exclusive and later")
         return self
 
 
@@ -408,16 +429,20 @@ def _to_rfc3339(value: datetime) -> str:
 
 def _calendar_create_payload(
     summary: str,
-    start: datetime,
-    end: datetime,
+    start: datetime | None,
+    end: datetime | None,
     description: str | None,
     location: str | None,
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> dict:
-    payload = {
-        "summary": summary,
-        "start": {"dateTime": start.isoformat()},
-        "end": {"dateTime": end.isoformat()},
-    }
+    # Google Calendar all-day end.date is exclusive.
+    dates = (
+        {"start": {"date": start_date.isoformat()}, "end": {"date": end_date.isoformat()}}
+        if start_date is not None and end_date is not None
+        else {"start": {"dateTime": start.isoformat()}, "end": {"dateTime": end.isoformat()}}
+    )
+    payload = {"summary": summary, **dates}
     if description is not None:
         payload["description"] = description
     if location is not None:
@@ -480,6 +505,8 @@ async def create_calendar_event(
                 body.end,
                 body.description,
                 body.location,
+                body.start_date,
+                body.end_date,
             ),
         )
         event = response.json()
@@ -514,6 +541,9 @@ async def update_calendar_event(
     if "start" in fields:
         payload["start"] = {"dateTime": body.start.isoformat()}
         payload["end"] = {"dateTime": body.end.isoformat()}
+    if "start_date" in fields:
+        payload["start"] = {"date": body.start_date.isoformat()}
+        payload["end"] = {"date": body.end_date.isoformat()}
 
     execution = await start_execution(
         db,

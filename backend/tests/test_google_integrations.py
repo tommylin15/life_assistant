@@ -6,6 +6,7 @@ from app.api.google_integrations import (
     CAPABILITIES,
     CalendarEventCreate,
     CalendarEventUpdate,
+    _calendar_create_payload,
     GmailToCalendarCreate,
     GmailToTaskCreate,
 )
@@ -138,6 +139,42 @@ class GoogleIntegrationContractTests(TestCase):
         )
         self.assertIsNotNone(timed.start)
         self.assertIsNotNone(timed.end)
+
+    def test_all_day_create_preserves_civil_dates_and_exclusive_end(self):
+        event = CalendarEventCreate(
+            summary="Holiday", start_date="2026-10-09", end_date="2026-10-10"
+        )
+        payload = _calendar_create_payload(
+            event.summary, event.start, event.end, event.description,
+            event.location, event.start_date, event.end_date,
+        )
+        self.assertEqual(payload["start"], {"date": "2026-10-09"})
+        self.assertEqual(payload["end"], {"date": "2026-10-10"})
+        for invalid in (
+            {"start_date": "2026-10-09"},
+            {"start_date": "2026-10-09", "end_date": "2026-10-09"},
+            {"start_date": "2026-10-10", "end_date": "2026-10-09"},
+            {"start_date": "2026-10-09", "end_date": "2026-10-10",
+             "start": "2026-10-09T10:00:00+08:00",
+             "end": "2026-10-09T11:00:00+08:00"},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                CalendarEventCreate(summary="Invalid", **invalid)
+
+    def test_all_day_update_dates_are_paired_and_not_mixed(self):
+        update = CalendarEventUpdate(
+            summary="New holiday", start_date="2026-10-09", end_date="2026-10-12"
+        )
+        self.assertEqual(update.end_date.isoformat(), "2026-10-12")
+        for invalid in (
+            {"start_date": "2026-10-09"},
+            {"start_date": "2026-10-09", "end_date": "2026-10-09"},
+            {"start_date": "2026-10-09", "end_date": "2026-10-10",
+             "start": "2026-10-09T10:00:00+08:00",
+             "end": "2026-10-09T11:00:00+08:00"},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                CalendarEventUpdate(**invalid)
 
     def test_gmail_to_calendar_requires_explicit_valid_time_range(self):
         with self.assertRaises(ValueError):

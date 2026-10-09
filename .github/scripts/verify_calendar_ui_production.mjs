@@ -122,13 +122,43 @@ async function named(page, name, timeout = 12000) {
   throw new Error('Calendar locator missing: ' + pattern);
 }
 
-// Flutter exposes event-card action semantics only within the scroll viewport.
+// Keep Flutter's accessibility overlay active when dialogs cause a rebuild.
+// Never replace a real delete click with a fake request or a synthetic callback.
+async function calendarDiagnostics(page, phase) {
+  const snapshot = await page.evaluate(() => ({
+    path: location.pathname,
+    ready: document.readyState,
+    flutterViews: document.querySelectorAll('flutter-view').length,
+    placeholders: document.querySelectorAll('flt-semantics-placeholder').length,
+    semanticsCount: document.querySelectorAll('flt-semantics').length,
+    roles: [...document.querySelectorAll('[role]')].slice(0, 35)
+      .map(el => ({role: el.getAttribute('role'), label: el.getAttribute('aria-label'),
+        text: (el.textContent || '').slice(0, 90)})),
+    semantics: [...document.querySelectorAll('flt-semantics')].slice(0, 25)
+      .map(el => ({tag: el.tagName, role: el.getAttribute('role'),
+        label: el.getAttribute('aria-label'), text: (el.textContent || '').slice(0, 90)})),
+  })).catch(error => ({diagnosticsError: String(error).slice(0, 160)}));
+  console.log('calendar_semantics_probe=' + phase + ':' + JSON.stringify(snapshot));
+}
+
 async function eventAction(page, verb, title) {
   const expected = verb + '行程：' + title;
+  // Keyboard input reactivates Web semantics when the modal closes.
+  await page.keyboard.press('Tab');
+  await semantics(page);
+  await calendarDiagnostics(page, 'pre-' + verb);
+
+  // Prefer the named title as a scroll anchor over a hard-coded screen point.
+  const anchor = page.getByText(title, { exact: false }).first();
+  if (await anchor.count()) {
+    await anchor.scrollIntoViewIfNeeded({ timeout: 1800 }).catch(() => {});
+  }
   await page.mouse.move(950, 650);
   await page.mouse.wheel(0, -3500);
-  await delay(260);
-  for (let scroll = 0; scroll < 12; scroll += 1) {
+  await delay(350);
+
+  for (let scroll = 0; scroll < 16; scroll += 1) {
+    await semantics(page);
     const locators = [
       page.getByRole('button', { name: expected, exact: true }),
       page.getByLabel(expected, { exact: true }),
@@ -138,32 +168,19 @@ async function eventAction(page, verb, title) {
         const item = locator.nth(i);
         if (await item.isVisible().catch(() => false)) {
           await item.click();
+          console.log('calendar_action_click=PASS verb=' + verb);
           return;
         }
       }
     }
-    await page.mouse.wheel(0, 260);
-    await delay(260);
+    if (scroll === 0 || scroll === 7 || scroll === 15) {
+      await calendarDiagnostics(page, 'scroll-' + scroll);
+    }
+    await page.mouse.wheel(0, 200);
+    await delay(280);
   }
-  const diagnostics = await page.evaluate(() => ({
-    href: location.pathname,
-    flutterViews: document.querySelectorAll('flutter-view').length,
-    placeholders: document.querySelectorAll('flt-semantics-placeholder').length,
-    semantics: [...document.querySelectorAll('flt-semantics')]
-      .slice(0, 90).map(el => ({
-        role: el.getAttribute('role'),
-        aria: el.getAttribute('aria-label'),
-        text: (el.textContent || '').slice(0, 100),
-      })),
-    buttons: [...document.querySelectorAll('[role=button]')]
-      .slice(0, 50).map(el => ({
-        role: el.getAttribute('role'),
-        aria: el.getAttribute('aria-label'),
-        text: (el.textContent || '').slice(0, 70),
-      })),
-  }));
-  throw new Error('Missing Calendar action ' + expected +
-    ' after scrolling; diagnostics=' + JSON.stringify(diagnostics));
+  await calendarDiagnostics(page, 'missing-' + verb);
+  throw new Error('Missing Calendar action ' + expected + ' after accessibility recovery and scrolling');
 }
 
 async function observed(predicate, label) {
@@ -188,6 +205,8 @@ async function setTitle(page, value) {
 
 async function desktop(context) {
   const page = await context.newPage();
+  page.on('crash', () => console.error('calendar_browser_event=PAGE_CRASH'));
+  page.on('pageerror', error => console.error('calendar_browser_pageerror=' + String(error).slice(0, 350)));
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.clock.setFixedTime(new Date('2026-10-08T00:00:00Z'));
   const state = initialState();
@@ -282,7 +301,8 @@ try {
   console.error(error);
   for (const context of browser.contexts()) {
     for (const page of context.pages()) {
-      await page.screenshot({ path: '/tmp/calendar-ui-acceptance.png', fullPage: true }).catch(() => {});
+      await page.screenshot({ path: '/tmp/calendar-ui-acceptance.png', fullPage: true })
+        .catch(error => console.error('calendar_screenshot_failure=' + String(error).slice(0, 220)));
     }
   }
   process.exitCode = 1;

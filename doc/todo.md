@@ -17,6 +17,17 @@
 - Source Registry、Organizer/Event/Session/Registration Opportunity schema 與 M1 additive migration 0011 + lease 0012 已寫入 main，隔離 PostgreSQL CI PASS；正式 DB migration 與 live source ingestion 尚未執行。
 - 追蹤 MVP：M1 官方 adapter/增量去重/AI 0 無變更；M2 Flutter 候選+admin-only 健康；M3 用戶獨立 opt-in reminders/tasks/notes；M4 06:00/18:00 Cloud Scheduler → authenticated Run → PostgreSQL，通過後才停用 ChatGPT 過渡掃描。
 
+
+### P0 新增工項 — 免費／高性價比活動自動候選入庫與跨來源去重（NOT IMPLEMENTED）
+
+- [ ] 將合法來源掃描得到的**免費**或**已查證福利價值至少為不可退實際支出 3 倍**的活動，透過經授權的 FastAPI 批次入口寫入共用 PostgreSQL 候選資料；不可把 ChatGPT 過渡通知當作已入庫。費用需包含手續費/材料費；可退保證金分開記錄及註明退還條件。估值不明維持待確認，不偽稱達標。
+- [ ] Additive migration 擴充活動費用、保證金、確定福利、估值證據、查證時間與狀態；保留既有免費資料和來源驗證 gate。建立 authenticated / rate-limited / idempotent candidate batch API，僅允許候選資料寫入，禁止直接設定 verified 或建立個人 Calendar、提醒、Task、Note。
+- [ ] **強制去重（release blocker）**：優先以 `source_id + external_event_id`、官方活動 ID、canonical 官方 URL 去重；去除 URL tracking params，維持跨站 alias / source mapping；再以主辦單位＋活動名稱＋日期／地點產生疑似重複待審，不得自動合併不同場次、票種、報名窗口或同名不同活動。資料庫唯一鍵＋交易式 UPSERT＋併發鎖，確保兩輪掃描、重試、不同網站引用同一官方活動時**一個 Event 可對應多個來源，但每個 Session／Opportunity 不重複**。不確定的跨站比對不刪資料，轉人工審查。
+- [ ] **通知去重**：以 canonical event/session/opportunity + semantic version + recipient 作唯一投遞鍵；同一活動已通報不再推送，只有新報名窗口、取消、延期、費用或福利重大變更才重新通知。不得以來源文字更新產生重複通知；保留最小 tombstone 防過期清理後重報。
+- [ ] 測試涵蓋同站重掃、跨站同活動、不同場次/票種、URL tracking、併發 4 worker、重試/中斷、未知欄位、3 倍福利門檻、通知 exactly-once 語意與禁止個人資料 mutation；CI → V3 deployment → production PostgreSQL migration/readback → Flutter 清單與真實排程逐項 PASS 才可 DONE。
+
+詳細契約：[`free_events_candidate_ingestion_contract.md`](free_events_candidate_ingestion_contract.md)。本工項與現有 M1–M4 合併執行，不另外建立重複掃描系統。
+
 **Phase 1 scope-freeze：** 活動 MVP 插入優先序但不自動變更原 11 包分母；是否納入最終 Phase 1 release blocker 需另明示治理決策，不能推斷。
 
 ## Next — 原 Phase 1 工作包

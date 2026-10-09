@@ -30,6 +30,12 @@
 
 **Phase 1 scope-freeze：** 活動 MVP 插入優先序但不自動變更原 11 包分母；是否納入最終 Phase 1 release blocker 需另明示治理決策，不能推斷。
 
+## 2026-10-09 P0/P1 工程啟動續作
+
+- **P0 統計讀回替代實作：** 新增只有明確 `ALLOWED_GOOGLE_EMAIL` owner session 才可使用的聚合 API `GET /api/v1/free-events/status` 與單元測試；GitHub Actions Cloud Logging 權限原 FAIL 未解除，正式 owner HTTPS／實際 rows/14-day/去重計量仍 **NOT VERIFIED**。後續需按 V3 release gate 發布驗證，不可用測試資料冒充結果。
+- **P1 staging 固定網址：** 新增版本／pins／前版 SHA readback 的 fail-closed verifier + 12 項以上回歸測試、CI gate 與 manual-only `v3-staging-live.yml`。它具有 staging-only exact-version clone 與失敗回復程式路徑，正式 production 隔離條件必須 readback；**固定 staging 真實 OAuth E2E、首次可信前版 baseline、workflow GCP runtime 與 live URL 驗收尚未 PASS**。預設 preflight，不會因 main push 直接更新 staging live。詳細見 `deployment_runbook.md`。
+- 原 Phase 1 仍 **8/11**；P0、P1 都不能因 implementation／CI 完成便標記 DONE。
+
 ## Next — 原 Phase 1 工作包
 
 - #9 Activity / Execution Log + Integrations 產品化 — NOT STARTED。

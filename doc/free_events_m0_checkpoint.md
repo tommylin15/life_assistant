@@ -1,0 +1,32 @@
+# Taiwan Free Events — M0 Source & Freshness Baseline Checkpoint
+
+Date: 2026-10-09. Status: **PARTIAL / NOT VERIFIED**. Calendar #8 is closed; M0 is the next approved priority.
+
+## Explicit evidence and access decisions
+
+| Source | Official evidence | Licensing / access boundary | Operational state |
+|---|---|---|---|
+| Ministry of Culture all-category arts events | https://data.gov.tw/dataset/6478 | Listing states Government Open Data License v1 and daily updates; API endpoint behavior, service rate/robots still must be reviewed separately | CATALOGUED / FETCH DISABLED |
+| Ministry of Culture per-event detail | https://opendata.culture.tw/frontsite/openData/detail?datasetId=311 | Official licensed dataset; do not conflate permission for dataset use with unlimited site requests | CATALOGUED / FETCH DISABLED |
+| TDX tourism events | https://tdx.transportdata.tw/api-service/swagger/tourism/0aed433a-9e95-404d-974c-4e70e29ae460 | Official Tourism V2 API; API credentials, quota and access terms required | CATALOGUED / FETCH DISABLED |
+| data.gov.tw directory | https://data.gov.tw/ | Dataset discovery only; individual dataset terms must be checked | CATALOGUED / FETCH DISABLED |
+| EventGo / BeClass / yii.tw / Citytalk / ACCUPASS / KKTIX | User-requested candidate URLs in `data/free_events_m0_sources.json` | robots, ToS, API, RSS and individual host permission **NOT VERIFIED**; may supply candidates only after lawful access, never sole proof that registration is open | CANDIDATES / FETCH DISABLED |
+
+The Government Open Data License listing is verified as metadata, but no request quota or repeated automated fetch authorization is inferred. No runtime ingestion or Cloud Scheduler has been enabled by this checkpoint.
+
+## Minimal implementation for M0
+
+- `data/free_events_m0_sources.json`: versioned registry with provenance, license-evidence URL, endpoint-doc URL, manual access review, API-key requirement, expected interval and fail-closed `enabled_for_fetch=false`.
+- `scripts/free_events_m0_baseline.py`: offline-only JSONL observation evaluator; HTTPS/provenance validation; rejects future or naive timestamps, impossible publication lag, unknown source, missing free-status truth. Computes per-source day coverage, consecutive-day span, unknown fee and registration starts, official-verified vs unverified free counts, publication-lag sample means only when publish timestamps exist.
+- `backend/tests/test_free_events_m0_baseline.py`: no-fetch default, 14-day fixture not faked as production PASS, missing-day failure, source/license authorization guard, unknown values, temporal and pricing rules.
+- Example invocation after acquiring independent authorized observations: `python scripts/free_events_m0_baseline.py --observations path/to/reviewed_observations.jsonl --as-of 2026-10-23T00:00:00+00:00`. No network I/O.
+
+## Still required before M0 PASS
+
+1. Human/source-specific robots/ToS, API terms, quotas and attribution review; only turn on fetch adapters for explicitly approved endpoints, starting with official datasets. Keep source proof and expiry.
+2. Record **at least 14 contiguous actual observation days** (not mocked fixtures), sources and official organizer/registration proof, and publication→discovery latency. These observations are currently **NOT VERIFIED**; no source freshness, availability or discovery-rate numbers exist yet.
+3. Curate verified FREE, CONDITIONAL FREE, PAID and UNKNOWN counterexamples across multiple sessions and separate registration opportunities. Unknown times remain null; never infer open time or fees.
+4. Review Organizer/Event/Session/Registration Opportunity minimal schema and migration plan **before** M1 PostgreSQL mutation. M0 audit does not create production tables.
+5. Accept explicit cost/precision/freshness thresholds using real baseline; decide Phase 1 final-gate scope freeze explicitly. Existing temporary ChatGPT scans are not the app ingestion pipeline.
+
+The M0 script never publishes an overall `PASS`; operator acceptance is mandatory after 14-day evidence and source reviews. Implementation + tests alone = **PARTIAL**. Date 2026-10-09 is the registry creation day, not a fabricated observation day.

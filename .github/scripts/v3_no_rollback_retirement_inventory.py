@@ -214,8 +214,24 @@ def gcs_candidates():
                 lower = key.lower()
                 is_root_log = bool(re.fullmatch(
                     r"log-[0-9a-f]{8}-[0-9a-f-]{20,50}(?:[.]txt|[.]log)?", lower))
+                nested_ci_prefix = bool(
+                    "/" in key and re.match(
+                        r"^(?:cloudbuild|gcb|build[-_]|logs?[-_]|source[-_]|artifacts?[-_])",
+                        prefix.lower(),
+                    )
+                )
+                uuid_folder = bool(
+                    "/" in key and re.fullmatch(
+                        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                        prefix.lower(),
+                    )
+                )
                 if prefix in SAFE_CI_PREFIXES:
                     group_key = prefix
+                elif nested_ci_prefix:
+                    group_key = "<build-like-nested-prefix>"
+                elif uuid_folder:
+                    group_key = "<uuid-nested-prefix>"
                 elif is_root_log:
                     group_key = "<cloud-build-root-log>"
                 elif "/" not in key and lower.startswith("log-"):
@@ -235,7 +251,7 @@ def gcs_candidates():
                 # candidates when not protected by data-sensitive name patterns.
                 candidate = (not protected and
                              (prefix in SAFE_CI_PREFIXES or is_root_log
-                              or bucket.startswith("run-sources-")))
+                              or nested_ci_prefix or bucket.startswith("run-sources-")))
                 if candidate:
                     g["candidate_objects"] += 1
                     g["candidate_bytes"] += size

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "updated_on": "2026-10-09",
-  "policy": "No automated network fetch until source-specific service-access review. EventGo terms (2026-04-23) prohibit bulk automated access; written permission and robots review required. BeClass is excluded.",
+  "policy": "No automated network fetch until source-specific service-access review. EventGo terms (2026-04-23) restrict bulk automated access; written permission and robots review required. BeClass is not a direct crawl source; third-party-discovered BeClass registration links must be preserved without fetching BeClass.",
   "sources": [
     {
       "id": "moc_events_all",

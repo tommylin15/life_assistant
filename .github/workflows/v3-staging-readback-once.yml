@@ -57,13 +57,13 @@ jobs:
               rows=[x for x in version.get("config",{}).get("rewrites",[]) if x.get("glob")==path]
               print(f"rewrite_{path}="+("PINNED" if len(rows)==1 and rows[0].get("run",{}).get("tag") else "NOT_VERIFIED"))
           PY
-                echo "stage_live=EXISTS version=$version" >> "$GITHUB_STEP_SUMMARY"
+                echo "stage_live=EXISTS version=$version" | tee -a "$GITHUB_STEP_SUMMARY"
               else
-                echo "stage_live=NO_RELEASE; bootstrap_needed=TRUE" >> "$GITHUB_STEP_SUMMARY"
+                echo "stage_live=NO_RELEASE; bootstrap_needed=TRUE" | tee -a "$GITHUB_STEP_SUMMARY"
               fi
               ;;
             404)
-              echo "stage_live=NOT_FOUND; bootstrap_needed=TRUE" >> "$GITHUB_STEP_SUMMARY"
+              echo "stage_live=NOT_FOUND; bootstrap_needed=TRUE" | tee -a "$GITHUB_STEP_SUMMARY"
               ;;
             *)
               echo "::error::Firebase staging live readback failure status=$stage_status"
@@ -71,7 +71,7 @@ jobs:
           esac
           test "$(fetch_status "sites/$PROJECT/channels/live/releases?pageSize=2" "$RUNNER_TEMP/prod.json")" = 200
           jq -e '.releases | length>=1' "$RUNNER_TEMP/prod.json"
-          echo "production_hosting_version=$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod.json")" >> "$GITHUB_STEP_SUMMARY"
+          echo "production_hosting_version=$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod.json")" | tee -a "$GITHUB_STEP_SUMMARY"
           gcloud run services describe life-assistant-api --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/cloudrun.json"
           jq -e '[.status.traffic[] | select((.percent//0)>0) | .percent] | add==100' "$RUNNER_TEMP/cloudrun.json"
           echo "production_cloud_run_readback=PASS" >> "$GITHUB_STEP_SUMMARY"
@@ -84,10 +84,9 @@ jobs:
           STAGE_URL="https://$STAGE.web.app"
           for path in /release.txt /api/v1/free-events /api/v1/free-events/status /auth/me /auth/login; do
             result="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$STAGE_URL$path" || true)"
-            echo "stage_.github/workflows/v3-staging-readback-once.yml=$result" >> "$GITHUB_STEP_SUMMARY"
+            echo "stage_${path}=$result" | tee -a "$GITHUB_STEP_SUMMARY"
           done
           PROD_URL="https://$PROJECT.web.app"
           PROD_401="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$PROD_URL/api/v1/free-events/status")"
-          test "$PROD_401" = 401 || { echo "production_free_events_owner_boundary=NOT_VERIFIED status=$PROD_401" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
-          echo "production_free_events_owner_boundary=PASS unauthenticated_401" >> "$GITHUB_STEP_SUMMARY"
-          echo "Aggregate owner counts and full OAuth callback remain NOT VERIFIED without real owner session" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$PROD_401" != 401 ]; then echo "production_free_events_owner_boundary=NOT_VERIFIED status=$PROD_401" | tee -a "$GITHUB_STEP_SUMMARY"; else echo "production_free_events_owner_boundary=PASS unauthenticated_401" | tee -a "$GITHUB_STEP_SUMMARY"; fi
+                    echo "Aggregate owner counts and full OAuth callback remain NOT VERIFIED without real owner session" >> "$GITHUB_STEP_SUMMARY"

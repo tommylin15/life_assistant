@@ -1,9 +1,22 @@
 # life_assistant CI/CD V3 — GitHub Actions + public GHCR + Cloud Run digest
 
 **Decision date:** 2026-10-08  
-**State:** V3 WORKFLOWS COMMITTED / ACTUAL GHCR-CLOUD RUN RELEASE AND INTEGRATION NOT VERIFIED  
+**State (2026-10-09):** V3 promoted deployment PASS, old Cloud Build triggers 5/5 disabled PASS, scoped obsolete GCS/AR resources removed PASS; subsequent releases and end-to-end integration must be verified per run; Phase 1 overall PARTIAL.  
 **Owner:** life_assistant; applies to `tommylin15/life_assistant` main.  
 **Authority:** This document and the latest V3 section of `PROJECT_RULES.md` supersede the Cloud Build-led CI/CD V2 target. Earlier V2 runbooks and acceptance records remain historical evidence, not instructions to keep operating Cloud Build in the new path.
+
+## 0. 現行生效狀態／2026-10-09 稽核註記
+
+本檔為 V3 policy 的核准設計，以下是與 2026-10-08 舊「未實作」文字不同的 **已實際驗證**狀態：
+
+- GitHub Actions V3 promoted release [run 37795789924](https://github.com/tommylin15/life_assistant/actions/runs/37795789924)：PASS；GHCR digest `sha256:b06254c2db22489295c2a82928ea19a6352193fd7b0c72f1041040f22bc0d7b1`。
+- Cloud Run `life-assistant-api-00183-hax`：Ready/Active/ContainerHealthy/ContainerReady/ResourcesAvailable 都為 `True`；供應映像為 GHCR digest cache，而不是 user-managed AR。
+- Cloud Build Triggers 五個 `disabled=true`（包含 life_assistant、Janus、OmniAgent）。觸發器未刪除定義，只停用。
+- 兩個 Cloud Build GCS Buckets、`run-sources-*` Bucket 已消失（404）；舊 AR `cloud-run-source-deploy`、`janusai-poc`、`omniagent` 三個 Repository 已消失。GCP readback [run 37867249614](https://github.com/tommylin15/life_assistant/actions/runs/37867249614) **PASS**，AR 4→1 / GCS 8→5。
+- **最新 AR 保存政策已由使用者修正：只保留「現役 runtime/CI deployment 確實依賴」的 Docker 映像；不以舊 Cloud Run Revision 回滾、或「最新 Digest」為獨立保存理由。** 這僅適用 user-managed AR 清理，不代表應刪除 GHCR manifest、當前容器依賴或 PostgreSQL 備份。
+- `janus-postgres/postgres:16.15` 仍存一個 Digest：Cloud Run 未發現引用，但 VM/資料庫容器依賴 `NOT VERIFIED`，暫時保留；五個 `dev-*` GCS Buckets 也保留。
+- 2026-10-09 清理後資產不存在已 `PASS`；原始逐 Digest/逐 object 刪除事件、成本節省、所有區域/VM/in-flight 依賴及最新 Revision 總數未逐項證實者 **不能標 PASS**。
+- 規格中涉及遷移前切流順序、Bootstrap 未實作或舊資產尚未刪除的敘述屬 **當時條件與歷史要求**，不是目前實際狀態；目前實作與驗收參照 [`v3_cleanup_and_cutover_inventory.md`](v3_cleanup_and_cutover_inventory.md)。
 
 ## 1. Non-negotiable boundaries
 
@@ -65,7 +78,7 @@ Public container metadata and layers are pullable by third parties. Never bake t
 
 ### F — Post-acceptance Cloud Run revision retention (latest 10)
 
-**Approved retention target:** keep the **10 most recently created Cloud Run revisions** of the existing `life-assistant-api` service, not two. This is a target for **the future V3 deployment pipeline**, not an authorization to run immediate GCP deletion. Keep one stable Cloud Run service and its stable URL; revision names and traffic assignments can change without modifying Google OAuth redirect URIs.
+**Approved retention target:** keep the **10 most recently created Cloud Run revisions** of the existing `life-assistant-api` service, not two. This retention policy has an implemented V3 release workflow, but this documentation change does not authorize immediate revision deletion; actual per-service revision count remains subject to post-deploy readback. Keep one stable Cloud Run service and its stable URL; revision names and traffic assignments can change without modifying Google OAuth redirect URIs.
 
 - **Ordering and timing:** after a release is promoted and the entire required **live** smoke/OAuth/integration/runtime gate set reports PASS, run an idempotent, serialized cleanup step **at the very end** of that successful release workflow. Candidate/Preview-only, failed, cancelled, partially verified and rolled-back executions **must not clean up**. A temporary 11th revision during deployment is expected.
 - **Inventory:** fetch the exact project's `us-central1/life-assistant-api` service and revision list; sort revisions by server-reported creation time descending with a deterministic name tie-breaker. Compute the newest ten, review live traffic assignments, active candidate/preview/rollback tags, in-progress deployments and captured prior live traffic. Never list/delete revisions from unrelated services or jobs.
@@ -98,4 +111,4 @@ ChatGPT reads **GitHub Actions run/job logs** through its connected GitHub acces
 4. Once new workflow is verified, **disable old Cloud Build push/manual release triggers** and retire legacy GitHub Actions Cloud Build submit paths, without removing past logs or artifacts. This change requires actual GCP/readback evidence and is **not performed by documentation commit**.
 5. Record Actions run, source SHA, public GHCR digest/readback, WIF identity, Cloud Run revision/0% state, candidate and Preview results, promotion/rollback simulations, live runtime/integration, plus absence of new pipeline Cloud Build/GCS/Artifact Registry API writes. Cost comparison must be measured, not assumed.
 
-**Release status:** documentation and decision may be PASS while **implementation / tests / CI / deployment / runtime / integration = NOT VERIFIED** until observed. Mark overall **PARTIAL** until all required evidence PASS. Failures and historical V2 traces must remain visible, not be relabeled green.
+**Latest verified release status (2026-10-09):** V3 deployment/production-ready service / five disabled legacy triggers / scoped legacy GCS+AR resource removal **PASS** on the run IDs in §0. A new release still requires its own tests/deployment/runtime/integration evidence; neither this documentation commit nor historical PASS closes all product Phase 1 gates. **Overall Phase 1 PARTIAL**. Historical V2 failures remain historical evidence.

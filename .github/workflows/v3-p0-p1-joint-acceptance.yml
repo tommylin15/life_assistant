@@ -90,7 +90,10 @@ jobs:
           print("staging_pinned_backend=PASS exact_candidate_revision")
           PY
           STAGE_SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "$STAGE_URL/release.txt")"
+          PROD_SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "$PROD_URL/release.txt")"
           test "$STAGE_SHA" = "$EXPECTED_SHA"
+          test "$PROD_SHA" = "$EXPECTED_SHA"
+          echo "staging_and_production_frontend_sha=PASS both_exact_source_sha" >> "$GITHUB_STEP_SUMMARY"
           for path in /api/v1/free-events /api/v1/free-events/status /auth/me; do
             status="$(curl -sS -o /dev/null -w '%{http_code}' "$STAGE_URL$path")"
             test "$status" = 401 || { echo "::error::Staging $path unexpected status=$status"; exit 1; }
@@ -126,4 +129,10 @@ jobs:
           jq -c '[.status.traffic[]|select((.percent//0)>0)|{revisionName,percent}]|sort_by(.revisionName)' "$RUNNER_TEMP/cloudrun-after.json" > "$RUNNER_TEMP/traffic-after"
           cmp "$RUNNER_TEMP/traffic-before" "$RUNNER_TEMP/traffic-after"
           echo "production_hosting_and_cloudrun_traffic_unchanged=PASS" >> "$GITHUB_STEP_SUMMARY"
+          LIVE_REV="$(jq -r '.status.traffic[]|select((.percent//0)==100)|.revisionName' "$RUNNER_TEMP/cloudrun-after.json")"
+          [[ "$LIVE_REV" =~ ^life-assistant-api-[A-Za-z0-9-]+$ ]]
+          gcloud run revisions describe "$LIVE_REV" --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/live-revision.json"
+          IMAGE="$(jq -r '.spec.containers[0].image // empty' "$RUNNER_TEMP/live-revision.json")"
+          [[ "$IMAGE" =~ ^ghcr[.]io/tommylin15/life_assistant-backend@sha256:[0-9a-f]{64}$ ]]
+          echo "production_live_ghcr_immutable_digest=PASS" >> "$GITHUB_STEP_SUMMARY"
           echo "overall=P0_P1_PARTIAL until real owner DB counts, OAuth E2E, rollback rehearsal and UI acceptance" >> "$GITHUB_STEP_SUMMARY"

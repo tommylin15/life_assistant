@@ -172,8 +172,9 @@ jobs:
           mutated=0
           rollback() {
             code=$?
-            trap - ERR
+            trap - ERR EXIT INT TERM HUP
             if [ "$mutated" -eq 1 ]; then
+              [ "$code" -ne 0 ] || code=1
               if firebase hosting:clone "$STAGE_SITE:@$(basename "$OLD_VERSION")" "$STAGE_SITE:live" --project "$GCP_PROJECT_ID" --json > "$RUNNER_TEMP/rollback.json"; then
                 curl -fsS -H "Authorization: Bearer $(gcloud auth print-access-token)" "$API/sites/$STAGE_SITE/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/restored.json" || true
                 if jq -e --arg ver "$OLD_VERSION" '.releases | max_by(.releaseTime) | .version.name==$ver' "$RUNNER_TEMP/restored.json"; then
@@ -194,7 +195,8 @@ jobs:
             fi
             exit "$code"
           }
-          trap rollback ERR
+          trap rollback ERR EXIT
+          trap 'exit 130' INT TERM HUP
           test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_SHA"
           # Recheck the previous live release to guard concurrent/unobserved changes.
           curl -fsS -H "Authorization: Bearer $TOKEN" "$API/sites/$STAGE_SITE/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/live-pre-mutation.json"
@@ -228,8 +230,8 @@ jobs:
           # successful code exchange/callback, then authenticated /auth/me.
           # Failures here execute this same shell step's staging-only rollback.
           CANARY_STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "staging_oauth_canary=ACTIVE url=$LIVE_URL/auth/login" >> "$GITHUB_STEP_SUMMARY"
-          echo "staging_canary_next=Owner must complete Google login then open $LIVE_URL/auth/me?staging_e2e=true on SAME browser session" >> "$GITHUB_STEP_SUMMARY"
+          echo "staging_oauth_canary=ACTIVE url=$LIVE_URL/auth/login" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "staging_canary_next=Owner must complete Google login then open $LIVE_URL/auth/me?staging_e2e=true on SAME browser session" | tee -a "$GITHUB_STEP_SUMMARY"
           PAYLOAD="$(python - "$EXPECTED_REVISION" "$CANARY_STARTED" <<'PY'
           import base64,re,sys
           from pathlib import Path
@@ -257,7 +259,7 @@ jobs:
           curl -fsS -H "Authorization: Bearer $(gcloud auth print-access-token)" "$API/sites/$PROD_SITE/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/prod-releases-after.json"
           test "$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod-releases-after.json")" = "$(cat "$RUNNER_TEMP/prod-version-before.txt")"
           mutated=0
-          trap - ERR
+          trap - ERR EXIT INT TERM HUP
           echo "staging_live_smoke=PASS sha=$RELEASE_SHA version=$VERSION; production_hosting_and_traffic=UNCHANGED; true_OAuth_login=PASS owner_callback_and_session" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Record preflight-only result when not publishing

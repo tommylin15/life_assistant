@@ -1,6 +1,6 @@
 # 生活助理 App v0.1 — 開發進度摘要
 
-最後更新：2026-10-09（CI/CD V3 / GCP 清理段；Phase 1 功能包進度延續前次 verified checkpoint）
+最後更新：2026-10-09（Calendar #8 exact-SHA CI/V3/Firebase/真實 Google read-list/desktop-mobile UI 完整封板；下一軌 M0）
 
 目前狀態：**Phase 1 = PARTIAL。**
 
@@ -8,12 +8,12 @@
 
 ## CI/CD V3、AR/GCS 清理最新進度（獨立於 Phase 1 功能封板）
 
-- **V3 GitHub Actions → 公開 GHCR → Cloud Run：PASS**。正式 API `life-assistant-api-00183-hax`；狀態 `Ready=True`；映像指向 GHCR `sha256:b06254c2db22489295c2a82928ea19a6352193fd7b0c72f1041040f22bc0d7b1`。已成功 promoted V3 Release [run 37795789924](https://github.com/tommylin15/life_assistant/actions/runs/37795789924)。
+- **V3 GitHub Actions → 公開 GHCR → Cloud Run：PASS**。最新已驗證的正式 release SHA `5c8d2fca8c9b17f6e4a013c02ba5d2b9fba86aa7`，[V3 run 37882875014](https://github.com/tommylin15/life_assistant/actions/runs/37882875014)：固定 GHCR digest、100% promotion、health/ready/auth/DB、rollback rehearsal/restore、API latest-10 revision retention PASS。歷史 `life-assistant-api-00183-hax` / `sha256:b06254...` 為**先前** release evidence，不再當成最新服務狀態。
 - **舊 Cloud Build 5 個 Triggers 全部 disabled=true：PASS**（兩個 life-assistant、Janus 一個、OmniAgent 兩個）。Trigger 定義仍存在，狀態是停用而非刪除。
 - **舊 CI/CD GCS Bucket 清理：PASS**。Bucket 數 8 → 5；兩個 `cloudbuild` Buckets 及 `run-sources-gen-lang-client-0593591102-us-central1` 均不存在；舊 CI/CD Bucket 逐一 404 readback。保留五個 `dev-*` Buckets，不碰應用／備份／研究資料。
 - **AR 舊 Docker Repository 清理：PASS**。AR repository 數 4 → 1；`cloud-run-source-deploy`, `janusai-poc`, `omniagent` 不存在。唯一保留的 `janus-postgres/postgres:16.15` 含 **1 Digest**；us-central1 Cloud Run 未發現引用，但 VM/資料庫容器依賴 **NOT VERIFIED**，因此不刪。
 - **最終 runtime/GCP inventory：PASS**：[run 37867249614](https://github.com/tommylin15/life_assistant/actions/runs/37867249614)。過去 58 個 AR Digest / 77 個 GCS source objects 為**清理前候選估算**，不能當成逐項 delete 事件紀錄；現況以 Bucket/Repository 缺席與 1 Digest readback 為準。
-- **舊 CI/CD 指定資產清理 = DONE/PASS**；但「所有 AR 清空」不是 DONE（剩 `janus-postgres`）；Cloud Run revisions 最新 10 之即時逐服務剩餘數、本輪新正式部署、VM 非 Cloud Run 依賴均 **NOT VERIFIED**。**Phase 1 全案仍 PARTIAL**，不變更下方 7/11 功能封板數。
+- **舊 CI/CD 指定資產清理 = DONE/PASS**；但「所有 AR 清空」不是 DONE（剩 `janus-postgres`）。最新 V3 run 37882875014 證實 **life-assistant-api** retention = 10 PASS；其他 Cloud Run services 即時數量與 VM 非 Cloud Run 依賴仍 **NOT VERIFIED**。**Phase 1 全案 PARTIAL，功能封板 8/11**。
 - 詳細證據、完整清單與差異：[`v3_cleanup_and_cutover_inventory.md`](v3_cleanup_and_cutover_inventory.md)。
 
 ## Phase 1 全案封板進度表 — 剩餘 11 個工作包
@@ -28,11 +28,12 @@
 
 ### 目前總覽
 
-- **Completed packages：7 / 11**
-- **Closure progress：63.6%**
-- **Current package：#8 — Calendar 完整產品化（IN PROGRESS）**
-- **Current state：PARTIAL — Calendar backend CRUD exists；Flutter UI、tests 與 production acceptance candidate 正在推進；CI / deployment / live Google account 尚待新 evidence。**
-- **Next checkpoint：#8 Calendar implementation → CI → Firebase / Cloud Run → desktop/mobile production UI → true-account Calendar read/list → closure。**
+
+- **Completed packages：8 / 11**
+- **Closure progress：72.7%**
+- **Just closed：#8 — Calendar 完整產品化（DONE / PASS）**
+- **Current priority（已核准）：Post-Calendar P0 台灣免費活動探索，M0 來源授權／14 天時效與品質基線，尚未實作（NOT VERIFIED）。**
+- **Next remaining original Phase 1 package：#9 Activity / Execution Log + Integrations（按核准順序暫排在活動探索 MVP 後）。**
 - **#8 gating rule：Gemini / OpenRouter #63/#70 failure is a separate known regression, not a Calendar-specific gate. Calendar still needs its own genuine provider and production evidence.**
 - **Independent cross-feature health：historical Drive Knowledge #63 / run `37625447402` exit `91` = Gemini-only；newer #70 / run `37702785541` exit `93` = Gemini + OpenRouter (Groq not in mask)。diagnostic candidate `8dedf655` / CI #574 PASS；new deployment / runtime still NOT VERIFIED。Regression remains OPEN / FAIL, without undoing Shopping #7 DONE.**
 
@@ -45,10 +46,23 @@
 | 5 | Task 9 — Drive Knowledge 正式交付與 production acceptance | ✅ DONE | historical closure release `2d08118a13c71c6fec97e8bfba0857b861eefd1e` / #47 PASS；latest health release `3b75e9e288be0d2179cd381281b55210a14ad875` / Drive Knowledge #59 PASS；Picker / live external AI / 真實 Drive / production UI 全 PASS |
 | 6 | Habits 完整產品化 | ✅ DONE | release SHA `02eda1124885846f41ca32ca185d9e1a5a5ebfe1`；CI #558、Firebase #376、Cloud Run #430、Habits UI Acceptance #7、Post-deploy Runtime #96 全 PASS；Habit list/create/update/complete/history、週期/提醒 UI、mobile/desktop production acceptance 與真實 PostgreSQL runtime evidence 完整 |
 | 7 | Shopping 完整產品化 | ✅ DONE | release SHA `1dd0b1f15827ae9cf50a8f4fcb69a1fa3782f40d`；CI #566、Firebase #384、Cloud Run #438、Shopping UI #4、Post-deploy Runtime #104 PASS；list/create item/toggle、分類/進度、mobile navigation、真實 PostgreSQL cloud-domain persistence evidence 完整 |
-| 8 | Calendar 完整產品化 | 🟡 IN PROGRESS | 一般使用者 read/list/create/update/delete UX + true-account verification + 完整 vertical-slice evidence |
+| 8 | Calendar 完整產品化 | ✅ DONE / PASS | release `5c8d2fca8c9b`：CI 37882690249、V3 37882875014、Firebase 37885328134、真實 Calendar read/list 37885330178、desktop/mobile UI 37885544932、Bootstrap 37882690327 全 PASS；詳見 Calendar checkpoint |
 | 9 | Activity / Execution Log + Integrations 完整產品化 | ⬜ NOT STARTED | 使用者可理解的 Activity / Integration UI + 所需 runtime/integration evidence |
 | 10 | Integration / Foundation 尾項收尾 | ⬜ NOT STARTED | Attachment strategy；Bridge/MCP contract；true provider failure / partial-success；Calendar true-account read/list 重驗；historical SQLite migration 僅在 source 存在時執行 |
 | 11 | Phase 1 Final Release Gate / 封板 checkpoint | ⬜ NOT STARTED | Implementation / Tests / CI / Deployment / Runtime / Integration / UI flow / mobile+desktop acceptance 證據完整；Drive checkpoint 回寫；Phase 1 才標 DONE |
+
+### #8 — Calendar 最終封板證據（2026-10-09）
+
+- Source / release SHA: `5c8d2fca8c9b17f6e4a013c02ba5d2b9fba86aa7` (同一完整 SHA 綁定 CI / V3 / Firebase / Calendar UI / Google read-list)。
+- **Implementation / tests / CI — PASS:** [CI #37882690249](https://github.com/tommylin15/life_assistant/actions/runs/37882690249) backend tests、Flutter analyze/widgets/Drive nav/Web build、deployment scripts；全天日期 `start_date/end_date` 保持 Google `end.date` exclusive；對話框 `dialogContext` 修復巢狀 Navigator。
+- **V3 GHCR → Cloud Run + runtime — PASS:** [V3 #37882875014](https://github.com/tommylin15/life_assistant/actions/runs/37882875014) immutable digest、Trivy、0%-traffic candidate、健康/資料庫/Auth、Preview、真實 pre-promotion integration、100% promotion/live、rollback rehearsal/restore、`life-assistant-api` 最新 **10 revisions** retention PASS。
+- **Firebase Hosting — PASS:** [#37885328134](https://github.com/tommylin15/life_assistant/actions/runs/37885328134) exact-SHA release file, Flutter Web production, Task/Project UI regression gates。
+- **真實 Google Calendar 授權 read/list（唯讀）— PASS:** [#37885330178](https://github.com/tommylin15/life_assistant/actions/runs/37885330178) 已有 owner-scoped Cloud Run Job runtime 成功結果；不宣稱曾對真實使用者行程執行 create/update/delete。
+- **正式桌面／手機 Calendar UI（mocked Google responses）— PASS:** [#37885544932](https://github.com/tommylin15/life_assistant/actions/runs/37885544932) log: `month_list_allday`、`create_tz`、`update`、`confirmed_delete`、`all_day_edit`、`mobile_navigation_controls` 與 `calendar_ui_acceptance=PASS`。刪除驗證含「取消時無 mutation」及明示確認 header；此 UI 模擬不等同真實 Google mutation E2E。
+- **Bootstrap E2E orchestration — PASS:** [#37882690327](https://github.com/tommylin15/life_assistant/actions/runs/37882690327) 逐步驗證 V3 + Firebase + Calendar UI + True Account gates，同 SHA 全成功。
+- **特定界線：** #8 Calendar 依核准的 read/list 真實帳號 + mocked browser mutation 流程驗收封板；尚未以正式 Google 帳號執行真實 create/update/delete（風險較高的外部寫入），這不冒充已驗證。Drive Knowledge Gemini/OpenRouter 歷史 #63/#70 failure 仍是獨立跨功能 health backlog，不隨 Calendar 封板自動消失。
+
+**結論：Package #8 DONE/PASS，總進度 8/11 = 72.7%；Phase 1 最終 Release Gate 仍 PARTIAL。**
 
 ### 固定回報格式
 

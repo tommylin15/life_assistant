@@ -1,12 +1,12 @@
 # life_assistant Phase 1 — Delivery Order
 
-最後更新：2026-10-09（僅整理既有優先序與連結）
+最後更新：2026-10-09（Calendar #8 封板 8/11；台灣免費活動 M0 開始排程）
 
 > 本文件定義 Phase 1 後續的**執行順序**。`doc/acceptance.md` 與 `doc/release_checklist.md` 繼續定義完成條件與 Release Gate；本文件只負責「先做什麼、後做什麼」。若本文件與較舊文件的隱含先後順序不同，以本文件的執行順序為準，但不得因此降低既有 acceptance / security / migration 要求。
 
 ## 2026-10-09 使用者指定優先級 — Calendar 之後優先交付免費活動探索
 
-**明確授權的優先級變更：Calendar 工作包 #8 全部需要的驗收完成後，下一個第一優先產品項目是「台灣免費活動探索與報名追蹤」（Post-Calendar P0），在既有 #9 Activity / Integrations、#10 Integration / Foundation tail、#11 Final Release Gate 的新增產品開發工作之前安排。** 原本 #9–#11 未取消；本功能的工作包另列，不直接更動原 11-package 完成分子或分母，不能因文件更新宣稱 #8 或新需求已完成。
+**明確授權的優先級變更：Calendar 工作包 #8 已於 2026-10-09 以完整證據 DONE/PASS，下一個第一優先產品項目是「台灣免費活動探索與報名追蹤」（Post-Calendar P0），在既有 #9 Activity / Integrations、#10 Integration / Foundation tail、#11 Final Release Gate 的新增產品開發工作之前安排。** 原本 #9–#11 未取消；本功能的工作包另列，不直接更動原 11-package 完成分子或分母，不能因文件更新宣稱 #8 或新需求已完成。
 
 - 正式產品/工程規格：[`taiwan_free_events_discovery_plan.md`](taiwan_free_events_discovery_plan.md)，已統一最小 DB／精簡卡片／增量 Batch AI／M0–E2 驗收；共用 AI 路由的單一政策見 [`ai_provider_policy.md`](ai_provider_policy.md)。
 - 第一線官方 RSS、新聞稿、主辦網站、報名頁與合法接入的活動網站：每 12 小時（Asia/Taipei 06:00、18:00）；文化/觀光官方 API 每日補充；data.gov.tw 目錄每日只負責發現/維護來源，不作為活動即時性依據。
@@ -17,14 +17,14 @@
 - **資料模型先行的必要決策**：同一活動下需分場次 Session 和報名機會 Registration Opportunity（窗口／票種／免費條件／候補）；精確報名時刻未知須保留未知，報名時間待公布可追蹤；主辦單位 Organizer 留可持續的身份關聯。必須在 migration 前評審。
 - 此次只變更開發順序與設計；既有 Phase 1 release scope freeze / 必要驗收不能被文件默默取消。開始實作時必須明確記錄對 #9–#11 排程與 release gate 的影響。此功能 **APPROVED PLAN / NOT IMPLEMENTED**。
 
-## Current closure checkpoint — 2026-10-07
+## Current closure checkpoint — 2026-10-09
 
 2026-10-01 之後的 Phase 1 closure 以 `doc/progress.md` 的 11 個工作包為目前執行序；本文件後續各節保留原始 vertical-slice delivery rationale，不再被解讀成另一套平行進度表。
 
 目前：
-- Completed packages：**7/11 = 63.6%**。
-- Just closed：**#7 — Shopping 完整產品化，DONE / PASS**。
-- Current package：**#8 — Calendar 完整產品化，IN PROGRESS / PARTIAL**。
+- Completed packages：**8/11 = 72.7%**。
+- Just closed：**#8 — Calendar 完整產品化，DONE / PASS**（CI 37882690249；V3 37882875014；Firebase 37885328134；Google True Account 37885330178；Calendar UI 37885544932；同一 SHA `5c8d2fca8c9b17f6e4a013c02ba5d2b9fba86aa7`）。
+- Current priority：**台灣免費活動探索 M0 來源合規/新鮮度基線，NOT IMPLEMENTED / NOT VERIFIED**。
 - #6 final release SHA `02eda1124885846f41ca32ca185d9e1a5a5ebfe1`；CI #558、Firebase #376、Cloud Run #430、Habits UI #7、Post-deploy Runtime #96 PASS。
 - Habits production desktop/mobile list/create/edit/complete/history、真實 PostgreSQL cloud-domain runtime 與 release-level post-deploy regression均 PASS。
 - Cross-feature health：latest-release Drive Knowledge #54 為 FAIL（live external AI production acceptance）；不回滾 #6 closure，但在 final release gate 前必須重新收斂。

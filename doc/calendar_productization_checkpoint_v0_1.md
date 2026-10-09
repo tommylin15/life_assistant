@@ -1,8 +1,8 @@
 # Calendar Productization Checkpoint v0.1 — Package #8
 
 日期：2026-10-08  
-狀態：**IN PROGRESS / PARTIAL**  
-Phase 1 completed packages：**7 / 11（63.6%）**；#8 尚未計入。
+狀態：**DONE / PASS（2026-10-09 final addendum supersedes earlier checkpoints）**  
+Phase 1 completed packages：**8 / 11（72.7%）**；#8 已列入。
 
 ## Scope / implementation candidate
 
@@ -72,3 +72,17 @@ Google all-day edit (preserving `date` rather than converting to `dateTime`) is 
 - Root-cause code finding: `lib/web/calendar_page.dart` constructed dialog with root Navigator default, but used the Calendar page's possibly nested `context` to `Navigator.pop`. Product fix `3e607ca146184e778613cf28b80ec7db6566efdb` now pops with `dialogContext`; adds nested-Navigator widget regression plus browser no-reload cancel-confirm acceptance.
 - All-day event create/update preservation of `date` and exclusive `end.date` implemented in commits `44f9d6d` and `97c6bf3`; local/CI tests were PASS, but new root-Navigator fix requires a fresh CI + V3 release and UI acceptance.
 - **Package #8 = PARTIAL, Phase 1 remains 7/11 (63.6%).** No DONE until new exact-SHA CI, V3/Firebase production, desktop/mobile UI delete/cancel/all-day and real account acceptance all PASS. Distinguish mocked UI provider test from true Google read/list.
+
+
+## 2026-10-09 Final Calendar #8 closure — DONE / PASS
+
+- Source / release SHA: `5c8d2fca8c9b17f6e4a013c02ba5d2b9fba86aa7` (同一完整 SHA 綁定 CI / V3 / Firebase / Calendar UI / Google read-list)。
+- **Implementation / tests / CI — PASS:** [CI #37882690249](https://github.com/tommylin15/life_assistant/actions/runs/37882690249) backend tests、Flutter analyze/widgets/Drive nav/Web build、deployment scripts；全天日期 `start_date/end_date` 保持 Google `end.date` exclusive；對話框 `dialogContext` 修復巢狀 Navigator。
+- **V3 GHCR → Cloud Run + runtime — PASS:** [V3 #37882875014](https://github.com/tommylin15/life_assistant/actions/runs/37882875014) immutable digest、Trivy、0%-traffic candidate、健康/資料庫/Auth、Preview、真實 pre-promotion integration、100% promotion/live、rollback rehearsal/restore、`life-assistant-api` 最新 **10 revisions** retention PASS。
+- **Firebase Hosting — PASS:** [#37885328134](https://github.com/tommylin15/life_assistant/actions/runs/37885328134) exact-SHA release file, Flutter Web production, Task/Project UI regression gates。
+- **真實 Google Calendar 授權 read/list（唯讀）— PASS:** [#37885330178](https://github.com/tommylin15/life_assistant/actions/runs/37885330178) 已有 owner-scoped Cloud Run Job runtime 成功結果；不宣稱曾對真實使用者行程執行 create/update/delete。
+- **正式桌面／手機 Calendar UI（mocked Google responses）— PASS:** [#37885544932](https://github.com/tommylin15/life_assistant/actions/runs/37885544932) log: `month_list_allday`、`create_tz`、`update`、`confirmed_delete`、`all_day_edit`、`mobile_navigation_controls` 與 `calendar_ui_acceptance=PASS`。刪除驗證含「取消時無 mutation」及明示確認 header；此 UI 模擬不等同真實 Google mutation E2E。
+- **Bootstrap E2E orchestration — PASS:** [#37882690327](https://github.com/tommylin15/life_assistant/actions/runs/37882690327) 逐步驗證 V3 + Firebase + Calendar UI + True Account gates，同 SHA 全成功。
+- **特定界線：** #8 Calendar 依核准的 read/list 真實帳號 + mocked browser mutation 流程驗收封板；尚未以正式 Google 帳號執行真實 create/update/delete（風險較高的外部寫入），這不冒充已驗證。Drive Knowledge Gemini/OpenRouter 歷史 #63/#70 failure 仍是獨立跨功能 health backlog，不隨 Calendar 封板自動消失。
+
+- **Release decision: #8 DONE / PASS，Phase 1 8/11 = 72.7%，全案仍 PARTIAL。** 上文過去 FAIL / NOT VERIFIED 為歷史快照，以上同 SHA 最新證據優先。不影響 #9–#11 或獨立 provider regression 的 Gate。

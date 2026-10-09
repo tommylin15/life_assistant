@@ -1,8 +1,23 @@
 # 生活助理 App v0.1 — Acceptance Criteria
 
-最後更新：2026-10-09（CI/CD V3 證據；既有各功能驗收項目不重新判定）
+最後更新：2026-10-09（Calendar #8 同 SHA 正式封板證據；其他歷史功能/最終 Gate 不重新判定）
 
 > 本文件定義 Phase 1 Platform Release Gate。`[x]` 只代表該條要求層級已有足夠 evidence；Implementation / CI / Deployment PASS 不自動等於 Runtime / Integration PASS。
+
+## Package #8 — Calendar 正式封板（2026-10-09）
+
+- [x] **DONE / PASS — Calendar #8**，原 11 個 Phase 1 工作包完成數：**8/11（72.7%）**。所有以下 Gate 綁定同一 release SHA `5c8d2fca8c9b17f6e4a013c02ba5d2b9fba86aa7`。
+- Source / release SHA: `5c8d2fca8c9b17f6e4a013c02ba5d2b9fba86aa7` (同一完整 SHA 綁定 CI / V3 / Firebase / Calendar UI / Google read-list)。
+- **Implementation / tests / CI — PASS:** [CI #37882690249](https://github.com/tommylin15/life_assistant/actions/runs/37882690249) backend tests、Flutter analyze/widgets/Drive nav/Web build、deployment scripts；全天日期 `start_date/end_date` 保持 Google `end.date` exclusive；對話框 `dialogContext` 修復巢狀 Navigator。
+- **V3 GHCR → Cloud Run + runtime — PASS:** [V3 #37882875014](https://github.com/tommylin15/life_assistant/actions/runs/37882875014) immutable digest、Trivy、0%-traffic candidate、健康/資料庫/Auth、Preview、真實 pre-promotion integration、100% promotion/live、rollback rehearsal/restore、`life-assistant-api` 最新 **10 revisions** retention PASS。
+- **Firebase Hosting — PASS:** [#37885328134](https://github.com/tommylin15/life_assistant/actions/runs/37885328134) exact-SHA release file, Flutter Web production, Task/Project UI regression gates。
+- **真實 Google Calendar 授權 read/list（唯讀）— PASS:** [#37885330178](https://github.com/tommylin15/life_assistant/actions/runs/37885330178) 已有 owner-scoped Cloud Run Job runtime 成功結果；不宣稱曾對真實使用者行程執行 create/update/delete。
+- **正式桌面／手機 Calendar UI（mocked Google responses）— PASS:** [#37885544932](https://github.com/tommylin15/life_assistant/actions/runs/37885544932) log: `month_list_allday`、`create_tz`、`update`、`confirmed_delete`、`all_day_edit`、`mobile_navigation_controls` 與 `calendar_ui_acceptance=PASS`。刪除驗證含「取消時無 mutation」及明示確認 header；此 UI 模擬不等同真實 Google mutation E2E。
+- **Bootstrap E2E orchestration — PASS:** [#37882690327](https://github.com/tommylin15/life_assistant/actions/runs/37882690327) 逐步驗證 V3 + Firebase + Calendar UI + True Account gates，同 SHA 全成功。
+- **特定界線：** #8 Calendar 依核准的 read/list 真實帳號 + mocked browser mutation 流程驗收封板；尚未以正式 Google 帳號執行真實 create/update/delete（風險較高的外部寫入），這不冒充已驗證。Drive Knowledge Gemini/OpenRouter 歷史 #63/#70 failure 仍是獨立跨功能 health backlog，不隨 Calendar 封板自動消失。
+- [ ] **NOT VERIFIED（非本次 Calendar read/list 封板契約）**：正式 Google 帳號真正 create/update/delete 事件的無副作用、明示同意之 E2E。未執行真實 destructive API，不能因 mocked UI PASS 宣稱實際 mutation E2E PASS。
+- [ ] **OPEN / FAIL — 獨立跨功能**：Drive Knowledge #63/#70 歷史 Gemini/OpenRouter 回歸，需另跑最新部署的 real provider gate；未包含在 #8 封板。
+- 原始 Phase 1 #9–#11 與 Final Release Gate 仍 **PARTIAL / NOT VERIFIED**；不因 Calendar 封板將全案標為 DONE。
 
 ## CI/CD V3 舊資產清理驗收（與產品 Phase 1 功能驗收分開）
 

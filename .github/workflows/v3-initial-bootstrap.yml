@@ -1,4 +1,4 @@
-# One-time controlled release retry: Drive AI owner-aware consent acceptance preflight; full SHA CI mandatory.
+# Calendar #8 explicit one-time release request: preserve full-SHA CI and all existing V3 candidate, Preview, promotion, rollback, and retention gates.
 name: V3 One-Time Controlled Release Bootstrap
 
 on:

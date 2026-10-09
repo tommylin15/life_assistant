@@ -87,6 +87,8 @@ class FreeEventDiscoveryTests(unittest.IsolatedAsyncioTestCase):
     async def test_read_service_never_writes_and_is_bounded(self):
         db = MagicMock()
         db.execute = AsyncMock()
+        # AsyncSession.execute() awaits SQL, but Result.all() is synchronous.
+        db.execute.return_value = MagicMock()
         db.execute.return_value.all.return_value = [
             (self.event, self.session, self.registration)
         ]
@@ -124,6 +126,8 @@ class FreeEventDiscoveryApiTests(unittest.TestCase):
     def test_authenticated_empty_read_is_no_store(self):
         db = MagicMock()
         db.execute = AsyncMock()
+        # AsyncSession.execute() awaits SQL, but Result.all() is synchronous.
+        db.execute.return_value = MagicMock()
         db.execute.return_value.all.return_value = []
         app.dependency_overrides[current_user] = lambda: {"sub": "synthetic-owner"}
         app.dependency_overrides[get_db] = lambda: db

@@ -26,6 +26,9 @@ def upgrade() -> None:
         sa.Column("last_success_at", sa.DateTime(timezone=True)),
         sa.Column("last_error_kind", sa.String(80)),
         sa.CheckConstraint("tier IN ('official_dataset', 'official_api', 'official_catalog', 'aggregator')", name="ck_free_event_source_tier"),
+        sa.CheckConstraint("NOT fetch_enabled OR (access_review = 'reviewed_with_evidence' "
+                           "AND license_evidence_url IS NOT NULL)",
+                           name="ck_free_event_source_fetch_approval"),
         sa.CheckConstraint("expected_interval_hours BETWEEN 1 AND 168", name="ck_free_event_source_interval"),
     )
     op.create_table(
@@ -54,6 +57,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint("verification_status IN ('unverified', 'verified', 'stale', 'invalid')",
                            name="ck_free_event_verification_status"),
+        sa.CheckConstraint("verification_status <> 'verified' OR "
+                           "(official_url IS NOT NULL AND last_verified_at IS NOT NULL)",
+                           name="ck_free_event_verified_provenance"),
     )
     op.create_index("ix_free_events_status_checked", "free_events", ["verification_status", "last_verified_at"])
     op.create_index("ix_free_events_source", "free_events", ["source_id"])
@@ -109,6 +115,11 @@ def upgrade() -> None:
                            name="ck_free_event_registration_window"),
         sa.CheckConstraint("fee_amount IS NULL OR fee_amount >= 0",
                            name="ck_free_event_registration_nonnegative_fee"),
+        sa.CheckConstraint("fee_kind <> 'free' OR fee_amount IS NULL OR fee_amount = 0",
+                           name="ck_free_event_registration_free_fee"),
+        sa.CheckConstraint("NOT official_verified OR fee_kind NOT IN ('free', 'conditional_free') "
+                           "OR registration_url IS NOT NULL",
+                           name="ck_free_event_registration_official_evidence"),
     )
     op.create_index("ix_free_event_registration_opens", "free_event_registration_opportunities",
                     ["registration_opens_at"])

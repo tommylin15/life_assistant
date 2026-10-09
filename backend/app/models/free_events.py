@@ -23,6 +23,11 @@ class FreeEventSource(Base):
             "tier IN ('official_dataset', 'official_api', 'official_catalog', 'aggregator')",
             name="ck_free_event_source_tier",
         ),
+        CheckConstraint(
+            "NOT fetch_enabled OR (access_review = 'reviewed_with_evidence' "
+            "AND license_evidence_url IS NOT NULL)",
+            name="ck_free_event_source_fetch_approval",
+        ),
         CheckConstraint("expected_interval_hours BETWEEN 1 AND 168",
                         name="ck_free_event_source_interval"),
     )
@@ -55,6 +60,11 @@ class FreeEvent(Base):
         CheckConstraint(
             "verification_status IN ('unverified', 'verified', 'stale', 'invalid')",
             name="ck_free_event_verification_status",
+        ),
+        CheckConstraint(
+            "verification_status <> 'verified' OR "
+            "(official_url IS NOT NULL AND last_verified_at IS NOT NULL)",
+            name="ck_free_event_verified_provenance",
         ),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_id)
@@ -127,6 +137,15 @@ class FreeEventRegistrationOpportunity(Base):
         CheckConstraint(
             "fee_amount IS NULL OR fee_amount >= 0",
             name="ck_free_event_registration_nonnegative_fee",
+        ),
+        CheckConstraint(
+            "fee_kind <> 'free' OR fee_amount IS NULL OR fee_amount = 0",
+            name="ck_free_event_registration_free_fee",
+        ),
+        CheckConstraint(
+            "NOT official_verified OR fee_kind NOT IN ('free', 'conditional_free') "
+            "OR registration_url IS NOT NULL",
+            name="ck_free_event_registration_official_evidence",
         ),
         Index("ix_free_event_registration_opens", "registration_opens_at"),
     )

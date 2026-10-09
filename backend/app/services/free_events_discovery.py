@@ -1,5 +1,5 @@
 """Fail-closed public catalog query. Not an availability checker or auto-booking."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, or_, select
@@ -13,6 +13,9 @@ from app.models.free_event_discovery_schemas import FreeEventOpportunityCard
 
 def verified_catalog_query(*, now: datetime, limit: int, offset: int):
     today = now.astimezone(ZoneInfo("Asia/Taipei")).date()
+    # A once-verified registration must never remain advertised forever.
+    # No background fetch / re-review -> no public results, not stale claims.
+    fresh_since = now - timedelta(hours=24)
     r = FreeEventRegistrationOpportunity
     s = FreeEventSession
     e = FreeEvent
@@ -25,13 +28,17 @@ def verified_catalog_query(*, now: datetime, limit: int, offset: int):
         .where(
             e.verification_status == "verified",
             e.last_verified_at.is_not(None),
+            e.last_verified_at >= fresh_since,
             e.official_url.is_not(None),
             source.fetch_enabled.is_(True),
             source.access_review == "reviewed_with_evidence",
             source.license_evidence_url.is_not(None),
+            source.last_success_at.is_not(None),
+            source.last_success_at >= fresh_since,
             s.is_cancelled.is_(False),
             r.official_verified.is_(True),
             r.last_verified_at.is_not(None),
+            r.last_verified_at >= fresh_since,
             r.registration_url.is_not(None),
             r.fee_kind.in_(["free", "conditional_free"]),
             r.registration_status.notin_(["cancelled", "closed", "event_ended", "full"]),

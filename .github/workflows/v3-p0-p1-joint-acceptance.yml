@@ -1,0 +1,129 @@
+name: V3 P0 P1 Joint Read-only Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full 40-character SHA already released to both intended targets
+        type: string
+        required: true
+      expected_stage_revision:
+        description: Cloud Run immutable revision pinned by fixed staging live
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+  checks: read
+
+concurrency:
+  group: life-assistant-v3-production-release
+  cancel-in-progress: false
+
+jobs:
+  joint-readback:
+    runs-on: ubuntu-latest
+    environment: dev-test
+    timeout-minutes: 20
+    env:
+      PROJECT: gen-lang-client-0593591102
+      STAGE: life-assistant-v3-stage-tl15
+      REGION: us-central1
+      EXPECTED_SHA: ${{ inputs.release_sha }}
+      EXPECTED_REVISION: ${{ inputs.expected_stage_revision }}
+      PROD_URL: https://gen-lang-client-0593591102.web.app
+      STAGE_URL: https://life-assistant-v3-stage-tl15.web.app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          persist-credentials: false
+      - name: Source SHA and CI prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_REVISION" =~ ^life-assistant-api-[A-Za-z0-9-]+$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_SHA"
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Read exact production and staging versions without mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          API="https://firebasehosting.googleapis.com/v1beta1"
+          fetch_json() {
+            curl -fsS --max-time 30 --retry 2 -H "Authorization: Bearer $TOKEN" "$API/$1" -o "$2"
+          }
+          fetch_json "sites/$STAGE/channels/live/releases?pageSize=5" "$RUNNER_TEMP/stage-releases.json"
+          jq -e '.releases | length>=1' "$RUNNER_TEMP/stage-releases.json"
+          VERSION="$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/stage-releases.json")"
+          [[ "$VERSION" == "sites/$STAGE/versions/"* ]]
+          fetch_json "$VERSION" "$RUNNER_TEMP/stage-version.json"
+          fetch_json "sites/$PROJECT/channels/live/releases?pageSize=5" "$RUNNER_TEMP/prod-releases-before.json"
+          jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod-releases-before.json" > "$RUNNER_TEMP/prod-version-before"
+          gcloud run services describe life-assistant-api --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/cloudrun-before.json"
+          jq -c '[.status.traffic[]|select((.percent//0)>0)|{revisionName,percent}]|sort_by(.revisionName)' "$RUNNER_TEMP/cloudrun-before.json" > "$RUNNER_TEMP/traffic-before"
+          jq -e '[.status.traffic[]|select((.percent//0)>0)|.percent]|add==100' "$RUNNER_TEMP/cloudrun-before.json"
+          printf "hosting_stage_version=%s\n" "$VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check staging exact SHA, API/Auth pins, OAuth redirect and owner-only P0 boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/stage-version.json" "$RUNNER_TEMP/cloudrun-before.json" "$EXPECTED_REVISION" <<'PY'
+          import json,sys
+          sys.path.insert(0,".github/scripts")
+          from v3_staging_gate import pinned_routes
+          with open(sys.argv[1]) as f: hosting=json.load(f)
+          with open(sys.argv[2]) as f: run=json.load(f)
+          routes=pinned_routes(hosting,run,sys.argv[3])
+          assert len(routes)==2
+          print("staging_pinned_backend=PASS exact_candidate_revision")
+          PY
+          STAGE_SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "$STAGE_URL/release.txt")"
+          test "$STAGE_SHA" = "$EXPECTED_SHA"
+          for path in /api/v1/free-events /api/v1/free-events/status /auth/me; do
+            status="$(curl -sS -o /dev/null -w '%{http_code}' "$STAGE_URL$path")"
+            test "$status" = 401 || { echo "::error::Staging $path unexpected status=$status"; exit 1; }
+          done
+          curl -sS -D "$RUNNER_TEMP/stage-login" -o /dev/null "$STAGE_URL/auth/login"
+          python - "$RUNNER_TEMP/stage-login" <<'PY'
+          import sys
+          from urllib.parse import urlparse,parse_qs
+          headers=open(sys.argv[1],encoding="utf-8").read().splitlines()
+          links=[x.split(":",1)[1].strip() for x in headers if x.lower().startswith("location:")]
+          assert len(links)==1 and urlparse(links[0]).netloc=="accounts.google.com"
+          callback=parse_qs(urlparse(links[0]).query).get("redirect_uri",[""])[0]
+          assert callback=="https://life-assistant-v3-stage-tl15.web.app/auth/callback", "Staging OAuth callback mismatch"
+          print("staging_oauth_redirect=PASS fixed_staging_domain")
+          PY
+          # This is only unauthenticated access control: it cannot establish
+          # actual database aggregates or a completed Google login.
+          PROD_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "$PROD_URL/api/v1/free-events/status")"
+          test "$PROD_STATUS" = 401 || { echo "::error::P0 owner API not deployed/protected: status=$PROD_STATUS"; exit 1; }
+          echo "p0_owner_only_boundary=PASS unauthenticated_401" >> "$GITHUB_STEP_SUMMARY"
+          echo "p0_actual_db_aggregate_counts=NOT_VERIFIED real_owner_session_required" >> "$GITHUB_STEP_SUMMARY"
+          echo "staging_actual_google_code_callback=NOT_VERIFIED interactive_true_login_required" >> "$GITHUB_STEP_SUMMARY"
+          echo "staging_https_release_sha_pins_redirect=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reconfirm production isolation and annotate partial E2E gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          curl -fsS --max-time 30 -H "Authorization: Bearer $TOKEN" "https://firebasehosting.googleapis.com/v1beta1/sites/$PROJECT/channels/live/releases?pageSize=5" > "$RUNNER_TEMP/prod-after.json"
+          test "$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod-after.json")" = "$(cat "$RUNNER_TEMP/prod-version-before")"
+          gcloud run services describe life-assistant-api --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/cloudrun-after.json"
+          jq -c '[.status.traffic[]|select((.percent//0)>0)|{revisionName,percent}]|sort_by(.revisionName)' "$RUNNER_TEMP/cloudrun-after.json" > "$RUNNER_TEMP/traffic-after"
+          cmp "$RUNNER_TEMP/traffic-before" "$RUNNER_TEMP/traffic-after"
+          echo "production_hosting_and_cloudrun_traffic_unchanged=PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "overall=P0_P1_PARTIAL until real owner DB counts, OAuth E2E, rollback rehearsal and UI acceptance" >> "$GITHUB_STEP_SUMMARY"

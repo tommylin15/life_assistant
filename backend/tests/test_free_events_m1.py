@@ -65,6 +65,7 @@ class FreeEventAdmissionTests(unittest.TestCase):
         a = self.make()
         b = self.make(source_id="beclass", external_event_key="other")
         self.assertEqual(canonical_event_key(a), canonical_event_key(b))
+        self.assertEqual(meaningful_fingerprint(a), meaningful_fingerprint(b))
         c = self.make(source_id="beclass", external_event_key="other",
                       official_verified=False)
         self.assertNotEqual(canonical_event_key(a), canonical_event_key(c))

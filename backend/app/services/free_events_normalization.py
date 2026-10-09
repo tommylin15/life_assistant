@@ -165,6 +165,11 @@ def meaningful_fingerprint(candidate: EventCandidate) -> str:
     data = candidate.model_dump(mode="json", exclude_none=False)
     # Identity is a key, not content. Normalized nested ordering avoids repeated AI work.
     data.pop("external_event_key")
+    # Provenance is stored in evidence records, not part of semantic content:
+    # two authorized sources pointing to the same verified official event
+    # must not trigger a redundant AI run solely for their different URLs.
+    data.pop("source_id")
+    data.pop("source_url")
     data["sessions"].sort(key=lambda value: value["session_key"])
     for session in data["sessions"]:
         session["opportunities"].sort(key=lambda value: value["opportunity_key"])

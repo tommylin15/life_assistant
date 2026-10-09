@@ -59,6 +59,18 @@ class FreeEventManifestTests(unittest.TestCase):
         self.assertFalse(report["candidates"][0]["publishable"])
         self.assertFalse(report["candidates"][0]["registration_open_verified"])
 
+    def test_verified_same_official_content_from_two_sources_deduplicates(self):
+        a = deepcopy(self.candidate)
+        b = deepcopy(a)
+        b["source_id"] = "beclass"
+        b["external_event_key"] = "beclass-other"
+        b["source_url"] = "https://www.beclass.com/rid/other"
+        report = prepare_manifest([a, b], self.registry)
+        self.assertEqual(report["deduplicated_count"], 1)
+        self.assertEqual(len(report["candidates"]), 1)
+        self.assertFalse(report["candidates"][0]["content_conflict"])
+        self.assertEqual(report["candidates"][0]["status"], "quarantined_source_permission")
+
     def test_deterministic_dedup_and_conflict_quarantine(self):
         a = deepcopy(self.candidate)
         b = deepcopy(self.candidate)

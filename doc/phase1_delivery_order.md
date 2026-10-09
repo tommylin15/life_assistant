@@ -15,7 +15,7 @@
 - ChatGPT 的 06:00/18:00 掃描**只是暫時過渡**；正式目標是 Cloud Scheduler → Cloud Run → PostgreSQL → Flutter Web，真實 GCP 驗收通過後才停用過渡任務。
 - **階段與 Gate**：M0 來源合法性/14 天新鮮度基線 → M1 掃描/活動－場次－報名機會/去重與安全 → M2 一般使用者候選清單＋現有 UI 的 admin-only 來源健康 → M3 三種獨立個人動作/提醒與真實整合 → M4 Cloud Scheduler/Cloud Run 正式切換；以上 **M0–M4 屬 MVP 必要驗收**。其後 E1 第一版增強（主辦追蹤、進階偏好、摘要/通知控制）、E2 第二階段（貼連結、交通距離、電子報/推薦）。詳細驗收見產品規格 §9–§13。
 - **資料模型先行的必要決策**：同一活動下需分場次 Session 和報名機會 Registration Opportunity（窗口／票種／免費條件／候補）；精確報名時刻未知須保留未知，報名時間待公布可追蹤；主辦單位 Organizer 留可持續的身份關聯。必須在 migration 前評審。
-- 此次只變更開發順序與設計；既有 Phase 1 release scope freeze / 必要驗收不能被文件默默取消。開始實作時必須明確記錄對 #9–#11 排程與 release gate 的影響。此功能 **APPROVED PLAN / NOT IMPLEMENTED**。
+- 優先序變更已核准，既有 Phase 1 release scope freeze / 必要驗收不能被文件默默取消。M0 source registry + offline 14-day evaluator + 8 tests 已於 `ea826456` 實作，[CI #37892185617](https://github.com/tommylin15/life_assistant/actions/runs/37892185617) PASS；但 14 天真實觀測、逐站授權與正式 ingestion **NOT VERIFIED / NOT IMPLEMENTED**。此功能 **M0 PARTIAL；M1–M4 NOT IMPLEMENTED**。#9–#11 保留且暫於活動探索 MVP 後執行，final release blocker 決策仍需明示。
 
 ## Current closure checkpoint — 2026-10-09
 
@@ -24,7 +24,7 @@
 目前：
 - Completed packages：**8/11 = 72.7%**。
 - Just closed：**#8 — Calendar 完整產品化，DONE / PASS**（CI 37882690249；V3 37882875014；Firebase 37885328134；Google True Account 37885330178；Calendar UI 37885544932；同一 SHA `5c8d2fca8c9b17f6e4a013c02ba5d2b9fba86aa7`）。
-- Current priority：**台灣免費活動探索 M0 來源合規/新鮮度基線，NOT IMPLEMENTED / NOT VERIFIED**。
+- Current priority：**台灣免費活動探索 M0 = PARTIAL：清冊／離線工具／8 tests／CI PASS，但 14 天真實觀測及逐來源存取審查 NOT VERIFIED**；M1–M4、E1/E2 尚未實作。詳見 `free_events_m0_checkpoint.md`。
 - #6 final release SHA `02eda1124885846f41ca32ca185d9e1a5a5ebfe1`；CI #558、Firebase #376、Cloud Run #430、Habits UI #7、Post-deploy Runtime #96 PASS。
 - Habits production desktop/mobile list/create/edit/complete/history、真實 PostgreSQL cloud-domain runtime 與 release-level post-deploy regression均 PASS。
 - Cross-feature health：latest-release Drive Knowledge #54 為 FAIL（live external AI production acceptance）；不回滾 #6 closure，但在 final release gate 前必須重新收斂。

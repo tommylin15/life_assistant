@@ -7,7 +7,7 @@
 ## Latest checkpoint — 2026-10-09（優先於下方 2026-10-07 歷史快照）
 
 - **Completed packages：8/11 = 72.7%；#8 Calendar DONE / PASS**，完成依據 [CI 37882690249](https://github.com/tommylin15/life_assistant/actions/runs/37882690249) → [V3 37882875014](https://github.com/tommylin15/life_assistant/actions/runs/37882875014) → [Firebase 37885328134](https://github.com/tommylin15/life_assistant/actions/runs/37885328134) → [真實 Google read/list 37885330178](https://github.com/tommylin15/life_assistant/actions/runs/37885330178) → [Calendar UI 37885544932](https://github.com/tommylin15/life_assistant/actions/runs/37885544932)，全數為 `5c8d2fca8c9b17f6e4a013c02ba5d2b9fba86aa7`；Bootstrap 37882690327 PASS。
-- 原 Phase 1 #9、#10、#11 **NOT STARTED**；Post-Calendar P0 台灣免費活動 M0 按核准優先序先行，尚 **NOT IMPLEMENTED**；Phase 1 全案仍 PARTIAL。
+- 原 Phase 1 #9、#10、#11 **NOT STARTED**；Post-Calendar P0 台灣免費活動 M0 按核准優先序先行：來源清冊／離線度量程式／8 個測試 [CI #37892185617](https://github.com/tommylin15/life_assistant/actions/runs/37892185617) PASS，但真實 14 天觀測／合法存取審核與正式資料收集仍 **NOT VERIFIED / NOT IMPLEMENTED**。Phase 1 全案仍 PARTIAL。
 - Google write-side real account E2E 與獨立跨功能 Drive Knowledge model/provider regression 不能由 Calendar mocked UI 或其他 Gate 偷渡；狀態另看 `acceptance.md`。
 - 下列舊 **2026-10-07 checkpoint** 是歷史證據，不是現行完成分子或本輪宣稱。保留未勾選最終 Release Gate，不因工作包 #8 通過而批量勾選。
 

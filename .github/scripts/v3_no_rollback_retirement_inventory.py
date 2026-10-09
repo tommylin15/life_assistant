@@ -266,8 +266,16 @@ def gcs_candidates():
                 "prefixes": [{"prefix": prefix, **d} for prefix, d in sorted(groups.items())],
                 "object_names_disclosed": False,
             })
-        except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError,
-                urllib.error.HTTPError) as exc:
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                reports.append({"bucket": bucket, "status": "DELETED",
+                                "objects": 0, "delete_candidates": 0,
+                                "candidate_bytes": 0, "protected": 0,
+                                "prefixes": [], "object_names_disclosed": False})
+            else:
+                failures.append(bucket + ":HTTPError")
+                reports.append({"bucket": bucket, "status": "NOT_VERIFIED"})
+        except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as exc:
             failures.append(bucket + ":" + type(exc).__name__)
             reports.append({"bucket": bucket, "status": "NOT_VERIFIED"})
     return reports, failures

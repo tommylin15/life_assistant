@@ -81,8 +81,22 @@ def main():
     for bucket in CANDIDATE_BUCKETS:
         try:
             result["buckets"].append(metadata_summary(bucket, list_objects(bucket)))
-        except (OSError, ValueError, KeyError, subprocess.CalledProcessError,
-                urllib.error.HTTPError) as exc:
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                result["buckets"].append({
+                    "bucket": bucket, "readback": "PASS",
+                    "bucket_deleted": True, "objects": 0, "bytes": 0,
+                    "categories": {}, "deletion_eligible": False,
+                    "reason": "Verified legacy CI/CD bucket absent (404)",
+                })
+            else:
+                failed = True
+                result["buckets"].append({
+                    "bucket": bucket, "readback": "NOT_VERIFIED",
+                    "reason": "HTTPError: failed GCS inventory (not 404)",
+                    "deletion_eligible": False,
+                })
+        except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as exc:
             failed = True
             result["buckets"].append({
                 "bucket": bucket, "readback": "NOT_VERIFIED",

@@ -202,3 +202,28 @@ class FreeEventIngestionLease(Base):
         Integer, nullable=False, server_default=text("0"), default=0,
     )
     last_error_kind: Mapped[str | None] = mapped_column(String(40))
+
+
+class FreeEventSourceObservation(Base):
+    """Real fetched-source evidence. Not a fabricated 14-day quality verdict."""
+    __tablename__ = "free_event_source_observations"
+    __table_args__ = (
+        CheckConstraint("record_count >= 0 AND accepted_count >= 0 AND rejected_count >= 0",
+                        name="ck_free_event_obs_nonnegative"),
+        CheckConstraint("accepted_count + rejected_count <= record_count",
+                        name="ck_free_event_obs_bounded_counts"),
+        Index("ix_free_event_observations_source_time", "source_id", "observed_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_id)
+    source_id: Mapped[str] = mapped_column(
+        String(80), ForeignKey("free_event_sources.id"), nullable=False,
+    )
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    endpoint_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    response_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    record_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    accepted_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    rejected_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    fee_unknown_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    registration_start_unknown_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    complete_source: Mapped[bool] = mapped_column(Boolean, nullable=False)

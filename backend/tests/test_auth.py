@@ -106,6 +106,38 @@ class AuthApiTests(IsolatedAsyncioTestCase):
         self.assertEqual(auth.oauth_redirect_for_request(request),
                          auth.settings.google_redirect_uri)
 
+    async def test_staging_google_e2e_audit_requires_real_owner_and_exact_revision(self):
+        stage = Request({"type": "http", "headers": [(b"host", b"life-assistant-v3-stage-tl15.web.app")]})
+        other = Request({"type": "http", "headers": [(b"host", b"gen-lang-client-0593591102.web.app")]})
+        db = object()
+        owner = {"sub": "owner-sub", "email": "owner@example.test"}
+        with patch.dict("os.environ", {"ALLOWED_GOOGLE_EMAIL": "owner@example.test",
+                                       "K_REVISION": "life-assistant-api-00200-abc"}):
+            with patch("app.api.auth.start_execution", new_callable=AsyncMock) as start, \
+                 patch("app.api.auth.finish_execution", new_callable=AsyncMock) as finish:
+                start.return_value = object()
+                await auth._audit_staging_e2e(db, stage, owner, "staging_google_callback")
+                start.assert_awaited_once()
+                self.assertEqual(start.await_args.kwargs["entity_id"], "life-assistant-api-00200-abc")
+                self.assertEqual(start.await_args.kwargs["action_type"], "staging_google_callback")
+                finish.assert_awaited_once()
+                start.reset_mock(); finish.reset_mock()
+                await auth._audit_staging_e2e(db, other, owner, "staging_google_callback")
+                await auth._audit_staging_e2e(db, stage, {"sub": "bad", "email": "attacker@example.test"},
+                                              "staging_google_callback")
+                start.assert_not_awaited()
+                finish.assert_not_awaited()
+
+    async def test_staging_google_e2e_denies_missing_allowlist_and_revision(self):
+        stage = Request({"type": "http", "headers": [(b"host", b"life-assistant-v3-stage-tl15.web.app")]})
+        owner = {"sub": "owner-sub", "email": "owner@example.test"}
+        for cfg in ({"ALLOWED_GOOGLE_EMAIL": "", "K_REVISION": "life-assistant-api-00200-abc"},
+                    {"ALLOWED_GOOGLE_EMAIL": "owner@example.test", "K_REVISION": ""}):
+            with patch.dict("os.environ", cfg):
+                with patch("app.api.auth.start_execution", new_callable=AsyncMock) as start:
+                    await auth._audit_staging_e2e(object(), stage, owner, "staging_google_session")
+                    start.assert_not_awaited()
+
     async def test_current_user_rejects_missing_session(self):
         request = Request({"type": "http", "headers": []})
         with self.assertRaises(HTTPException) as ctx:

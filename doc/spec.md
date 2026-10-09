@@ -339,3 +339,9 @@ candidate, Preview and live API/UI/provider gates
 before CLOSED; preserve existing failures and schedule timing. Full contract,
 cost gate and recovery: `deployment_runbook.md`. Implementation is pending
 real GCP/Firebase acceptance; no product capability is added by this section.
+
+## Post-Calendar 台灣免費活動探索（核准規劃）
+
+使用者核准在 Calendar #8 產品驗收完成後，以此項目為下一個第一優先產品開發。**MVP M0–M4**：來源 14 天新鮮度與授權、Event/Session/Registration Opportunity/Organizer 與來源安全/去重、Flutter 有效候選列表與 admin-only 來源健康、通知/待辦/筆記分別授權、GCP 每日 06:00/18:00 正式掃描切換。**E1**：主辦追蹤、進階偏好、摘要/靜音和報名管理；**E2**：使用者貼連結、交通距離、電子報和進階個人化。
+
+詳細規格、用例、工作切分與驗收見 [`taiwan_free_events_discovery_plan.md`](taiwan_free_events_discovery_plan.md)，正式排序見 [`phase1_delivery_order.md`](phase1_delivery_order.md)。此處僅為經同意的產品規劃，不代表已修改 PostgreSQL、部署 GCP 或新增 Flutter UI；也不自動覆蓋本規格既有 Phase 1 scope freeze / Release Gate。狀態：**APPROVED PLAN / NOT IMPLEMENTED**。

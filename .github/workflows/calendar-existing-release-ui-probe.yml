@@ -1,0 +1,57 @@
+# One-time non-mutating browser probe against an already promoted release.
+# The push trigger applies only to the initial creation of this file.
+name: Calendar Existing Release UI Probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_release_sha:
+        description: "Existing Firebase release SHA; this probe does not deploy"
+        required: true
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/calendar-existing-release-ui-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  browser-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      EXPECTED_RELEASE_SHA: ${{ inputs.expected_release_sha || '22a7ce68b18ee8b3a63bee630687ef0f4372240e' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Playwright script
+        run: node --check .github/scripts/verify_calendar_ui_production.mjs
+      - name: Install pinned browser tooling
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+      - name: Verify existing production SHA and probe Calendar UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          BASE_URL="https://${GCP_PROJECT_ID}.web.app"
+          LIVE="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$BASE_URL/release.txt?probe=$GITHUB_SHA")"
+          test "$LIVE" = "$EXPECTED_RELEASE_SHA" || {
+            echo "::error::Firebase release mismatch; refusing to probe a different build"
+            exit 1
+          }
+          echo "browser_probe_target=PASS release=$LIVE script=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          BASE_URL="$BASE_URL" node .github/scripts/verify_calendar_ui_production.mjs
+      - name: Upload failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-browser-probe-${{ github.sha }}
+          path: /tmp/calendar-ui-acceptance.png
+          if-no-files-found: ignore

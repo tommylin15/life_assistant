@@ -6,6 +6,7 @@ Revises: 20261009_0012
 from collections.abc import Sequence
 from alembic import op
 import sqlalchemy as sa
+from app.services.free_events_schema_reconcile import (create_checked_table, create_checked_index)
 
 revision: str = "20261009_0013"
 down_revision: str | None = "20261009_0012"
@@ -14,7 +15,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_table(
+    create_checked_table(
         "free_event_source_observations",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("source_id", sa.String(80),
@@ -37,7 +38,7 @@ def upgrade() -> None:
             name="ck_free_event_obs_bounded_counts",
         ),
     )
-    op.create_index(
+    create_checked_index(
         "ix_free_event_observations_source_time",
         "free_event_source_observations", ["source_id", "observed_at"],
     )

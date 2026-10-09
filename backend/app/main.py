@@ -23,7 +23,7 @@ from app.api.tasks import router as tasks_router
 from app.api.templates import router as templates_router
 from app.confirmation import CONFIRMATION_HEADER, confirmation_requirement, confirmation_satisfied
 from app.db import session as db_session
-from app.db.session import Base, engine
+from app.db.session import engine
 from app.errors import (
     ApiError,
     api_error_handler,
@@ -93,8 +93,10 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 @app.on_event("startup")
 async def startup():
     try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        # Never apply DDL from a live API instance. 0%-traffic candidates can
+        # start before release migrations; create_all would silently create
+        # new tables without advancing Alembic, breaking the next upgrade.
+        await db_session.check_database()
     except Exception as exc:
         logging.error(
             "DB startup error type=%s category=%s",

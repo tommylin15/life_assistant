@@ -5,6 +5,7 @@ No existing table is modified; no source adapter or account action is enabled.
 from collections.abc import Sequence
 from alembic import op
 import sqlalchemy as sa
+from app.services.free_events_schema_reconcile import (create_checked_table, create_checked_index)
 
 revision: str = "20261009_0011"
 down_revision: str | None = "20261007_0010"
@@ -13,7 +14,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_table(
+    create_checked_table(
         "free_event_sources",
         sa.Column("id", sa.String(80), primary_key=True),
         sa.Column("tier", sa.String(24), nullable=False),
@@ -31,7 +32,7 @@ def upgrade() -> None:
                            name="ck_free_event_source_fetch_approval"),
         sa.CheckConstraint("expected_interval_hours BETWEEN 1 AND 168", name="ck_free_event_source_interval"),
     )
-    op.create_table(
+    create_checked_table(
         "free_event_organizers",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("canonical_key", sa.String(64), unique=True, nullable=False),
@@ -39,7 +40,7 @@ def upgrade() -> None:
         sa.Column("official_url", sa.Text()),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
-    op.create_table(
+    create_checked_table(
         "free_events",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("canonical_key", sa.String(64), unique=True, nullable=False),
@@ -61,10 +62,10 @@ def upgrade() -> None:
                            "(official_url IS NOT NULL AND last_verified_at IS NOT NULL)",
                            name="ck_free_event_verified_provenance"),
     )
-    op.create_index("ix_free_events_status_checked", "free_events", ["verification_status", "last_verified_at"])
-    op.create_index("ix_free_events_source", "free_events", ["source_id"])
+    create_checked_index("ix_free_events_status_checked", "free_events", ["verification_status", "last_verified_at"])
+    create_checked_index("ix_free_events_source", "free_events", ["source_id"])
 
-    op.create_table(
+    create_checked_table(
         "free_event_sessions",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("event_id", sa.String(36), sa.ForeignKey("free_events.id"), nullable=False),
@@ -86,10 +87,10 @@ def upgrade() -> None:
                            "(starts_at IS NULL AND ends_at IS NULL)",
                            name="ck_free_event_session_date_time_exclusive"),
     )
-    op.create_index("ix_free_event_sessions_starts_at", "free_event_sessions", ["starts_at"])
-    op.create_index("ix_free_event_sessions_starts_on", "free_event_sessions", ["starts_on"])
+    create_checked_index("ix_free_event_sessions_starts_at", "free_event_sessions", ["starts_at"])
+    create_checked_index("ix_free_event_sessions_starts_on", "free_event_sessions", ["starts_on"])
 
-    op.create_table(
+    create_checked_table(
         "free_event_registration_opportunities",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("session_id", sa.String(36), sa.ForeignKey("free_event_sessions.id"), nullable=False),
@@ -121,10 +122,10 @@ def upgrade() -> None:
                            "OR registration_url IS NOT NULL",
                            name="ck_free_event_registration_official_evidence"),
     )
-    op.create_index("ix_free_event_registration_opens", "free_event_registration_opportunities",
+    create_checked_index("ix_free_event_registration_opens", "free_event_registration_opportunities",
                     ["registration_opens_at"])
 
-    op.create_table(
+    create_checked_table(
         "free_event_evidence",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("event_id", sa.String(36), sa.ForeignKey("free_events.id"), nullable=False),
@@ -137,7 +138,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("event_id", "source_id", "field_name", "content_fingerprint",
                             name="uq_free_event_evidence_field_fingerprint"),
     )
-    op.create_index("ix_free_event_evidence_observed", "free_event_evidence", ["observed_at"])
+    create_checked_index("ix_free_event_evidence_observed", "free_event_evidence", ["observed_at"])
 
 
 def downgrade() -> None:

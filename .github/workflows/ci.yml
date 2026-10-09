@@ -154,6 +154,36 @@ jobs:
           alembic current
       - name: Verify real PostgreSQL transactions, constraints, concurrency and read filters
         run: python -m unittest discover -s tests -p 'test_free_events_postgres_integration.py' -v
+      - name: Reproduce historical API create_all table collision and safely adopt schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c 'CREATE DATABASE free_events_precreated_ci'
+          export DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/free_events_precreated_ci
+          alembic upgrade 20261007_0010
+          python - <<'PY'
+          import asyncio
+          from app.db.session import Base, engine
+          from app.models.free_events import FreeEventSourceObservation
+          async def simulate_old_api():
+              async with engine.begin() as conn:
+                  await conn.run_sync(Base.metadata.create_all)
+          asyncio.run(simulate_old_api())
+          PY
+          alembic upgrade 20261009_0013
+          alembic current
+          python - <<'PY'
+          import asyncio
+          from sqlalchemy import text
+          from app.db.session import engine
+          async def verify():
+              async with engine.connect() as conn:
+                  assert await conn.scalar(text('SELECT version_num FROM alembic_version')) == '20261009_0013'
+                  assert await conn.scalar(text(\"SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='public' AND tablename LIKE 'free_event_%'\")) == 8
+              print('precreated_schema_reconciliation=PASS (additive, no stamp/drop)')
+          asyncio.run(verify())
+          PY
 
   deployment-scripts:
     runs-on: ubuntu-latest

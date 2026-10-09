@@ -100,7 +100,52 @@ Future<void> _pump(WidgetTester tester, _FakeCalendarApi api) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _pumpNested(WidgetTester tester, _FakeCalendarApi api) async {
+  // MaterialApp owns the root navigator and the page lives inside another
+  // Navigator, matching Flutter Web shells that nest navigation scopes.
+  await tester.pumpWidget(
+    ProviderScope(
+      key: UniqueKey(),
+      overrides: [calendarApiProvider.overrideWithValue(api)],
+      child: MaterialApp(
+        home: Navigator(
+          onGenerateRoute: (_) => MaterialPageRoute<void>(
+            builder: (_) => const CalendarPage(),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  testWidgets('delete dialog returns result through root navigator even inside nested shell', (tester) async {
+    final api = _FakeCalendarApi();
+    await _pumpNested(tester, api);
+    final delete = find.byKey(const ValueKey('calendar-delete-event-1'));
+    await tester.ensureVisible(delete);
+    await tester.tap(delete);
+    await tester.pumpAndSettle();
+    expect(find.text('確認刪除行程'), findsOneWidget);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(api.deleted, isEmpty);
+    expect(find.text('確認刪除行程'), findsNothing);
+    expect(find.text('會議'), findsOneWidget);
+
+    final deleteAgain = find.byKey(const ValueKey('calendar-delete-event-1'));
+    await tester.ensureVisible(deleteAgain);
+    await tester.tap(deleteAgain);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('確認刪除'));
+    await tester.pumpAndSettle();
+    expect(api.deleted, ['event-1']);
+    expect(find.text('確認刪除行程'), findsNothing);
+    expect(find.text('會議'), findsNothing);
+  });
+
   testWidgets('month view displays timed and all-day Google events', (tester) async {
     await _pump(tester, _FakeCalendarApi());
     expect(find.text('我的 Google 行程'), findsOneWidget);

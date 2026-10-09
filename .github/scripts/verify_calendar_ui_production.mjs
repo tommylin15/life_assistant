@@ -250,20 +250,14 @@ async function desktop(context) {
   await (await named(page, '取消')).click();
   await page.getByRole('alertdialog').waitFor({ state: 'hidden', timeout: 6000 });
   assert.equal(state.deletes.length, 0, 'cancelled delete mutated Google Calendar');
-  // Flutter Web's semantics overlay can become empty after a dialog dismissal.
-  // Reopen the page like a real user, verify the event survived cancellation,
-  // then exercise the actual confirmed-delete action (no mocked click).
+  // The Calendar route must remain mounted after cancel in nested navigation.
+  // This is a production UX regression gate, not a reload-based workaround.
   await calendarDiagnostics(page, 'after-cancel');
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await semantics(page);
   await named(page, '更新後的會議');
 
   await eventAction(page, '刪除', '更新後的會議');
   const confirm = await named(page, '確認刪除');
-  // Exercise keyboard activation as a real user would. Flutter Web's
-  // semantics overlay sometimes consumes pointer clicks during dialog pop.
-  await confirm.focus();
-  await confirm.press('Enter');
+  await confirm.click();
   await delay(500);
   await calendarDiagnostics(page, 'post-confirm');
   console.log('calendar_delete_request_count=' + state.deletes.length);

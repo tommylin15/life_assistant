@@ -165,17 +165,19 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
+      // showDialog uses the root Navigator. Pop with the dialog context,
+      // not the Calendar page's context (which can be nested under an app shell).
+      builder: (dialogContext) => AlertDialog(
         title: const Text('確認刪除行程'),
         content: Text('確定要從 Google Calendar 刪除「' + event.title +
             '」嗎？這個操作無法在生活助理中復原。'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('確認刪除'),
           ),
         ],

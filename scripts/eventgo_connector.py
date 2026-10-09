@@ -314,7 +314,8 @@ async def crawl_live(
     # Optional dependency: never pulled into API's production requirements.
     from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 
-    run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, page_timeout=20000,\n                               delay_before_return_html=1.0)
+    run_cfg = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, page_timeout=20000,
+                               delay_before_return_html=1.0)
     results, details = {}, {}
     async with AsyncWebCrawler(config=BrowserConfig(headless=True, text_mode=True)) as crawler:
         requests = 0

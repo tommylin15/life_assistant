@@ -208,8 +208,8 @@ class FreeEventCatalogSchemaTests(unittest.TestCase):
         env = (root / "alembic/env.py").read_text(encoding="utf-8")
         self.assertIn("from app.models.free_events import", env)
         release = (root / "scripts/apply_cloud_domain_parity_release.py").read_text(encoding="utf-8")
-        self.assertIn('PREVIOUS_RELEASE_REVISION = "20261007_0010"', release)
-        self.assertIn('RELEASE_TARGET_REVISION = "20261009_0011"', release)
+        self.assertIn('PREVIOUS_RELEASE_REVISION = "20261009_0011"', release)
+        self.assertIn('RELEASE_TARGET_REVISION = "20261009_0012"', release)
         self.assertIn('"20261002_0009"', release)
 
 

@@ -29,14 +29,15 @@ from scripts.reconcile_projects_status_default import (
 )
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-PREVIOUS_RELEASE_REVISION = "20261007_0010"
+PREVIOUS_RELEASE_REVISION = "20261009_0011"
 LEGACY_DIRECT_RELEASE_REVISIONS = {
     "20260927_0005",
     "20260928_0006",
     "20260930_0007",
     "20261002_0009",
+    "20261007_0010",
 }
-RELEASE_TARGET_REVISION = "20261009_0011"
+RELEASE_TARGET_REVISION = "20261009_0012"
 EXIT_RELEASE_REVISION = 60
 EXIT_RELEASE_ALEMBIC = 61
 EXIT_RELEASE_MISSING_TABLES = 62
@@ -81,6 +82,7 @@ RELEASE_REQUIRED_TABLES = {
     "free_event_sessions",
     "free_event_registration_opportunities",
     "free_event_evidence",
+    "free_event_ingestion_leases",
 }
 RELEASE_REQUIRED_TASK_COLUMNS = {"source_type", "source_ref", "completed_at", "deleted_at"}
 

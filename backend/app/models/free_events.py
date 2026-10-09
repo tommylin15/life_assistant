@@ -181,3 +181,24 @@ class FreeEventEvidence(Base):
     content_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     evidence_excerpt: Mapped[str | None] = mapped_column(String(320))
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class FreeEventIngestionLease(Base):
+    """One durable source claim; never stores credentials or raw source payloads."""
+    __tablename__ = "free_event_ingestion_leases"
+    __table_args__ = (
+        CheckConstraint("consecutive_failures >= 0",
+                        name="ck_free_event_lease_nonnegative_failures"),
+    )
+    source_id: Mapped[str] = mapped_column(
+        String(80), ForeignKey("free_event_sources.id"), primary_key=True,
+    )
+    lease_token: Mapped[str] = mapped_column(String(64), nullable=False)
+    lease_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consecutive_failures: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0"), default=0,
+    )
+    last_error_kind: Mapped[str | None] = mapped_column(String(40))

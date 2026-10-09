@@ -8,7 +8,7 @@ Used by additive 0011/0012/0013 on older production databases.
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import context, op
 from app.db.session import Base
 from app.models import free_events as _event_models  # noqa: F401
 
@@ -99,6 +99,11 @@ def assert_compatible_existing_table(name: str) -> None:
 
 
 def create_checked_table(name: str, *args, **kwargs) -> None:
+    # Offline --sql is a static SQL render, not a connection to inspect.
+    # Keep the ordinary CREATE statements in offline review output.
+    if context.is_offline_mode():
+        op.create_table(name, *args, **kwargs)
+        return
     if sa.inspect(op.get_bind()).has_table(name):
         assert_compatible_existing_table(name)
         return
@@ -106,6 +111,9 @@ def create_checked_table(name: str, *args, **kwargs) -> None:
 
 
 def create_checked_index(name: str, table_name: str, columns, **kwargs) -> None:
+    if context.is_offline_mode():
+        op.create_index(name, table_name, columns, **kwargs)
+        return
     inspector = sa.inspect(op.get_bind())
     matches = [row for row in inspector.get_indexes(table_name)
                if row["name"] == name]

@@ -13,7 +13,9 @@
 - 先查證是否真正免費、是否仍有效、報名起訖時間；不可從活動日期猜測報名時間。聚合站需核對來源和授權。資料持久去重、重要變更通知、過期後禁用；預設活動結束後 30 天清除非必要內容但保留最小去重紀錄及使用者自行建立的資料。
 - 一般使用者可獨立決定加入提醒、待辦、筆記與指定筆記資料夾；來源監控/健康只給 authenticated admin，沿用既有 Flutter UI 與 FastAPI RBAC、不建立專用後台；admin email 仍待核實。
 - ChatGPT 的 06:00/18:00 掃描**只是暫時過渡**；正式目標是 Cloud Scheduler → Cloud Run → PostgreSQL → Flutter Web，真實 GCP 驗收通過後才停用過渡任務。
-- 此次只變更開發順序與設計；既有 Phase 1 release scope freeze / 必要驗收不能被文件默默取消。開始實作時必須明確記錄對 #9–#11 排程與 release gate 的影響。此功能 **PLANNED / NOT IMPLEMENTED**。
+- **階段與 Gate**：M0 來源合法性/14 天新鮮度基線 → M1 掃描/活動－場次－報名機會/去重與安全 → M2 一般使用者候選清單＋現有 UI 的 admin-only 來源健康 → M3 三種獨立個人動作/提醒與真實整合 → M4 Cloud Scheduler/Cloud Run 正式切換；以上 **M0–M4 屬 MVP 必要驗收**。其後 E1 第一版增強（主辦追蹤、進階偏好、摘要/通知控制）、E2 第二階段（貼連結、交通距離、電子報/推薦）。詳細驗收見產品規格 §9–§13。
+- **資料模型先行的必要決策**：同一活動下需分場次 Session 和報名機會 Registration Opportunity（窗口／票種／免費條件／候補）；精確報名時刻未知須保留未知，報名時間待公布可追蹤；主辦單位 Organizer 留可持續的身份關聯。必須在 migration 前評審。
+- 此次只變更開發順序與設計；既有 Phase 1 release scope freeze / 必要驗收不能被文件默默取消。開始實作時必須明確記錄對 #9–#11 排程與 release gate 的影響。此功能 **APPROVED PLAN / NOT IMPLEMENTED**。
 
 ## Current closure checkpoint — 2026-10-07
 

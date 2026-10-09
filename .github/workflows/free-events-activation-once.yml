@@ -1,5 +1,5 @@
-name: Free Events - One-Time Verified Production Activation
-# Retry pinned verified schema-reconciliation release after superseded pre-cutover V3 cancellation.
+name: Free Events - P0 P2 One-Time Integrated Acceptance
+# One-time exact-main V3 promotion and MoC Job digest cutover; never replaces DB/secrets.
 
 on:
   workflow_dispatch:
@@ -108,95 +108,90 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Create isolated DB-only source observer job from verified acceptance template
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --disable-pip-version-check pyyaml==6.0.3
-          gcloud run jobs describe life-assistant-core-acceptance \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --format export > "$RUNNER_TEMP/core-job.yaml"
-          python - "$RUNNER_TEMP/core-job.yaml" "$RUNNER_TEMP/free-events-job.yaml" <<'PY'
-          import sys,yaml
-          template=yaml.safe_load(open(sys.argv[1],encoding='utf-8'))
-          assert template.get('kind')=='Job'
-          spec=template['spec']['template']['spec']['template']['spec']
-          containers=spec['containers']
-          assert len(containers)==1
-          container=containers[0]
-          image=container['image']
-          assert image.startswith('ghcr.io/tommylin15/life_assistant-backend@sha256:'), 'Unexpected template image'
-          existing=container.get('env',[])
-          # Reuse the verified DB connection channel WITHOUT exposing values.
-          # A legacy password-bundle needs its non-secret DATABASE_* parameters
-          # to assemble the URL; excluding them silently routes to localhost.
-          explicit=[v for v in existing if v.get('name')=='DATABASE_URL']
-          bundle=[v for v in existing if v.get('name')=='LIFE_ASSISTANT_BUNDLE']
-          database_keys={
-              'DATABASE_HOST','DATABASE_NAME','DATABASE_PORT','DATABASE_USER',
-              'DATABASE_SSLMODE'
-          }
-          db_parameters=[v for v in existing if v.get('name') in database_keys]
-          if len(explicit)==1:
-              chosen=explicit
-              print('observer_db_channel=separate_database_url')
-          elif len(bundle)==1 and {v.get('name') for v in db_parameters} >= {
-              'DATABASE_HOST','DATABASE_NAME','DATABASE_USER'
-          }:
-              chosen=bundle+db_parameters
-              print('observer_db_channel=existing_bundle_plus_database_parameters')
-          else:
-              raise SystemExit('No complete approved DB connection in template; fail closed')
-          container['env']=chosen
-          container['args']=['-m','scripts.run_free_events_moc_batch']
-          template['metadata']['name']='life-assistant-free-events'
-          for field in ('uid','resourceVersion','creationTimestamp','generation','selfLink'):
-              template['metadata'].pop(field,None)
-          template.pop('status',None)
-          template['spec']['template']['spec']['taskCount']=1
-          with open(sys.argv[2],'w',encoding='utf-8') as out:
-              yaml.safe_dump(template,out,sort_keys=False)
-          print('observer_config=PASS isolated_job_one_DB_secret')
-          PY
-          gcloud run jobs replace "$RUNNER_TEMP/free-events-job.yaml" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --quiet
-          gcloud run jobs describe life-assistant-free-events \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
-            | jq -e '.metadata.name=="life-assistant-free-events"'
-          echo "observer_job=PASS permissions_reused_no_new_IAM" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Dispatch production Firebase Hosting and the first real source observation
+      - name: Pin existing MoC source Job to promoted immutable GHCR digest
         shell: bash
         run: |
           set -euo pipefail
           test "$(gh api repos/$GH_REPO/commits/main --jq .sha)" = "$GITHUB_SHA"
-          gh workflow run deploy-firebase-hosting.yml --ref main
-          gh workflow run free-events-moc-observations.yml --ref main
-          echo "firebase_and_first_moc_observation=DISPATCHED sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          gcloud run services describe life-assistant-api \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format=json > "$RUNNER_TEMP/live-service.json"
+          REVISION="$(jq -er '.status.traffic[] | select(.percent==100) | .revisionName' "$RUNNER_TEMP/live-service.json")"
+          gcloud run revisions describe "$REVISION" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format=json > "$RUNNER_TEMP/live-revision.json"
+          IMAGE="$(jq -er '.spec.containers[0].image' "$RUNNER_TEMP/live-revision.json")"
+          [[ "$IMAGE" =~ ^ghcr\.io/tommylin15/life_assistant-backend@sha256:[0-9a-f]{64}$ ]]
+          gcloud run jobs describe life-assistant-free-events \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format=json > "$RUNNER_TEMP/source-before.json"
+          python - "$RUNNER_TEMP/source-before.json" <<'PY'
+          import json,sys
+          o=json.load(open(sys.argv[1],encoding='utf-8'))
+          spec=o['spec']['template']['spec']['template']['spec']
+          assert len(spec['containers'])==1
+          c=spec['containers'][0]
+          assert c.get('command') in (['python'],['python3'])
+          assert c.get('args')==['-m','scripts.run_free_events_moc_batch']
+          names={x.get('name') for x in c.get('env',[])}
+          assert 'DATABASE_URL' in names or 'LIFE_ASSISTANT_BUNDLE' in names
+          PY
+          gcloud run jobs update life-assistant-free-events \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --image "$IMAGE" --quiet
+          gcloud run jobs describe life-assistant-free-events \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format=json > "$RUNNER_TEMP/source-after.json"
+          python - "$RUNNER_TEMP/source-before.json" "$RUNNER_TEMP/source-after.json" "$IMAGE" <<'PY'
+          import json,sys
+          b=json.load(open(sys.argv[1],encoding='utf-8'))
+          a=json.load(open(sys.argv[2],encoding='utf-8'))
+          bc=b['spec']['template']['spec']['template']['spec']['containers'][0]
+          ac=a['spec']['template']['spec']['template']['spec']['containers'][0]
+          assert ac.get('image')==sys.argv[3]
+          for key in ('command','args','env'):
+              assert ac.get(key)==bc.get(key)
+          assert a['spec']['template']['spec']['template']['spec'].get('serviceAccountName') == b['spec']['template']['spec']['template']['spec'].get('serviceAccountName')
+          PY
+          echo "moc_job_immutable_live_image=PASS" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify Hosting and first observation workflow results
+      - name: Dispatch one bounded official MoC observation
         shell: bash
         run: |
           set -euo pipefail
-          for WORKFLOW in deploy-firebase-hosting.yml free-events-moc-observations.yml; do
-            MATCH=""
-            for ATTEMPT in $(seq 1 180); do
-              MATCH="$(gh api "repos/$GH_REPO/actions/workflows/$WORKFLOW/runs?event=workflow_dispatch&per_page=15" \
-                --jq ".workflow_runs[] | select(.head_sha==\"$GITHUB_SHA\") | .id" | head -1)"
-              if [ -n "$MATCH" ]; then
-                RESULT="$(gh api repos/$GH_REPO/actions/runs/$MATCH --jq '.conclusion // empty')"
-                if [ "$RESULT" = success ]; then
-                  echo "$WORKFLOW=PASS run=$MATCH" >> "$GITHUB_STEP_SUMMARY"
-                  break
-                fi
-                if [ -n "$RESULT" ]; then
-                  echo "::error::$WORKFLOW run $MATCH result=$RESULT"
-                  exit 1
-                fi
+          test "$(gh api repos/$GH_REPO/commits/main --jq .sha)" = "$GITHUB_SHA"
+          gh workflow run free-events-moc-observations.yml --ref main
+          echo "moc_observation=DISPATCHED sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify source execution and owner status 401 isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          MATCH=""
+          RESULT=""
+          for ATTEMPT in $(seq 1 360); do
+            MATCH="$(gh api "repos/$GH_REPO/actions/workflows/free-events-moc-observations.yml/runs?event=workflow_dispatch&per_page=15" \
+              --jq ".workflow_runs[] | select(.head_sha==\"$GITHUB_SHA\") | .id" | head -1)"
+            if [ -n "$MATCH" ]; then
+              RESULT="$(gh api repos/$GH_REPO/actions/runs/$MATCH --jq '.conclusion // empty')"
+              if [ "$RESULT" = success ]; then
+                echo "moc_observation_workflow=PASS run=$MATCH" >> "$GITHUB_STEP_SUMMARY"
+                break
               fi
-              sleep 10
-            done
-            test -n "$MATCH" && [ "${RESULT:-}" = success ] || exit 1
-            RESULT=""
+              if [ -n "$RESULT" ]; then
+                echo "::error::MoC observation did not pass: $MATCH ($RESULT)"
+                exit 1
+              fi
+            fi
+            sleep 10
           done
-          echo "activation_stage=PASS (14-day source quality remains NOT VERIFIED)" >> "$GITHUB_STEP_SUMMARY"
+          test -n "$MATCH" && [ "$RESULT" = success ]
+          API_URL="$(gcloud run services describe life-assistant-api \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format='value(status.url)')"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$API_URL/api/v1/free-events/status")" = 401
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$API_URL/api/v1/free-events")" = 401
+          echo "owner_status_anonymous_401=PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "p0_production_owner_authenticated_db_counts=NOT_VERIFIED (owner session required)" >> "$GITHUB_STEP_SUMMARY"
+          echo "p2_real_new_ingestion_count=NOT_VERIFIED (source may not be due)" >> "$GITHUB_STEP_SUMMARY"
+          echo "p0_p2_combined=PARTIAL until owner readback and actual queue counts" >> "$GITHUB_STEP_SUMMARY"

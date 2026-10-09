@@ -19,6 +19,26 @@ logger = logging.getLogger(__name__)
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+STAGING_HOST = "life-assistant-v3-stage-tl15.web.app"
+STAGING_REDIRECT_URI = f"https://{STAGING_HOST}/auth/callback"
+
+
+def oauth_redirect_for_request(request: Request) -> str:
+    """Only the exact fixed staging origin gets staging OAuth.
+
+    Never derive a redirect from an arbitrary forwarded host: an attacker may
+    supply X-Forwarded-Host through an unauthenticated Cloud Run request.
+    """
+    hostname = request.headers.get("host", "").split(":", 1)[0].lower()
+    if hostname == STAGING_HOST:
+        return STAGING_REDIRECT_URI
+    return settings.google_redirect_uri
+
+
+def frontend_for_request(request: Request) -> str:
+    if oauth_redirect_for_request(request) == STAGING_REDIRECT_URI:
+        return f"https://{STAGING_HOST}"
+    return settings.frontend_url.rstrip("/")
 
 # Firebase Hosting only forwards the specially named __session cookie to
 # rewritten Cloud Run backends. Prefix the value so an OAuth state cookie
@@ -54,14 +74,14 @@ async def current_user(request: Request) -> dict:
 
 
 @router.get("/login")
-async def login():
+async def login(request: Request):
     if not settings.google_client_id:
         raise _http_error(503, "Google OAuth client ID is not configured")
 
     state = secrets.token_urlsafe(32)
     params = {
         "client_id": settings.google_client_id,
-        "redirect_uri": settings.google_redirect_uri,
+        "redirect_uri": oauth_redirect_for_request(request),
         "response_type": "code",
         "scope": SCOPES,
         "state": state,
@@ -79,7 +99,7 @@ async def login():
     return response
 
 
-async def _complete_login(code: str) -> tuple[str, dict]:
+async def _complete_login(code: str, redirect_uri: str) -> tuple[str, dict]:
     if not settings.google_client_secret:
         raise _http_error(503, "Google OAuth client secret is not configured")
 
@@ -91,7 +111,7 @@ async def _complete_login(code: str) -> tuple[str, dict]:
                     "code": code,
                     "client_id": settings.google_client_id,
                     "client_secret": settings.google_client_secret,
-                    "redirect_uri": settings.google_redirect_uri,
+                    "redirect_uri": redirect_uri,
                     "grant_type": "authorization_code",
                 },
             )
@@ -125,9 +145,9 @@ async def callback(
         if not expected_state or not secrets.compare_digest(state, expected_state):
             raise _http_error(400, "Invalid OAuth state")
 
-        id_token, user = await _complete_login(code)
+        id_token, user = await _complete_login(code, oauth_redirect_for_request(request))
         max_age = max(1, min(3600, int(user["exp"]) - int(time.time())))
-        frontend_url = settings.frontend_url.rstrip("/") + "/"
+        frontend_url = frontend_for_request(request) + "/"
         response = RedirectResponse(frontend_url)
         response.set_cookie(
             SESSION_COOKIE,
@@ -145,7 +165,7 @@ async def callback(
     user = await current_user(request)
     services = await complete_authorization(db, state, code, user)
     query = urlencode({"google": "connected", "services": ",".join(services)})
-    return RedirectResponse(f"{settings.frontend_url.rstrip('/')}/integrations?{query}")
+    return RedirectResponse(f"{frontend_for_request(request)}/integrations?{query}")
 
 
 @router.get("/me")

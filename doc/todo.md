@@ -30,6 +30,14 @@
 
 **Phase 1 scope-freeze：** 活動 MVP 插入優先序但不自動變更原 11 包分母；是否納入最終 Phase 1 release blocker 需另明示治理決策，不能推斷。
 
+## 2026-10-09 P1 優先補齊 + P0/P1 聯合驗收 readback
+
+- 已核實的既存 staging live：version `e3a6dd23aec06848`、`release.txt` = `eb9f60c3413a8e5216318888a6456a1c464d8cab`、兩條 rewrite 均 `pinTag` 到 `life-assistant-api-00197-fug`；[readback 37944737101](https://github.com/tommylin15/life_assistant/actions/runs/37944737101) PASS。
+- 現況阻礙：staging `/auth/login` **仍回 production callback**；P0 `/api/v1/free-events/status` staging/production 都 404（[readback 37945021056](https://github.com/tommylin15/life_assistant/actions/runs/37945021056)）；因此沒有新的後端 runtime 或 P0 真實 aggregate 驗收 PASS。
+- 已修正 staging OAuth 白名單來源選擇與 Google incremental callback/token exchange；加入單元測試及 staging-only clone rollback 安全 readback；建立 `v3-p0-p1-joint-acceptance.yml` 手動唯讀聯合 Gate。修碼與 CI 不等於 staging 重新發布。
+- 待辦：Google OAuth Client 追加固定 staging callback（保留正式 callback）、本次完整 SHA V3 candidate／Preview gate、真實 Google staging 登入與證據、stage-only live 更新與回復、P0 owner session 實際 aggregate 回覆／去重計量、聯合 runtime UI E2E。舊 staging version 是**可定位回復候選**，尚未證實完整 OAuth，不能假冒 verified fallback。
+- 雙工項維持 **PARTIAL / NOT VERIFIED**；已確認正式 Hosting/version 與 Cloud Run traffic 讀取能力存在，但未更新正式站或變更正式 traffic。
+
 ## 2026-10-09 P0/P1 工程啟動續作
 
 - **P0 統計讀回替代實作：** 新增只有明確 `ALLOWED_GOOGLE_EMAIL` owner session 才可使用的聚合 API `GET /api/v1/free-events/status` 與單元測試；GitHub Actions Cloud Logging 權限原 FAIL 未解除，正式 owner HTTPS／實際 rows/14-day/去重計量仍 **NOT VERIFIED**。後續需按 V3 release gate 發布驗證，不可用測試資料冒充結果。

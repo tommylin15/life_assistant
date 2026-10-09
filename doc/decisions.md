@@ -140,3 +140,14 @@ The user has superseded the Cloud Build-led V2 target above with the GitHub Acti
 ### Cloud Run V3 revision retention amendment — 2026-10-08
 
 User-approved target changed from the earlier conversational 2-revision proposal to **the latest 10 service revisions**. The final V3 release stage prunes only unprotected, 0%-traffic, older revisions **after successful live acceptance**, with rollback/traffic/tag safeguards, post-delete readback and independent GHCR digest preservation; >10 when protected is PARTIAL, not a license for destructive cleanup. No runtime pruning has yet been performed. Canonical detail: `ci_cd_ghcr_release_policy.md` §3F. **Status: APPROVED SPEC / IMPLEMENTATION NOT VERIFIED**.
+
+## 2026-10-09 — 台灣免費活動探索已核准的產品路線（規劃，未實作）
+
+- 使用者指定 **Calendar #8 正式產品驗收完成後，台灣免費活動探索與報名追蹤為下一個第一優先產品項目**；排序依 `phase1_delivery_order.md`，完整規格依 `taiwan_free_events_discovery_plan.md`。
+- 採階段式交付：**M0–M4 為 MVP**（14 天來源新鮮度／授權觀測、來源與資料正規化/安全、一般使用者與 admin-only UI、三項獨立個人動作、GCP Cloud Scheduler 正式切換）；**E1 第一版增強**（主辦單位追蹤、進階偏好、通知摘要與手動參與狀態管理）；**E2 第二階段**（貼連結、交通距離、電子報來源、進階個人化）。
+- 第一線高價值官方 RSS、新聞稿、主辦單位及合法接入報名網站每天 **06:00、18:00 Asia/Taipei** 掃描；開放資料每日補漏，data.gov.tw 只發現來源。ChatGPT 定時掃描為過渡，**GCP 正式排程未實作/未驗收**；正式驗收完成後停用過渡任務。
+- 核心結構需區分 **Event / Session / Registration Opportunity / Organizer / User Participation**；支援免費條件、不同報名窗口、待公布、候補、取消等生命週期；無來源證據的報名精確時刻不推測。
+- 一般使用者自由決定通知、待辦、筆記與筆記資料夾；不因瀏覽/收藏即建立個人物件；未追蹤者不推新活動。管理來源健康只給 verified admin UID/RBAC，不另建後台。提供的 email `tommylin15@gmai.com` 疑有拼字問題，身份核實前不授權。
+- 活動過期停止可操作、30 天後清理非必要內容並保留最小去重與使用者自有資料；真實 production 大量不可逆清理不因本規劃自動授權。
+- 不做自動替使用者報名/付款、繞過反爬、完整票務平台或常駐 VM。MVP 的安全、授權、幂等、資料品質、真實 Google 整合、mobile/desktop 以及 runtime evidence 不可降標。
+- 原有 Phase 1 11-package 完成數與 #9–#11 封板工作保留。此次優先順序變更**不是默認修改 Phase 1 Release Gate/scope freeze**；進入實作須依現有治理紀錄是否列為 release blocker。當前 **APPROVED PLAN / NOT IMPLEMENTED**。

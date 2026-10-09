@@ -1,8 +1,20 @@
 # 生活助理 App v0.1 — Acceptance Criteria
 
-最後更新：2026-10-07
+最後更新：2026-10-09（CI/CD V3 證據；既有各功能驗收項目不重新判定）
 
 > 本文件定義 Phase 1 Platform Release Gate。`[x]` 只代表該條要求層級已有足夠 evidence；Implementation / CI / Deployment PASS 不自動等於 Runtime / Integration PASS。
+
+## CI/CD V3 舊資產清理驗收（與產品 Phase 1 功能驗收分開）
+
+- [x] **PASS** — GitHub Actions → 公開 GHCR → Cloud Run promoted release。歷史成功 [run 37795789924](https://github.com/tommylin15/life_assistant/actions/runs/37795789924)，release SHA `25ff10c61abc15e557996b6070e02abf3b54a97b`。
+- [x] **PASS** — Cloud Run `life-assistant-api-00183-hax` 現為 Ready，所用 GHCR digest 為 `sha256:b06254c2db22489295c2a82928ea19a6352193fd7b0c72f1041040f22bc0d7b1`。
+- [x] **PASS** — 5 個歷史 Cloud Build Trigger 均 `disabled=true`，非直接刪除 trigger 定義。
+- [x] **PASS** — 指定 3 個舊 GCS CI/CD Buckets 均自 bucket list 消失且個別 404；8→5，保留 5 個 `dev-*`。
+- [x] **PASS** — 指定 3 個舊 AR Docker Repositories 自 list 消失；4→1，保留 `janus-postgres`，目前 1 Digest。
+- [x] **PASS** — 刪後 GCP 即時 readback [run 37867249614](https://github.com/tommylin15/life_assistant/actions/runs/37867249614)，GCS 已刪 Bucket / AR 唯一保留 repository / triggers / API readiness 均驗證；清理盤點已可將已刪 Bucket 的 404 報為 `DELETED`。
+- [ ] **NOT VERIFIED** — `janus-postgres/postgres:16.15` 是否仍被 GCE VM 或非 Cloud Run database container 使用。依保護資料庫／應用資料原則，未驗證前不刪。
+- [ ] **NOT VERIFIED** — 每個 Cloud Run Service 即時 Revision 最終數量及新的正式 release 專屬 E2E integration；不能只因 CI/CD 清理 PASS 就宣稱 Phase 1 DONE。
+- **Evidence register**：[`v3_cleanup_and_cutover_inventory.md`](v3_cleanup_and_cutover_inventory.md)；摘要 [`progress.md`](progress.md)。原先 58 AR Digest、77 GCS objects 是清理前候選統計，最終證據是已刪 Bucket/Repository 不存在；不得推定逐項 deletion audit event。
 
 ## Web / Cloud 核心
 

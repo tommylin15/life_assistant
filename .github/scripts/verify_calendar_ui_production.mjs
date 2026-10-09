@@ -57,8 +57,8 @@ async function mockApi(page, state) {
           summary: body.summary,
           description: body.description,
           location: body.location,
-          start: { dateTime: body.start },
-          end: { dateTime: body.end },
+          start: body.start_date ? { date: body.start_date } : { dateTime: body.start },
+          end: body.end_date ? { date: body.end_date } : { dateTime: body.end },
         };
         state.events.push(event);
         return json(route, 201, event);
@@ -70,7 +70,11 @@ async function mockApi(page, state) {
       if (method === 'PATCH') {
         state.updates.push({ id, body });
         const item = state.events.find(event => event.id === id);
-        Object.assign(item, { summary: body.summary, start: { dateTime: body.start }, end: { dateTime: body.end } });
+        Object.assign(item, {
+          summary: body.summary,
+          start: body.start_date ? { date: body.start_date } : { dateTime: body.start },
+          end: body.end_date ? { date: body.end_date } : { dateTime: body.end },
+        });
         return json(route, 200, item);
       }
       if (method === 'DELETE') {
@@ -210,8 +214,11 @@ async function desktop(context) {
   await observed(() => state.updates.some(item => item.id === 'calendar-1' && item.body.summary === '更新後的會議'), 'update');
   await named(page, '更新後的會議');
   console.log('calendar_ui_check=update:PASS');
-  // Modal pop/rebuild can suspend Flutter semantics on web; reactivate if needed.
+  // Re-read persisted state after edit and restore Flutter Web semantics after
+  // Navigator modal pop. Immediate action labels have dedicated widget coverage.
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await semantics(page);
+  await named(page, '更新後的會議');
   await eventAction(page, '刪除', '更新後的會議');
   await named(page, '確認刪除行程');
   assert.equal(state.deletes.length, 0, 'delete happened without confirmation');
@@ -222,6 +229,18 @@ async function desktop(context) {
   await observed(() => state.deletes.length === 1, 'delete');
   assert.equal(state.deletes[0].confirmation, 'explicit_user:calendar.delete:calendar-1');
   console.log('calendar_ui_check=confirmed_delete:PASS');
+
+  // An all-day edit must retain civil date fields, not a timezone timestamp.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await semantics(page);
+  await (await named(page, '編輯行程：全天假期')).click();
+  await (await named(page, '儲存')).click();
+  await observed(() => state.updates.some(item => item.id === 'calendar-allday'), 'all-day update');
+  const allDay = state.updates.find(item => item.id === 'calendar-allday').body;
+  assert.equal(allDay.start_date, '2026-10-09');
+  assert.equal(allDay.end_date, '2026-10-10');
+  assert.equal(allDay.start, undefined);
+  console.log('calendar_ui_check=all_day_edit:PASS');
 
   await page.close();
 }

@@ -55,8 +55,12 @@ class _FakeCalendarApi implements CalendarApi {
     final event = {
       'id': 'new-1',
       'summary': body['summary'],
-      'start': {'dateTime': body['start']},
-      'end': {'dateTime': body['end']},
+      'start': body['start_date'] != null
+          ? {'date': body['start_date']}
+          : {'dateTime': body['start']},
+      'end': body['end_date'] != null
+          ? {'date': body['end_date']}
+          : {'dateTime': body['end']},
     };
     eventsData.add(event);
     return event;
@@ -69,8 +73,12 @@ class _FakeCalendarApi implements CalendarApi {
     updated.add({'id': id, ...body});
     final event = eventsData.firstWhere((value) => value['id'] == id);
     event['summary'] = body['summary'];
-    event['start'] = {'dateTime': body['start']};
-    event['end'] = {'dateTime': body['end']};
+    event['start'] = body['start_date'] != null
+        ? {'date': body['start_date']}
+        : {'dateTime': body['start']};
+    event['end'] = body['end_date'] != null
+        ? {'date': body['end_date']}
+        : {'dateTime': body['end']};
     return event;
   }
 
@@ -159,6 +167,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.deleted, ['event-1']);
     expect(find.text('會議'), findsNothing);
+  });
+
+  testWidgets('all-day edit keeps date fields and exclusive end', (tester) async {
+    final api = _FakeCalendarApi();
+    await _pump(tester, api);
+    final edit = find.byKey(const ValueKey('calendar-edit-all-day-1'));
+    await tester.ensureVisible(edit);
+    await tester.tap(edit);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SwitchListTile), findsOneWidget);
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, true);
+    await tester.enterText(find.byKey(const ValueKey('calendar-title-field')), '新假期');
+    await tester.tap(find.text('儲存'));
+    await tester.pumpAndSettle();
+
+    final today = DateTime.now();
+    final start = DateTime(today.year, today.month, 5).toIso8601String().substring(0, 10);
+    final exclusive = DateTime(today.year, today.month, 6).toIso8601String().substring(0, 10);
+    expect(api.updated.single['start_date'], start);
+    expect(api.updated.single['end_date'], exclusive);
+    expect(api.updated.single.containsKey('start'), false);
+    expect(find.text('新假期'), findsOneWidget);
+  });
+
+  testWidgets('all-day create sends civil dates, not UTC timestamps', (tester) async {
+    final api = _FakeCalendarApi();
+    await _pump(tester, api);
+    await tester.tap(find.text('新增行程'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('calendar-title-field')), '全天研討');
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('儲存'));
+    await tester.pumpAndSettle();
+
+    expect(api.created.single['start_date'], isNotNull);
+    expect(api.created.single['end_date'], isNotNull);
+    expect(api.created.single.containsKey('start'), false);
+    expect(find.text('全天研討'), findsOneWidget);
   });
 
   testWidgets('shows connect, empty, and error states', (tester) async {

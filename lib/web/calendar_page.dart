@@ -134,10 +134,6 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
 
   Future<void> _edit([_CalendarEvent? event]) async {
     if (_busy) return;
-    if (event != null && event.allDay) {
-      _notify('全天行程目前支援查看與刪除，不能轉為一般時段來覆寫');
-      return;
-    }
     final body = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
@@ -411,6 +407,7 @@ class _CalendarEditorState extends State<_CalendarEditor> {
   late final TextEditingController _location;
   late DateTime _start;
   late DateTime _end;
+  late bool _allDay;
   String? _validation;
 
   @override
@@ -422,7 +419,12 @@ class _CalendarEditorState extends State<_CalendarEditor> {
     _start = widget.event?.start ??
         DateTime(widget.selectedDay.year, widget.selectedDay.month,
             widget.selectedDay.day, 9);
-    _end = widget.event?.end ?? _start.add(const Duration(hours: 1));
+    _allDay = widget.event?.allDay ?? false;
+    final existingEnd = widget.event?.end;
+    // Google end.date excludes the last displayed day.
+    _end = _allDay && existingEnd != null
+        ? DateTime(existingEnd.year, existingEnd.month, existingEnd.day - 1)
+        : existingEnd ?? _start.add(const Duration(hours: 1));
   }
 
   @override
@@ -477,6 +479,23 @@ class _CalendarEditorState extends State<_CalendarEditor> {
 
   void _save() {
     if (!_key.currentState!.validate()) return;
+    if (_allDay) {
+      final firstDay = _dateOnly(_start);
+      final lastDay = _dateOnly(_end);
+      if (lastDay.isBefore(firstDay)) {
+        setState(() => _validation = '結束日期不可早於開始日期');
+        return;
+      }
+      final exclusiveEnd = DateTime(lastDay.year, lastDay.month, lastDay.day + 1);
+      Navigator.pop(context, <String, dynamic>{
+        'summary': _title.text.trim(),
+        'description': _description.text.trim(),
+        'location': _location.text.trim(),
+        'start_date': DateFormat('yyyy-MM-dd').format(firstDay),
+        'end_date': DateFormat('yyyy-MM-dd').format(exclusiveEnd),
+      });
+      return;
+    }
     if (!_end.isAfter(_start)) {
       setState(() => _validation = '結束時間必須晚於開始時間');
       return;
@@ -485,7 +504,6 @@ class _CalendarEditorState extends State<_CalendarEditor> {
       'summary': _title.text.trim(),
       'description': _description.text.trim(),
       'location': _location.text.trim(),
-      // Backend requires timezone-aware timestamps.
       'start': _start.toUtc().toIso8601String(),
       'end': _end.toUtc().toIso8601String(),
     });
@@ -525,8 +543,19 @@ class _CalendarEditorState extends State<_CalendarEditor> {
                     decoration: const InputDecoration(labelText: '備註（選填）'),
                   ),
                   const SizedBox(height: AppSpacing.md),
+                  SwitchListTile(
+                    title: const Text('全天行程'),
+                    subtitle: const Text('全天活動的結束日期包含所選當天'),
+                    value: _allDay,
+                    onChanged: (value) => setState(() {
+                      _allDay = value;
+                      _validation = null;
+                    }),
+                  ),
                   for (final begin in [true, false]) ...[
-                    Text(begin ? '開始時間' : '結束時間'),
+                    Text(_allDay
+                        ? (begin ? '開始日期' : '結束日期（含當天）')
+                        : (begin ? '開始時間' : '結束時間')),
                     Wrap(
                       spacing: AppSpacing.sm,
                       children: [
@@ -534,12 +563,13 @@ class _CalendarEditorState extends State<_CalendarEditor> {
                           onPressed: () => _pickDate(begin),
                           child: Text(_dayText(begin ? _start : _end)),
                         ),
-                        OutlinedButton(
-                          onPressed: () => _pickTime(begin),
-                          child: Text(TimeOfDay.fromDateTime(
-                            begin ? _start : _end,
-                          ).format(context)),
-                        ),
+                        if (!_allDay)
+                          OutlinedButton(
+                            onPressed: () => _pickTime(begin),
+                            child: Text(TimeOfDay.fromDateTime(
+                              begin ? _start : _end,
+                            ).format(context)),
+                          ),
                       ],
                     ),
                   ],

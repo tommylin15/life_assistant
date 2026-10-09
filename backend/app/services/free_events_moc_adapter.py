@@ -79,7 +79,9 @@ def normalize_moc_record(item: dict[str, Any]) -> EventCandidate:
     # Organizer claims from a dataset are not sufficient to assert official
     # registration verification. A direct organizer/registration page review
     # is required in later ingestion and publication gates.
-    showinfo = item.get("showinfo") or []
+    # The official JSON uses camel-case showInfo; legacy exports used showinfo.
+    showinfo = item.get("showInfo") if "showInfo" in item else item.get("showinfo")
+    showinfo = showinfo or []
     if not isinstance(showinfo, list):
         raise ValueError("invalid showinfo array")
     sessions = []

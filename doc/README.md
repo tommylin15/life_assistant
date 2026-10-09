@@ -1,6 +1,6 @@
 # life_assistant 文件索引與治理
 
-最後更新：2026-10-08
+最後更新：2026-10-09
 
 > 這份文件是 `doc/` 的入口與角色說明。它不取代 implementation/runtime evidence；目前程式、API、schema、migration、CI/CD、deployment、infra、bug 與實際完成狀態仍以 GitHub `main` + runtime evidence 為 Source of Truth。
 
@@ -11,8 +11,9 @@
 3. `phase1_delivery_order.md`：**目前唯一的後續執行順序來源**。
 4. `acceptance.md`：各功能目前 PASS / FAIL / NOT VERIFIED 與 evidence。
 5. `release_checklist.md`：Phase 1 Release Gate。
-6. `ci_cd_ghcr_release_policy.md`：**2026-10-08 最新正式 CI/CD V3 設計／切換驗收條件（文件已核准，尚未實作）**。
-6. 需要特定領域細節時，再讀 architecture / data / migration / integration / UI / security 等專題文件。
+6. `ci_cd_ghcr_release_policy.md`：正式 V3 GitHub Actions → GHCR → Cloud Run 發布政策；**新部署已上線、舊 GCS/AR 清理已驗證**。
+7. `v3_cleanup_and_cutover_inventory.md`：**2026-10-09 GCP 清理後 readback、保留資產及未驗證依賴清單**。
+8. 需要特定領域細節時，再讀 architecture / data / migration / integration / UI / security 等專題文件。
 
 ## 文件角色
 
@@ -29,7 +30,8 @@
 - `phase1_delivery_order.md`：目前執行順序；若 `todo.md` / `wbs.md` 的排列不同，以本檔為準。
 - `acceptance.md`：目前驗收狀態與 evidence truth。
 - `release_checklist.md`：Phase 1 最終 release gate。
-- `ci_cd_ghcr_release_policy.md`：最新 GitHub Actions／GHCR／Cloud Run digest 版 release policy，取代 Cloud Build V2 目標。
+- `ci_cd_ghcr_release_policy.md`：已實施的 GitHub Actions／GHCR／Cloud Run digest 版 release policy，取代 Cloud Build V2 目標。
+- `v3_cleanup_and_cutover_inventory.md`：V3 切流與舊 AR/GCS 清理後的現場資產 readback、保留及未驗證事項（2026-10-09）。
 - `todo.md`：精簡 active backlog；只鏡射目前執行重點，不再維護另一套優先順序。
 - `progress.md`：人類可快速閱讀的進度摘要；詳細 run / revision / runtime evidence 不重複抄寫，以 `acceptance.md` 為準。
 - `wbs.md`：工作範圍分解，不是排程，也不是目前執行順序。

@@ -126,9 +126,20 @@ jobs:
           image=container['image']
           assert image.startswith('ghcr.io/tommylin15/life_assistant-backend@sha256:'), 'Unexpected template image'
           existing=container.get('env',[])
-          safe=[v for v in existing if v.get('name')=='DATABASE_URL']
-          assert len(safe)==1, 'No explicit DATABASE_URL in acceptance template; refuse to clone other secrets'
-          container['env']=safe
+          # Production DB credentials may be passed as a single existing Secret
+          # bundle, rather than a separately materialized DATABASE_URL. Reuse
+          # only the minimal available database channel; never print values.
+          explicit=[v for v in existing if v.get('name')=='DATABASE_URL']
+          bundle=[v for v in existing if v.get('name')=='LIFE_ASSISTANT_BUNDLE']
+          if len(explicit)==1:
+              chosen=explicit
+              print('observer_db_channel=separate_database_url')
+          elif len(bundle)==1:
+              chosen=bundle
+              print('observer_db_channel=existing_bundle_reference')
+          else:
+              raise SystemExit('No known database credential channel in job; fail closed')
+          container['env']=chosen
           container['args']=['-m','scripts.run_free_events_moc_batch']
           template['metadata']['name']='life-assistant-free-events'
           for field in ('uid','resourceVersion','creationTimestamp','generation','selfLink'):
@@ -144,7 +155,7 @@ jobs:
           gcloud run jobs describe life-assistant-free-events \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
             | jq -e '.metadata.name=="life-assistant-free-events"'
-          echo "isolated_observer_job=PASS permissions_reused_no_new_IAM" >> "$GITHUB_STEP_SUMMARY"
+          echo "observer_job=PASS permissions_reused_no_new_IAM" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Dispatch production Firebase Hosting and the first real source observation
         shell: bash

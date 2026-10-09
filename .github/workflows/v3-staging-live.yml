@@ -170,7 +170,14 @@ jobs:
               if firebase hosting:clone "$STAGE_SITE:@$(basename "$OLD_VERSION")" "$STAGE_SITE:live" --project "$GCP_PROJECT_ID" --json > "$RUNNER_TEMP/rollback.json"; then
                 curl -fsS -H "Authorization: Bearer $(gcloud auth print-access-token)" "$API/sites/$STAGE_SITE/channels/live/releases?pageSize=2" > "$RUNNER_TEMP/restored.json" || true
                 if jq -e --arg ver "$OLD_VERSION" '.releases | max_by(.releaseTime) | .version.name==$ver' "$RUNNER_TEMP/restored.json"; then
-                  echo "staging_rollback=PASS previous=$OLD_VERSION" >> "$GITHUB_STEP_SUMMARY"
+                  OLD_SHA="$(jq -r '.previous_live_sha' "$RUNNER_TEMP/gate.json")"
+                  if test "$(curl -fsSL -H 'Cache-Control: no-cache' "https://$STAGE_SITE.web.app/release.txt")" = "$OLD_SHA" &&
+                     test "$(curl -sS -o /dev/null -w '%{http_code}' "https://$STAGE_SITE.web.app/api/v1/free-events")" = 401 &&
+                     test "$(curl -sS -o /dev/null -w '%{http_code}' "https://$STAGE_SITE.web.app/auth/me")" = 401; then
+                    echo "staging_rollback=PASS previous=$OLD_VERSION old_sha=$OLD_SHA api_auth=PASS" >> "$GITHUB_STEP_SUMMARY"
+                  else
+                    echo "::error::ROLLBACK FAIL: prior static release/API/auth behavior not restored"
+                  fi
                 else
                   echo "::error::ROLLBACK FAIL: old version not confirmed"
                 fi
@@ -203,6 +210,7 @@ jobs:
           LIVE_URL="https://$STAGE_SITE.web.app"
           test "$(curl -fsSL -H 'Cache-Control: no-cache' "$LIVE_URL/release.txt")" = "$RELEASE_SHA"
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/api/v1/free-events")" = 401
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/api/v1/free-events/status")" = 401
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/auth/me")" = 401
           curl -sS -D "$RUNNER_TEMP/live-login.txt" -o /dev/null "$LIVE_URL/auth/login"
           grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' "$RUNNER_TEMP/live-login.txt"
@@ -213,7 +221,7 @@ jobs:
           test "$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod-releases-after.json")" = "$(cat "$RUNNER_TEMP/prod-version-before.txt")"
           mutated=0
           trap - ERR
-          echo "staging_live=PASS sha=$RELEASE_SHA version=$VERSION; production_hosting_and_traffic=UNCHANGED" >> "$GITHUB_STEP_SUMMARY"
+          echo "staging_live_smoke=PASS sha=$RELEASE_SHA version=$VERSION; production_hosting_and_traffic=UNCHANGED; true_OAuth_login=NOT_VERIFIED_until_independent_E2E" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Record preflight-only result when not publishing
         if: ${{ !inputs.apply }}

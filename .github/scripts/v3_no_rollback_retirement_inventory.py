@@ -211,16 +211,31 @@ def gcs_candidates():
                     raise RuntimeError("GCS metadata lacks object identifier")
                 prefix = key.split("/", 1)[0]
                 # Never print arbitrary private object name components.
-                group_key = prefix if prefix in SAFE_CI_PREFIXES else "<unclassified>"
+                lower = key.lower()
+                is_root_log = bool(re.fullmatch(
+                    r"log-[0-9a-f]{8}-[0-9a-f-]{20,50}(?:\\.txt|\\.log)?", lower))
+                if prefix in SAFE_CI_PREFIXES:
+                    group_key = prefix
+                elif is_root_log:
+                    group_key = "<cloud-build-root-log>"
+                elif "/" not in key and lower.startswith("log-"):
+                    group_key = "<root-log-other>"
+                elif "/" not in key and lower.startswith("source-"):
+                    group_key = "<root-source-other>"
+                elif "/" not in key and lower.endswith((".txt", ".log")):
+                    group_key = "<root-text-other>"
+                elif "/" not in key:
+                    group_key = "<root-unclassified>"
+                else:
+                    group_key = "<unclassified>"
                 g = groups[group_key]
                 size = int(item.get("size") or 0)
-                lower = key.lower()
                 protected = any(term in lower for term in PROTECTED_TERMS)
-                # Only known CI/CD artifacts are disposal candidates under the
-                # no-rollback policy. An unknown root object stays protected.
-                # The run-sources bucket is dedicated to Cloud Run SOURCE staging.
+                # Old Cloud Build objects, including UUID-named build logs, are
+                # candidates when not protected by data-sensitive name patterns.
                 candidate = (not protected and
-                             (prefix in SAFE_CI_PREFIXES or bucket.startswith("run-sources-")))
+                             (prefix in SAFE_CI_PREFIXES or is_root_log
+                              or bucket.startswith("run-sources-")))
                 if candidate:
                     g["candidate_objects"] += 1
                     g["candidate_bytes"] += size

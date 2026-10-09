@@ -30,6 +30,9 @@ class FreeEventIngestionTests(unittest.IsolatedAsyncioTestCase):
     def session(self, source):
         db = MagicMock()
         db.execute = AsyncMock()
+        # AsyncSession.execute() is async; its SQLAlchemy Result methods are
+        # synchronous (scalar_one/scalar_one_or_none). Do not await Result.
+        db.execute.return_value = MagicMock()
         db.begin.return_value.__aenter__ = AsyncMock()
         db.begin.return_value.__aexit__ = AsyncMock(return_value=False)
         db.execute.return_value.scalar_one_or_none.return_value = source
@@ -86,8 +89,10 @@ class FreeEventIngestionTests(unittest.IsolatedAsyncioTestCase):
         sql = str(stmt.compile(dialect=postgresql.dialect()))
         self.assertIn("ON CONFLICT (canonical_key) DO UPDATE", sql)
         self.assertIn("RETURNING free_events.id", sql)
-        self.assertIn("verified", sql)
-        self.assertIn("stale", sql)
+        self.assertIn("CASE WHEN", sql)
+        params = stmt.compile(dialect=postgresql.dialect()).params
+        self.assertIn(["verified", "stale"], params.values())
+        self.assertIn("stale", params.values())
         self.assertIn("content_fingerprint", sql)
         self.assertNotIn("DELETE", sql)
 

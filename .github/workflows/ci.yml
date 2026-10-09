@@ -110,6 +110,47 @@ jobs:
       - name: Test backend
         run: python -m unittest discover -s tests -v
 
+  # Independent local PostgreSQL service; never reads production credentials.
+  # Runs the genuine Alembic chain and executes transactional/concurrency checks.
+  free-events-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: free_events_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d free_events_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/free_events_ci
+      FREE_EVENTS_INTEGRATION_DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/free_events_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install pinned dependencies
+        run: pip install -r requirements.txt
+      - name: Verify fresh database upgrades through 0010 to 0011
+        run: |
+          alembic upgrade 20261007_0010
+          alembic current
+          alembic upgrade 20261009_0011
+          alembic current
+      - name: Verify real PostgreSQL transactions, constraints, concurrency and read filters
+        run: python -m unittest discover -s tests -p 'test_free_events_postgres_integration.py' -v
+
   deployment-scripts:
     runs-on: ubuntu-latest
     steps:

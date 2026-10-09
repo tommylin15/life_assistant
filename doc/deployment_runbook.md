@@ -43,6 +43,19 @@
 
 不在 evidence 中輸出 OAuth secret、cookie、session、credential 或使用者敏感資料。**發布成功、路由核實、正式網址不可受影響及 staging live E2E 是分開驗收項目。**
 
+## 2026-10-09 修正：固定 staging 真實 OAuth 的有界 canary 驗收
+
+**關鍵現況與前後順序：** SHA Preview 是隨版本變更且有期限的不同網域，無法在固定 staging hostname 完成真實 Google OAuth callback。因此舊 `v3-staging-live.yml` 要求「尚未發布 staging live 就先有同 SHA 的 staging true-OAuth 成功 run」會永遠卡死；已改為受控、**僅 staging** 的短時 canary 例外，不放寬任何 production release gate：
+
+1. 先有本次 full-SHA 完整 CI、V3 GHCR immutable digest、Cloud Run **0% 有 tag 候選**、SHA Preview、REST version→`/api/**`/`/auth/**` pinned revision、及既存 staging live 技術恢復基線的全部 PASS；任一失敗則不發布。
+2. 鎖住 V3 共用發布互斥鎖，在 staging live 記錄原 version / SHA / backend pinned tag 與正式 Hosting version／正式 Cloud Run 流量，clone **已驗證的同一 Preview Hosting version** 至 staging live。此步 **不會**寫 production Hosting、變更正式流量、變更 Secret／IAM 或建立額外 Job。
+3. **開始六分鐘真實 owner 登入 canary**。使用者在固定 `https://life-assistant-v3-stage-tl15.web.app/auth/login` 經 Google OAuth Web Client 完成 code callback，再在**相同瀏覽器 session** 開啟 `https://life-assistant-v3-stage-tl15.web.app/auth/me?staging_e2e=true`。新 backend 在驗證過 Google ID token、固定 staging origin、owner allowlist、Cloud Run `K_REVISION` 後，於既有 `execution_logs` 記錄 `staging_google_callback` 與 `staging_google_session` 的成功狀態，不記 token、auth code、cookie 或 email。
+4. 同一 release workflow 使用**現有** `life-assistant-db-migrate` Job 的短期**唯讀 `python -c` arguments override** 查詢 `execution_logs`：必須在本次 canary 起算後、**同一 user_sub、同一 expected revision** 有兩筆成功事件才算 PASS。此驗收不做 migration 或資料異動，也不需要 Cloud Logging reader IAM。若 timeout、登入失敗、DB 唯讀查詢失敗或其他後續 Gate 失敗，當次工作流在同一 shell trap **clone 回原 staging Hosting version**，再核對 version、原 SHA、API/Auth 401；若回復不完整則明報 **ROLLBACK FAIL**。此技術恢復不自稱舊版 Google 登入也曾 PASS。
+5. 成功後仍 readback 固定網址 SHA、Hosting version 的兩條 exact pinned routes、正式 Hosting version 和 Cloud Run 正式流量不變。**本 canary 只封板 true Google code exchange + owner session；桌面/手機 UI、其他 provider、資料庫實際 P0 aggregate 與正式發布 gate 仍獨立保留。**
+6. **不可跳過的外部前提**：必須在既有 Google OAuth **Web Client** 合法追加 `https://life-assistant-v3-stage-tl15.web.app/auth/callback`（保留 production callback），並確認實際 Hosting/Cloud Run 代理 Origin/Header 選擇正確。Google Console 變更與真實使用者登入不可以 mock、不可由假的 workflow run ID 冒充；未完成則 staging 新版最多為 **NOT VERIFIED**，不得宣稱 P1 DONE。
+
+程式證據：`backend/scripts/verify_staging_google_e2e.py`、`backend/tests/test_staging_oauth_e2e_gate.py`、`backend/app/api/auth.py` 與 `.github/workflows/v3-staging-live.yml`；`apply=false` 依然只做 preflight，不改 staging live。**目前僅實作與 CI 階段，尚未執行這個 live canary，實際 Google Client redirect URI 設定也 NOT VERIFIED。**
+
 ## 2026-10-09 staging live 現場 readback／OAuth 隔離修正（本輪最新）
 
 - GitHub Actions 唯讀現場盤點 [37944737101](https://github.com/tommylin15/life_assistant/actions/runs/37944737101) **PASS**：staging site **live** 已存在，Hosting version `sites/life-assistant-v3-stage-tl15/versions/e3a6dd23aec06848`；固定 URL `/release.txt` 讀出 `eb9f60c3413a8e5216318888a6456a1c464d8cab`；Hosting REST `/api/**`、`/auth/**` 各有單一 pinned tag `v3-eb9f60c341` 並精確對應 Cloud Run revision `life-assistant-api-00197-fug`。此版本只確定靜態 SHA、pins 及未登入存取控制，**尚不是「真實 Google OAuth 已驗證」的 fallback 認證**。

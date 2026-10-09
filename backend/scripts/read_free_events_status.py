@@ -19,7 +19,7 @@ from app.services.free_events_discovery import verified_catalog_query
 
 READBACK_MARKER = "FREE_EVENTS_READBACK_V1"
 SOURCE_ID = "moc_events_all"
-EXPECTED_REVISION = "20261009_0013"
+EXPECTED_REVISION = "20261009_0014"
 
 
 async def readback() -> dict[str, object]:
@@ -88,6 +88,11 @@ async def readback() -> dict[str, object]:
                 WHERE e.source_id=:source
             """), {"source": SOURCE_ID})
 
+            queue_states = (await conn.execute(text("""
+                SELECT state, count(*) FROM free_event_candidate_queue
+                WHERE source_id = :source GROUP BY state
+            """), {"source": SOURCE_ID})).all()
+            queue_counts = {str(state): int(count) for state, count in queue_states}
             # Count rows under the exact production API predicate; do not
             # substitute "fee=free" or non-verified source candidates.
             live_query = verified_catalog_query(now=now, limit=50, offset=0)
@@ -132,6 +137,10 @@ async def readback() -> dict[str, object]:
                     "complete_source": bool(latest["complete_source"]),
                 } if latest else None),
                 "current_source_events": total,
+                "queue_source_counts": queue_counts,
+                "queue_source_total": sum(queue_counts.values()),
+                "queue_source_done": queue_counts.get("done", 0),
+                "queue_source_failed": queue_counts.get("failed", 0),
                 "current_unique_canonical_keys": int(events["unique_keys"]),
                 "current_duplicate_canonical_keys": total - int(events["unique_keys"]),
                 "current_source_sessions": int(session_count or 0),

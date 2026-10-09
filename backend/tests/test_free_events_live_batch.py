@@ -12,6 +12,18 @@ from scripts.run_free_events_moc_batch import (
 
 
 class FreeEventsLiveBatchTests(unittest.TestCase):
+    def test_batch_routes_to_durable_queue_before_catalog(self):
+        from pathlib import Path
+        source = (Path(__file__).resolve().parents[1] /
+                  "scripts/run_free_events_moc_batch.py").read_text(encoding="utf-8")
+        self.assertIn("enqueue_candidate(", source)
+        self.assertIn("claim_candidate(", source)
+        self.assertIn("complete_candidate(", source)
+        self.assertLess(source.index("enqueue_candidate(db, candidate"),
+                        source.index("claim = await claim_candidate("))
+        self.assertIn('EXPECTED_REVISION = "20261009_0014"', source)
+
+
     def test_only_published_json_source_is_hard_coded(self):
         self.assertEqual(DATASET_ENDPOINT,
             "https://cloud.culture.tw/frontsite/trans/SearchShowAction.do"

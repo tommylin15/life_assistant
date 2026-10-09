@@ -21,6 +21,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
 from app.models.free_events import FreeEventSource, FreeEventSourceObservation
+from app.services.free_events_candidate_queue import enqueue_candidate, claim_candidate, complete_candidate
+from app.services.free_events_normalization import EventCandidate
 from app.services.free_events_ingest import ingest_approved_candidate
 from app.services.free_events_lease import claim_source_batch, finish_source_batch
 from app.services.free_events_moc_adapter import normalize_moc_record
@@ -34,7 +36,7 @@ SOURCE_ID = "moc_events_all"
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 MAX_RECORDS = 12000
 MAX_ADMISSION = 400
-EXPECTED_REVISION = "20261009_0013"
+EXPECTED_REVISION = "20261009_0014"
 
 
 class SourceBatchError(RuntimeError):
@@ -140,30 +142,61 @@ async def run_batch() -> dict:
             if not rows:
                 raise SourceBatchError("schema_drift")
             accepted = rejected = unknown_fee = unknown_open = 0
+            queued = unchanged = 0
             for row in sample:
                 try:
                     candidate = normalize_moc_record(row)
                     if not candidate.sessions:
                         raise ValueError("no structured show sessions")
-                    async with factory() as db:
-                        await ingest_approved_candidate(
-                            db, candidate, observed_at=observed_at
-                        )
-                    accepted += 1
-                    unknown_fee += sum(
-                        opportunity.fee_kind == "unknown"
-                        for session in candidate.sessions
-                        for opportunity in session.opportunities
-                    )
-                    unknown_open += sum(
-                        opportunity.opens_at is None
-                        for session in candidate.sessions
-                        for opportunity in session.opportunities
-                    )
                 except (ValueError, TypeError):
                     rejected += 1
+                    continue
+                async with factory() as db:
+                    action = await enqueue_candidate(db, candidate, observed_at=observed_at)
+                accepted += 1
+                queued += int(action == "queued")
+                unchanged += int(action == "unchanged")
+                unknown_fee += sum(
+                    opportunity.fee_kind == "unknown"
+                    for session in candidate.sessions
+                    for opportunity in session.opportunities
+                )
+                unknown_open += sum(
+                    opportunity.opens_at is None
+                    for session in candidate.sessions
+                    for opportunity in session.opportunities
+                )
             if accepted == 0:
                 raise SourceBatchError("schema_drift")
+            processed = failed = 0
+            for _ in range(MAX_ADMISSION):
+                async with factory() as db:
+                    claim = await claim_candidate(
+                        db, source_id=SOURCE_ID, now=datetime.now(timezone.utc),
+                        lease_minutes=60,
+                    )
+                if claim is None:
+                    break
+                succeeded = False
+                try:
+                    candidate = EventCandidate.model_validate(claim.payload)
+                    async with factory() as db:
+                        await ingest_approved_candidate(
+                            db, candidate, observed_at=claim.observed_at,
+                        )
+                    succeeded = True
+                except Exception:
+                    succeeded = False
+                async with factory() as db:
+                    acked = await complete_candidate(
+                        db, claim, now=datetime.now(timezone.utc),
+                        success=succeeded,
+                        failure_kind=None if succeeded else "unknown",
+                    )
+                if not acked:
+                    raise SourceBatchError("source_revoked")
+                processed += int(succeeded)
+                failed += int(not succeeded)
             # The sampled rows are not the complete underlying source.
             async with factory() as db:
                 async with db.begin():
@@ -180,6 +213,8 @@ async def run_batch() -> dict:
                         registration_start_unknown_count=unknown_open,
                         complete_source=(len(sample) == len(rows) and rejected == 0),
                     ))
+            if failed:
+                raise SourceBatchError("validation_error")
             async with factory() as db:
                 ack = await finish_source_batch(
                     db, source_id=SOURCE_ID, token=lease_token,
@@ -191,7 +226,11 @@ async def run_batch() -> dict:
                 "status": "OBSERVED_UNVERIFIED", "source_id": SOURCE_ID,
                 "observed_at": observed_at.isoformat(),
                 "source_records": len(rows),
-                "candidate_records_ingested": accepted,
+                "candidate_records_accepted": accepted,
+                "candidate_records_queued": queued,
+                "candidate_records_unchanged": unchanged,
+                "candidate_records_ingested": processed,
+                "candidate_records_failed": failed,
                 "candidate_records_rejected": rejected,
                 "fee_unknown": unknown_fee,
                 "registration_start_unknown": unknown_open,

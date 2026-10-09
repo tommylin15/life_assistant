@@ -31,3 +31,7 @@ POST /api/v1/internal/free-events/candidates:batch
 
 ## Delivery decision
 Preferred durable pipeline: reviewed source adapter -> authenticated Cloud Run batch -> PostgreSQL -> verified-only read API -> Flutter. ChatGPT 06/18 task remains a discovery-only transitional channel until authenticated bridge ingestion is actually available. Never claim scheduled ChatGPT outputs automatically reached life_assistant before live readback.
+
+## 2026-10-10 — Internal queue implementation vs external write API
+
+An internal reviewed-source normalized candidate queue has been implemented at `free_event_candidate_queue` (Alembic 0014) and connected to the official Ministry of Culture batch; deterministic normalization and PostgreSQL catalog ingestion remain the only execution path for that source. This is **not** the separately planned authenticated `POST /api/v1/internal/free-events/candidates:batch` endpoint. That endpoint, TDX and aggregator authorization/ingestion, high-value paid opportunity expansion and live production queue readback remain separate work. No public write method or AI escalation is enabled as part of P0–P2.

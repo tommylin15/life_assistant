@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer,
-    Numeric, String, Text, UniqueConstraint, false, func, text,
+    Numeric, String, Text, UniqueConstraint, JSON, false, func, text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -227,3 +227,37 @@ class FreeEventSourceObservation(Base):
     fee_unknown_count: Mapped[int] = mapped_column(Integer, nullable=False)
     registration_start_unknown_count: Mapped[int] = mapped_column(Integer, nullable=False)
     complete_source: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+class FreeEventCandidateQueue(Base):
+    """Normalized source candidate, never raw HTML or personal credentials."""
+    __tablename__ = "free_event_candidate_queue"
+    __table_args__ = (
+        UniqueConstraint("source_id", "external_event_key",
+                         name="uq_free_event_candidate_source_key"),
+        CheckConstraint(
+            "state IN ('pending', 'processing', 'done', 'retry', 'failed')",
+            name="ck_free_event_candidate_state",
+        ),
+        CheckConstraint(
+            "attempt_count >= 0 AND attempt_count <= 5",
+            name="ck_free_event_candidate_attempts",
+        ),
+        Index("ix_free_event_candidate_claim", "source_id", "state", "next_retry_at"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_id)
+    source_id: Mapped[str] = mapped_column(
+        String(80), ForeignKey("free_event_sources.id"), nullable=False,
+    )
+    external_event_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    candidate_payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'pending'"))
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_token: Mapped[str | None] = mapped_column(String(64))
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_kind: Mapped[str | None] = mapped_column(String(40))

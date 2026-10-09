@@ -18,6 +18,7 @@ from app.models.free_events import (
     FreeEvent, FreeEventEvidence, FreeEventOrganizer,
     FreeEventRegistrationOpportunity, FreeEventSession, FreeEventSource,
     FreeEventIngestionLease, FreeEventSourceObservation,
+    FreeEventCandidateQueue,
 )
 from app.services.free_events_normalization import EventCandidate, canonical_event_key
 from app.services.free_events_ingest import (
@@ -163,15 +164,16 @@ class FreeEventPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_exact_alembic_head_and_additive_tables(self):
         async with self.engine.connect() as conn:
             revision = await conn.scalar(text("SELECT version_num FROM alembic_version"))
-            self.assertEqual(revision, "20261009_0013")
+            self.assertEqual(revision, "20261009_0014")
             rows = (await conn.execute(text(
                 "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public' "
                 "AND tablename LIKE 'free_event_%'"
             ))).scalars().all()
-            self.assertEqual(len(rows), 8)
+            self.assertEqual(len(rows), 9)
             self.assertIn("free_events", rows)
             self.assertIn("free_event_ingestion_leases", rows)
             self.assertIn("free_event_source_observations", rows)
+            self.assertIn("free_event_candidate_queue", rows)
             self.assertIn("free_event_registration_opportunities", rows)
             other = await conn.scalar(text("SELECT to_regclass('public.tasks')"))
             self.assertIsNotNone(other)

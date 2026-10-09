@@ -340,18 +340,18 @@ jobs:
           echo "migration_job_image=PASS no_migration_executed image=$IMAGE_REF" \
             >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Apply additive 0013 schema before production cutover
+      - name: Apply additive 0014 schema before production cutover
         if: ${{ inputs.promote }}
         shell: bash
         run: |
           set -euo pipefail
-          # Migrations 0011/0012/0013 are additive and checked against exact head.
+          # Migrations 0011/0012/0013/0014 are additive and checked against exact head.
           .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-db-migrate \
             gcloud run jobs execute life-assistant-db-migrate \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --args=-m,scripts.apply_cloud_domain_parity_release \
             --task-timeout 10m --wait --quiet
-          echo "free_events_schema_migration=PASS alembic=20261009_0013" >> "$GITHUB_STEP_SUMMARY"
+          echo "free_events_schema_migration=PASS alembic=20261009_0014" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Require explicit promotion selection
         if: ${{ !inputs.promote }}

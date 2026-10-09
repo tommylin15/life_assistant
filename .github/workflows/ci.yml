@@ -152,8 +152,10 @@ jobs:
           alembic current
           alembic upgrade 20261009_0013
           alembic current
+          alembic upgrade 20261009_0014
+          alembic current
       - name: Verify real PostgreSQL transactions, constraints, concurrency and read filters
-        run: python -m unittest discover -s tests -p 'test_free_events_postgres_integration.py' -v
+        run: python -m unittest discover -s tests -p 'test_free_events_*postgres*.py' -v
       - name: Reproduce historical API create_all table collision and safely adopt schema
         shell: bash
         run: |
@@ -173,14 +175,16 @@ jobs:
           PY
           alembic upgrade 20261009_0013
           alembic current
+          alembic upgrade 20261009_0014
+          alembic current
           python - <<'PY'
           import asyncio
           from sqlalchemy import text
           from app.db.session import engine
           async def verify():
               async with engine.connect() as conn:
-                  assert await conn.scalar(text('SELECT version_num FROM alembic_version')) == '20261009_0013'
-                  assert await conn.scalar(text("""SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='public' AND tablename LIKE 'free_event_%'""")) == 8
+                  assert await conn.scalar(text('SELECT version_num FROM alembic_version')) == '20261009_0014'
+                  assert await conn.scalar(text("""SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='public' AND tablename LIKE 'free_event_%'""")) == 9
               print('precreated_schema_reconciliation=PASS (additive, no stamp/drop)')
           asyncio.run(verify())
           PY

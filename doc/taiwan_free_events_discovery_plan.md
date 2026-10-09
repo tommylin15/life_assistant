@@ -151,3 +151,7 @@ Admin 採現有 Flutter UI／FastAPI API、**後端 verified UID allowlist/RBAC*
 - **時效驗證方法**：若未來重新評估 data.gov.tw 所發現的每個資料集，先核對授權、固定端點、欄位／活動 ID，再以至少 14 個真實觀測日建立「主辦公告日／來源活動發布日／首次看到日／報名開放及截止日」可追溯紀錄。計算具樣本分母的首次發現延遲分布、過期／取消／已截止率、費用與資格錯誤率、重複率和缺值率。來源沒有發布日期就標 `unknown`，不可用資料集修改時間、活動舉辦日或第一次看見日期冒充發布時間。門檻待實測與使用者核准，沒有樣本不得判 PASS。
 - **共同處理管線（設計，非當前完整實作）**：已獲授權的文化部及未來 TDX 走來源 JSON/API Adapter → 正規化 → 候選去重/Queue → 官方報名頁交叉驗證 → Life PostgreSQL；結構化欄位預設 **AI 呼叫 0**，僅自由文本模糊且變更內容指紋時才考慮 AI。EventGo／yii.tw 只在授權後用輕量索引發現，再由獲准原始來源擷取／必要時 AI；**不同來源共用同一候選閘門與去重規則，不宣稱 Queue、跨來源工作流或 AI E2E 已上線。**
 - **EventGo／yii.tw 待授權排程決策**：週一 18:00、週三 12:00、週五 16:00（Asia/Taipei），上架日期以「天」篩選、重疊時段靠去重；無可信上架日則待查，不以活動日替代。該排程是需求，並非已上線自動爬蟲。BeClass 只留間接報名連結，不爬取其網站。
+
+## 2026-10-10 — P0–P2 implementation milestone
+
+The first shared-path implementation reuses `normalize_moc_record` and `ingest_approved_candidate` with an **additive durable `free_event_candidate_queue`**. Per-source network permissions and calendars do not change; structured JSON sources use deterministic parsing and **0 AI by default**. Candidate staging is an internal normalized representation; official verification and publication are still separate gates. MoC source observation metrics distinguish accepted normalized samples, newly/changed enqueues, unchanged candidates and actually processed claims. P0 owner-only readback now includes actual queue statuses but remains **runtime NOT VERIFIED** until retrieved under real owner authentication. Do not label it DONE based on tests alone.

@@ -128,7 +128,8 @@ jobs:
           PREVIEW_URL="$(jq -r '.url // empty' "$RUNNER_TEMP/channel.json")"
           [[ "$PREVIEW_URL" == https://"$STAGE_SITE"--*.web.app ]]
           PREVIEW_SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "$PREVIEW_URL/release.txt")"
-          python .github/scripts/v3_staging_gate.py --preview-releases "$RUNNER_TEMP/preview-releases.json"             --preview-version "$RUNNER_TEMP/preview-version.json"             --stage-releases "$RUNNER_TEMP/stage-releases.json"             --stage-version "$RUNNER_TEMP/stage-version.json"             --cloud-run "$RUNNER_TEMP/run-before.json" --sha "$RELEASE_SHA"             --revision "$EXPECTED_REVISION" --preview-sha "$PREVIEW_SHA" > "$RUNNER_TEMP/gate.json"
+          STAGE_SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "https://$STAGE_SITE.web.app/release.txt")"
+          python .github/scripts/v3_staging_gate.py --preview-releases "$RUNNER_TEMP/preview-releases.json"             --preview-version "$RUNNER_TEMP/preview-version.json"             --stage-releases "$RUNNER_TEMP/stage-releases.json"             --stage-version "$RUNNER_TEMP/stage-version.json"             --cloud-run "$RUNNER_TEMP/run-before.json" --sha "$RELEASE_SHA"             --revision "$EXPECTED_REVISION" --preview-sha "$PREVIEW_SHA" --stage-sha "$STAGE_SHA" > "$RUNNER_TEMP/gate.json"
           jq -e '.status=="PASS"' "$RUNNER_TEMP/gate.json"
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL/api/v1/free-events")" = 401
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL/auth/me")" = 401

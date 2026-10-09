@@ -27,7 +27,9 @@ class FreeEventsM0Tests(unittest.TestCase):
         return obs
 
     def test_only_approved_official_source_is_enabled(self):
-        self.assertGreaterEqual(len(self.registry["sources"]), 9)
+        self.assertEqual(len(self.registry["sources"]), 9)
+        self.assertNotIn("beclass", {s["id"] for s in self.registry["sources"]})
+        self.assertFalse(next(s for s in self.registry["sources"] if s["id"] == "eventgo")["enabled_for_fetch"])
         self.assertEqual([s["id"] for s in self.registry["sources"] if s["enabled_for_fetch"]], ["moc_events_all"])
         source = next(s for s in self.registry["sources"] if s["id"] == "moc_events_all")
         self.assertEqual(source["tier"], "official_dataset")

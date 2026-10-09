@@ -50,7 +50,7 @@ Phase 1 不再採「所有底層項目全部清零後才開始 UI」。目前正
 2. 收斂 authorization / minimum-permission + destructive/sensitive policy 核心版。
 3. 完成 Checklist Cloud 主線。
 4. 立即進 UI Vertical Slice A：App Shell → Task 完整 UX → Project UX。
-5. 再依序產品化 Notes（同批補 full-text search）→ Habits → Shopping → Calendar → Activity / Integrations。
+5. 再依序產品化 Notes（同批補 full-text search）→ Habits → Shopping → Calendar；**Calendar #8 全部驗收完成後，先進行「台灣免費活動探索與報名追蹤」（Post-Calendar P0）**，再接原 #9 Activity / Integrations、#10 Foundation tail、#11 Final Release Gate；原 11 包數量與 release gates 不因新需求規劃而改寫。詳見 [`doc/phase1_delivery_order.md`](doc/phase1_delivery_order.md) 與 [`doc/taiwan_free_events_discovery_plan.md`](doc/taiwan_free_events_discovery_plan.md)。
 6. Bridge/MCP 完整化、真實 provider failure、完整 attachment strategy、真實歷史 SQLite migration 等非直接 UI dependency，不再無限期阻塞主要 UI。
 
 使用者功能的完成判定採 vertical slice：除了 implementation / tests / CI / deployment / runtime / integration，還必須有 UI entry、可操作 flow，以及 mobile / desktop UX acceptance，才可標示產品層 DONE。

@@ -78,14 +78,6 @@ def _external_url(href: str) -> str | None:
     return urlunsplit((u.scheme, u.netloc.lower(), u.path, u.query, ""))
 
 
-def _is_beclass(url_or_text: str) -> bool:
-    value = url_or_text.lower()
-    if "beclass" in value:
-        return True
-    host = urlsplit(value).hostname
-    return host == "beclass.com" or bool(host and host.endswith(".beclass.com"))
-
-
 @dataclass
 class Node:
     tag: str
@@ -174,12 +166,6 @@ def parse_listing(html: str, seed: str) -> tuple[list[dict], list[str]]:
         if not event:
             continue
         url, eid = event
-        if any(_is_beclass(n.attrs.get("src", "")) for n in card.walk() if n.tag == "img"):
-            continue
-        if any(n.tag == "a" and _is_beclass(n.attrs.get("href", "")) for n in card.walk()):
-            continue
-        if any(n.text().lower() == "beclass" for n in card.walk() if n.tag in {"a", "span"}):
-            continue
         spans = {n.text() for n in card.walk() if n.tag in {"span", "small"}}
         labels = sorted(s for s in spans if s and len(s) <= 16 and s not in {"今天", "明天"})
         badge = any(n.text() == "免費" for n in card.walk()
@@ -227,7 +213,7 @@ def parse_detail(html: str) -> dict:
 
 
 def normalize(rows: list[dict], details: dict[str, str], observed_at: str) -> list[dict]:
-    """Deduplicate by EventGo UUID, exclude BeClass, retain unverified hints."""
+    """Deduplicate by EventGo UUID; retain third-party registration links as hints."""
     unique: dict[str, dict] = {}
     for row in rows:
         url = row["detail_url"]
@@ -236,8 +222,6 @@ def normalize(rows: list[dict], details: dict[str, str], observed_at: str) -> li
         detail = parse_detail(details[url]) if url in details else {
             "detail_title": None, "original_url": None}
         original = detail["original_url"]
-        if original and _is_beclass(original):
-            continue
         # For a production candidate feed, do not admit unverifiable provenance.
         if not original:
             continue
@@ -349,7 +333,8 @@ async def crawl_live(
                         break
                 page_url = _next_page(pagination, page, seed)
 
-        # Always fetch detail provenance; BeClass indirect results will be excluded.
+        # Fetch EventGo detail only. Preserve outbound registration URLs including BeClass,
+        # but never navigate to or scrape external registration hosts.
         for item in list(results.values())[:max_events]:
             details[item["detail_url"]] = await read(item["detail_url"])
 

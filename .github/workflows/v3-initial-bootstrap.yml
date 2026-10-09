@@ -17,7 +17,7 @@ jobs:
   dispatch-after-ci:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 150
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: tommylin15/life_assistant
@@ -91,3 +91,84 @@ jobs:
           echo "v3_release_dispatch=REQUESTED sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "Actual promotion and cutover remain conditional on every candidate/Preview/live gate." \
             >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for exact-SHA V3 release and verify mandatory live gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          FOUND=""
+          for ATTEMPT in $(seq 1 150); do
+            MAIN_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+            test "$MAIN_SHA" = "$GITHUB_SHA"
+            RESULTS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?per_page=50")"
+            FOUND="$(printf '%s' "$RESULTS" | jq -c --arg sha "$GITHUB_SHA" '
+              [.workflow_runs[] | select(.head_sha==$sha and .event=="workflow_dispatch")]
+              | sort_by(.run_number) | last // null')"
+            if [ "$FOUND" != "null" ]; then
+              STATUS="$(printf '%s' "$FOUND" | jq -r '.status')"
+              if [ "$STATUS" = "completed" ]; then
+                RESULT="$(printf '%s' "$FOUND" | jq -r '.conclusion')"
+                RELEASE_ID="$(printf '%s' "$FOUND" | jq -r '.id')"
+                test "$RESULT" = "success" || { echo "::error::V3 release not successful, run=$RELEASE_ID"; exit 1; }
+                JOBS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_ID/jobs?per_page=100")"
+                printf '%s' "$JOBS" | jq -e '
+                  [.jobs[].steps[] |
+                   select(.name=="Post-promotion live health, OAuth redirect, PostgreSQL and access gates" or
+                          .name=="Controlled rollback rehearsal and restore promoted live traffic" or
+                          .name=="Retain latest 10 revisions after all live gates PASS") |
+                   select(.conclusion=="success") | .name] | unique | length==3'
+                echo "v3_live_gates=PASS run=$RELEASE_ID sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+            fi
+            sleep 30
+          done
+          echo "::error::No completed same-SHA V3 release within bounded verification"
+          exit 1
+
+      - name: Dispatch production Hosting and true-account Calendar acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$GITHUB_SHA"
+          gh workflow run deploy-firebase-hosting.yml --ref main
+          gh workflow run calendar-true-account-acceptance.yml --ref main
+          echo "calendar_firebase=REQUESTED sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "calendar_true_account=REQUESTED sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require production Hosting before desktop/mobile UI and verify true account
+        shell: bash
+        run: |
+          set -euo pipefail
+          wait_dispatch() {
+            local workflow="$1" attempts="$2" json selected status result run_url
+            for ((attempt=1; attempt<=attempts; attempt++)); do
+              json="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?per_page=50")"
+              selected="$(printf '%s' "$json" | jq -c --arg sha "$GITHUB_SHA" '
+                [.workflow_runs[] | select(.head_sha==$sha and .event=="workflow_dispatch")]
+                | sort_by(.run_number) | last // null')"
+              if [ "$selected" != "null" ]; then
+                status="$(printf '%s' "$selected" | jq -r '.status')"
+                if [ "$status" = "completed" ]; then
+                  result="$(printf '%s' "$selected" | jq -r '.conclusion')"
+                  run_url="$(printf '%s' "$selected" | jq -r '.html_url')"
+                  echo "$workflow=$result url=$run_url" >> "$GITHUB_STEP_SUMMARY"
+                  if [ "$result" != "success" ]; then
+                    echo "::error::Same-SHA workflow failed: $run_url"
+                    return 1
+                  fi
+                  return 0
+                fi
+              fi
+              sleep 15
+            done
+            echo "::error::Same-SHA acceptance not completed: $workflow"
+            return 1
+          }
+          wait_dispatch deploy-firebase-hosting.yml 120
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$GITHUB_SHA"
+          gh workflow run calendar-ui-acceptance.yml --ref main
+          echo "calendar_ui=REQUESTED sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          wait_dispatch calendar-ui-acceptance.yml 90
+          wait_dispatch calendar-true-account-acceptance.yml 45
+          echo "calendar_e2e=PASS sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

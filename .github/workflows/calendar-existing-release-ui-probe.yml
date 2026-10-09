@@ -1,4 +1,4 @@
-# Replay: verify cancellation survives reload and still requires confirmed deletion.
+# Replay: trace the second modal confirmation and actual Calendar DELETE request.
 # The push trigger applies only to the initial creation of this file.
 name: Calendar Existing Release UI Probe
 

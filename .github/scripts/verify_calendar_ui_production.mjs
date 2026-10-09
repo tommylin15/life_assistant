@@ -210,6 +210,12 @@ async function desktop(context) {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.clock.setFixedTime(new Date('2026-10-08T00:00:00Z'));
   const state = initialState();
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.includes('/integrations/google/calendar/events')) {
+      console.log('calendar_http_request=' + request.method() + ' ' + path);
+    }
+  });
   await mockApi(page, state);
   await page.goto(baseUrl + '/calendar', { waitUntil: 'domcontentloaded' });
   await semantics(page);
@@ -242,6 +248,7 @@ async function desktop(context) {
   await named(page, '確認刪除行程');
   assert.equal(state.deletes.length, 0, 'delete happened without confirmation');
   await (await named(page, '取消')).click();
+  await page.getByRole('alertdialog').waitFor({ state: 'hidden', timeout: 6000 });
   assert.equal(state.deletes.length, 0, 'cancelled delete mutated Google Calendar');
   // Flutter Web's semantics overlay can become empty after a dialog dismissal.
   // Reopen the page like a real user, verify the event survived cancellation,
@@ -252,7 +259,11 @@ async function desktop(context) {
   await named(page, '更新後的會議');
 
   await eventAction(page, '刪除', '更新後的會議');
-  await (await named(page, '確認刪除')).click();
+  const confirm = await named(page, '確認刪除');
+  await confirm.click();
+  await delay(500);
+  await calendarDiagnostics(page, 'post-confirm');
+  console.log('calendar_delete_request_count=' + state.deletes.length);
   await observed(() => state.deletes.length === 1, 'delete');
   assert.equal(state.deletes[0].confirmation, 'explicit_user:calendar.delete:calendar-1');
   console.log('calendar_ui_check=confirmed_delete:PASS');

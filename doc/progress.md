@@ -1,10 +1,20 @@
 # 生活助理 App v0.1 — 開發進度摘要
 
-最後更新：2026-10-07
+最後更新：2026-10-09（CI/CD V3 / GCP 清理段；Phase 1 功能包進度延續前次 verified checkpoint）
 
 目前狀態：**Phase 1 = PARTIAL。**
 
 > 本檔只提供人類可快速閱讀的 rollup，不取代 `acceptance.md`、CI、deployment 或 runtime evidence。最新 PASS / FAIL / NOT VERIFIED 與 release evidence 仍以 GitHub `main` + runtime evidence 為準；目前開發先後順序請以 `phase1_delivery_order.md` 為準。
+
+## CI/CD V3、AR/GCS 清理最新進度（獨立於 Phase 1 功能封板）
+
+- **V3 GitHub Actions → 公開 GHCR → Cloud Run：PASS**。正式 API `life-assistant-api-00183-hax`；狀態 `Ready=True`；映像指向 GHCR `sha256:b06254c2db22489295c2a82928ea19a6352193fd7b0c72f1041040f22bc0d7b1`。已成功 promoted V3 Release [run 37795789924](https://github.com/tommylin15/life_assistant/actions/runs/37795789924)。
+- **舊 Cloud Build 5 個 Triggers 全部 disabled=true：PASS**（兩個 life-assistant、Janus 一個、OmniAgent 兩個）。Trigger 定義仍存在，狀態是停用而非刪除。
+- **舊 CI/CD GCS Bucket 清理：PASS**。Bucket 數 8 → 5；兩個 `cloudbuild` Buckets 及 `run-sources-gen-lang-client-0593591102-us-central1` 均不存在；舊 CI/CD Bucket 逐一 404 readback。保留五個 `dev-*` Buckets，不碰應用／備份／研究資料。
+- **AR 舊 Docker Repository 清理：PASS**。AR repository 數 4 → 1；`cloud-run-source-deploy`, `janusai-poc`, `omniagent` 不存在。唯一保留的 `janus-postgres/postgres:16.15` 含 **1 Digest**；us-central1 Cloud Run 未發現引用，但 VM/資料庫容器依賴 **NOT VERIFIED**，因此不刪。
+- **最終 runtime/GCP inventory：PASS**：[run 37867249614](https://github.com/tommylin15/life_assistant/actions/runs/37867249614)。過去 58 個 AR Digest / 77 個 GCS source objects 為**清理前候選估算**，不能當成逐項 delete 事件紀錄；現況以 Bucket/Repository 缺席與 1 Digest readback 為準。
+- **舊 CI/CD 指定資產清理 = DONE/PASS**；但「所有 AR 清空」不是 DONE（剩 `janus-postgres`）；Cloud Run revisions 最新 10 之即時逐服務剩餘數、本輪新正式部署、VM 非 Cloud Run 依賴均 **NOT VERIFIED**。**Phase 1 全案仍 PARTIAL**，不變更下方 7/11 功能封板數。
+- 詳細證據、完整清單與差異：[`v3_cleanup_and_cutover_inventory.md`](v3_cleanup_and_cutover_inventory.md)。
 
 ## Phase 1 全案封板進度表 — 剩餘 11 個工作包
 

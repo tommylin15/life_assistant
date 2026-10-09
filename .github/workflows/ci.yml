@@ -180,7 +180,7 @@ jobs:
           async def verify():
               async with engine.connect() as conn:
                   assert await conn.scalar(text('SELECT version_num FROM alembic_version')) == '20261009_0013'
-                  assert await conn.scalar(text(\"SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='public' AND tablename LIKE 'free_event_%'\")) == 8
+                  assert await conn.scalar(text("""SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='public' AND tablename LIKE 'free_event_%'""")) == 8
               print('precreated_schema_reconciliation=PASS (additive, no stamp/drop)')
           asyncio.run(verify())
           PY

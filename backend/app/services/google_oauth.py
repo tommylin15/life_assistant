@@ -106,10 +106,10 @@ def _state_hash(state: str) -> str:
     return hashlib.sha256(state.encode("utf-8")).hexdigest()
 
 
-def build_authorization_url(state: str, services: tuple[str, ...]) -> str:
+def build_authorization_url(state: str, services: tuple[str, ...], redirect_uri: str | None = None) -> str:
     params = {
         "client_id": settings.google_client_id,
-        "redirect_uri": settings.google_redirect_uri,
+        "redirect_uri": redirect_uri or settings.google_redirect_uri,
         "response_type": "code",
         "scope": " ".join(scopes_for_services(services)),
         "access_type": "offline",

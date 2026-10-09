@@ -13,7 +13,7 @@
 - 本專案**不得使用、呼叫或套用任何 Superpowers skill / workflow**。
 - 禁止範圍包含所有 `skills://plugins/superpowers/...` skills，以及其衍生的 brainstorming、planning、TDD、debugging、execution、review、verification 等 Superpowers 工作流程。
 - 本專案的工程方法、測試策略、debugging、驗證、CI/CD 與交付流程，應以本文件、GitHub 目前實作、相關正式規格與專案治理 / delivery runbook 為準，不得以 Superpowers 規則覆蓋或補充。
-- 既有 `docs/superpowers/` 內容視為歷史資料 / legacy artifact；不得把它當作目前的強制流程、Source of Truth 或後續工作的必要輸入，也不得因舊文件存在而重新啟用 Superpowers skill。
+- `docs/superpowers/` 已從當前工作樹清除（保留 Git history），不得把其草稿當作現行流程、Source of Truth 或必要輸入，也不得因舊文件存在而重新啟用 Superpowers skill。
 - 除非使用者日後明確修改本條規則，所有代理人與開發工作都必須遵守本禁令。
 
 ## 目前架構基準
@@ -127,7 +127,7 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 
 ## GCP / CI/CD / IAM
 
-- 2026-10-08 **CI/CD V3** 決策已取代 Cloud Build-led V2 主線；新版文件見 `ci_cd_ghcr_release_policy.md`。本次只確認正式設計，不代表 GitHub Actions/GHCR/Cloud Run 新版流程已建置或驗收。
+- 2026-10-08 **CI/CD V3** 決策已取代 Cloud Build-led V2 主線；新版文件見 `ci_cd_ghcr_release_policy.md`。V3 已有真實 release 完成證據；每次新 SHA、來源 Job、前後端 OAuth、資料庫及應用整合仍各自獨立驗收，不能由此推定 PASS。
 
 - 正式派版優先走 `GitHub main → GitHub Actions → tests/build → GCP → runtime/integration validation`。
 - GitHub Actions 對 `gen-lang-client-0593591102` 使用 OIDC / Workload Identity Federation；不得建立長效 Service Account JSON key 作為一般部署憑證。
@@ -145,23 +145,16 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 - **Cloud Run Revision 保留最新 10 個**：V3 promotion + live gates 全數 PASS 後，於成功 release pipeline 最後安全清理舊版；含流量、回滾 baseline、候選 tag 的版本不可刪。保護條件使數量超過 10 時必須 PARTIAL，禁止強行刪除。無流量且無最小實例的版本通常不計運算費；GHCR image digest 與 Jobs 所需映像另行保留。
 - 實作與驗收規範以 `ci_cd_ghcr_release_policy.md` 為準；下方 V2 僅供稽核過往決策，不再作為新建/變更 pipeline 的目標。
 
-### 歷史政策：CI/CD V2（已被 V3 取代，保留原文）
+## 歷史政策
 
-## CI/CD V2 — 集中發布政策（2026-10-08）
+V2 Cloud Build 全文已歸檔：[archive/ci_cd_v2_policy.md](archive/ci_cd_v2_policy.md)。**新建/更新/部署只使用 CI/CD V3**，當次驗收需實際 runtime evidence。
 
-- **Push CI 與正式 Release 分離**。main 更新只由 us-central1 Cloud Build 第二代 repository push trigger 執行受影響的 Python、Flutter、安全與部署契約測試，不自動部署 Backend、Candidate 或 Firebase 正式站。中間 commits 不預設 `[skip ci]`。
-- 工作包 Ready 後，由 Codex 明確啟動第二代 repository **manual Release trigger**，指定完整 40 字元 SHA。Push 不可呼叫 Release。成功發布 SHA 是完整變更計算基準，不使用 HEAD^；缺少可信基準則完整驗證。
-- Backend／Frontend 分別判斷是否需要發布，避免無意義 Docker／Flutter 重建；契約變更須驗證 candidate API 與前端相容性。不需 runtime 更動的工作包可略過部署，但仍需適當驗證。
-- Ready Gate：implementation 完成 → Ponytail review 與受影響測試 PASS → migration/API/auth 契約確認 → Candidate acceptance → 集中 Cloud Run/Firebase 發布 → post-deploy runtime/UI/integration → 所有必要 gate PASS 才 DONE。
-- 保留必要開發期真實測試：GCP dev/GCS、Cloud Run Candidate、PostgreSQL migration preflight、bounded acceptance Job、Firebase Preview、Gmail/Calendar/Drive 與 AI/Shared Codex probes；集中發布不禁止這些測試。
-- Backend 沿用 FastAPI、PostgreSQL/Alembic、Artifact Registry；single immutable digest、no-traffic Candidate 全 gate 通過才切流量。Frontend 沿用 Firebase Hosting/Web/PWA/branding/OAuth redirect，Preview 通過後才 Live；Preview PASS 不等於正式站 PASS。
-- 保留 Task/Project/Notes/Habits/Shopping、Calendar/Gmail/Drive、OAuth/Bridge/MCP、Post-deploy、External AI 與 Firebase 正式站 mandatory gates。Provider 既有 FAIL 是獨立 blocker，不刪 gate、不降門檻、不偽造 PASS。
-- 不改生活總排程或每小時監控時間，不因 CI 執行它們，不重複啟動資料寫入型 Job，不影響既有執行中排程工作。Migration 必須 idempotent、有 recovery；保留 Activity Log、single-user owner allowlist、Shared Codex owner isolation 與資料完整性。
-- 限制 build timeout/retry；部署依版本排序互斥，同 SHA/phase idempotent，舊 SHA 不覆蓋新 SHA。切換前保留正常 backend revision；Firebase 發布失敗可回復前版。中斷後先 readback 再恢復，禁止自動 DB downgrade/drop。
-- 清理 image 前必須 dry-run、核對 immutable digest 與所有 Runtime 引用；只操作 Life Assistant packages，不清真實資料、不改其他專案、不新增未核准付費資源、不重大擴權。Shared Codex 使用既有 OmniAgent service，不建第二套、不修改 OmniAgent/Janus 程式。
-- 比較 Public repo 免費 GitHub-hosted runner 與實測 Cloud Build 成本，計入共用 free tier、Cloud Run、Artifact Registry/GCS；不得假設 V2 省錢。固定 us-central1、CLOUD_LOGGING_ONLY，不建立 legacy multiregion log bucket；不要求 GCS evidence 存放。
-- 最新追加指令要求 Push 不部署，因此舊 Actions 自動入口改為 manual diagnostics/recovery。V2 CLOSED 仍須真實 CI Push、完整 SHA Manual Release、migration、candidate、Preview/Live、runtime/UI/provider、Scheduler/Jobs readback 與成本 evidence 全部通過。
-- `AGENTS.md` 只引用本政策；操作與恢復程序見 `deployment_runbook.md`。完成證據回寫 `acceptance.md`、`progress.md`、`todo.md`；單次 Build PASS、mock、localhost 不等於 live acceptance。
+## 2026-10-10 現行文件與產品決策
+
+- 現況：[CURRENT_STATE.md](CURRENT_STATE.md)；產品與權限：[CURRENT_PRODUCT_ARCHITECTURE.md](CURRENT_PRODUCT_ARCHITECTURE.md)；執行順序：[phase1_delivery_order.md](phase1_delivery_order.md)。現行程式與 runtime 永遠優先於文件的歷史快照。
+- 活動：官方來源先進 Queue、ChatGPT Chat 排程只讀 Queue 並回傳篩選結果，由 Life API 原子提交精選決定與 Queue ACK；精選池即終點。EventGo、yii.tw 停止新自動爬取。詳見 [活動設計](taiwan_free_events_discovery_plan.md)。
+- AI 管理：平台內部 Drive AI Provider 配置與 ChatGPT Chat 排程不同；每位使用者仍須自行 Google OAuth 授權和 Drive AI consent。後台只管共用資料、Provider 策略與功能開放，個人導覽/首頁設定按帳號隔離。追蹤 Issues #10–#12。
+- 曾經核准的 Drive 正式文件若與 GitHub 的現行規格不同，應明示差異，不默默覆蓋。
 
 ## Git
 

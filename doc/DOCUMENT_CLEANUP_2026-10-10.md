@@ -1,0 +1,12 @@
+# Documentation consolidation audit — 2026-10-10
+
+Scope: **only `tommylin15/life_assistant` GitHub docs**. Current `main` was inspected before edits, together with the Drive `life_assistantGPT` governance runbook (no Drive files deleted or overwritten). No application source, DB rows, Cloud Run resource, scheduled task, secrets or GCP production configuration intentionally changed.
+
+- **21 historical documents moved** from active `doc/` to `doc/archive/`, including old V2 artifact strategy, historical release gates/tasks/progress/acceptance, legacy SQLite Bridge/local sync specifications, previous M0/M1 free-events studies, deprecated EventGo Crawl4AI connector and product checkpoints. All text preserved under archive paths and in commit history.
+- Historical CI/CD V2 sections extracted intact from `PROJECT_RULES.md` and `deployment_runbook.md` into two historical archive files. **V3 only** remains operational.
+- **8 forbidden Superpowers plans/specs** removed from current tree; retain Git history for audit; no use of the prohibited skill. **1 duplicate CI/CD artifact alias stub** removed.
+- Active index, root README, status/evidence ledger, TODO, delivery order, release checklist, current product architecture, activity V2 API, governance and staging runbook rewritten/reconciled to reflect 2026-10-10 user decisions; removed old claim that latest Activity Queue source Job rollout is already fully accepted.
+- Important unresolved conflicts: existing MoC code still drains Queue into verified-only legacy catalog vs intended Queue-only; old source activation [37958755189](https://github.com/tommylin15/life_assistant/actions/runs/37958755189) FAIL; current /today remains placeholder vs approved customizable Home; current provider routes lack new admin AI controls. Their status stays NOT VERIFIED.
+- External governance documents in Drive may still contain earlier general Artifact Registry deployment preferences and prior point-in-time V3 implementation assertions; GitHub current V3/runtime takes precedence on implementation, and historical Drive decisions are not silently edited.
+
+**Validation:** GitHub archive tree existence, internal active document paths and GitHub Actions CI need readback after commit; don't claim PASS without that evidence. Old archived relative links are historical snapshots and may require their original Git revision to resolve; they must not be used as current links.

@@ -19,7 +19,7 @@ from sqlalchemy import delete, select
 from app.api.auth import current_user
 from app.confirmation import CONFIRMATION_HEADER, explicit_confirmation_value
 from app.db.session import SessionLocal
-from app.main import app
+from app.main import app, CORE_FEATURE_GATES, DRIVE_FEATURE_GATE
 from app.models.drive import DriveDocument, ProjectDriveDocument
 from app.models.project import Project
 from app.services.idempotency import ACTION_ID_HEADER
@@ -168,6 +168,9 @@ async def run_acceptance() -> None:
     try:
         await _seed_drive_document(document_id, google_file_id, label)
         app.dependency_overrides[current_user] = _acceptance_user
+        # Test relationships independently of admin rollout in this isolated runner.
+        app.dependency_overrides[CORE_FEATURE_GATES["projects"]] = lambda: None
+        app.dependency_overrides[DRIVE_FEATURE_GATE] = lambda: None
         transport = httpx.ASGITransport(app=app)
 
         async with httpx.AsyncClient(
@@ -297,6 +300,8 @@ async def run_acceptance() -> None:
         primary_error = AcceptanceStageError(stage, exc)
     finally:
         app.dependency_overrides.pop(current_user, None)
+        app.dependency_overrides.pop(CORE_FEATURE_GATES["projects"], None)
+        app.dependency_overrides.pop(DRIVE_FEATURE_GATE, None)
         try:
             await _cleanup(project_id, document_id)
             _record("cleanup")

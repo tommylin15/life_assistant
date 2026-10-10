@@ -12,7 +12,7 @@ from sqlalchemy import delete, or_, select
 
 from app.api.auth import SESSION_COOKIE, current_user
 from app.db.session import SessionLocal
-from app.main import app
+from app.main import app, CORE_FEATURE_GATES
 from app.models.migration_support import EntityTag, Tag
 from app.models.note import Note, NoteLink
 
@@ -96,6 +96,8 @@ async def run_acceptance() -> None:
     artifacts.tag_names.update({tag_a, tag_b})
 
     app.dependency_overrides[current_user] = _acceptance_user
+    # Test Notes behavior independently of admin rollout in this isolated runner.
+    app.dependency_overrides[CORE_FEATURE_GATES["notes"]] = lambda: None
     transport = httpx.ASGITransport(app=app)
 
     try:
@@ -207,6 +209,7 @@ async def run_acceptance() -> None:
             print("notes_acceptance_check=delete_confirmation:PASS", flush=True)
     finally:
         app.dependency_overrides.pop(current_user, None)
+        app.dependency_overrides.pop(CORE_FEATURE_GATES["notes"], None)
         await _cleanup(artifacts)
 
     print("notes_product_acceptance=PASS", flush=True)

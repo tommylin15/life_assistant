@@ -1,10 +1,12 @@
 import inspect
 import unittest
+from unittest.mock import AsyncMock, patch
 from pathlib import Path
 
 import httpx
 
 from scripts import run_project_drive_runtime_acceptance as acceptance
+from scripts import run_notes_product_acceptance as notes_acceptance
 
 
 class ProjectDriveRuntimeAcceptanceContractTests(unittest.TestCase):
@@ -91,6 +93,35 @@ class ProjectDriveRuntimeAcceptanceContractTests(unittest.TestCase):
         source = inspect.getsource(acceptance)
         self.assertIn("stage={exc.stage}", source)
         self.assertIn("return STAGE_EXIT_CODES[exc.stage]", source)
+
+
+class PostdeployRolloutIsolationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_notes_and_project_runners_remove_rollout_overrides_on_failure(self):
+        for runner, key, error_type in (
+            (notes_acceptance, "notes", RuntimeError),
+            (acceptance, "projects", acceptance.AcceptanceStageError),
+        ):
+            with self.subTest(key=key):
+                observed = {}
+
+                def fail_client(**kwargs):
+                    observed.update(runner.app.dependency_overrides)
+                    raise RuntimeError("stop before requests")
+
+                with patch.object(runner, "_cleanup", new_callable=AsyncMock) as cleanup, patch.object(
+                    runner.httpx, "AsyncClient", side_effect=fail_client
+                ), patch.object(acceptance, "_seed_drive_document", new_callable=AsyncMock):
+                    with self.assertRaises(error_type):
+                        await runner.run_acceptance()
+                cleanup.assert_awaited_once()
+                gate = runner.CORE_FEATURE_GATES[key]
+                expected = {runner.current_user, gate}
+                if runner is acceptance:
+                    expected.add(runner.DRIVE_FEATURE_GATE)
+                    self.assertIsNone(observed[runner.DRIVE_FEATURE_GATE]())
+                self.assertEqual(set(observed), expected)
+                self.assertIsNone(observed[gate]())
+                self.assertFalse(set(observed) & set(runner.app.dependency_overrides))
 
 
 if __name__ == "__main__":

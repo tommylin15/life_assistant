@@ -5,8 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'api_client.dart';
 import 'platform_api.dart';
 import 'habit_api.dart';
+import 'auth_state.dart';
 
 final _todayDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  if (ref.watch(authProvider).asData?.value == null) {
+    throw StateError('Authentication required');
+  }
   final api = ref.read(apiClientProvider);
   final now = DateTime.now();
   final tomorrow = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));

@@ -3,15 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'platform_api.dart';
 
-final _ownerCanManage = FutureProvider<bool>((ref) async {
-  try {
-    await ref.read(platformApiProvider).get('/admin/feature-rollouts');
-    return true;
-  } catch (_) {
-    return false;
-  }
-});
-
 class MorePage extends ConsumerWidget {
   const MorePage({super.key});
 
@@ -77,7 +68,7 @@ class MorePage extends ConsumerWidget {
           subtitle: const Text('自訂導覽列與首頁卡片'),
           onTap: () => context.go('/more/personalize'),
         ),
-        if (ref.watch(_ownerCanManage).asData?.value == true)
+        if (ref.watch(ownerAuthorizedProvider).asData?.value == true)
           ListTile(
             leading: const Icon(Icons.admin_panel_settings_outlined),
             title: const Text('管理中心'),

@@ -173,12 +173,11 @@ jobs:
           wait_dispatch calendar-true-account-acceptance.yml 45
           echo "calendar_e2e=PASS sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
 
-  # Bounded retry 1 of the user-requested 0%-traffic candidate, after
-  # pre-0015 legacy feature gate compatibility hardening. No production cutover.
-  # Runs only when THIS workflow file was changed and the commit has the
-  # unique candidate-only marker. No promotion or staging-live publication.
-  p0p1-candidate-once:
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[life-p0p1-candidate-retry1]')
+  # Bounded retry of Preview propagation verification after 404 from the
+  # previous V3 production run. CI -> 0%-traffic candidate -> Preview only.
+  # Never modifies staging live, production Hosting or production traffic.
+  v3-preview-retry-once:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[life-v3-preview-retry1]')
     runs-on: ubuntu-latest
     timeout-minutes: 115
     env:

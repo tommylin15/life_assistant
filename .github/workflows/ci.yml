@@ -228,6 +228,9 @@ jobs:
           python -m py_compile .github/scripts/v3_free_event_retirement_readback.py
           python -m py_compile .github/scripts/v3_staging_gate.py
 
+      - name: Test bounded Firebase Preview propagation and strict SHA/401 readiness
+        run: python -m unittest tests/test_v3_verify_preview.py -v
+
       - name: Test V3 Firebase CLI diagnostics secret redaction
         run: python -m unittest tests/test_v3_firebase_error.py -v
 

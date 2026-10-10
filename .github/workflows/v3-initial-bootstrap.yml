@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   dispatch-after-ci:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[calendar-e2e-one-time]')
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
@@ -172,3 +172,98 @@ jobs:
           wait_dispatch calendar-ui-acceptance.yml 90
           wait_dispatch calendar-true-account-acceptance.yml 45
           echo "calendar_e2e=PASS sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+  # Explicit, one-commit deployment trigger for the current user request.
+  # Runs only when THIS workflow file was changed and the commit has the
+  # unique candidate-only marker. No promotion or staging-live publication.
+  p0p1-candidate-once:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[life-p0p1-candidate-once]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 115
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the exact source SHA
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require current main and all four quality gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          for ATTEMPT in $(seq 1 100); do
+            MAIN_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+            test "$MAIN_SHA" = "$GITHUB_SHA"
+            RESULT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100")"
+            FAILED="$(printf '%s' "$RESULT" | jq '
+              [.check_runs[] |
+               select(.name=="backend" or .name=="flutter" or .name=="deployment-scripts" or .name=="free-events-postgres") |
+               select(.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out")] | length')"
+            PASSED="$(printf '%s' "$RESULT" | jq '
+              [.check_runs[] |
+               select(.name=="backend" or .name=="flutter" or .name=="deployment-scripts" or .name=="free-events-postgres") |
+               select(.conclusion=="success") | .name] | unique | length')"
+            if ((FAILED > 0)); then
+              echo "::error::Current SHA failed required quality gate; deployment stopped"
+              exit 1
+            fi
+            if ((PASSED == 4)); then
+              echo "candidate_source_ci=PASS sha=$GITHUB_SHA required=4/4" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Four CI jobs not confirmed for this SHA"
+          exit 1
+
+      - name: Dispatch only existing exact SHA V3 candidate pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$GITHUB_SHA"
+          gh workflow run v3-release-ghcr.yml --ref main \
+            --raw-field release_sha="$GITHUB_SHA" \
+            --raw-field promote=false \
+            --raw-field publish_staging=false
+          echo "v3_candidate_dispatch=REQUESTED sha=$GITHUB_SHA promote=false staging_live=false" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check exact SHA 0 percent candidate and preview results
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ATTEMPT in $(seq 1 180); do
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$GITHUB_SHA"
+            RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?per_page=35")"
+            SELECTED="$(printf '%s' "$RUNS" | jq -c --arg sha "$GITHUB_SHA" '
+              [.workflow_runs[] | select(.event=="workflow_dispatch" and .head_sha==$sha)]
+              | sort_by(.run_number) | last // null')"
+            if [[ "$SELECTED" != "null" ]]; then
+              STATUS="$(printf '%s' "$SELECTED" | jq -r '.status')"
+              if [[ "$STATUS" == "completed" ]]; then
+                RELEASE_ID="$(printf '%s' "$SELECTED" | jq -r '.id')"
+                CONCLUSION="$(printf '%s' "$SELECTED" | jq -r '.conclusion')"
+                echo "v3_candidate_release=$CONCLUSION run=$RELEASE_ID sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+                test "$CONCLUSION" = "success" || exit 1
+                JOBS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_ID/jobs?per_page=100")"
+                printf '%s' "$JOBS" | jq -e '
+                  [.jobs[].steps[] | select(
+                     .name=="Create 0%-traffic digest-pinned candidate" or
+                     .name=="Candidate health, database readiness, auth and authorization" or
+                     .name=="Run real database/auth acceptance using release digest" or
+                     .name=="Verify pinned Preview API and static release" or
+                     .name=="Require explicit promotion selection"
+                   ) | select(.conclusion=="success") | .name] | unique | length==5'
+                printf '%s' "$JOBS" | jq -e '
+                  [.jobs[].steps[] | select(
+                    .name=="Reconfirm source SHA and live traffic, then promote" or
+                    .name=="Promote exact Preview to independent fixed staging live and verify owner OAuth"
+                  ) | select(.conclusion!="skipped")] | length==0'
+                echo "v3_candidate_only=PASS sha=$GITHUB_SHA release=$RELEASE_ID production_promotion=SKIPPED staging_live=SKIPPED" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+            fi
+            sleep 20
+          done
+          echo "::error::Exact-SHA V3 candidate did not complete within bounded check"
+          exit 1

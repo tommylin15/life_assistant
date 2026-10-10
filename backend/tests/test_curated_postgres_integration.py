@@ -167,7 +167,7 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
             "parent_event_key":key, "record_type":"offer", "title":"不同優惠",
             "registration_url": self.url+"/register", "importance_star":5})
         async with self.sessions() as db:
-            db.add(CuratedActivity(identity_key=key, title="不同的舊版活動",
+            db.add(CuratedActivity(identity_key=key, occurrence_key="legacy", title="不同的舊版活動",
                 original_url=self.url+"/legacy", city=city+":other", importance=1,
                 fee_kind="unknown", registration_status="unknown", on_site_spending=False,
                 limited_offer=False))

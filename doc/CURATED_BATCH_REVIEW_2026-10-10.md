@@ -10,4 +10,6 @@ Validation: full backend suite 529 tests OK (19 integration tests skipped in tha
 
 Verdict: Ship source to CI/staging. Production acceptance remains a separate gate.
 
+Follow-up review before the next commit/push: CI 38041481706 reached the namespace-collision regression and found the manually constructed legacy fixture omitted mandatory occurrence_key. Added the explicit legacy value, matching the existing schema; production code is unchanged. Other actual PostgreSQL curated tests passed. Re-run the complete CI on the corrected SHA.
+
 Not checked: the final PostgreSQL namespace-collision regression was blocked locally by WSL network reset (WinError 64 / Wsl Service 0x8007274c); CI must run it. Its Flutter counterpart passed. Real Sheet permissions/version-qualified receipt compatibility with the exploration writer and cleaner, deployed GCP Job/Scheduler, real Calendar OAuth actions, new-SHA staging and final admin/Home acceptance remain pending. App push is not implemented; reminders use Google Calendar popup.

@@ -1,6 +1,6 @@
 # Life 活動精選池 — 唯一現行流程（2026-10-10）
 
-**DESIGN APPROVED / NEW API AND UI NOT VERIFIED.** This document supersedes all former MoC/TDX/Queue plans. Historical details are in Git history and doc/archive; do not restart collectors.
+**DESIGN APPROVED / BACKEND + FLUTTER SOURCE IMPLEMENTED; CHATGPT CONNECTOR & LIVE DEPLOYMENT NOT VERIFIED.** This document supersedes all former MoC/TDX/Queue plans. Historical details are in Git history and doc/archive; do not restart collectors.
 
 ## Only active pipeline
 

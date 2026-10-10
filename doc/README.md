@@ -7,7 +7,7 @@
 | Purpose | Authoritative active document |
 |---|---|
 | Governance, project boundaries | [PROJECT_RULES.md](PROJECT_RULES.md), [project_boundary.md](project_boundary.md) |
-| Current observable status & known FAIL | [CURRENT_STATE.md](CURRENT_STATE.md), [acceptance.md](acceptance.md) |
+| Current observable status & known FAIL | [CURRENT_STATE.md](CURRENT_STATE.md), [acceptance.md](acceptance.md), [P0/P1 consolidated acceptance](P0_P1_CONSOLIDATED_ACCEPTANCE_2026-10-10.md) |
 | Current approved product / privacy / UI | [CURRENT_PRODUCT_ARCHITECTURE.md](CURRENT_PRODUCT_ARCHITECTURE.md), [decisions.md](decisions.md) |
 | Next work only | [phase1_delivery_order.md](phase1_delivery_order.md), [todo.md](todo.md), [progress.md](progress.md) |
 | V3 deployment, staging, release checklist | [ci_cd_ghcr_release_policy.md](ci_cd_ghcr_release_policy.md), [deployment_runbook.md](deployment_runbook.md), [release_checklist.md](release_checklist.md) |

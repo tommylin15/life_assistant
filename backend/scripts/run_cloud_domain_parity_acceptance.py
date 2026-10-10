@@ -2,8 +2,9 @@
 """Run authenticated cloud-domain parity acceptance against the dev-test database.
 
 The runner exercises the real FastAPI routes and real PostgreSQL sessions from the
-exact deployed image. It replaces only the Google identity dependency with a
-fixed acceptance identity so no personal OAuth token is required or exposed.
+exact deployed image. It replaces Google identity and feature-availability
+dependencies only inside this isolated runner. CRUD persistence must remain
+testable when an admin hides a feature; real-user rollout acceptance is separate.
 All business artifacts are tagged with [ACCEPTANCE TEST], tracked by exact IDs,
 and removed through exact-ID cleanup in a finally path.
 """
@@ -69,6 +70,7 @@ async def _acceptance_user() -> dict:
 
 def _expect(response: httpx.Response, expected: int, label: str) -> None:
     if response.status_code != expected:
+        print(f"acceptance_http_failure={label}:expected={expected}:actual={response.status_code}", flush=True)
         body = response.text[:500]
         raise AssertionError(
             f"{label}: expected HTTP {expected}, got {response.status_code}: {body}"
@@ -189,6 +191,17 @@ async def run_acceptance() -> None:
     primary_error: BaseException | None = None
 
     app.dependency_overrides[current_user] = _acceptance_user
+    # Admin rollout choices must not disable the isolated storage parity check.
+    rollout_gates = {
+        dependency.dependency
+        for route in app.routes
+        if route.path.startswith(("/api/v1/projects", "/api/v1/notes", "/api/v1/habits", "/api/v1/shopping"))
+        for dependency in getattr(route, "dependencies", ())
+        if dependency.dependency.__module__ == "app.api.ui_policies"
+        and dependency.dependency.__qualname__ == "feature_gate.<locals>.check"
+    }
+    for gate in rollout_gates:
+        app.dependency_overrides[gate] = lambda: None
     transport = httpx.ASGITransport(app=app)
 
     try:
@@ -417,6 +430,8 @@ async def run_acceptance() -> None:
         primary_error = exc
     finally:
         app.dependency_overrides.pop(current_user, None)
+        for gate in rollout_gates:
+            app.dependency_overrides.pop(gate, None)
         try:
             await cleanup_exact_artifacts(artifacts)
             print("acceptance_cleanup=PASS", flush=True)

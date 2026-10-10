@@ -79,9 +79,6 @@ class AuthApiTests(IsolatedAsyncioTestCase):
                          [auth.settings.google_redirect_uri])
 
     async def test_explicit_staging_callback_uses_state_not_proxy_headers(self):
-        req = Request({"type": "http", "headers": [
-            (b"host", b"life-assistant-api-abc-uc.a.run.app"),
-        ]})
         state = "n" * 32
         callback_req = Request({"type": "http", "headers": [
             (b"host", b"life-assistant-api-abc-uc.a.run.app"),
@@ -166,7 +163,8 @@ class AuthApiTests(IsolatedAsyncioTestCase):
                          auth.settings.google_redirect_uri)
 
     async def test_staging_google_e2e_audit_requires_real_owner_and_exact_revision(self):
-        stage = Request({"type": "http", "headers": [(b"host", b"life-assistant-v3-stage-tl15.web.app")]})
+        stage = Request({"type": "http", "headers": [(b"host", b"life-assistant-api-abc-uc.a.run.app"),
+                                                         (b"cookie", b"__session=id:staging:valid-owner-token")]})
         other = Request({"type": "http", "headers": [(b"host", b"gen-lang-client-0593591102.web.app")]})
         db = object()
         owner = {"sub": "owner-sub", "email": "owner@example.test"}
@@ -188,7 +186,8 @@ class AuthApiTests(IsolatedAsyncioTestCase):
                 finish.assert_not_awaited()
 
     async def test_staging_google_e2e_denies_missing_allowlist_and_revision(self):
-        stage = Request({"type": "http", "headers": [(b"host", b"life-assistant-v3-stage-tl15.web.app")]})
+        stage = Request({"type": "http", "headers": [(b"host", b"life-assistant-api-abc-uc.a.run.app"),
+                                                         (b"cookie", b"__session=id:staging:valid-owner-token")]})
         owner = {"sub": "owner-sub", "email": "owner@example.test"}
         for cfg in ({"ALLOWED_GOOGLE_EMAIL": "", "K_REVISION": "life-assistant-api-00200-abc"},
                     {"ALLOWED_GOOGLE_EMAIL": "owner@example.test", "K_REVISION": ""}):

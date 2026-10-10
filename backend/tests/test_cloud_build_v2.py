@@ -124,6 +124,17 @@ class CloudBuildV2Tests(unittest.TestCase):
                 self.assertIn('gh workflow run v3-cutover-disable-triggers.yml', source)
                 self.assertNotIn('gcloud run services update-traffic', source)
                 self.assertNotIn('updateMask=disabled', source)
+            elif workflow.name == 'v3-auto-staging-after-ci.yml':
+                # Owner-approved 2026-10-10 exception: only main's successful
+                # four-job push CI may dispatch staging. Not production.
+                self.assertIn('workflow_run:', source)
+                self.assertIn('workflows: ["CI"]', source)
+                self.assertIn("workflow_run.event == 'push'", source)
+                self.assertIn("workflow_run.conclusion == 'success'", source)
+                self.assertIn('--raw-field promote=false', source)
+                self.assertIn('--raw-field publish_staging=true', source)
+                self.assertNotIn('--raw-field promote=true', source)
+                self.assertNotIn('gcloud run services update-traffic', source)
             else:
                 self.assertIn('workflow_dispatch:', source)
                 self.assertNotIn('workflow_run:', source)

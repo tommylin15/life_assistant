@@ -22,7 +22,7 @@ from sqlalchemy import delete, or_, select
 
 from app.api.auth import current_user
 from app.db.session import SessionLocal
-from app.main import app
+from app.main import app, CORE_FEATURE_GATES
 from app.models.habit import Habit, HabitCompletion
 from app.models.note import Note, NoteLink
 from app.models.project import Project
@@ -190,16 +190,9 @@ async def run_acceptance() -> None:
     expected_activity: set[tuple[str, str]] = set()
     primary_error: BaseException | None = None
 
-    app.dependency_overrides[current_user] = _acceptance_user
     # Admin rollout choices must not disable the isolated storage parity check.
-    rollout_gates = {
-        dependency.dependency
-        for route in app.routes
-        if route.path.startswith(("/api/v1/projects", "/api/v1/notes", "/api/v1/habits", "/api/v1/shopping"))
-        for dependency in getattr(route, "dependencies", ())
-        if dependency.dependency.__module__ == "app.api.ui_policies"
-        and dependency.dependency.__qualname__ == "feature_gate.<locals>.check"
-    }
+    rollout_gates = tuple(CORE_FEATURE_GATES.values())
+    app.dependency_overrides[current_user] = _acceptance_user
     for gate in rollout_gates:
         app.dependency_overrides[gate] = lambda: None
     transport = httpx.ASGITransport(app=app)

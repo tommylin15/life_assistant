@@ -20,5 +20,12 @@ focused runner and rollout regression suite 16 PASS after final scope restrictio
 
 Looks good. Ship.
 
+Follow-up /ponytail-review: CI 38043827949 exposed newer FastAPI lazy included
+routers. Replace route introspection with the same four explicitly registered
+gate references from `app.main`; core router authorization remains unchanged.
+Updated three route contract fixtures. Focused runner, feature gate, Notes,
+Habits, Shopping and confirmation-policy suite: 69 PASS. Checked the final diff
+and identity cleanup after failure. Verdict: Ship.
+
 Not checked: corrected runner in the release image, current-SHA real browser and
 production acceptance remain pending and must not be inferred from unit tests.

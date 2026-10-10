@@ -265,7 +265,7 @@ class NotesMainRegistrationTests(unittest.TestCase):
         path = Path(__file__).parents[1] / "app/main.py"
         source = path.read_text()
         self.assertIn("from app.api.notes import router as notes_router", source)
-        self.assertIn('app.include_router(notes_router, prefix="/api/v1", dependencies=[Depends(feature_gate("notes"))])', source)
+        self.assertIn('app.include_router(notes_router, prefix="/api/v1", dependencies=[Depends(CORE_FEATURE_GATES["notes"])])', source)
 
 
 class NotesHttpContractTests(unittest.IsolatedAsyncioTestCase):

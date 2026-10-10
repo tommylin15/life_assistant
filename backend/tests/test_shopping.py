@@ -210,7 +210,7 @@ class ShoppingMainRegistrationTests(unittest.TestCase):
         path = Path(__file__).parents[1] / "app/main.py"
         source = path.read_text()
         self.assertIn("from app.api.shopping import router as shopping_router", source)
-        self.assertIn('app.include_router(shopping_router, prefix="/api/v1", dependencies=[Depends(feature_gate("shopping"))])', source)
+        self.assertIn('app.include_router(shopping_router, prefix="/api/v1", dependencies=[Depends(CORE_FEATURE_GATES["shopping"])])', source)
 
 
 class ShoppingHttpContractTests(unittest.IsolatedAsyncioTestCase):

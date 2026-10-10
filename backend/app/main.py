@@ -137,11 +137,12 @@ async def ready():
 
 
 app.include_router(auth_router)
+CORE_FEATURE_GATES = {key: feature_gate(key) for key in ("projects", "notes", "habits", "shopping")}
 app.include_router(tasks_router, prefix="/api/v1", dependencies=[Depends(feature_gate("tasks"))])
-app.include_router(projects_router, prefix="/api/v1", dependencies=[Depends(feature_gate("projects"))])
-app.include_router(notes_router, prefix="/api/v1", dependencies=[Depends(feature_gate("notes"))])
-app.include_router(habits_router, prefix="/api/v1", dependencies=[Depends(feature_gate("habits"))])
-app.include_router(shopping_router, prefix="/api/v1", dependencies=[Depends(feature_gate("shopping"))])
+app.include_router(projects_router, prefix="/api/v1", dependencies=[Depends(CORE_FEATURE_GATES["projects"])])
+app.include_router(notes_router, prefix="/api/v1", dependencies=[Depends(CORE_FEATURE_GATES["notes"])])
+app.include_router(habits_router, prefix="/api/v1", dependencies=[Depends(CORE_FEATURE_GATES["habits"])])
+app.include_router(shopping_router, prefix="/api/v1", dependencies=[Depends(CORE_FEATURE_GATES["shopping"])])
 app.include_router(templates_router, prefix="/api/v1")
 app.include_router(drive_router, prefix="/api/v1", dependencies=[Depends(feature_gate("drive"))])
 app.include_router(drive_note_import_router, prefix="/api/v1", dependencies=[Depends(feature_gate("drive"))])

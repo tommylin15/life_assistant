@@ -116,6 +116,13 @@
         }
       },
       {
+        "source": "/mcp/**",
+        "run": {
+          "serviceId": "life-assistant-api",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "/api/**",
         "run": {
           "serviceId": "life-assistant-api",

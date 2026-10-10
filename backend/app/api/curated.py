@@ -134,9 +134,11 @@ async def ingest_curated_batch(
         }
         statement = pg_insert(CuratedActivity).values(**row)
         # Never change canonical unique identity or the original creation time.
+        # Omitted optional fields must not erase prior evidence on retry.
+        changed_fields = item.model_fields_set | {"updated_at"}
         statement = statement.on_conflict_do_update(
             index_elements=[CuratedActivity.identity_key],
-            set_={k: v for k, v in row.items() if k != "identity_key"},
+            set_={k: v for k, v in row.items() if k in changed_fields and k != "identity_key"},
         )
         await db.execute(statement)
     db.add(ExecutionLog(
@@ -202,6 +204,34 @@ async def curated_owner_status(
     owner = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().lower()
     if not owner or str(user.get("email", "")).strip().lower() != owner:
         raise HTTPException(403, "Owner access required")
+    count = await db.scalar(select(func.count()).select_from(CuratedActivity))
+    newest = await db.scalar(select(func.max(CuratedActivity.updated_at)))
+    response.headers["Cache-Control"] = "no-store"
+    return {"items": count or 0, "last_updated_at": newest}
+
+# Machine-to-machine readback for the Cloud Run MCP adapter. The browser
+# owner routes above retain their signed-in feature and owner checks.
+@router.get("/curated:connector", dependencies=[Depends(require_curator)])
+async def connector_list_curated(
+    response: Response,
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0, le=5000),
+    city: str | None = Query(None, max_length=100),
+    category: str | None = Query(None, max_length=100),
+    starts_from: date | None = None,
+    min_importance: int = Query(1, ge=1, le=5),
+    db: AsyncSession = Depends(get_db),
+):
+    return await list_curated(response, limit=limit, offset=offset, city=city,
+                              category=category, starts_from=starts_from,
+                              min_importance=min_importance, _user={}, db=db)
+
+
+@router.get("/curated:connector/status", dependencies=[Depends(require_curator)])
+async def connector_curated_status(
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
     count = await db.scalar(select(func.count()).select_from(CuratedActivity))
     newest = await db.scalar(select(func.max(CuratedActivity.updated_at)))
     response.headers["Cache-Control"] = "no-store"

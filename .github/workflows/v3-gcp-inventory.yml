@@ -11,6 +11,7 @@ on:
       - .github/scripts/v3_gcp_inventory.py
       - .github/scripts/v3_ar_docker_inventory.py
       - .github/scripts/v3_no_rollback_retirement_inventory.py
+      - .github/scripts/v3_free_event_retirement_readback.py
 
 permissions:
   contents: read
@@ -83,6 +84,24 @@ jobs:
           if not ok:
               raise SystemExit("Retired life_assistant triggers not both confirmed disabled")
           PY
+      - name: Inspect cancelled free-events source Scheduler links (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/v3_free_event_retirement_readback.py \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            | tee "$RUNNER_TEMP/v3-free-event-scheduler.json"
+          python - "$RUNNER_TEMP/v3-free-event-scheduler.json" <<'PY'
+          import json,os,sys
+          info=json.load(open(sys.argv[1]))
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as output:
+              print("## Cancelled event source Scheduler status — read-only",file=output)
+              print(f"- region={info['region']}; status={info['status']}",file=output)
+              for job in info["matching_scheduler_jobs"]:
+                  print(f"- {job['job']}: {job['state']}",file=output)
+              print("- Other regions/external callers: NOT VERIFIED",file=output)
+          PY
+
       - name: Recheck only bounded legacy GCS CI/CD bucket object metadata
         shell: bash
         run: |

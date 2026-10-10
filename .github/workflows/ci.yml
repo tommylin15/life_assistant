@@ -225,6 +225,7 @@ jobs:
           python -m py_compile .github/scripts/v3_image_identity.py
           python -m py_compile .github/scripts/v3_revision_retention.py
           python -m py_compile .github/scripts/v3_gcp_inventory.py
+          python -m py_compile .github/scripts/v3_free_event_retirement_readback.py
           python -m py_compile .github/scripts/v3_staging_gate.py
 
       - name: Test V3 Firebase CLI diagnostics secret redaction
@@ -238,3 +239,5 @@ jobs:
 
       - name: Test V3 staging version and pinned Cloud Run revision gates
         run: python -m unittest tests/test_v3_staging_gate.py -v
+      - name: Test retired free-events Scheduler classification
+        run: python -m unittest tests/test_v3_free_event_retirement_readback.py -v

@@ -392,3 +392,43 @@ jobs:
           done
           echo "::error::Exact-SHA production Hosting/UI did not complete"
           exit 1
+
+
+  stage-home-readback-once:
+    # User-reported staging root JSON 401; diagnostic is read-only.
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[life-stage-home-probe1]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Compare preview, fixed staging and production public HTML
+        shell: bash
+        run: |
+          set -euo pipefail
+          BAD=0
+          for target in \
+            "preview|https://life-assistant-v3-stage-tl15--v3-37299e392f-fkak5lm7.web.app" \
+            "staging|https://life-assistant-v3-stage-tl15.web.app" \
+            "production|https://gen-lang-client-0593591102.web.app"; do
+            label="\${target%%|*}"
+            origin="\${target#*|}"
+            for path in / /index.html /login /today /release.txt /auth/me /api/v1/tasks; do
+              headers="$(mktemp)"
+              body="$(mktemp)"
+              status="$(curl -sS -L --max-time 20 -H 'Cache-Control: no-cache' \
+                -D "$headers" -o "$body" -w '%{http_code}' "$origin$path" || printf '000')"
+              ct="$(grep -im1 '^content-type:' "$headers" | cut -d: -f2- | tr -d '\r' | xargs || true)"
+              html=NO
+              if grep -qi '<!doctype html' "$body" && grep -q 'flutter_bootstrap.js' "$body"; then html=YES; fi
+              missing_session=NO
+              if grep -q '"Missing session"' "$body"; then missing_session=YES; fi
+              echo "site=$label path=$path http=$status content_type=\${ct:-missing} flutter_html=$html missing_session=$missing_session" | tee -a "$GITHUB_STEP_SUMMARY"
+              if [[ "$path" == / || "$path" == /index.html || "$path" == /login || "$path" == /today ]]; then
+                if [[ "$status" != 200 || "$html" != YES ]]; then BAD=1; fi
+              fi
+              rm -f "$headers" "$body"
+            done
+          done
+          if [[ "$BAD" -ne 0 ]]; then
+            echo "::error::Hosting UI entrypoint returned non-Flutter HTML. Check SPA routing."
+            exit 1
+          fi

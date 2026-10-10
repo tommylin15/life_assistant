@@ -284,7 +284,18 @@ jobs:
           # A new Firebase Hosting channel may 404 until CDN propagation.
           # Do not accept an incorrect SHA, an insecure API status or timeout.
           python scripts/v3_verify_preview.py
-          echo "preview=PASS release-sha=$RELEASE_SHA 401-protected" >> "$GITHUB_STEP_SUMMARY"
+          # Probe the real Firebase -> Cloud Run rewrite BEFORE touching staging
+          # live; the stage OAuth entrypoint must work even when the proxy
+          # hides the original Host / X-Forwarded-Host. No Google login follows.
+          curl --fail --silent --show-error --dump-header "$RUNNER_TEMP/stage-oauth-preview-headers" \
+            --output /dev/null "$PREVIEW_URL/auth/staging/login"
+          grep -Eiq '^location: https://accounts[.]google[.]com/o/oauth2/' \
+            "$RUNNER_TEMP/stage-oauth-preview-headers"
+          grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' \
+            "$RUNNER_TEMP/stage-oauth-preview-headers"
+          grep -Eiq '^set-cookie: __session=' "$RUNNER_TEMP/stage-oauth-preview-headers"
+          grep -Fq 'oauth:staging:' "$RUNNER_TEMP/stage-oauth-preview-headers"
+          echo "preview=PASS release-sha=$RELEASE_SHA 401-protected stage-oauth-rewrite-and-state=PASS" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Read-only fixed staging preview and rollback baseline preflight
         if: ${{ inputs.publish_staging }}

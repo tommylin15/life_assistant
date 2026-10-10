@@ -5,10 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'api_client.dart';
 import 'platform_api.dart';
 import 'habit_api.dart';
-import 'auth_state.dart';
+import 'session_identity.dart';
 
 final _todayDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
-  if (ref.watch(authProvider).asData?.value == null) {
+  if (ref.watch(sessionIdentityProvider) == null) {
     throw StateError('Authentication required');
   }
   final api = ref.read(apiClientProvider);

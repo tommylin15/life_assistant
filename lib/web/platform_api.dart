@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'api_http_client.dart';
-import 'auth_state.dart';
+import 'session_identity.dart';
 
 const _base = String.fromEnvironment('API_BASE_URL', defaultValue: '');
 
@@ -42,7 +42,7 @@ class PlatformApi {
 
 final platformApiProvider = Provider<PlatformApi>((_) => PlatformApi());
 final effectiveFeaturesProvider = FutureProvider<Map<String, bool>>((ref) async {
-  if (ref.watch(authProvider).asData?.value == null) {
+  if (ref.watch(sessionIdentityProvider) == null) {
     throw StateError('Authentication required');
   }
   final json = await ref.read(platformApiProvider).get('/ui/features');
@@ -51,7 +51,7 @@ final effectiveFeaturesProvider = FutureProvider<Map<String, bool>>((ref) async 
 });
 
 final uiPreferencesProvider = FutureProvider<Map<String, dynamic>>((ref) async {
-  if (ref.watch(authProvider).asData?.value == null) {
+  if (ref.watch(sessionIdentityProvider) == null) {
     throw StateError('Authentication required');
   }
   return ref.read(platformApiProvider).get('/me/ui-preferences');

@@ -75,7 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
-          gh workflow run v3-release-ghcr.yml --ref main \
+          gh workflow run v3-release-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref main \
             --raw-field promote=false \
             --raw-field publish_staging=true
           echo "auto_staging=DISPATCHED sha=$RELEASE_SHA promote=false publish_staging=true" >> "$GITHUB_STEP_SUMMARY"

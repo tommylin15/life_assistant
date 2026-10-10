@@ -3,10 +3,6 @@ name: V3 Release - GHCR to Cloud Run
 on:
   workflow_dispatch:
     inputs:
-      release_sha:
-        description: "Exact 40-character main commit to release"
-        required: true
-        type: string
       promote:
         description: "After candidate and Preview PASS, switch production traffic and run live gates"
         required: true
@@ -39,7 +35,7 @@ jobs:
       CLOUD_RUN_SERVICE: life-assistant-api
       CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance
       POSTDEPLOY_ACCEPTANCE_JOB: life-assistant-postdeploy-acceptance
-      RELEASE_SHA: ${{ inputs.release_sha }}
+      RELEASE_SHA: ${{ github.sha }}
       GHCR_IMAGE: ghcr.io/tommylin15/life_assistant-backend
       FRONTEND_URL: https://gen-lang-client-0593591102.web.app
       STAGING_HOSTING_SITE: life-assistant-v3-stage-tl15
@@ -50,7 +46,7 @@ jobs:
       - name: Checkout exact release commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Guard main SHA and required CI success
@@ -83,7 +79,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
-          image-ref: ghcr.io/tommylin15/life_assistant-backend:${{ inputs.release_sha }}
+          image-ref: ghcr.io/tommylin15/life_assistant-backend:${{ github.sha }}
           scanners: vuln,secret
           exit-code: '1'
           ignore-unfixed: true

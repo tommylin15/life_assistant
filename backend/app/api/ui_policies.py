@@ -10,8 +10,8 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select, text, update
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
@@ -75,14 +75,46 @@ async def _commit_versioned(db: AsyncSession) -> None:
         raise HTTPException(409, "Concurrent settings change; reload") from exc
 
 
+async def _verified_pre_0015_rollout_absence(
+    db: AsyncSession, exc: ProgrammingError,
+) -> bool:
+    """Permit *existing* routes only on the known 0014 -> 0015 upgrade window.
+
+    An unrelated PostgreSQL error, a dropped 0015 table after migration, or an
+    unknown DB revision must NEVER silently disable owner rollout policies.
+    """
+    original = exc.orig
+    state = (
+        getattr(original, "sqlstate", None)
+        or getattr(original, "pgcode", None)
+        or getattr(getattr(original, "__cause__", None), "sqlstate", None)
+    )
+    if state != "42P01" or "feature_rollouts" not in str(original):
+        return False
+    await db.rollback()  # PostgreSQL aborts the transaction on UndefinedTable.
+    revision = await db.scalar(text("SELECT version_num FROM alembic_version"))
+    if revision != "20261009_0014":
+        raise HTTPException(503, "Feature rollout schema requires verified migration") from exc
+    return True
+
+
 async def effective_features(db: AsyncSession, user: dict) -> list[dict]:
-    rows = (await db.execute(select(FeatureRollout))).scalars().all()
+    pre_0015 = False
+    try:
+        rows = (await db.execute(select(FeatureRollout))).scalars().all()
+    except ProgrammingError as exc:
+        if not await _verified_pre_0015_rollout_absence(db, exc):
+            raise
+        rows = []
+        pre_0015 = True
     policies = {row.feature_key: row for row in rows}
     result = []
     for key, (path, title) in FEATURES.items():
         policy = policies.get(key)
         status, audience = (
-            (policy.status, policy.audience) if policy else _default_rollout(key)
+            (policy.status, policy.audience) if policy else
+            ("hidden", "owner") if (pre_0015 and key == "events") else
+            _default_rollout(key)
         )
         permitted = status not in ("hidden", "maintenance") and (
             audience == "all" or is_owner(user)
@@ -96,7 +128,16 @@ def feature_gate(key: str):
     async def check(user: dict = Depends(current_user), db: AsyncSession = Depends(get_db)):
         if not isinstance(db, AsyncSession):
             return  # Non-production mock session from unit tests.
-        row = await db.get(FeatureRollout, key)
+        try:
+            row = await db.get(FeatureRollout, key)
+        except ProgrammingError as exc:
+            if not await _verified_pre_0015_rollout_absence(db, exc):
+                raise
+            # Existing features retain their pre-rollout behavior while the
+            # approved additive migration is pending; no new feature opens.
+            if key == "events":
+                raise HTTPException(503, "Curated feature requires verified migration") from exc
+            return
         if row is None:
             if key == "events" and not is_owner(user):
                 raise HTTPException(403, "Feature requires verified rollout")

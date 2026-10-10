@@ -160,6 +160,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_free_events_*postgres*.py' -v
       - name: Verify curated ingestion and per-user preferences on real PostgreSQL
         run: python -m unittest discover -s tests -p 'test_curated_postgres_integration.py' -v
+      - name: Verify rollback-only 0015 production-style runtime smoke on CI PostgreSQL
+        run: python -m scripts.run_curated_pool_runtime_acceptance
       - name: Reproduce historical API create_all table collision and safely adopt schema
         shell: bash
         run: |
@@ -215,6 +217,7 @@ jobs:
           node --check .github/scripts/verify_drive_knowledge_production.mjs
           python -m py_compile backend/scripts/run_drive_knowledge_runtime_acceptance.py
           python -m py_compile backend/scripts/run_drive_google_integration_acceptance.py
+          python -m py_compile backend/scripts/run_curated_pool_runtime_acceptance.py
           python -m py_compile .github/scripts/v3_firebase_error.py
           python -m py_compile .github/scripts/v3_gcs_object_inventory.py
           python -m py_compile .github/scripts/v3_image_identity.py

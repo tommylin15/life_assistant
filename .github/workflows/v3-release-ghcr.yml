@@ -58,8 +58,8 @@ jobs:
           test "$MAIN_SHA" = "$RELEASE_SHA"
           gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/check-runs?per_page=100" \
             | jq -e '
-              [.check_runs[] | select(.name=="flutter" or .name=="backend" or .name=="deployment-scripts")
-               | select(.conclusion=="success") | .name] | unique | length == 3
+              [.check_runs[] | select(.name=="flutter" or .name=="backend" or .name=="deployment-scripts" or .name=="free-events-postgres")
+               | select(.conclusion=="success") | .name] | unique | length == 4
             '
           echo "source=PASS sha=$RELEASE_SHA; required-ci=PASS" >> "$GITHUB_STEP_SUMMARY"
 
@@ -304,24 +304,6 @@ jobs:
             --task-timeout 10m --wait --quiet
           echo "real_google_drive_integration=PASS" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Pre-promotion Drive AI consent runtime acceptance
-        if: ${{ inputs.promote }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Exercise the exact release image against the configured dev-test DB
-          # before any production traffic is changed. This synthetic test must
-          # preserve the OFF-by-default consent and provider-isolation contract.
-          gcloud run jobs update "$POSTDEPLOY_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "$IMAGE_REF" --quiet
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$POSTDEPLOY_ACCEPTANCE_JOB" \
-            gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --args=-m,scripts.run_drive_ai_enrichment_acceptance \
-            --task-timeout 10m --wait --quiet
-          echo "pre_promotion_drive_ai_consent=PASS" >> "$GITHUB_STEP_SUMMARY"
-
       - name: Pin migration job to same immutable release digest (do not execute)
         if: ${{ inputs.promote }}
         shell: bash
@@ -340,18 +322,48 @@ jobs:
           echo "migration_job_image=PASS no_migration_executed image=$IMAGE_REF" \
             >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Apply additive 0014 schema before production cutover
+      - name: Apply additive 0015 schema before production cutover
         if: ${{ inputs.promote }}
         shell: bash
         run: |
           set -euo pipefail
-          # Migrations 0011/0012/0013/0014 are additive and checked against exact head.
+          # Migrations 0011 through 0015 are additive; guarded runner checks actual head.
           .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-db-migrate \
             gcloud run jobs execute life-assistant-db-migrate \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --args=-m,scripts.apply_cloud_domain_parity_release \
             --task-timeout 10m --wait --quiet
-          echo "free_events_schema_migration=PASS alembic=20261009_0014" >> "$GITHUB_STEP_SUMMARY"
+          echo "curated_schema_migration=PASS alembic=20261010_0015" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Rollback-only curated pool migration and personal UI runtime acceptance
+        if: ${{ inputs.promote }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.run_curated_pool_runtime_acceptance \
+            --task-timeout 10m --wait --quiet
+          echo "curated_db_readback=PASS schema=20261010_0015 rollback_only=true" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pre-promotion Drive AI consent runtime acceptance
+        if: ${{ inputs.promote }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Exercise the exact release image against the configured dev-test DB
+          # before any production traffic is changed. This synthetic test must
+          # preserve the OFF-by-default consent and provider-isolation contract.
+          gcloud run jobs update "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --image "$IMAGE_REF" --quiet
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.run_drive_ai_enrichment_acceptance \
+            --task-timeout 10m --wait --quiet
+          echo "pre_promotion_drive_ai_consent=PASS" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Require explicit promotion selection
         if: ${{ !inputs.promote }}

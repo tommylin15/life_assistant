@@ -337,7 +337,7 @@ async def enrich_document(
                 "openai": _setting("ai_enrichment_model", "AI_ENRICHMENT_MODEL"),
                 "codex": str(config.settings.codex_shared_model or ""),
             }
-            candidates = []
+            provider_candidates = []
             for name in ("gemini", "gemini_lite", "groq", "openrouter", "openai", "codex"):
                 if name not in ai_policy.allowed_providers:
                     continue
@@ -347,12 +347,12 @@ async def enrich_document(
                     provider=name, model=models[name], owner_id=codex_owner_uuid(user_sub),
                 )
                 if not isinstance(candidate, UnavailableAIEnrichmentProvider):
-                    candidates.append(candidate)
-            if not candidates:
+                    provider_candidates.append(candidate)
+            if not provider_candidates:
                 resolved_provider = UnavailableAIEnrichmentProvider()
             else:
-                resolved_provider = candidates[-1]
-                for candidate in reversed(candidates[:-1]):
+                resolved_provider = provider_candidates[-1]
+                for candidate in reversed(provider_candidates[:-1]):
                     resolved_provider = FallbackAIEnrichmentProvider(candidate, resolved_provider)
     allow_ai = enrichment_settings.allow_document_content and policy_active
     fingerprint = compute_enrichment_fingerprint(

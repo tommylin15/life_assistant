@@ -1,6 +1,6 @@
 # Life Direct ChatGPT → Curated Pool API (2026-10-10)
 
-**BACKEND API IMPLEMENTED IN GITHUB MAIN / RUNTIME NOT VERIFIED.** See [activity scope](taiwan_free_events_discovery_plan.md). Queue and source-crawler APIs are cancelled.
+**EXISTING API IMPLEMENTED IN GITHUB MAIN / RUNTIME NOT VERIFIED; COMPATIBILITY PATH, NOT NEW DEFAULT IMPORT.** 最新以 [獨立 Drive「交接資料」Job 契約](curated_sheet_job_ingestion.md) 為準；舊 Queue／來源 crawler 取消。
 
 | Endpoint (source implemented) | Responsibility |
 |---|---|
@@ -17,6 +17,6 @@ URL canonicalization strips tracking query parameters and sorts the remaining qu
 
 **Legacy:** Existing GET /api/v1/free-events is verified-only and preserved temporarily for compatibility. Existing Alembic 0011–0014 and previously ingested records remain. No destructive schema deletion, Cloud Run/GCP resource deletion or new source/Queue worker. Tests and acceptance: [P0/P1 consolidated matrix](P0_P1_CONSOLIDATED_ACCEPTANCE_2026-10-10.md). No second publish/registration gate.
 
-## Current Sheet handoff
+## Dedicated Sheet handoff (approved; implementation gap)
 
-As of 2026-10-10 the approved intake is a native Google Sheet selected by ChatGPT, read by a GCP Cloud Run Job with Google Sheets readonly, followed by existing validated Python/PostgreSQL upsert. The bearer REST endpoint remains for compatibility, but no ChatGPT Plugin/MCP credential is required by this Job. See [curated_sheet_job_ingestion.md](curated_sheet_job_ingestion.md). No production/real Drive import has been verified.
+New default input is [台灣活動｜交接資料](https://docs.google.com/spreadsheets/d/1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4/edit) tab `交接資料` (30 columns), **not** the 45-column `精選活動` tab. Life needs READY/ERROR consumer, permanent event_key/content_hash identity and version-checked ACKED/ERROR writeback. Earlier `spreadsheets.readonly` and URL+occurrence identity cannot satisfy this contract without deliberate source changes. The bearer endpoint remains compatible; new Sheet E2E and production are NOT VERIFIED. See [curated_sheet_job_ingestion.md](curated_sheet_job_ingestion.md).

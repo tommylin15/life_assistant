@@ -6,7 +6,7 @@
 
 Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL。Life 負責 Data + UI + API + Execution + Integration，不是通用 Agent reasoning 系統。
 
-活動資料只走 **ChatGPT 已精選 → Life 驗證授權的 direct intake → 單一 PostgreSQL curated pool**；不建來源爬蟲、Queue、雙重 AI 或發布審核。唯一輸入規格：[活動資料管線](taiwan_free_events_discovery_plan.md)；API 欄位：[ingestion contract](free_events_candidate_ingestion_contract.md)。
+最新核准入口：**ChatGPT 探索／核證 → Drive 精選池 → [獨立交接 Sheet](https://docs.google.com/spreadsheets/d/1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4/edit) → Life 每日 GCP Job → 單一 PostgreSQL curated pool**；Life 不做來源爬蟲、舊 Queue 或第二次 AI。既有 direct batch API 尚是相容 source 實作，不能冒充新 Job 已部署。唯一輸入規格：[Sheet Job 交接契約](curated_sheet_job_ingestion.md)；[現有 API](free_events_candidate_ingestion_contract.md) 作相容對照。
 
 ## 使用者產品（規劃）
 

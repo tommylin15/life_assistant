@@ -1,9 +1,11 @@
-# Life 活動精選池 — 唯一現行流程（2026-10-10）
+# Life 活動精選池 — 最新唯一交接路徑（2026-10-10）
 
-**最新核准方向：ChatGPT → Drive 精選池表 → GCP 定時 Python Job → PostgreSQL → Flutter。**
+**APPROVED DESIGN：ChatGPT Chat 探索／核證 → Drive 精選池 → [獨立「交接資料」Sheet](https://docs.google.com/spreadsheets/d/1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4/edit) → Life GCP 每日 Job → PostgreSQL 共用精選池 → Flutter。**
 
-Google Drive 指定原生試算表只當 ChatGPT 精選結果的**交接站**，不是 PostgreSQL 的替代資料庫。GCP Job 透過 Sheets API 唯讀取得已選活動，Python 使用現有欄位與後端驗證、穩定去重鍵和 upsert，**不使用第二次 AI 分析**。完整欄位、安全閘門和驗收見 [精選池 Sheet 匯入契約](curated_sheet_job_ingestion.md)。
+- 探索原始證據、去重和星等規則只在 Drive 正式探索 01～05 文件管理；探索任務的終點是**核實合格資料寫入交接表、讀回驗證**。探索不連 Life API／DB。
+- 固定 Google Sheet ID `1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4`，`交接資料` 為資料分頁，`交接規格` 定義 30 欄語意。**不是**舊精選池 45 欄 `精選活動` 分頁。
+- Life 用一般 Python/Pydantic 讀 READY/ERROR、PostgreSQL 永久穩定 `event_key`／`content_hash` 去重 upsert，DB commit 且版本一致才寫 ACKED。探索端只清成功 ACK 超過 30 天的列，未 ACK 不刪；交接表不是永久資料庫。
+- 原 direct ChatGPT bearer API 與既有 URL-based identity 暫留相容；目前 importer 可能仍讀舊精選池、僅 readonly，**不代表新設計已實作**。必須先補 ID mapping、Sheet 最小寫權限、真實 DB/ACK/UI 與 Scheduler 驗收。全部規則見 [Life 端唯一交接契約](curated_sheet_job_ingestion.md)。
+- Life 不負責文化部／觀光署／官網／第三方網站探索或爬蟲，不做第二次 AI、舊候選 Queue／claim／lease、舊來源觀測／獨立二次發布，也不自動建立私人待辦／行事曆／通知。Drive 上游自行維護來源快照，不屬於 Life 爬蟲。
 
-舊 TDX／文化部擷取、官網清單掃描、Queue/ACK/claim、Cloud Run source crawler 與 14 天來源觀察持續取消；**這次僅新增已精選 Sheet 入庫 Job**，不得重新啟動來源爬蟲。不得以 Excel 草稿、未核准、取消或過期狀態冒充已上架資料，不建立個人任務／行事曆／提醒。
-
-目前 GitHub 程式與部署驗收各自判定：程式存在不等於 Cloud Run Job 已部署，也不等於真實 Drive、PostgreSQL、Flutter readback PASS。
+**狀態：設計核准，交接表已建立；Life 新 Job、定期讀取、資料庫去重及 ACK 實際整合仍 NOT VERIFIED。**

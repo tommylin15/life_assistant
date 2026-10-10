@@ -11,7 +11,7 @@
 
 ## 精選池與使用者功能
 
-- 唯一活動資料進入方式：ChatGPT 自行精選 → Life 授權 API → **單一 PostgreSQL 精選池** → Flutter；取消 Life 來源爬蟲、文化部/TDX、官網 Excel、Queue/ACK、雙重 AI 與第二層發布。詳細管線在 [現行活動資料契約](taiwan_free_events_discovery_plan.md)。
+- 最新活動入口：ChatGPT 探索／核證 → Drive 精選池 → **[獨立交接資料 Sheet](https://docs.google.com/spreadsheets/d/1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4/edit)** → Life 每日 GCP Job（永久 event_key/content_hash 去重、PostgreSQL upsert、版本一致 ACKED/ERROR）→ Flutter。交接資料僅滾動保留 ACK 後30天，不以 Excel 永久保留歷史。原 direct API 僅作相容，Life 來源 crawler／舊 Queue/lease/claim／第二次 AI 持續取消。新 Job 和 ACK 實作 **NOT VERIFIED**。詳見 [現行流程](taiwan_free_events_discovery_plan.md) 和 [交接契約](curated_sheet_job_ingestion.md)。
 - **兩個使用者功能入口**：「限時機會」（報名／限量／預警／待辦）與「活動探索」（活動日期標記／收藏／旅遊候選）；同一活動可同時屬於兩者，沒有兩份資料庫。
 - 使用者自行選擇個人追蹤、提醒、待辦、行事曆與未來行程；價值星等、急迫度、是否要報名、旅遊用途相互獨立。所有行事曆資訊標記、報名時間提醒、確定行程有不同語意。唯一詳細規格：[精選池使用者功能](curated_activity_user_features.md)。
 - 此產品決策為 **APPROVED DESIGN**；當前 UI/API 只有單一精選池 baseline，兩入口與個人整合不可標示實作或部署完成。

@@ -4,7 +4,7 @@
 
 ## 邊界與共用資料
 
-唯一資料入口：**ChatGPT 自行探索及精選 → Life 已授權批次 API → 單一 PostgreSQL curated pool → 使用者 UI**。Life 不做官網/Excel/文化部/TDX 掃描、Source Job、Queue/ACK、第二輪 AI 推薦或發布審核。入口契約請看 [現行活動管線](taiwan_free_events_discovery_plan.md) 和 [現有 API 契約](free_events_candidate_ingestion_contract.md)；本文件不重複維護輸入 schema。
+唯一最新核准入口：**ChatGPT 探索／核證 → Drive 精選池 → [獨立交接 Sheet](https://docs.google.com/spreadsheets/d/1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4/edit) → Life 每日 GCP Job → PostgreSQL curated pool → 使用者 UI**。Life 不做官網／文化部／TDX 掃描、來源 crawler、舊 Queue／claim／lease 或第二次 AI 評選。ACKED/ERROR 是匯入回執而非舊 Queue。詳見 [交接契約](curated_sheet_job_ingestion.md)；[原 API 契約](free_events_candidate_ingestion_contract.md) 是既有相容實作，不表示新 Job 已完成。
 
 **共用一筆資料，不拆成兩個資料來源。** 同一活動可包含一般活動、限量場次或優惠，允許同時出現在兩個功能；可在後續版本設計母活動／子場次（相同原始 URL 可用既有 occurrence_key 區別），避免在清單間複製相同實體。精選不代表已核實可報名、尚有名額或保證優惠。
 
@@ -72,7 +72,7 @@
 
 ### D. 下一步開發與驗收順序
 
-1. **P0 接入基線先驗：** 從真實授權 ChatGPT connector 寫一筆有明確 `occurrence_key` 的精選候選到 API，驗證 PostgreSQL upsert/重送不重複、owner 讀回及 Flutter 顯示；無證據仍標 NOT VERIFIED。此步不需啟用探索排程，不能擅自寫入 Drive 暫存 28 筆至 production。
+1. **P0 接入基線先驗：** 由真實 Drive「交接資料」輸出合格 READY（event_key/content_hash），驗證 Life Job 讀取、PostgreSQL 重送不重複／網址更換映射、版本一致 ACKED、owner/Flutter 讀回；缺少 runtime 證據仍標 NOT VERIFIED。直寫 API 只能算相容性驗收，不可替代新交接 E2E。
 2. **P1 共用資料模型與展示：** 先落地最小主活動／子優惠聚合，能區別「待核預告／已核實將開放／過期」和各自日期、來源、退款/押金；依需要做 additive migration、schema/API tests 與既有資料兼容；完成「一主題卡、多優惠展開」。
 3. **P1 兩個使用者入口：** 實作限時機會／活動探索獨立導覽及交叉呈現，後台開放與使用者排序；保持篩選、loading/error/unknown、行動裝置/桌面一致。
 4. **P1 個人動作：** 在有權限和資訊足夠時讓使用者勾選 Task、Calendar 資訊標記／報名提醒、通知訂閱；測試取消、重複加入、不同使用者資料隔離、日期時區及 Google 授權失敗。旅遊候選維持未來擴充。

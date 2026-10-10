@@ -7,7 +7,7 @@
 | 規範、系統邊界 | [PROJECT_RULES](PROJECT_RULES.md) · [project_boundary](project_boundary.md) |
 | 核准決策、產品總覽 | [decisions](decisions.md) · [CURRENT_PRODUCT_ARCHITECTURE](CURRENT_PRODUCT_ARCHITECTURE.md) |
 | **使用者活動功能（新）** | **[限時機會＋活動探索：唯一功能規格](curated_activity_user_features.md)** |
-| 活動資料進池（與使用者功能分開） | [ChatGPT direct intake](taiwan_free_events_discovery_plan.md) · [現有 API contract](free_events_candidate_ingestion_contract.md) |
+| 活動資料進池（與使用者功能分開） | **[Drive「交接資料」→ Life 每日 Job](curated_sheet_job_ingestion.md)** · [活動資料最新路徑](taiwan_free_events_discovery_plan.md) · [舊 API 相容契約](free_events_candidate_ingestion_contract.md) |
 | 現況與驗收 | [CURRENT_STATE](CURRENT_STATE.md) · [acceptance](acceptance.md) · [P0/P1 consolidated matrix](P0_P1_CONSOLIDATED_ACCEPTANCE_2026-10-10.md) |
 | 待辦及排序 | [todo](todo.md) · [phase1 delivery order](phase1_delivery_order.md)；[progress](progress.md) 僅提供入口 |
 | CI/CD V3 發布 | [ci_cd_ghcr_release_policy](ci_cd_ghcr_release_policy.md) · [deployment_runbook](deployment_runbook.md) · [release_checklist](release_checklist.md) |

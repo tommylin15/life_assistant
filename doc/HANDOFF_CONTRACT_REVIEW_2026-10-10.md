@@ -13,3 +13,11 @@ Validation: backend 535 tests OK, 19 environment-dependent tests skipped; focuse
 Expected load: one fixed outbox, at most 1000 rows, daily or manually triggered. No new dependency, paid resource, schema change or authentication bypass was added.
 
 Not checked: current-diff CI PostgreSQL tests, real Job apply/ACK, new-version external Chrome acceptance and production promotion. Google Sheets has no atomic conditional cell write; concurrent source row movement can produce PARTIAL and requires the next import to recheck the database and repair receipts.
+
+## Follow-up review: admin audience selection
+
+What this change does: The existing admin menu can now explicitly open a feature to all users or to the administrator. Previously enabling a beta/owner feature preserved owner-only access, so the requested public opening could not be done through the backend UI.
+
+Looks good. Ship. Reviewed the menu payload, FeatureWrite validation, version-conflict checks, effective_features and feature_gate, and provider invalidation. The backend still enforces owner-only writes; the UI adds no permission bypass. A widget test verifies beta/owner → enabled/all → enabled/owner → beta/owner and current revisions. It passes. Targeted analysis reports six pre-existing style infos and no errors or warnings. The a373f91 CI passed all four jobs, including actual PostgreSQL concurrency and same-hash rejection tests.
+
+Not checked: live audience changes and ordinary-account browser readback on the updated frontend. Final release acceptance still requires the new exact SHA.

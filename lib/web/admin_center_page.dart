@@ -31,12 +31,15 @@ class AdminCenterPage extends ConsumerWidget {
               subtitle: Text('目前：${feature['status']} / ${feature['audience']}'),
               trailing: PopupMenuButton<String>(
                 tooltip: '調整開放狀態',
-                onSelected: (status) async {
+                onSelected: (selection) async {
+                  final parts = selection.split('/');
+                  final status = parts.first;
+                  final audience = parts.length == 2 ? parts.last : feature['audience'];
                   try {
                     await ref.read(platformApiProvider).put('/admin/feature-rollouts', {
                       'key': feature['key'],
                       'status': status,
-                      'audience': status == 'beta' ? 'owner' : feature['audience'],
+                      'audience': audience,
                       'expected_revision': feature['revision'],
                     });
                     ref.invalidate(_adminRollouts);
@@ -47,8 +50,13 @@ class AdminCenterPage extends ConsumerWidget {
                     );
                   }
                 },
-                itemBuilder: (_) => ['enabled', 'beta', 'hidden', 'maintenance']
-                    .map((s) => PopupMenuItem(value: s, child: Text(s))).toList(),
+                itemBuilder: (_) => const {
+                  'enabled/all': '開放給所有使用者',
+                  'enabled/owner': '開放給管理員',
+                  'beta/owner': '測試（管理員）',
+                  'hidden': '隱藏',
+                  'maintenance': '維護中',
+                }.entries.map((entry) => PopupMenuItem(value: entry.key, child: Text(entry.value))).toList(),
               ),
             ),
           const Divider(),

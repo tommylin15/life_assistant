@@ -396,7 +396,7 @@ jobs:
 
   stage-home-readback-once:
     # User-reported staging root JSON 401; diagnostic is read-only.
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[life-stage-home-probe2]')
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[life-stage-home-probe3]')
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -432,3 +432,47 @@ jobs:
             echo "::error::Hosting UI entrypoint returned non-Flutter HTML. Check SPA routing."
             exit 1
           fi
+
+      - name: Install isolated browser for user-facing login smoke
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Load anonymous Flutter app with a real Chromium browser
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          (async () => {
+            const browser = await chromium.launch({headless: true, args:['--disable-dev-shm-usage']});
+            let bad = 0;
+            for (const [name, origin] of [
+              ['preview','https://life-assistant-v3-stage-tl15--v3-37299e392f-fkak5lm7.web.app'],
+              ['staging','https://life-assistant-v3-stage-tl15.web.app'],
+              ['production','https://gen-lang-client-0593591102.web.app'],
+            ]) {
+              const context = await browser.newContext({locale:'zh-TW',serviceWorkers:'block'});
+              const page = await context.newPage();
+              const errors = [];
+              page.on('pageerror', err => errors.push(String(err.name).slice(0,60)));
+              try {
+                const response = await page.goto(origin+'/', {waitUntil:'domcontentloaded',timeout:45000});
+                await page.waitForSelector('flutter-view', {timeout:45000});
+                await page.waitForTimeout(3500);
+                const result = {site:name, http:response.status(), url:page.url(),
+                  title:await page.title(), flutter_view:await page.locator('flutter-view').count(),
+                  canvas:await page.locator('canvas').count(), javascript_errors:errors};
+                console.log(JSON.stringify(result));
+                if (result.http !== 200 || !result.flutter_view ||
+                    !result.title.includes('生活助理')) bad = 1;
+              } catch (error) {
+                bad = 1;
+                console.error('site='+name+' browser_smoke=FAIL error_type='+String(error.name));
+              } finally {
+                await context.close();
+              }
+            }
+            await browser.close();
+            if(bad)process.exitCode=1;
+          })().catch(error => {console.error('browser_smoke=FAIL '+String(error.name));process.exitCode=1;});
+          NODE

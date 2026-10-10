@@ -12,6 +12,12 @@
 
 固定入口始終指向 **staging site 的 live channel**，不是 production site 的 live、也不是 staging site 的限期 Preview。維持 staging 與 production **不同 Hosting site**，不可把 runner-local staging `hosting.site` / `pinTag` 寫回 production `firebase.json` 的預設發布組態。
 
+## 自動 staging-only 觸發（2026-10-10 起）
+
+`main` push 的 `CI` 四項 Job（`backend`、`flutter`、`deployment-scripts`、`free-events-postgres`）全部成功後，`.github/workflows/v3-auto-staging-after-ci.yml` 以 `workflow_run` 自動檢查來源 run／完整 SHA／當前 main／重複版本，再 `workflow_dispatch` 既有 `v3-release-ghcr.yml`，強制 `promote=false`、`publish_staging=true`。PR、手動 CI、過期 SHA 或已發布版本不觸發新 staging release；正式站 Hosting 與正式後端流量不受此入口控制。人工手動 V3 釋出入口仍保留給正式切流和故障處理。
+
+**真實 owner OAuth 是仍需本人互動的驗收門檻**：當 `staging_oauth_canary=ACTIVE` 出現，使用固定 staging 的 `/auth/staging/login` 完成 Google 登入後，同一瀏覽器進入 `/auth/me?staging_e2e=true`。CI 或匿名 HTTP redirect 不足以替代本人登入；沒有同次登入稽核紀錄時原流程判 FAIL，回復 staging 原版本。**自動開始不等於自動完成真人驗收**，不得把這類失敗寫成已上線。
+
 ## 每次 staging 發布順序（程式保護已實作、實際發布未驗證）
 
 > 新的 V3 workflow 有獨立的 `workflow_dispatch.publish_staging` 布林欄位，預設 `false`。只有勾選才會執行 `scripts/v3_fixed_staging_release.sh`。該腳本先獨立唯讀核對上一個 staging live 版本、preview release SHA 與 API/auth 的真正 Hosting version pinned revision；只有 source/rollback baseline 齊全才允許更新，且只會對 staging site 使用 Firebase REST `releases.create?versionName=...` 將**已驗證的同一 version** 發布至 staging live。驗證失敗會在同一腳本嘗試用先前**確定的 Hosting version**回復，並核對固定入口 SHA、兩條 rewrite 的 pins。實際執行 PASS 尚未取得。

@@ -66,23 +66,23 @@ live_snapshot() {
 }
 verify_live() {
   local expected="$1" expected_sha="$2" expected_revision="$3"
-  live_snapshot "${WORK}/stage-after-releases.json"
+  live_snapshot "${WORK}/stage-after-releases.json" || return 1
   local current
-  current="$(release_version "${WORK}/stage-after-releases.json" live)"
+  current="$(release_version "${WORK}/stage-after-releases.json" live)" || return 1
   if [[ "$current" != "$expected" ]]; then
     echo "staging_live_readback=FAIL layer=hosting_version" >&2
     return 1
   fi
-  version_get "$current" "${WORK}/stage-after-version.json"
-  snapshot_cloud "${WORK}/cloud-after.json"
+  version_get "$current" "${WORK}/stage-after-version.json" || return 1
+  snapshot_cloud "${WORK}/cloud-after.json" || return 1
   local visible
-  visible="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "${STAGE_URL}/release.txt")"
+  visible="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "${STAGE_URL}/release.txt")" || return 1
   if [[ "$visible" != "$expected_sha" ]]; then
     echo "staging_live_readback=RETRY layer=static_sha" >&2
     return 1
   fi
   echo "staging_live_readback=PASS layer=hosting_version_and_static_sha"
-  python - "${WORK}/stage-after-version.json" "${WORK}/cloud-after.json" "${expected_revision}" <<'PY'
+  python - "${WORK}/stage-after-version.json" "${WORK}/cloud-after.json" "${expected_revision}" <<'PY' || { echo "staging_live_readback=FAIL layer=pinned_routes" >&2; return 1; }
 import json,sys
 sys.path.insert(0, ".github/scripts")
 from v3_staging_gate import pinned_routes

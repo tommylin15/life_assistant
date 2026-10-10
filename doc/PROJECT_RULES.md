@@ -152,7 +152,7 @@ V2 Cloud Build 全文已歸檔：[archive/ci_cd_v2_policy.md](archive/ci_cd_v2_p
 ## 2026-10-10 現行文件與產品決策
 
 - 現況：[CURRENT_STATE.md](CURRENT_STATE.md)；產品與權限：[CURRENT_PRODUCT_ARCHITECTURE.md](CURRENT_PRODUCT_ARCHITECTURE.md)；執行順序：[phase1_delivery_order.md](phase1_delivery_order.md)。現行程式與 runtime 永遠優先於文件的歷史快照。
-- **最新 2026-10-10 活動決策（覆蓋所有舊 Queue 規劃）：** Life 只接受 ChatGPT 已選活動，經驗證與授權 API 直接 upsert 到 PostgreSQL 精選池，再交給使用者自行瀏覽。取消文化部/TDX 擷取、官網 Excel 掃描、來源清單、Queue/ACK/claim、Cloud Run source Job/14 天觀測與第二階段發布；舊 DB migration 和資料只供兼容，禁止破壞性清除。見 [活動現行規格](taiwan_free_events_discovery_plan.md)。
+- **最新 2026-10-10 活動決策（覆蓋所有舊 Queue 規劃）：** Life 只接受 ChatGPT 已選活動，經驗證與授權 API 直接 upsert 到 PostgreSQL 精選池，再交給使用者自行瀏覽。取消文化部/TDX 擷取、官網 Excel 掃描、來源清單、Queue/ACK/claim、Cloud Run source Job/14 天觀測與第二階段發布；舊 DB migration 和資料只供兼容，禁止破壞性清除。見 [活動現行資料管線](taiwan_free_events_discovery_plan.md) 與 [兩個使用者功能的唯一詳細規格](curated_activity_user_features.md)；兩個入口在單一精選池上運作，與個人待辦／日曆／提醒資料分離，僅為核准設計而非已部署。
 - AI 管理：平台內部 Drive AI Provider 配置與 ChatGPT Chat 排程不同；每位使用者仍須自行 Google OAuth 授權和 Drive AI consent。後台只管共用資料、Provider 策略與功能開放，個人導覽/首頁設定按帳號隔離。追蹤 Issues #10–#12。
 - 曾經核准的 Drive 正式文件若與 GitHub 的現行規格不同，應明示差異，不默默覆蓋。
 

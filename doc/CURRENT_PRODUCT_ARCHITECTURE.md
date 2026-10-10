@@ -1,17 +1,23 @@
 # Life — Current Approved Product Architecture (2026-10-10)
 
-**Product direction approved; unimplemented features must not be called deployed.** GitHub code/runtime are Source of Truth: [current state](CURRENT_STATE.md).
+**產品方向 APPROVED；部署及使用者功能以 current GitHub source / runtime 為準。** 具體最新證據請看 [CURRENT_STATE](CURRENT_STATE.md) 和 [P0/P1 acceptance](P0_P1_CONSOLIDATED_ACCEPTANCE_2026-10-10.md)。
 
-## Architecture
+## 系統與責任邊界
 
-Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL. Life owns Data + UI + API + Execution + Integration, not general agent reasoning.
+Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL。Life 負責 Data + UI + API + Execution + Integration，不是通用 Agent reasoning 系統。
 
-**One and only one activity data path:** ChatGPT independently finds/selects events → Life authenticated direct intake API → PostgreSQL **curated pool** → Flutter list/cards. Life does not ingest MoC/TDX, inspect official-site Excel, run a source crawler or Queue, or apply a second AI/recommendation/publication layer. User freely browses, filters and chooses. [Activity contract](taiwan_free_events_discovery_plan.md), [GitHub #10](https://github.com/tommylin15/life_assistant/issues/10).
+活動資料只走 **ChatGPT 已精選 → Life 驗證授權的 direct intake → 單一 PostgreSQL curated pool**；不建來源爬蟲、Queue、雙重 AI 或發布審核。唯一輸入規格：[活動資料管線](taiwan_free_events_discovery_plan.md)；API 欄位：[ingestion contract](free_events_candidate_ingestion_contract.md)。
 
-**Minimal Life admin modules:** curated items and inbound processing errors (not source/Queue operators); system health; internal Life Drive AI providers/models/quotas [#11](https://github.com/tommylin15/life_assistant/issues/11); global feature release toggles [#12](https://github.com/tommylin15/life_assistant/issues/12).
+## 使用者產品（規劃）
 
-**Each user's own settings:** Google Gmail/Calendar/Drive consent, Drive AI content processing consent, navigation bottom/left favorites/order and homepage cards. Backend auth applies separately. Admin may never read other users' Drive private content or OAuth secrets.
+同一精選池提供兩個可重疊的使用者功能：**限時機會**（追蹤報名／限量／提醒／待辦）與 **活動探索**（收藏、日期標記、旅遊規劃候選）。使用者自主勾選個人待辦、行事曆、通知或未來行程；日曆資訊標記、行動提醒、確定行程必須分開。星等、報名屬性、時效性、旅遊用途不能混為單一等級。**唯一詳細功能規格：[curated_activity_user_features.md](curated_activity_user_features.md)**。
 
-**Flutter UI:** Keep Material 3 responsive mobile bottom nav and desktop left rail. Per-user Home cards: tasks, schedule, attention, habits, projects and (after new API release) curated event previews; optional notes, shopping, consented Drive AI.
+## 管理端與個人化
 
-**Current implementation/evidence:** PostgreSQL migration 0015 adds the independent curated pool and policy/preferences tables; code now contains direct authenticated curated batch write/read, responsive Flutter pool, personalized nav/Home and minimal owner management. Legacy 0011–0014 and old verified-only API/UI remain solely for backward compatibility. **Real scheduled ChatGPT connector token, staging/production API/database/Google OAuth runtime acceptance, public rollout and production deployment are NOT VERIFIED**; release is PARTIAL. Deleting source GitHub workflows does not prove external GCP Cloud Scheduler/Job triggers stopped. See [consolidated acceptance](P0_P1_CONSOLIDATED_ACCEPTANCE_2026-10-10.md).
+- Life admin：精選資料與錯誤、系統健康、內部 Life Drive AI Provider 策略、feature rollout。不可閱讀他人 Google Drive 文件、OAuth secret 或替他人建立私人物件。
+- 個人：Google OAuth / Drive AI consent、手機底部／桌面左側導覽及排序、首頁卡片與提醒偏好；個人記錄依帳號隔離。保持 Material 3 responsive UI。
+- ChatGPT 的活動探索和獨立 Google Drive 優惠研究不屬 Life 內部 Drive AI Provider；互不改動。
+
+## Implementation ≠ release
+
+截至此份規格整理時，source 有 curated API / Alembic 0015 / 單一 Flutter 精選池以及泛用的 rollout／個人導覽功能。**兩個活動入口、個人追蹤/待辦/日曆/預警、旅遊候選尚未完成；真實 ChatGPT connector、正式 production rollout 和本 SHA runtime 不因文件修改而自動 PASS。** 

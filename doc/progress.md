@@ -1,9 +1,10 @@
 # Life — Progress (2026-10-10)
 
-**Overall PARTIAL.** Historical V3 exact-SHA release [37959057237](https://github.com/tommylin15/life_assistant/actions/runs/37959057237) PASS, prior source activation [37958755189](https://github.com/tommylin15/life_assistant/actions/runs/37958755189) FAIL (now CANCELLED scope, not a blocker). Docs cleanup CI [37967964969](https://github.com/tommylin15/life_assistant/actions/runs/37967964969) PASS.
+本檔只作**進度入口**，避免與現行證據和待辦平行維護兩份狀態表。
 
-On new user instruction, 22 obsolete source-workflow/scripts/test/registry files were removed, and the legacy MoC Cloud Run entrypoint made fail-closed (no fetch or DB writes) in [code cleanup commit](https://github.com/tommylin15/life_assistant/commit/10335187e3e2a338eed5c76b4d61bd2c18a605e3). ChatGPT prior activity task that wrote old Sheets/Queue has been disabled.
+- **最新 code/runtime 證據（Source of Truth）：** [CURRENT_STATE.md](CURRENT_STATE.md)。
+- **逐項 PASS/FAIL/NOT VERIFIED：** [P0/P1 consolidated acceptance](P0_P1_CONSOLIDATED_ACCEPTANCE_2026-10-10.md)。
+- **下一步：** [todo.md](todo.md) / [phase1_delivery_order.md](phase1_delivery_order.md)。
+- **新核准但尚未實作的產品規格：** [限時機會／活動探索](curated_activity_user_features.md)。
 
-Direct ChatGPT→curated pool POST/GET and Flutter selected-pool view: **NOT IMPLEMENTED / NOT VERIFIED**. Old Alembic migrations and past verified-only API remain for safety. Actual GCP Job/Scheduler trigger stop-state **NOT VERIFIED**; no production GCP resource deletion occurred.
-
-Separate UI feature rollout and Life AI admin issues remain open. [Next tasks](todo.md), [state](CURRENT_STATE.md).
+截至產品規格核准，整體仍是 **PARTIAL**。先前的 code cleanup、舊 Queue 取消和已完成的特定 SHA CI 不代表最新 SHA 的 staging、production、真實 ChatGPT connector 或使用者兩入口已通過驗收。

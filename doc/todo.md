@@ -13,6 +13,9 @@
 | Acceptance | Exact main SHA CI, V3 candidate, Preview, fixed staging true OAuth, live API/DB/UI/connector, rollback | NOT VERIFIED for new release |
 | Operations | Read-only GCP old external Source Job/Scheduler status | Cloud Run Job exists per inventory #38012860019; Scheduler in `us-central1` **PASS (no matching jobs)** per #38013575831; other-region/external callers NOT VERIFIED |
 
+| P1 product design → implementation | Split single curated pool into independent 限時機會 and 活動探索 user entries; allow overlapping activity membership; account-owned opt-in tracking, Task/Calendar dates, alerts; preserve unknowns | **APPROVED DESIGN / NOT IMPLEMENTED** — [canonical spec](curated_activity_user_features.md) |
+| Future | Travel itinerary candidate handoff from curated events and accepted registrations | **DESIGN EXTENSION ONLY / NOT IMPLEMENTED** |
+
 **CANCELLED, not pending**: MoC, TDX, EventGo/yii crawlers, official Excel/source registry, Queue/lease/ACK, old source 14-day acceptance, extra publication gate. Preserve legacy historical migrations/data non-destructively.
 
 Follow [consolidated P0/P1 acceptance](P0_P1_CONSOLIDATED_ACCEPTANCE_2026-10-10.md).

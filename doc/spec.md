@@ -301,7 +301,7 @@ UI 需求以 `ui.md` 為頁面與流程規格，以 `design_system.md` 為視覺
 
 Phase 1 必須支援手機與桌面瀏覽器，並優先確保 responsive layout、loading / empty / error / data 狀態一致。
 
-Phase 1 主導航先維持 Dashboard / Tasks / Calendar / Projects / More；Today / Focus / Plan / Review 等 situation-oriented navigation 屬於 Phase 2 候選。
+導覽沿用既有 Material 3 responsive bottom/rail/sidebar，管理員控管功能開放、使用者可選擇釘選、排序與首頁卡片；新增「限時機會／活動探索」是**兩個獨立的使用者入口（待實作）**，不固定所有人只能看到五個入口。
 
 ## 20. Phase 1 不做
 
@@ -336,6 +336,6 @@ Phase 1 主導航先維持 Dashboard / Tasks / Calendar / Projects / More；Toda
 - mutation 仍需通過 Backend validation / permission / audit。
 - 不改變 life_assistant / omniAgent 的正式責任邊界。
 
-## 2026-10-10 活動精選最小介面
+## 活動功能契約
 
-只接收 ChatGPT 已選活動，經 Life FastAPI 授權驗證、來源 HTTPS 校驗及去重，直接 upsert 到 PostgreSQL 精選池，Flutter 顯示活動卡讓使用者自行篩選。**不建 Life 的文化部/TDX/Excel 擷取、Queue、掃描排程、AI 第二道審核或正式推薦流程**。實際 API/schema/UI 尚未完成；以 [活動規格](taiwan_free_events_discovery_plan.md) 和 [API 契約](free_events_candidate_ingestion_contract.md) 為準。
+單一精選池輸入流程看 [活動資料管線](taiwan_free_events_discovery_plan.md)；兩入口與個人操作看 [使用者功能規格](curated_activity_user_features.md)。本通用產品文件不再維護另一套活動實作或驗收清單。

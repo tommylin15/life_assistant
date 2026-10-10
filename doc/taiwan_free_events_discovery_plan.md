@@ -2,6 +2,8 @@
 
 **DESIGN APPROVED / BACKEND + FLUTTER SOURCE IMPLEMENTED; CHATGPT CONNECTOR & LIVE DEPLOYMENT NOT VERIFIED.** This document supersedes all former MoC/TDX/Queue plans. Historical details are in Git history and doc/archive; do not restart collectors.
 
+**本文件只定義精選資料如何進池，不再放使用者側分類／待辦／日曆規格。使用者功能唯一規格：[curated_activity_user_features.md](curated_activity_user_features.md)。**
+
 ## Only active pipeline
 
 ChatGPT Chat（自主搜尋、篩選和去重） → Life 認證 API 接收精選活動 → PostgreSQL 精選池 → Flutter 用戶自行瀏覽。

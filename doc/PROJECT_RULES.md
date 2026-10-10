@@ -138,7 +138,7 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 
 ## CI/CD V3 — 正式目標（2026-10-08，優先於下方歷史 V2）
 
-- **單一正式目標**：`ChatGPT → GitHub main → GitHub Actions 完整測試/發布公開 GHCR digest → GCP API → GitHub Actions Logs → ChatGPT`。Push 只做完整測試；Release 以 full SHA 手動啟動、GHCR 發布、Cloud Run 0%-traffic 候選驗收、Firebase Preview、經驗收後明確切流與可回滾。
+- **單一正式目標**：`ChatGPT → GitHub main → GitHub Actions 完整測試/發布公開 GHCR digest → GCP API → GitHub Actions Logs → ChatGPT`。`main` push 先執行完整 CI；**2026-10-10 使用者最新核准變更**：只有四個 CI Job 全 PASS 的當次 `main` SHA，才由 `.github/workflows/v3-auto-staging-after-ci.yml` 的 `workflow_run` 自動啟動既有 V3 **staging-only** 發布（`promote=false`、`publish_staging=true`）。嚴格核對 CI push 來源、SHA 等於當前 main、避免重複發布；不對 PR／手動 CI／過期 SHA 發布。正式 production 切流仍需另外明確手動要求，不得由自動 staging 啟動。既有 GHCR digest、Cloud Run 0% 候選、Preview、真實 Google owner OAuth、失敗恢復與可稽核驗收不可略過。
 - 新流程不得呼叫 Cloud Build、不得主動寫 GCS/Artifact Registry，也不得新增其 repo/bucket；過去 Cloud Build 僅允許獨立、WIF **唯讀** 診斷。部署採**分離的最小權限 deployer**；唯讀 WIF 無法部署。
 - Cloud Run **僅允許直接讀取公開 GHCR package 的 immutable manifest digest**；package visibility/讀取、live/candidate digest、服務身份和 0% tagged URL 安全均需實測。私人 GHCR 所需的 Artifact Registry remote repo 與本決策衝突，因此失敗關閉，不自動替換架構。
 - 禁止因寫好文件而標示 V3 DONE。切換前盤點現有 workflow/Cloud Build triggers，實作後先取得 Actions、GHCR、WIF、0% revision、真實候選/Preview/Live、rollback 及未觸發 Cloud Build/未主動寫 GCS/AR 證據；再停用舊入口，不刪歷史記錄。

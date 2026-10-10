@@ -195,7 +195,7 @@ PY
 PHASE="staging_live_readback"
 verify_live_bounded "$PREVIEW_VERSION" "$RELEASE_SHA" "$CANDIDATE_REVISION"
 PHASE="staging_google_redirect"
-curl -sS -D "${WORK}/stage-oauth-headers" -o /dev/null "${STAGE_URL}/auth/login"
+curl -sS -D "${WORK}/stage-oauth-headers" -o /dev/null "${STAGE_URL}/auth/staging/login"
 if ! grep -Eiq '^location: https://accounts[.]google[.]com/o/oauth2/' "${WORK}/stage-oauth-headers"; then
   echo "staging_google_redirect=FAIL not_google" >&2
   exit 1
@@ -207,7 +207,7 @@ if ! grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2
 fi
 echo "staging_google_redirect=PASS fixed_staging_callback"
 PHASE="owner_google_auth"
-echo "staging_oauth_canary=ACTIVE url=${STAGE_URL}/auth/login" | tee -a "$GITHUB_STEP_SUMMARY"
+echo "staging_oauth_canary=ACTIVE url=${STAGE_URL}/auth/staging/login" | tee -a "$GITHUB_STEP_SUMMARY"
 
 # This job reads only authenticated owner callback + session evidence. No fake
 # login and no bypass if the owner cannot complete Google OAuth on staging.

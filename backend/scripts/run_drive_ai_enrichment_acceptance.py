@@ -18,7 +18,7 @@ from sqlalchemy import delete, select
 
 from app.api.auth import current_user
 from app.db.session import SessionLocal
-from app.main import app
+from app.main import app, DRIVE_FEATURE_GATE
 from app.models.drive import (
     DriveDocument,
     DriveDocumentEnrichmentRun,
@@ -384,6 +384,8 @@ async def run_acceptance() -> None:
         )
         drive_enrichment.get_ai_enrichment_provider = _acceptance_provider_resolver(provider)
         app.dependency_overrides[current_user] = _acceptance_user
+        # Test consent independently of admin rollout in this isolated runner.
+        app.dependency_overrides[DRIVE_FEATURE_GATE] = lambda: None
         transport = httpx.ASGITransport(app=app)
 
         async with httpx.AsyncClient(
@@ -543,6 +545,7 @@ async def run_acceptance() -> None:
     finally:
         drive_enrichment.get_ai_enrichment_provider = original_provider_resolver
         app.dependency_overrides.pop(current_user, None)
+        app.dependency_overrides.pop(DRIVE_FEATURE_GATE, None)
         try:
             await _cleanup(
                 project_id=project_id,

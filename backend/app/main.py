@@ -1,8 +1,5 @@
 import asyncio
 import logging
-import os
-import secrets
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -41,18 +38,7 @@ from app.errors import (
     validation_exception_handler,
 )
 from app.models import migration_support as _migration_support  # noqa: F401
-from app.mcp_adapter import mcp as curator_mcp, mounted_mcp_app
-
-
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    # Mounted Streamable HTTP MCP requires a parent-owned session manager.
-    async with curator_mcp.session_manager.run():
-        await startup()
-        yield
-
-
-app = FastAPI(title="Life Assistant API", version="0.1.0", debug=False, lifespan=lifespan)
+app = FastAPI(title="Life Assistant API", version="0.1.0", debug=False)
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,18 +55,6 @@ async def request_context(request: Request, call_next):
     request.state.request_id = request_id
     token = set_request_id(request_id)
     try:
-        if request.url.path == "/mcp" or request.url.path.startswith("/mcp/"):
-            # The MCP client gets its own key, never the REST ingest credential.
-            inbound = os.environ.get("LIFE_MCP_CLIENT_TOKEN", "")
-            writer = os.environ.get("LIFE_CURATED_INGEST_TOKEN", "")
-            if len(inbound) < 32 or len(writer) < 32 or inbound == writer:
-                return JSONResponse(status_code=503, content={"detail": "MCP connector not configured"})
-            authorization = request.headers.get("Authorization", "")
-            candidate = authorization[len("Bearer "):] if authorization.startswith("Bearer ") else ""
-            if not candidate or not secrets.compare_digest(candidate, inbound):
-                return JSONResponse(status_code=401, content={"detail": "Invalid MCP credentials"},
-                                    headers={"WWW-Authenticate": "Bearer"})
-
         requirement = confirmation_requirement(request.method, request.url.path)
         authenticated_session = request.cookies.get(SESSION_COOKIE, "").startswith("id:")
         if (
@@ -118,6 +92,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 
+@app.on_event("startup")
 async def startup():
     try:
         # Never apply DDL from a live API instance. 0%-traffic candidates can
@@ -176,6 +151,3 @@ app.include_router(free_events_router, prefix="/api/v1")
 
 app.include_router(curated_router, prefix="/api/v1")
 app.include_router(ui_policies_router, prefix="/api/v1")
-
-# Remote HTTPS MCP endpoint. No local process, stdio, or desktop dependency.
-app.mount("/mcp", mounted_mcp_app)

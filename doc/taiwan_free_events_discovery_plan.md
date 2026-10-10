@@ -1,27 +1,9 @@
 # Life 活動精選池 — 唯一現行流程（2026-10-10）
 
-**DESIGN APPROVED / BACKEND + FLUTTER SOURCE IMPLEMENTED; CHATGPT CONNECTOR & LIVE DEPLOYMENT NOT VERIFIED.** This document supersedes all former MoC/TDX/Queue plans. Historical details are in Git history and doc/archive; do not restart collectors.
+**最新核准方向：ChatGPT → Drive 精選池表 → GCP 定時 Python Job → PostgreSQL → Flutter。**
 
-**本文件只定義精選資料如何進池，不再放使用者側分類／待辦／日曆規格。使用者功能唯一規格：[curated_activity_user_features.md](curated_activity_user_features.md)。**
+Google Drive 指定原生試算表只當 ChatGPT 精選結果的**交接站**，不是 PostgreSQL 的替代資料庫。GCP Job 透過 Sheets API 唯讀取得已選活動，Python 使用現有欄位與後端驗證、穩定去重鍵和 upsert，**不使用第二次 AI 分析**。完整欄位、安全閘門和驗收見 [精選池 Sheet 匯入契約](curated_sheet_job_ingestion.md)。
 
-## Only active pipeline
+舊 TDX／文化部擷取、官網清單掃描、Queue/ACK/claim、Cloud Run source crawler 與 14 天來源觀察持續取消；**這次僅新增已精選 Sheet 入庫 Job**，不得重新啟動來源爬蟲。不得以 Excel 草稿、未核准、取消或過期狀態冒充已上架資料，不建立個人任務／行事曆／提醒。
 
-ChatGPT Chat（自主搜尋、篩選和去重） → Life 認證 API 接收精選活動 → PostgreSQL 精選池 → Flutter 用戶自行瀏覽。
-
-Life 不做前置文化部/TDX/官網 Excel 資料抓取，**不建立／不讀取／不處理 Queue**，不部署活動擷取 Job，不在伺服端進行第二次 AI 分析或正式推薦／報名審核。ChatGPT 自行管理來源與模型；Life 自己的 Drive AI Provider 路由無關。
-
-## Minimum Life scope
-
-- Authenticated bounded POST of ChatGPT-curated activity records: stable official/original HTTPS link, title, optional city/date/category/fee/summary, unknown fields explicitly unknown. Caller cannot assert official validity or booking availability on behalf of Life.
-- Backend validates payload size, role/capability, HTTPS source safety, dedup stable identity, idempotent retry and database transaction. Do not fetch attacker-supplied URLs or add any external crawler.
-- Additive PostgreSQL curated-pool table and a GET API for signed-in user viewing with basic filters and original source link. Users decide for themselves; minor factual ambiguity is acceptable but cannot be presented as a verified fact.
-- Actual ChatGPT Chat scheduled task/API connector credential flow must be proved in real E2E. Prior '台灣活動探索' ChatGPT task writing Sheets/Queue has been disabled; no new task is activated by this design.
-- Keep prior migrations 0011–0014/legacy catalog only for backward-compatible database history; no destructive production drop. Existing Cloud Run Job still exists as external resource, but new Python source-job entrypoint is inert and former GitHub cron workflows are removed.
-
-## What is cancelled
-
-MoC, TDX, official-site workbook, source registry, event discovery/normalization source adapters, scheduled source scanner, Queue/claim/lease/ACK, source Job image pinning, M0–M4, source acceptance observations and extra publication gates. The 14-day source-observation failure is historical evidence and **not a blocker** of the new direct flow.
-
-## Validation before DONE
-
-Real PostgreSQL tests of safe input, idempotent upsert, stable dedup, unauthorized access, failure rollback; Flutter card empty/error/unknown states; GitHub CI / guarded V3 deploy; owner/runtime DB readback; real ChatGPT connector/Tasks run. No current assertion that this E2E already works.
+目前 GitHub 程式與部署驗收各自判定：程式存在不等於 Cloud Run Job 已部署，也不等於真實 Drive、PostgreSQL、Flutter readback PASS。

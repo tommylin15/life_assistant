@@ -151,6 +151,8 @@ V2 Cloud Build 全文已歸檔：[archive/ci_cd_v2_policy.md](archive/ci_cd_v2_p
 
 ## 2026-10-10 現行文件與產品決策
 
+- **最新開發與權限安排：** 新交接表、穩定去重、活動呈現、限時機會／活動探索兩入口、個人動作先同批完成開發，再與後台及個人首頁一起做正式上線驗收。AI 管理補強暫緩，AI 管理相關能力限制 admin；這項限制不適用於活動新功能。活動是否開放、開放對象由 admin 在既有後台設定，不另設程式外的公開開放核准旗標。
+
 - 現況：[CURRENT_STATE.md](CURRENT_STATE.md)；產品與權限：[CURRENT_PRODUCT_ARCHITECTURE.md](CURRENT_PRODUCT_ARCHITECTURE.md)；執行順序：[phase1_delivery_order.md](phase1_delivery_order.md)。現行程式與 runtime 永遠優先於文件的歷史快照。
 - **最新 2026-10-10 活動交接決策（取代舊 direct-API 預設入口）：** ChatGPT 探索／核證只寫 Drive 精選池與[獨立交接資料 Sheet](https://docs.google.com/spreadsheets/d/1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4/edit)；讀回成功即結束探索。Life 每日 GCP Python Job 只消費新 Sheet，依穩定 event_key/content_hash 驗證／PostgreSQL 去重，DB commit 後比對版本再回寫 ACKED/ERROR；僅 ACK 超過30天的列由探索端清理。Life 不做文化部／TDX／官網 crawler、舊 Queue/claim/lease、來源觀測或第二次 AI。現有 direct API 與 URL-based identity 是相容程式；新 Job、去重、Sheet 寫權限、runtime 尚 **NOT VERIFIED**。詳見 [現行流程](taiwan_free_events_discovery_plan.md)、[唯一交接契約](curated_sheet_job_ingestion.md) 及 [使用者功能](curated_activity_user_features.md)；不破壞舊資料或 migrations。
 - AI 管理：平台內部 Drive AI Provider 配置與 ChatGPT Chat 排程不同；每位使用者仍須自行 Google OAuth 授權和 Drive AI consent。後台只管共用資料、Provider 策略與功能開放，個人導覽/首頁設定按帳號隔離。追蹤 Issues #10–#12。

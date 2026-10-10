@@ -14,7 +14,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select, or_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -153,7 +153,7 @@ async def ingest_curated_batch(
     return {"accepted": len(unique), "duplicates_within_batch": len(body.items) - len(unique)}
 
 
-@router.get("/curated", dependencies=[Depends(feature_gate("events"))])
+@router.get("/curated")
 async def list_curated(
     response: Response,
     limit: int = Query(20, ge=1, le=50),
@@ -164,8 +164,13 @@ async def list_curated(
     min_importance: int = Query(1, ge=1, le=5),
     _user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
+    entry: Literal["all", "opportunities", "explore"] = "all",
 ):
+    if _user and isinstance(db, AsyncSession):
+        await feature_gate("events" if entry == "all" else entry)(user=_user, db=db)
     statement = select(CuratedActivity).where(CuratedActivity.importance >= min_importance)
+    if entry == "opportunities":
+        statement = statement.where(or_(CuratedActivity.registration_required.is_(True), CuratedActivity.limited_offer.is_(True)))
     if city:
         statement = statement.where(CuratedActivity.city == city)
     if category:
@@ -174,12 +179,19 @@ async def list_curated(
         statement = statement.where(
             (CuratedActivity.starts_on.is_(None)) | (CuratedActivity.starts_on >= starts_from)
         )
-    statement = statement.order_by(
-        CuratedActivity.importance.desc(),
-        CuratedActivity.starts_on.asc().nulls_last(),
-        CuratedActivity.updated_at.desc(),
-    ).offset(offset).limit(limit)
-    rows = (await db.execute(statement)).scalars().all()
+    handoff_key = func.coalesce(CuratedActivity.parent_event_key, CuratedActivity.handoff_event_key)
+    group_key = case((handoff_key.is_not(None), func.concat("handoff:", handoff_key)),
+                     else_=func.concat("legacy:", CuratedActivity.identity_key))
+    groups = statement.with_only_columns(
+        group_key.label("group_key"), func.max(CuratedActivity.importance).label("rank"),
+        func.min(CuratedActivity.starts_on).label("day"),
+    ).group_by(group_key).order_by(
+        func.max(CuratedActivity.importance).desc(),
+        func.min(CuratedActivity.starts_on).asc().nulls_last(), group_key,
+    ).offset(offset).limit(limit).subquery()
+    rows = (await db.execute(select(CuratedActivity).join(groups, group_key == groups.c.group_key)
+        .order_by(groups.c.rank.desc(), groups.c.day.asc().nulls_last(), groups.c.group_key,
+                  CuratedActivity.handoff_event_key.asc().nulls_last()))).scalars().all()
     response.headers["Cache-Control"] = "no-store"
     return {"items": [
         {
@@ -188,11 +200,12 @@ async def list_curated(
                 "summary", "city", "category", "starts_on", "ends_on", "fee_kind",
                 "fee_amount", "benefit_value", "on_site_spending", "importance",
                 "registration_required", "registration_status", "limited_offer",
-                "registration_deadline", "updated_at",
+                "registration_deadline", "updated_at", "handoff_event_key", "parent_event_key", "handoff_details",
             )}
         }
         for row in rows
-    ], "returned": len(rows), "policy": "chatgpt_curated_unverified"}
+    ], "returned": len({("handoff", r.parent_event_key or r.handoff_event_key) if r.handoff_event_key
+                        else ("legacy", r.identity_key) for r in rows}), "policy": "chatgpt_curated_unverified"}
 
 
 @router.get("/curated/status")

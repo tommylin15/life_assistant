@@ -80,11 +80,15 @@
 
 ## 實作切分與驗收門檻
 
+2026-10-10 本批工作樹已實作新 Sheet importer、0016 穩定鍵 migration、父子卡片／群組分頁、兩個入口與帳號隔離的收藏／追蹤狀態／待辦／Calendar 動作。後端完整測試 529 項 PASS（19 項整合測試跳過，另有真實本機 PostgreSQL 測試），Flutter 72 項 PASS、最新卡片 2 項補跑 PASS、Web release build PASS；尚不等於 deployed 或正式驗收。提醒目前是使用者 Google Calendar popup，App 推播未實作。
+
+活動入口開放由 admin 在後台設定，可開給一般使用者；預設 beta／owner 只作首次發布的安全初值。AI 管理補強暫緩並維持 admin 權限，不是把活動新功能永久限 admin。本批完成後，合併後台／個人首頁／真實 Sheet 回執／Google OAuth 進同一次正式上線驗收；AI 補強不阻擋這批驗收。
+
 | 工作 | 2026-10-10 檔案核對狀態 |
 |---|---|
 | ChatGPT direct curated API、0015 schema、單一精選清單 | **SOURCE IMPLEMENTED**；live end-to-end **NOT VERIFIED** |
-| 「限時機會／活動探索」獨立入口及交叉顯示、活動／場次關係 | **NOT IMPLEMENTED / NOT VERIFIED** |
-| 個人追蹤／收藏／待辦／日曆標記／提前通知；使用者隔離、去重、取消 | **NOT IMPLEMENTED / NOT VERIFIED**（既有通用 Task/Calendar 不等於完成串接） |
+| 「限時機會／活動探索」獨立入口及交叉顯示、活動／場次關係 | **工作樹 SOURCE IMPLEMENTED / runtime NOT VERIFIED** |
+| 個人追蹤／收藏／待辦／日曆標記／提前通知；使用者隔離、去重、取消 | **工作樹 SOURCE IMPLEMENTED / 真實 Google runtime NOT VERIFIED**；提前通知使用 Calendar popup，App 推播未實作 |
 | 旅遊行程候選 | **FUTURE DESIGN ONLY** |
 | 管理員 rollout／個人導覽設定 | 既有 generic source baseline；兩個新入口的政策和真實驗收 **NOT VERIFIED** |
 

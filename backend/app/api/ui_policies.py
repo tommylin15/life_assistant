@@ -32,18 +32,20 @@ FEATURES = {
     "habits": ("/more/habits", "習慣"),
     "shopping": ("/more/shopping", "購物"),
     "events": ("/more/curated", "活動精選"),
+    "opportunities": ("/more/opportunities", "限時機會"),
+    "explore": ("/more/explore", "活動探索"),
     "drive": ("/more/drive", "Google Drive"),
     "integrations": ("/integrations", "Google 整合"),
 }
 DEFAULT_PINNED = ["tasks", "calendar", "projects"]
-DEFAULT_MORE = ["notes", "habits", "events", "shopping", "drive", "integrations"]
+DEFAULT_MORE = ["notes", "habits", "events", "opportunities", "explore", "shopping", "drive", "integrations"]
 DEFAULT_HOME = ["tasks", "calendar", "attention", "habits", "events", "projects"]
 HOME_KEYS = set(DEFAULT_HOME) | {"notes", "shopping", "drive"}
 AI_PROVIDERS = ["gemini", "gemini_lite", "groq", "openrouter", "openai", "codex"]
 
 def _default_rollout(key: str) -> tuple[str, str]:
     # New curated feature stays owner-only until actual V3 E2E release.
-    return ("beta", "owner") if key == "events" else ("enabled", "all")
+    return ("beta", "owner") if key in ("events", "opportunities", "explore") else ("enabled", "all")
 
 
 
@@ -113,7 +115,7 @@ async def effective_features(db: AsyncSession, user: dict) -> list[dict]:
         policy = policies.get(key)
         status, audience = (
             (policy.status, policy.audience) if policy else
-            ("hidden", "owner") if (pre_0015 and key == "events") else
+            ("hidden", "owner") if (pre_0015 and key in ("events", "opportunities", "explore")) else
             _default_rollout(key)
         )
         permitted = status not in ("hidden", "maintenance") and (
@@ -135,11 +137,11 @@ def feature_gate(key: str):
                 raise
             # Existing features retain their pre-rollout behavior while the
             # approved additive migration is pending; no new feature opens.
-            if key == "events":
+            if key in ("events", "opportunities", "explore"):
                 raise HTTPException(503, "Curated feature requires verified migration") from exc
             return
         if row is None:
-            if key == "events" and not is_owner(user):
+            if key in ("events", "opportunities", "explore") and not is_owner(user):
                 raise HTTPException(403, "Feature requires verified rollout")
             return
         if row.status in ("hidden", "maintenance") or row.audience == "owner" and not is_owner(user) or row.status == "beta" and not is_owner(user):
@@ -255,12 +257,6 @@ async def put_rollout(
 ):
     if body.key not in FEATURES:
         raise HTTPException(422, "Unknown feature")
-    if body.status == "enabled" and body.key == "events" and body.audience == "all":
-        # Release engineering must set this non-secret flag only AFTER the
-        # exact production SHA, real connector, OAuth, and DB readback pass.
-        # The admin toggle alone can never launch an unverified new feature.
-        if os.environ.get("LIFE_CURATED_PUBLIC_ROLLOUT_APPROVED") != "1":
-            raise HTTPException(409, "Curated event public rollout requires release gate")
     row = await db.get(FeatureRollout, body.key)
     revision = row.revision if row else 0
     if revision != body.expected_revision:

@@ -28,9 +28,9 @@ from app.services.idempotency import (
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
-async def _require_task(db: AsyncSession, task_id: str) -> Task:
+async def _require_task(db: AsyncSession, task_id: str, user: dict) -> Task:
     task = await db.get(Task, task_id)
-    if not task or task.deleted_at is not None:
+    if not task or task.deleted_at is not None or (task.user_sub is not None and task.user_sub != user["sub"]):
         raise HTTPException(404, "Task not found")
     return task
 
@@ -48,11 +48,11 @@ async def _require_checklist_item(
 
 @router.get("", response_model=list[TaskOut])
 async def list_tasks(
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Task).where(Task.deleted_at.is_(None)).order_by(Task.created_at.desc())
+        select(Task).where(Task.deleted_at.is_(None), (Task.user_sub.is_(None)) | (Task.user_sub == user["sub"])).order_by(Task.created_at.desc())
     )
     return result.scalars().all()
 
@@ -98,10 +98,10 @@ async def create_task(
 @router.get("/{task_id}/checklist", response_model=list[ChecklistItemOut])
 async def list_checklist_items(
     task_id: str,
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await _require_task(db, task_id)
+    await _require_task(db, task_id, user)
     result = await db.execute(
         select(ChecklistItem)
         .where(ChecklistItem.task_id == task_id)
@@ -122,7 +122,7 @@ async def create_checklist_item(
     db: AsyncSession = Depends(get_db),
     action_id: str | None = Header(default=None, alias=ACTION_ID_HEADER),
 ):
-    await _require_task(db, task_id)
+    await _require_task(db, task_id, user)
     request_payload = {"task_id": task_id, **body.model_dump(mode="json")}
     reservation = await reserve_execution(
         db,
@@ -179,7 +179,7 @@ async def update_checklist_item(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await _require_task(db, task_id)
+    await _require_task(db, task_id, user)
     item = await _require_checklist_item(db, task_id, item_id)
     execution = await start_execution(
         db,
@@ -214,7 +214,7 @@ async def delete_checklist_item(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await _require_task(db, task_id)
+    await _require_task(db, task_id, user)
     item = await _require_checklist_item(db, task_id, item_id)
     execution = await start_execution(
         db,
@@ -242,10 +242,10 @@ async def delete_checklist_item(
 @router.get("/{task_id}", response_model=TaskOut)
 async def get_task(
     task_id: str,
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await _require_task(db, task_id)
+    return await _require_task(db, task_id, user)
 
 
 @router.patch("/{task_id}", response_model=TaskOut)
@@ -255,7 +255,7 @@ async def update_task(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    task = await _require_task(db, task_id)
+    task = await _require_task(db, task_id, user)
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -294,7 +294,7 @@ async def complete_task(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    task = await _require_task(db, task_id)
+    task = await _require_task(db, task_id, user)
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -327,7 +327,7 @@ async def delete_task(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    task = await _require_task(db, task_id)
+    task = await _require_task(db, task_id, user)
     execution = await start_execution(
         db,
         user_sub=user["sub"],

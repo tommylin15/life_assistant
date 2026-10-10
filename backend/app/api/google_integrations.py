@@ -212,7 +212,9 @@ async def _request_google(
     url: str,
     **kwargs,
 ) -> httpx.Response:
-    token = await get_access_token(db, user_sub, scope)
+    allowed_status = kwargs.pop("allowed_status", ())
+    preserve_transaction = kwargs.pop("preserve_transaction", False)
+    token = await get_access_token(db, user_sub, scope, **({"commit_refresh": False} if preserve_transaction else {}))
     headers = dict(kwargs.pop("headers", {}))
     headers.update(_auth_headers(token))
     try:
@@ -222,7 +224,7 @@ async def _request_google(
         raise HTTPException(503, "Google API unavailable") from exc
 
     if response.status_code == 401:
-        token = await get_access_token(db, user_sub, scope, force_refresh=True)
+        token = await get_access_token(db, user_sub, scope, force_refresh=True, **({"commit_refresh": False} if preserve_transaction else {}))
         headers.update(_auth_headers(token))
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -233,7 +235,7 @@ async def _request_google(
         raise HTTPException(
             409, "Google reauthorization or additional permission is required"
         )
-    if response.status_code >= 400:
+    if response.status_code >= 400 and response.status_code not in allowed_status:
         raise HTTPException(502, "Google API request failed")
     return response
 

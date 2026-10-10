@@ -1,238 +1,154 @@
-"""Deterministic import of ChatGPT-selected native Google Sheet rows into Life.
-
-Cloud Scheduler -> Cloud Run Job -> Google Sheets read-only -> existing Pydantic /
-PostgreSQL upsert. No AI calls, web crawler, direct MCP, or user browser cookies.
-Run with no write unless LIFE_CURATED_IMPORT_APPLY=1.
-"""
-from __future__ import annotations
-
+"""Daily fixed-Sheet handoff importer; commit first, then version-checked receipt."""
 import asyncio
-import hashlib
 import os
-import re
-from datetime import date
-from decimal import Decimal, InvalidOperation
-
+import json
+import uuid
+from datetime import datetime, timezone, timedelta
+from urllib.parse import quote
 import httpx
-from fastapi import Response
 from pydantic import ValidationError
-from sqlalchemy import select
-
-from app.api.curated import CuratedBatchIn, CuratedItemIn, identity, ingest_curated_batch
 from app.db.session import SessionLocal, engine
-from app.models.curated import CuratedActivity
+from app.services.curated_handoff import HEADERS, BUSINESS_FIELDS, HandoffItem, content_hash, upsert_handoff
 
-GOOGLE_SHEETS_ENDPOINT = "https://sheets.googleapis.com/v4/spreadsheets"
-TAB = "精選活動"
+SHEET_ID = "1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4"
+TAB = "交接資料"
 MAX_SHEET_ROWS = 1000
-ALLOWED_STATES = frozenset(("selected", "changed"))
-FIELDS = (
-    "event_key", "活動名稱", "主辦官方活動網址", "報名網址",
-    "pool狀態", "重要性星等",
-)
+# shortcut: reject over 1000 outbox rows; add paged reads if 30-day cleanup exceeds this bound.
 
 
-def _text(row: list, indexes: dict[str, int], name: str) -> str:
-    idx = indexes.get(name)
-    return str(row[idx]).strip() if idx is not None and idx < len(row) and row[idx] is not None else ""
-
-
-def _date(raw: str) -> date | None:
-    if not raw:
-        return None
-    match = re.fullmatch(r"(\d{4}-\d{2}-\d{2})(?:\s+\d{2}:\d{2}(?::\d{2})?)?", raw)
-    if not match:
-        # Commentary like "registration opens 10/14, event TBC" is not
-        # a verified activity date. Preserve the activity without a date.
-        return None
-    try:
-        return date.fromisoformat(match.group(1))
-    except ValueError:
-        return None
-
-
-def _amount(raw: str) -> Decimal | None:
-    if not raw:
-        return None
-    value = raw.replace(",", "")
-    if not re.fullmatch(r"\d+(?:\.\d{1,2})?", value):
-        raise ValueError("unverified_amount")
-    try:
-        amount = Decimal(value)
-    except InvalidOperation as exc:
-        raise ValueError("invalid_amount") from exc
-    if amount > 10000000:
-        raise ValueError("amount_exceeds_limit")
-    return amount
-
-
-def parse_rows(values: list[list]) -> tuple[list[CuratedItemIn], list[int], int]:
-    """Reject bad approved rows individually; fail duplicate IDs before any DB writes.
-
-    Row numbers, not personal Google Drive content, are suitable for job logs.
-    """
-    if not values:
-        raise ValueError("empty_curated_sheet")
-    headers = [str(v).strip() for v in values[0]]
-    if len(headers) != len(set(headers)):
-        raise ValueError("duplicate_headers")
-    indexes = {name: index for index, name in enumerate(headers)}
-    if not set(FIELDS).issubset(indexes):
-        raise ValueError("missing_required_curated_headers")
-    if len(values) > MAX_SHEET_ROWS:
-        raise ValueError("curated_sheet_rows_exceed_limit")
-
-    by_event_key: dict[str, CuratedItemIn] = {}
-    invalid_rows: list[int] = []
-    filtered = 0
-    for row_number, row in enumerate(values[1:], start=2):
-        state = _text(row, indexes, "pool狀態").lower()
-        if state not in ALLOWED_STATES:
-            filtered += 1
+def parse_rows(values):
+    if not values or tuple(values[0]) != HEADERS:
+        raise ValueError("handoff_header_contract_mismatch")
+    if len(values) > MAX_SHEET_ROWS + 1:
+        raise ValueError("handoff_rows_exceed_limit")
+    rows = []
+    seen = set()
+    for row in values[1:]:
+        record = {key: str(row[i] if i < len(row) and row[i] is not None else "").strip()
+                  for i, key in enumerate(HEADERS)}
+        if not any(record.values()):
             continue
-        key = _text(row, indexes, "event_key")
-        title = _text(row, indexes, "活動名稱")
-        official_url = _text(row, indexes, "主辦官方活動網址")
-        signup_url = _text(row, indexes, "報名網址")
-        if not key or not title or not (official_url or signup_url):
-            invalid_rows.append(row_number)
-            continue
-        if key in by_event_key:
-            raise ValueError("duplicate_approved_event_key")
-        try:
-            start = _date(_text(row, indexes, "開始時間(台北)"))
-            end = _date(_text(row, indexes, "結束時間(台北)"))
-            fee = _amount(_text(row, indexes, "不可退實付C(NTD)"))
-            benefit = _amount(_text(row, indexes, "可驗證福利V(NTD)"))
-            stars = int(_text(row, indexes, "重要性星等"))
-            fee_evidence = _text(row, indexes, "主會場入場費狀態")
-            registration_text = _text(row, indexes, "報名需求")
-            status_text = _text(row, indexes, "報名狀態")
-            payload = {
-                "title": title,
-                "original_url": official_url or signup_url,
-                # Keep distinct sub-events with the same URL while preserving
-                # a stable identity on retries. URL changes require review.
-                "occurrence_key": "sheet_" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:24],
-                "importance": stars,
-            }
-            optional = (
-                ("summary", _text(row, indexes, "精選理由")),
-                ("city", _text(row, indexes, "縣市")),
-                ("category", _text(row, indexes, "分類")),
-            )
-            for target, raw in optional:
-                if raw:
-                    payload[target] = raw
-            if start:
-                payload["starts_on"] = start
-            if end:
-                payload["ends_on"] = end
-            if fee is not None:
-                payload["fee_amount"] = fee
-                payload["fee_kind"] = ("free" if fee == 0 and "免費" in fee_evidence else
-                                       "paid" if fee > 0 else "unknown")
-            if benefit is not None:
-                payload["benefit_value"] = benefit
-            if "免報名" in registration_text or "不需報名" in registration_text:
-                payload["registration_required"] = False
-            elif "需報名" in registration_text or "要報名" in registration_text:
-                payload["registration_required"] = True
-            if "已額滿" in status_text:
-                payload["registration_status"] = "full"
-            elif "已截止" in status_text or "報名截止" in status_text:
-                payload["registration_status"] = "closed"
-            elif "尚未開放" in status_text or "即將開放" in status_text:
-                payload["registration_status"] = "upcoming"
-            elif "開放報名" in status_text:
-                payload["registration_status"] = "open"
-            if _text(row, indexes, "限量優惠狀態") in ("已確認限量", "confirmed_limited"):
-                payload["limited_offer"] = True
-            by_event_key[key] = CuratedItemIn.model_validate(payload)
-        except (ValueError, ValidationError):
-            invalid_rows.append(row_number)
-
-    result = list(by_event_key.values())
-    if len({identity(item) for item in result}) != len(result):
-        raise ValueError("distinct_sheet_keys_collide_on_curated_identity")
-    return result, invalid_rows, filtered
+        if not record["event_key"] or record["event_key"] in seen:
+            raise ValueError("missing_or_duplicate_event_key")
+        seen.add(record["event_key"])
+        if record["handoff_status"] not in ("READY", "ERROR", "ACKED"):
+            raise ValueError("invalid_handoff_status")
+        rows.append(record)
+    return rows
 
 
-def _get_google_access_token() -> str:
-    """Use job's attached service account ADC; no new API keys."""
-    import google.auth
-    from google.auth.transport.requests import Request
-    credentials, _project = google.auth.default(
-        scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
-    )
-    credentials.refresh(Request())
-    return credentials.token
+def validate_record(record):
+    if record["content_hash"] != content_hash(record):
+        raise ValueError("content_hash_mismatch")
+    return HandoffItem.model_validate({key: record[key] or None for key in BUSINESS_FIELDS + ("handoff_updated_at_tpe",)})
 
 
-async def read_sheet_values(file_id: str) -> list[list]:
-    if not re.fullmatch(r"[A-Za-z0-9_-]{15,120}", file_id):
-        raise ValueError("invalid_sheet_id")
-    token = await asyncio.to_thread(_get_google_access_token)
-    url = f"{GOOGLE_SHEETS_ENDPOINT}/{file_id}/values/%27%E7%B2%BE%E9%81%B8%E6%B4%BB%E5%8B%95%27!A1:AS1001"
-    async with httpx.AsyncClient(timeout=25.0) as client:
-        res = await client.get(url, headers={"Authorization": f"Bearer {token}"},
-                               params={"valueRenderOption": "FORMATTED_VALUE"})
-    if res.status_code != 200:
-        # Avoid logging the provider's response text or OAuth credentials.
-        raise RuntimeError(f"google_sheets_read_failed_http_{res.status_code}")
-    values = res.json().get("values")
-    if not isinstance(values, list):
-        raise ValueError("invalid_sheets_values")
-    return values
+def receipt_value(record, result):
+    return json.dumps({"result": result, "event_key": record["event_key"],
+                       "content_hash": record["content_hash"]}, separators=(",", ":"), ensure_ascii=False)
 
 
-async def run_import() -> dict[str, int | str]:
-    file_id = os.environ.get("LIFE_CURATED_SHEET_ID", "").strip()
-    values = await read_sheet_values(file_id)
-    items, invalid_rows, filtered = parse_rows(values)
+def acknowledged(record):
+    try:
+        receipt = json.loads(record["life_import_result"])
+    except (ValueError, TypeError):
+        return False
+    return (isinstance(receipt, dict) and record["handoff_status"] == "ACKED"
+            and record["content_hash"] == content_hash(record)
+            and receipt.get("event_key") == record["event_key"]
+            and receipt.get("content_hash") == record["content_hash"]
+            and receipt.get("result") in ("CREATED", "UPDATED", "UNCHANGED"))
+
+
+class SheetClient:
+    async def request(self, method, suffix, **kwargs):
+        import google.auth
+        from google.auth.transport.requests import Request
+        def token():
+            credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/spreadsheets"])
+            credentials.refresh(Request())
+            return credentials.token
+        access = await asyncio.to_thread(token)
+        async with httpx.AsyncClient(timeout=25) as client:
+            response = await client.request(method,
+                f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/{suffix}",
+                headers={"Authorization": f"Bearer {access}"}, **kwargs)
+        if response.status_code >= 400:
+            raise RuntimeError(f"sheets_http_{response.status_code}")
+        return response.json()
+
+    async def read(self):
+        result = await self.request("GET", "values/" + quote(f"'{TAB}'!A1:AD1002", safe=""),
+                                    params={"valueRenderOption": "FORMATTED_VALUE"})
+        return result.get("values", [])
+
+    async def receipt(self, snapshot, result, error=""):
+        # Re-read by stable key, never stale row position. Do not ACK a changed
+        # payload even if upstream accidentally retained its old content_hash.
+        values = await self.read()
+        records = parse_rows(values)
+        matches = [r for r in records if r["event_key"] == snapshot["event_key"]]
+        if len(matches) != 1 or any(matches[0][k] != snapshot[k] for k in BUSINESS_FIELDS + ("content_hash", "handoff_updated_at_tpe")):
+            return False
+        if acknowledged(matches[0]):
+            return True
+        row_number = next(i for i, row in enumerate(values[1:], 2) if row and str(row[0]).strip() == snapshot["event_key"])
+        now = datetime.now(timezone(timedelta(hours=8))).isoformat()
+        await self.request("POST", "values:batchUpdate", json={"valueInputOption": "RAW", "data": [
+            {"range": f"'{TAB}'!Z{row_number}", "values": [["ERROR" if error else "ACKED"]]},
+            {"range": f"'{TAB}'!AB{row_number}:AD{row_number}", "values": [["" if error else now, receipt_value(snapshot, result), error]]},
+        ]})
+        readback = parse_rows(await self.read())
+        current = next((r for r in readback if r["event_key"] == snapshot["event_key"]), None)
+        return bool(current and all(current[k] == snapshot[k] for k in BUSINESS_FIELDS + ("content_hash",))
+                    and current["life_import_result"] == receipt_value(snapshot, result)
+                    and current["handoff_status"] == ("ERROR" if error else "ACKED"))
+
+
+async def run_import(sheet=None, sessions=SessionLocal):
+    if os.environ.get("LIFE_CURATED_SHEET_ID", "") != SHEET_ID:
+        raise ValueError("fixed_handoff_sheet_required")
+    sheet = sheet or SheetClient()
+    rows = parse_rows(await sheet.read())
     applying = os.environ.get("LIFE_CURATED_IMPORT_APPLY") == "1"
-    result: dict[str, int | str] = {
-        "mode": "apply" if applying else "dry_run",
-        "selected": len(items), "filtered": filtered,
-        "invalid": len(invalid_rows), "unchanged": 0, "upserted": 0,
-    }
-    if not applying or not items:
-        return result
-
-    # Compare only supplied fields: a replay must not rewrite updated_at or
-    # generate misleading execution logs when the sheet has not changed.
-    async with SessionLocal() as db:
-        stored = (await db.execute(select(CuratedActivity).where(
-            CuratedActivity.identity_key.in_([identity(item) for item in items])
-        ))).scalars().all()
-        existing = {entry.identity_key: entry for entry in stored}
-        pending = []
-        for item in items:
-            old = existing.get(identity(item))
-            expected = item.model_dump(exclude_unset=True, exclude={"original_url"})
-            if old and old.original_url == item.original_url and all(
-                getattr(old, name) == value for name, value in expected.items()
-            ):
-                result["unchanged"] += 1
-            else:
-                pending.append(item)
-
-    for pos in range(0, len(pending), 40):
-        batch = CuratedBatchIn(items=pending[pos:pos + 40])
-        async with SessionLocal() as db:
-            await ingest_curated_batch(batch, Response(), db=db)
-        result["upserted"] += len(batch.items)
+    result = {"run_id": uuid.uuid4().hex, "mode": "apply" if applying else "dry_run",
+              "created": 0, "updated": 0, "unchanged": 0, "invalid": 0, "ack_failed": 0}
+    for record in rows:
+        # Sheets has no atomic cell-value compare-and-set. A version-qualified
+        # receipt makes a late/stale ACK invalid, even when a row moved between
+        # the check and write. Never skip or clean a row based on status alone.
+        if acknowledged(record):
+            continue
+        try:
+            item = validate_record(record)
+        except (ValueError, ValidationError):
+            result["invalid"] += 1
+            if applying and not await sheet.receipt(record, "INVALID", "invalid_handoff_record"):
+                result["ack_failed"] += 1
+            continue
+        if not applying:
+            continue
+        try:
+            async with sessions() as db:
+                status = await upsert_handoff(db, item, record["content_hash"])
+        except Exception:
+            result["invalid"] += 1
+            if not await sheet.receipt(record, "FAILED", "database_import_failed"):
+                result["ack_failed"] += 1
+            continue
+        result[status.lower()] += 1
+        if not await sheet.receipt(record, status):
+            result["ack_failed"] += 1
+    result["status"] = "PARTIAL" if result["invalid"] or result["ack_failed"] else "PASS"
     return result
 
 
-async def main() -> None:
+async def main():
     try:
-        results = await run_import()
-        print("life_sheet_curated_import " + " ".join(
-            f"{name}={value}" for name, value in results.items()
-        ))
-        if results["invalid"]:
-            raise RuntimeError("curated_sheet_has_invalid_selected_rows")
+        result = await run_import()
+        print("life_handoff_import " + " ".join(f"{k}={v}" for k, v in result.items()))
+        if result["status"] != "PASS":
+            raise RuntimeError("handoff_import_partial")
     finally:
         await engine.dispose()
 

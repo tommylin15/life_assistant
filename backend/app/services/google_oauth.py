@@ -237,6 +237,7 @@ async def get_access_token(
     required_scope: str,
     *,
     force_refresh: bool = False,
+    commit_refresh: bool = True,
 ) -> str:
     connection = await db.get(GoogleConnection, user_sub)
     if connection is None:
@@ -293,5 +294,8 @@ async def get_access_token(
     connection.access_token_expires_at = now + timedelta(seconds=expires_in)
     if payload.get("scope"):
         connection.scopes = " ".join(sorted(set(connection.scopes.split()) | set(str(payload["scope"]).split())))
-    await db.commit()
+    if commit_refresh:
+        await db.commit()
+    else:
+        await db.flush()
     return access_token

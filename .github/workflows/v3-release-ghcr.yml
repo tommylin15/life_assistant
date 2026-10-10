@@ -187,6 +187,37 @@ jobs:
             "$RUNNER_TEMP/v3-login-headers"
           echo "candidate_http=PASS health,ready,401,oauth-redirect" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Pin migration job to same immutable release digest (do not execute)
+        if: ${{ inputs.promote || inputs.publish_staging }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run jobs update life-assistant-db-migrate \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --image "$IMAGE_REF" --quiet
+          gcloud run jobs describe life-assistant-db-migrate \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/v3-migration-job.json"
+          python .github/scripts/v3_image_identity.py \
+            --resource job \
+            --json "$RUNNER_TEMP/v3-migration-job.json" \
+            --expected "$IMAGE_REF"
+          echo "migration_job_image=PASS no_migration_executed image=$IMAGE_REF" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apply additive 0016 schema before production cutover
+        if: ${{ inputs.promote || inputs.publish_staging }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Migrations 0011 through 0016 are additive; guarded runner checks actual head.
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-db-migrate \
+            gcloud run jobs execute life-assistant-db-migrate \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.apply_cloud_domain_parity_release \
+            --task-timeout 10m --wait --quiet
+          echo "curated_schema_migration=PASS alembic=20261010_0016" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run real database/auth acceptance using release digest
         run: |
           set -euo pipefail
@@ -327,37 +358,6 @@ jobs:
             --task-timeout 10m --wait --quiet
           echo "real_google_drive_integration=PASS" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Pin migration job to same immutable release digest (do not execute)
-        if: ${{ inputs.promote || inputs.publish_staging }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gcloud run jobs update life-assistant-db-migrate \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "$IMAGE_REF" --quiet
-          gcloud run jobs describe life-assistant-db-migrate \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
-            > "$RUNNER_TEMP/v3-migration-job.json"
-          python .github/scripts/v3_image_identity.py \
-            --resource job \
-            --json "$RUNNER_TEMP/v3-migration-job.json" \
-            --expected "$IMAGE_REF"
-          echo "migration_job_image=PASS no_migration_executed image=$IMAGE_REF" \
-            >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Apply additive 0015 schema before production cutover
-        if: ${{ inputs.promote || inputs.publish_staging }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Migrations 0011 through 0015 are additive; guarded runner checks actual head.
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-db-migrate \
-            gcloud run jobs execute life-assistant-db-migrate \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --args=-m,scripts.apply_cloud_domain_parity_release \
-            --task-timeout 10m --wait --quiet
-          echo "curated_schema_migration=PASS alembic=20261010_0015" >> "$GITHUB_STEP_SUMMARY"
-
       - name: Rollback-only curated pool migration and personal UI runtime acceptance
         if: ${{ inputs.promote || inputs.publish_staging }}
         shell: bash
@@ -368,7 +368,7 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --args=-m,scripts.run_curated_pool_runtime_acceptance \
             --task-timeout 10m --wait --quiet
-          echo "curated_db_readback=PASS schema=20261010_0015 rollback_only=true" >> "$GITHUB_STEP_SUMMARY"
+          echo "curated_db_readback=PASS schema=20261010_0016 rollback_only=true" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pre-promotion Drive AI consent runtime acceptance
         if: ${{ inputs.promote }}

@@ -1,4 +1,4 @@
-"""Rollback-only verification on actual database after additive 0015 upgrade.
+"""Rollback-only verification on actual database after additive 0016 upgrade.
 
 Do not leave synthetic activities, UI preferences, or audit entries in production.
 Run as the exact release image using the existing bounded Cloud Run acceptance Job.
@@ -24,7 +24,7 @@ async def main() -> None:
         async with SessionLocal() as db:
             try:
                 revision = await db.scalar(text("SELECT version_num FROM alembic_version"))
-                if revision != "20261010_0015":
+                if revision != "20261010_0016":
                     raise RuntimeError("curated_schema_revision_mismatch")
 
                 initial = await db.scalar(select(func.count()).select_from(CuratedActivity))
@@ -81,9 +81,9 @@ async def main() -> None:
         async with SessionLocal() as db:
             assert await db.get(CuratedActivity, activity_key) is None, "synthetic_curated_row_leaked"
             assert await db.get(UserUIPreference, account_key) is None, "synthetic_user_ui_row_leaked"
-        print("curated_runtime_0015=PASS rollback_only=true identity_upsert=PASS preferences=PASS")
+        print("curated_runtime_0016=PASS rollback_only=true identity_upsert=PASS preferences=PASS")
     except Exception:
-        print("curated_runtime_0015=FAIL (no synthetic transaction committed)")
+        print("curated_runtime_0016=FAIL (no synthetic transaction committed)")
         raise
 
 

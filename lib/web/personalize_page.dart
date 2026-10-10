@@ -4,7 +4,7 @@ import 'platform_api.dart';
 
 const _titles = <String, String>{
   'today':'首頁', 'tasks':'待辦', 'calendar':'日曆', 'projects':'專案',
-  'notes':'筆記', 'habits':'習慣', 'shopping':'購物', 'events':'精選活動',
+  'notes':'筆記', 'habits':'習慣', 'shopping':'購物', 'events':'精選活動', 'opportunities':'限時機會', 'explore':'活動探索',
   'drive':'Drive', 'integrations':'Google 整合', 'attention':'待關注',
 };
 
@@ -49,7 +49,7 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
                 style: Theme.of(context).textTheme.titleMedium),
             Wrap(spacing: 6, children: [
               for (final key in ['tasks','calendar','projects','notes','habits',
-                'shopping','events','drive','integrations'])
+                'shopping','events','opportunities','explore','drive','integrations'])
                 FilterChip(
                   label: Text(_titles[key] ?? key),
                   selected: pins.contains(key),

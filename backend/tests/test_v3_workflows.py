@@ -77,14 +77,18 @@ class V3PipelineContractTests(unittest.TestCase):
 
     def test_cutover_trigger_disable_shell_is_syntactically_valid(self):
         import subprocess
+        import os
+        from pathlib import Path
         _, data = load("v3-cutover-disable-triggers.yml")
         step = next(
             step for step in data["jobs"]["disable-legacy"]["steps"]
             if step.get("name") == "Disable only two verified legacy life_assistant triggers"
         )
+        git_bash = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe"
+        bash = str(git_bash) if os.name == "nt" and git_bash.exists() else "bash"
         check = subprocess.run(
-            ["bash", "-n"], input=step["run"],
-            capture_output=True, text=True, check=False,
+            [bash, "-n"], input=step["run"].encode(),
+            capture_output=True, check=False,
         )
         self.assertEqual(check.returncode, 0, check.stderr)
 

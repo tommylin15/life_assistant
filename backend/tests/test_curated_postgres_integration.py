@@ -56,7 +56,7 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(count, 2)
             row = await db.get(CuratedActivity, identity(retry.items[0]))
             self.assertEqual(row.title, "Updated 1")
-            feed = await list_curated(Response(), _user={"sub": "test"},
+            feed = await list_curated(Response(), _user={},
                                       db=db, min_importance=5, limit=20, offset=0,
                                       city=None, category=None, starts_from=None)
             self.assertTrue(any(x["title"] == "Updated 1" for x in feed["items"]))
@@ -105,6 +105,79 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(HTTPException) as ex:
                 await put_my_preferences(first, user=owner, db=db)
             self.assertEqual(ex.exception.status_code, 409)
+
+    async def test_handoff_concurrent_retry_url_change_and_stale_version(self):
+        import asyncio
+        from app.services.curated_handoff import HandoffItem, upsert_handoff
+        key = "ci:" + uuid.uuid4().hex
+        item = HandoffItem(event_key=key, record_type="main", title="穩定鍵活動",
+            official_url=self.url, importance_star=5,
+            verified_at_tpe="2026-10-10T09:00:00+08:00",
+            handoff_updated_at_tpe="2026-10-10T09:00:00+08:00")
+        async def apply(value, version):
+            async with self.sessions() as db:
+                return await upsert_handoff(db, value, version)
+        result = await asyncio.gather(*[apply(item, "a"*64) for _ in range(6)])
+        self.assertEqual(result.count("CREATED"), 1)
+        self.assertEqual(result.count("UNCHANGED"), 5)
+        updated = HandoffItem.model_validate({**item.model_dump(),
+            "official_url": self.url + "/new", "handoff_updated_at_tpe": "2026-10-10T10:00:00+08:00"})
+        self.assertEqual(await apply(updated, "b"*64), "UPDATED")
+        with self.assertRaisesRegex(ValueError, "superseded"):
+            await apply(item, "a"*64)
+        async with self.sessions() as db:
+            rows = (await db.execute(select(CuratedActivity).where(CuratedActivity.handoff_event_key == key))).scalars().all()
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0].original_url, self.url + "/new")
+
+    async def test_personal_task_retry_cancel_and_account_isolation(self):
+        from app.api.curated_actions import ActionWrite, set_action, my_actions
+        from app.api.tasks import _require_task
+        from app.models.task import Task
+        from fastapi import HTTPException
+        batch = CuratedBatchIn.model_validate({"items":[{"title":"個人動作活動", "original_url":self.url}]})
+        async with self.sessions() as db:
+            await ingest_curated_batch(batch, Response(), db=db)
+        activity_id = identity(batch.items[0])
+        owner = {"sub":"action-owner:" + uuid.uuid4().hex}
+        other = {"sub":"action-other:" + uuid.uuid4().hex}
+        async with self.sessions() as db:
+            first = await set_action(activity_id, "task", ActionWrite(active=True), owner, db)
+            retry = await set_action(activity_id, "task", ActionWrite(active=True), owner, db)
+            self.assertEqual(first["entity_id"], retry["entity_id"])
+            self.assertTrue(retry["unchanged"])
+            hidden = await my_actions(Response(), other, db)
+            self.assertEqual(hidden["items"], [])
+            with self.assertRaises(HTTPException) as ctx:
+                await _require_task(db, first["entity_id"], other)
+            self.assertEqual(ctx.exception.status_code, 404)
+            await set_action(activity_id, "task", ActionWrite(active=False), owner, db)
+            task = await db.get(Task, first["entity_id"])
+            self.assertEqual(task.status, "cancelled")
+
+    async def test_parent_pagination_keeps_all_distinct_offers_on_one_card(self):
+        from app.services.curated_handoff import HandoffItem, upsert_handoff
+        key = "ci:" + uuid.uuid4().hex
+        city = uuid.uuid4().hex
+        main = HandoffItem(event_key=key, record_type="main", title="主活動",
+            city=city, official_url=self.url, importance_star=3,
+            verified_at_tpe="2026-10-10T09:00:00+08:00",
+            handoff_updated_at_tpe="2026-10-10T09:00:00+08:00")
+        offer = HandoffItem.model_validate({**main.model_dump(), "event_key":key+":offer",
+            "parent_event_key":key, "record_type":"offer", "title":"不同優惠",
+            "registration_url": self.url+"/register", "importance_star":5})
+        async with self.sessions() as db:
+            db.add(CuratedActivity(identity_key=key, title="不同的舊版活動",
+                original_url=self.url+"/legacy", city=city+":other", importance=1,
+                fee_kind="unknown", registration_status="unknown", on_site_spending=False,
+                limited_offer=False))
+            await upsert_handoff(db, main, "c"*64)
+            await upsert_handoff(db, offer, "d"*64)
+            feed = await list_curated(Response(), _user={}, db=db, min_importance=5,
+                limit=1, offset=0, city=city, category=None, starts_from=None)
+            self.assertEqual(feed["returned"], 1)
+            self.assertEqual(len(feed["items"]), 2)
+            self.assertEqual({r["title"] for r in feed["items"]}, {"主活動", "不同優惠"})
 
 
 if __name__ == "__main__":

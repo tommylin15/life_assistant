@@ -15,6 +15,10 @@ class CuratedActivity(Base):
         Index("ix_curated_activity_city", "city"),
     )
     identity_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    handoff_event_key: Mapped[str | None] = mapped_column(String(200), unique=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64))
+    parent_event_key: Mapped[str | None] = mapped_column(String(200), index=True)
+    handoff_details: Mapped[dict | None] = mapped_column(JSON)
     occurrence_key: Mapped[str] = mapped_column(String(80), nullable=False)
     title: Mapped[str] = mapped_column(String(400), nullable=False)
     original_url: Mapped[str] = mapped_column(Text, nullable=False)

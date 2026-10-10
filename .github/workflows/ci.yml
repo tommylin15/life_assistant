@@ -156,11 +156,13 @@ jobs:
           alembic current
           alembic upgrade 20261010_0015
           alembic current
+          alembic upgrade 20261010_0016
+          alembic current
       - name: Verify real PostgreSQL transactions, constraints, concurrency and read filters
         run: python -m unittest discover -s tests -p 'test_free_events_*postgres*.py' -v
       - name: Verify curated ingestion and per-user preferences on real PostgreSQL
         run: python -m unittest discover -s tests -p 'test_curated_postgres_integration.py' -v
-      - name: Verify rollback-only 0015 production-style runtime smoke on CI PostgreSQL
+      - name: Verify rollback-only 0016 production-style runtime smoke on CI PostgreSQL
         run: python -m scripts.run_curated_pool_runtime_acceptance
       - name: Reproduce historical API create_all table collision and safely adopt schema
         shell: bash

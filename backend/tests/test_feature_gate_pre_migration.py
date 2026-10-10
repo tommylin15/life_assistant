@@ -85,6 +85,18 @@ class PreMigrationFeatureGateTests(unittest.IsolatedAsyncioTestCase):
         db.scalar.assert_not_awaited()
         db.rollback.assert_not_awaited()
 
+    async def test_admin_enabled_activity_entries_allow_normal_account(self):
+        db = AsyncMock(spec=AsyncSession)
+        db.get.return_value = type("Policy", (), {"status": "enabled", "audience": "all"})()
+        for key in ("events", "opportunities", "explore"):
+            await feature_gate(key)(user={"sub": "ordinary", "email": "person@example.org"}, db=db)
+
+    def test_normal_account_cannot_change_ai_management(self):
+        from app.api.ui_policies import owner_only
+        with self.assertRaises(HTTPException) as exc:
+            owner_only({"sub": "ordinary", "email": "person@example.org"})
+        self.assertEqual(exc.exception.status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()

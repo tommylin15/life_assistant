@@ -11,7 +11,7 @@ class MorePage extends ConsumerWidget {
     final flags = ref.watch(effectiveFeaturesProvider).asData?.value;
     final prefs = ref.watch(uiPreferencesProvider).asData?.value;
     bool enabled(String key) => flags?[key] ?? true;
-    const keys = ['notes', 'habits', 'events', 'shopping', 'drive', 'integrations'];
+    const keys = ['notes', 'habits', 'events', 'opportunities', 'explore', 'shopping', 'drive', 'integrations'];
     final preferred = (prefs?['more_order'] as List?)?.cast<String>() ?? keys;
     final ordered = [...preferred.where(keys.contains), ...keys.where((k) => !preferred.contains(k))];
     final entries = <String, Widget>{
@@ -36,6 +36,8 @@ class MorePage extends ConsumerWidget {
         trailing: const Icon(Icons.chevron_right),
         onTap: () => context.go('/more/curated'),
       ),
+      'opportunities': ListTile(leading: const Icon(Icons.timer_outlined), title: const Text('限時機會'), subtitle: const Text('報名開放、截止與限時優惠'), onTap: () => context.go('/more/opportunities')),
+      'explore': ListTile(leading: const Icon(Icons.explore_outlined), title: const Text('活動探索'), subtitle: const Text('活動日期、地點與值得參加的內容'), onTap: () => context.go('/more/explore')),
       'shopping': ListTile(
         leading: const Icon(Icons.shopping_cart_outlined),
         title: const Text('購物清單'),

@@ -1,24 +1,38 @@
 # life_assistant — Current State (2026-10-10)
 
+## 本批開發與驗收安排（2026-10-10 最新）
+
+- 新交接表、穩定去重、活動卡片、兩個入口及個人動作已在工作樹實作；開發驗證與 deployed／runtime 驗收分開記錄。細節見 [活動規格](curated_activity_user_features.md)。
+- 活動能否開放一般使用者由 admin 在後台設定。AI 管理補強暫緩，僅 AI 管理相關能力限 admin；不把這項限制套用到全部新功能。
+- 下一輪合併新活動功能、後台及個人首頁做正式上線驗收。真實 Sheet write scope／版本回執、GCP Job、Google Calendar 與新 SHA 的 CI／staging 尚待驗證；舊版測試站登入已完成。
+
+
+## 測試站驗收更新（2026-10-10；優先於下方歷史快照）
+
+- **固定測試站發布與真實 owner Google 登入驗收：PASS / 已完成。** [V3 run 38030697455](https://github.com/tommylin15/life_assistant/actions/runs/38030697455) 的 real database/auth、Preview、fixed staging preflight，以及「Promote exact Preview to independent fixed staging live and verify owner OAuth」均 success。使用者於本次對話確認 https://life-assistant-v3-stage-tl15.web.app 已能正常登入使用。
+- 測試站 `release.txt` 實際讀回 `3fb06169ad01a065fef60eecc2010c459970746e`，與上述成功發布 SHA 一致。先前 wrong_callback、Missing session 與未驗收敘述是修復前歷史，不再列為目前登入 blocker。
+- **後續版本發布是獨立狀態：** main `4219510cf2764c7b7bce9286ec2374d9ca36a1df` 的 CI success，但 [run 38037092043](https://github.com/tommylin15/life_assistant/actions/runs/38037092043) 在 real database/auth acceptance failure，尚未執行 Preview 或固定 staging 發布。不可據此把既有可用測試站改標 FAIL；也不可把測試站已驗收推定為最新 main 或 production 已發布。
+- 下一步仍是新交接 Sheet → Life Job → PostgreSQL → ACK/ERROR 的實作與真實驗收，以及活動產品待辦；不要求重做已完成版本的測試站登入驗收。
+
 **Overall PARTIAL**; release proof and runtime evidence are required beyond GitHub implementation.
 
 Architecture: Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL. CI/CD V3: GitHub Actions → immutable public GHCR digest → Cloud Run candidate → gated Firebase Hosting.
 
 ## Active curated-activity data path
 
-**Latest approved design:** ChatGPT explores and verifies in Drive → [dedicated 30-column handoff Sheet](https://docs.google.com/spreadsheets/d/1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4/edit) → Life daily GCP Job → validated PostgreSQL upsert / version-checked Sheet ACKED/ERROR → signed-in Flutter. Life does not crawl sources, run old Queue/claim/lease or apply second-stage AI. **Implemented source is still the earlier authorized FastAPI `/api/v1/free-events/curated:batch` and URL+occurrence identity**; new Sheet consumption/ACK/stable event_key identity is an unverified implementation gap.
+**Latest approved design:** ChatGPT explores and verifies in Drive → [dedicated 30-column handoff Sheet](https://docs.google.com/spreadsheets/d/1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4/edit) → Life daily GCP Job → validated PostgreSQL upsert / version-checked Sheet ACKED/ERROR → signed-in Flutter. Life does not crawl sources, run old Queue/claim/lease or apply second-stage AI. 本批 source 已加入固定交接表、版本回執與永久 event_key；舊 direct API／URL identity 保留相容。真實 Sheet／GCP runtime 尚待驗收。
 
 **Implemented in current main at source level**: additive Alembic 0015, authenticated bounded batch upsert with stable identity, curated listing/status, Flutter curated UI and site navigation. New `events` feature defaults **owner-only beta** until actual acceptance; old verified-only API preserved. **New Drive handoff Job / Sheet ACK / stable event_key dedup / real DB readback and production deploy: NOT VERIFIED**. Scheduled direct-writer token is no longer the approved default path. Do not reactivate old Sheets/Queue ChatGPT task. Read-only GCP inventory [#38012860019](https://github.com/tommylin15/life_assistant/actions/runs/38012860019) confirms the obsolete `life-assistant-free-events` Cloud Run Job still **EXISTS** (job existence alone does not prove it is scheduled). The regional Cloud Scheduler readback [#38013575831](https://github.com/tommylin15/life_assistant/actions/runs/38013575831) is **PASS** for `us-central1`: no Scheduler Job names/targets matched the retired `life-assistant-free-events` job. This is scoped negative evidence only; other regions and external invocations remain NOT VERIFIED. No deletion/pause performed.
 
-## New activity user UX — approved design, not source implementation
+## New activity user UX — source implemented, runtime pending
 
-[限時機會／活動探索規格](curated_activity_user_features.md) splits **user-facing entry points only**, not the curated database. Opt-in per-account follow/watchlist, todo, informative calendar marks versus booking reminders versus confirmed trips, early warnings and travel candidate links are **NOT IMPLEMENTED / NOT VERIFIED**. Existing `events` curated Flutter page is still one basic list; generic Tasks/Calendar integrations do not implement this connection. The existing direct ChatGPT intake and source-state evidence above are unchanged.
+[限時機會／活動探索規格](curated_activity_user_features.md) splits **user-facing entry points only**, not the curated database. 本批已實作父子卡片、兩個入口、個人收藏／追蹤／Task、資訊／報名／確定參與 Calendar 與提前 popup；真實 Google、Sheet 及新 SHA runtime 尚 NOT VERIFIED。旅遊行程與 App 推播尚未實作；admin 決定活動入口開放對象。AI 管理補強暫緩。
 
 ## P1 modules
 
 **Source implemented**: feature rollout API + owner UI, versioned account-owned personal navigation & Home cards, responsive bottom/rail/drawer, partial Home task/calendar/habits/events/projects cards, internal Drive AI admin allowlist/pause, aggregate-only usage and direct rate-limited probe. Personal Google OAuth/Drive AI content consent never delegated to administrator. **Actual per-device UI / provider smoke / runtime verification: NOT VERIFIED**. Usage tokens/cost, advanced budgets/alerts and owner E2E remain partial.
 
-## Fixed staging OAuth incident (2026-10-10)
+## Historical fixed staging OAuth incident (2026-10-10; superseded by PASS above)
 
 **2026-10-10 follow-up — V3 [#38023532632 attempt 2](https://github.com/tommylin15/life_assistant/actions/runs/38023532632/attempts/2):** candidate, database acceptance, Preview, and fixed-staging preflight **PASS**. A new staging Hosting version `36b7a8ddcf919c04` was temporarily published, but the subsequent post-publish check exited 1 **before** `staging_oauth_canary=ACTIVE`. Its precise failing subcheck is **NOT VERIFIED** because the old script logged no failure layer. The staging-only rollback reported **PASS**, restoring version `e3a6dd23aec06848`. Real owner Google OAuth remains **NOT VERIFIED**; do not retry the old release SHA as if fixed.
 
@@ -28,7 +42,7 @@ Live read-only OAuth redirect probe [#38022456431](https://github.com/tommylin15
 
 The current `main` backend has `oauth_redirect_for_request` support for the fixed staging hostname; **the existing fixed staging live backend pin is not yet promoted to a version that returns this callback**, so this is a **deployment/runtime gap, not a confirmed new source-code defect**. Next gate is **staging-only** V3 pinned version release + real owner OAuth callback/session readback with production traffic and Hosting unchanged. Do not claim staging OAuth PASS, production cutover, or successful user login before those runtime results. The one-time read-only probe job was removed after the result.
 
-## Fixed staging OAuth callback repair (2026-10-10, source only)
+## Historical fixed staging OAuth callback repair (2026-10-10; subsequently accepted above)
 
 New staging release [#38027300562](https://github.com/tommylin15/life_assistant/actions/runs/38027300562) failed with `staging_google_redirect=FAIL wrong_callback` after exact live Hosting version, release SHA, pinned `/api/**` + `/auth/**`, and unauthenticated API 401 all **PASS**. Rollback to `e3a6dd23aec06848` **PASS**. This proves the old OAuth host-header heuristics are insufficient for actual Firebase Hosting → Cloud Run requests. Production release/traffic were not promoted.
 

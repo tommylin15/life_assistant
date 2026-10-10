@@ -27,6 +27,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_sub: Mapped[str | None] = mapped_column(String(255))
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     note: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default=TaskStatus.pending)

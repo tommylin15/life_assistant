@@ -33,6 +33,8 @@ class AppShell extends ConsumerWidget {
     'notes': AppShellDestination(path: '/more/notes', label: '筆記', icon: Icons.description_outlined, selectedIcon: Icons.description),
     'habits': AppShellDestination(path: '/more/habits', label: '習慣', icon: Icons.repeat, selectedIcon: Icons.repeat),
     'events': AppShellDestination(path: '/more/curated', label: '精選', icon: Icons.event_outlined, selectedIcon: Icons.event),
+    'opportunities': AppShellDestination(path: '/more/opportunities', label: '限時機會', icon: Icons.timer_outlined, selectedIcon: Icons.timer),
+    'explore': AppShellDestination(path: '/more/explore', label: '活動探索', icon: Icons.explore_outlined, selectedIcon: Icons.explore),
     'shopping': AppShellDestination(path: '/more/shopping', label: '購物', icon: Icons.shopping_cart_outlined, selectedIcon: Icons.shopping_cart),
     'drive': AppShellDestination(path: '/more/drive', label: 'Drive', icon: Icons.cloud_outlined, selectedIcon: Icons.cloud),
     'integrations': AppShellDestination(path: '/integrations', label: 'Google', icon: Icons.hub_outlined, selectedIcon: Icons.hub),
@@ -68,7 +70,7 @@ class AppShell extends ConsumerWidget {
       destinations.last,
     ];
     final rest = (prefs?['more_order'] as List?)?.cast<String>() ??
-        ['notes', 'habits', 'events', 'shopping', 'drive', 'integrations'];
+        ['notes', 'habits', 'events', 'opportunities', 'explore', 'shopping', 'drive', 'integrations'];
     final railKeys = <String>[
       ...pins,
       ...rest,

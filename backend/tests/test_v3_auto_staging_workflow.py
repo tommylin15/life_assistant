@@ -48,7 +48,7 @@ class AutoStagingAfterCIContractTests(unittest.TestCase):
         self.assertEqual(self.workflow["permissions"]["contents"], "read")
         self.assertIn("cancel-in-progress: false", self.source)
         self.assertIn('any(.workflow_runs[]; .head_sha == $sha)', self.source)
-        self.assertIn("gh workflow run v3-release-ghcr.yml --ref main", self.source)
+        self.assertIn('gh workflow run v3-release-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref main', self.source)
         self.assertIn("--raw-field promote=false", self.source)
         self.assertIn("--raw-field publish_staging=true", self.source)
         self.assertNotIn("gcloud run services update-traffic", self.source)

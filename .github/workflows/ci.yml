@@ -158,6 +158,8 @@ jobs:
           alembic current
       - name: Verify real PostgreSQL transactions, constraints, concurrency and read filters
         run: python -m unittest discover -s tests -p 'test_free_events_*postgres*.py' -v
+      - name: Verify curated ingestion and per-user preferences on real PostgreSQL
+        run: python -m unittest discover -s tests -p 'test_curated_postgres_integration.py' -v
       - name: Reproduce historical API create_all table collision and safely adopt schema
         shell: bash
         run: |

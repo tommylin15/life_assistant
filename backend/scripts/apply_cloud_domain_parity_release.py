@@ -29,7 +29,7 @@ from scripts.reconcile_projects_status_default import (
 )
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-PREVIOUS_RELEASE_REVISION = "20261009_0013"
+PREVIOUS_RELEASE_REVISION = "20261009_0014"
 LEGACY_DIRECT_RELEASE_REVISIONS = {
     "20260927_0005",
     "20260928_0006",
@@ -38,8 +38,9 @@ LEGACY_DIRECT_RELEASE_REVISIONS = {
     "20261007_0010",
     "20261009_0011",
     "20261009_0012",
+    "20261009_0013",
 }
-RELEASE_TARGET_REVISION = "20261009_0014"
+RELEASE_TARGET_REVISION = "20261010_0015"
 EXIT_RELEASE_REVISION = 60
 EXIT_RELEASE_ALEMBIC = 61
 EXIT_RELEASE_MISSING_TABLES = 62
@@ -87,6 +88,10 @@ RELEASE_REQUIRED_TABLES = {
     "free_event_ingestion_leases",
     "free_event_source_observations",
     "free_event_candidate_queue",
+    "curated_activities",
+    "feature_rollouts",
+    "user_ui_preferences",
+    "life_ai_policy",
 }
 RELEASE_REQUIRED_TASK_COLUMNS = {"source_type", "source_ref", "completed_at", "deleted_at"}
 

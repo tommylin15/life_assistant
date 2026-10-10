@@ -148,7 +148,7 @@ app.include_router(drive_note_import_router, prefix="/api/v1", dependencies=[Dep
 app.include_router(google_integrations_router, prefix="/api/v1", dependencies=[Depends(feature_gate("integrations"))])
 app.include_router(google_project_router, prefix="/api/v1", dependencies=[Depends(feature_gate("integrations"))])
 app.include_router(activity_router, prefix="/api/v1")
-app.include_router(free_events_router, prefix="/api/v1", dependencies=[Depends(feature_gate("events"))])
+app.include_router(free_events_router, prefix="/api/v1")
 
 app.include_router(curated_router, prefix="/api/v1")
 app.include_router(ui_policies_router, prefix="/api/v1")

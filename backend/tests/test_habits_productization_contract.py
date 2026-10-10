@@ -45,7 +45,7 @@ class HabitsProductizationContractTests(unittest.TestCase):
 
         self.assertIn("context.go('/more/habits')", more)
         self.assertIn("path: '/more/habits'", app)
-        self.assertIn("const HabitsPage()", app)
+        self.assertIn("FeatureAccess(feature: 'habits', child: HabitsPage())", app)
 
     def test_production_ui_acceptance_covers_desktop_mobile_and_release_identity(self):
         self.assertTrue(UI_SCRIPT.is_file())

@@ -143,7 +143,7 @@ class HabitsMainRegistrationTests(unittest.TestCase):
         path = Path(__file__).parents[1] / 'app/main.py'
         source = path.read_text()
         self.assertIn('from app.api.habits import router as habits_router', source)
-        self.assertIn('app.include_router(habits_router, prefix="/api/v1")', source)
+        self.assertIn('app.include_router(habits_router, prefix="/api/v1", dependencies=[Depends(feature_gate("habits"))])', source)
 
 
 class HabitsHttpContractTests(unittest.IsolatedAsyncioTestCase):

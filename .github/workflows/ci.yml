@@ -207,6 +207,7 @@ jobs:
       - name: Check deployment acceptance syntax
         run: |
           bash -n scripts/bootstrap_gcp_wif.sh
+          bash -n scripts/v3_fixed_staging_release.sh
           bash -n scripts/inspect_postgres_dev.sh
           bash -n scripts/diagnose_db_secret.sh
           bash -n scripts/rotate_google_oauth_secret.sh
@@ -218,6 +219,7 @@ jobs:
           python -m py_compile backend/scripts/run_drive_knowledge_runtime_acceptance.py
           python -m py_compile backend/scripts/run_drive_google_integration_acceptance.py
           python -m py_compile backend/scripts/run_curated_pool_runtime_acceptance.py
+          python -m py_compile backend/scripts/verify_staging_google_e2e.py
           python -m py_compile .github/scripts/v3_firebase_error.py
           python -m py_compile .github/scripts/v3_gcs_object_inventory.py
           python -m py_compile .github/scripts/v3_image_identity.py

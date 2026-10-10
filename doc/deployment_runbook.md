@@ -1,6 +1,6 @@
 # Life Assistant V3 — 固定備選 staging Hosting 發布與恢復 Runbook
 
-> **規則建立：2026-10-09｜文件規則已核准；固定 staging live 自動發布與端到端驗收：NOT VERIFIED / 待實作。** 本節是現行 **V3 staging** 操作規則；下方 V2 Cloud Build 內容僅是歷史紀錄。程式碼與實際部署狀態仍以 GitHub `main`、Firebase Hosting／Cloud Run readback 和每次 Actions 證據為準。**此文件更新不代表已建立、發布或驗證 staging live，也不授權直接執行 staging/production 部署。**
+> **規則建立：2026-10-09｜文件規則已核准；固定 staging live 發布保護已補上來源實作，但真實部署與端到端驗收仍為 NOT VERIFIED。** 本節是現行 **V3 staging** 操作規則；下方 V2 Cloud Build 內容僅是歷史紀錄。程式碼與實際部署狀態仍以 GitHub `main`、Firebase Hosting／Cloud Run readback 和每次 Actions 證據為準。**此文件更新不代表已建立、發布或驗證 staging live，也不授權直接執行 staging/production 部署。**
 
 ## 網址、site 與 channel（禁止混稱）
 
@@ -11,6 +11,14 @@
 | 本次 SHA 驗證用 Preview | staging site 上的 `v3-<SHA 前 10 碼>` 等短期 channel URL | 只用於本次候選版本驗收；現行 `--expires 1d`，會到期，**不能當固定備選網址** |
 
 固定入口始終指向 **staging site 的 live channel**，不是 production site 的 live、也不是 staging site 的限期 Preview。維持 staging 與 production **不同 Hosting site**，不可把 runner-local staging `hosting.site` / `pinTag` 寫回 production `firebase.json` 的預設發布組態。
+
+## 每次 staging 發布順序（程式保護已實作、實際發布未驗證）
+
+> 新的 V3 workflow 有獨立的 `workflow_dispatch.publish_staging` 布林欄位，預設 `false`。只有勾選才會執行 `scripts/v3_fixed_staging_release.sh`。該腳本先獨立唯讀核對上一個 staging live 版本、preview release SHA 與 API/auth 的真正 Hosting version pinned revision；只有 source/rollback baseline 齊全才允許更新，且只會對 staging site 使用 Firebase REST `releases.create?versionName=...` 將**已驗證的同一 version** 發布至 staging live。驗證失敗會在同一腳本嘗試用先前**確定的 Hosting version**回復，並核對固定入口 SHA、兩條 rewrite 的 pins。實際執行 PASS 尚未取得。
+
+> 真實 Google OAuth 必須由核准的 owner 在固定 staging 完成 callback 並用 `/auth/me?staging_e2e=true` 驗證本人 session，且兩筆成功 ExecutionLog 綁定此次 candidate revision、驗收開始時間與同一 owner；程式不模擬、不造假、不產生 OAuth token。Cloud Run Job 讀回逾時或缺證即 FAIL，觸發 staging-only rollback。若先前 staging live 根本不存在可信 baseline、其 backend pin 已失效或 Firebase REST 權限不足，**fail closed，不覆蓋 staging live**。
+
+> 新版 `promote=true` 還要求 `publish_staging=true` 且通過 staging 驗收，先完成 additive 0015 migration/rollback-only PostgreSQL readback，再開放既有正式流量門檻。程式實作不等於 Firebase live 或 production 已驗收；正式 Production Hosting 發布仍是獨立工作，不能宣稱完整 DONE。
 
 ## 每次 staging 發布順序（目標流程／未宣稱已全部實作）
 

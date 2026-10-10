@@ -12,6 +12,11 @@ on:
         required: true
         default: false
         type: boolean
+      publish_staging:
+        description: "Publish the same verified Preview to fixed staging live only after true owner Google OAuth E2E"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -62,6 +67,12 @@ jobs:
                | select(.conclusion=="success") | .name] | unique | length == 4
             '
           echo "source=PASS sha=$RELEASE_SHA; required-ci=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require fixed-staging acceptance for production promotion
+        if: ${{ inputs.promote && !inputs.publish_staging }}
+        run: |
+          echo "::error::Production promotion requires publish_staging and owner Google OAuth evidence"
+          exit 1
 
       - name: Build Docker image ONCE on GitHub runner
         run: |
@@ -279,6 +290,11 @@ jobs:
           test "$HTTP" = 401
           echo "preview=PASS release-sha=$RELEASE_SHA 401-protected" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Read-only fixed staging preview and rollback baseline preflight
+        if: ${{ inputs.publish_staging }}
+        shell: bash
+        run: bash scripts/v3_fixed_staging_release.sh --preflight-only
+
       - name: Require real Google integration fixture and acceptance before promotion
         if: ${{ inputs.promote }}
         run: |
@@ -305,7 +321,7 @@ jobs:
           echo "real_google_drive_integration=PASS" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pin migration job to same immutable release digest (do not execute)
-        if: ${{ inputs.promote }}
+        if: ${{ inputs.promote || inputs.publish_staging }}
         shell: bash
         run: |
           set -euo pipefail
@@ -323,7 +339,7 @@ jobs:
             >> "$GITHUB_STEP_SUMMARY"
 
       - name: Apply additive 0015 schema before production cutover
-        if: ${{ inputs.promote }}
+        if: ${{ inputs.promote || inputs.publish_staging }}
         shell: bash
         run: |
           set -euo pipefail
@@ -336,7 +352,7 @@ jobs:
           echo "curated_schema_migration=PASS alembic=20261010_0015" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Rollback-only curated pool migration and personal UI runtime acceptance
-        if: ${{ inputs.promote }}
+        if: ${{ inputs.promote || inputs.publish_staging }}
         shell: bash
         run: |
           set -euo pipefail
@@ -364,6 +380,11 @@ jobs:
             --args=-m,scripts.run_drive_ai_enrichment_acceptance \
             --task-timeout 10m --wait --quiet
           echo "pre_promotion_drive_ai_consent=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Promote exact Preview to independent fixed staging live and verify owner OAuth
+        if: ${{ inputs.publish_staging }}
+        shell: bash
+        run: bash scripts/v3_fixed_staging_release.sh
 
       - name: Require explicit promotion selection
         if: ${{ !inputs.promote }}

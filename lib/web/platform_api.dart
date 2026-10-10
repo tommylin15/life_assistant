@@ -76,6 +76,7 @@ class FeatureAccess extends ConsumerWidget {
 }
 
 final ownerAuthorizedProvider = FutureProvider<bool>((ref) async {
+  if (ref.watch(sessionIdentityProvider) == null) return false;
   try { await ref.read(platformApiProvider).get('/admin/feature-rollouts'); return true; }
   catch (_) { return false; }
 });

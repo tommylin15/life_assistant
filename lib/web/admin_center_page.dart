@@ -91,6 +91,28 @@ class _AiSettings extends ConsumerWidget {
                 if (enable == false) next.remove(p['key']);
                 _save(context, ref, policy, policy['enabled'] as bool, next);
               },
+              secondary: IconButton(
+                tooltip: '直連健康測試（每 15 分鐘最多一次）',
+                icon: const Icon(Icons.monitor_heart_outlined),
+                onPressed: p['key'] == 'codex' ? null : () async {
+                  try {
+                    final outcome = await ref.read(platformApiProvider).post(
+                        '/admin/ai/probe/${p['key']}', const {});
+                    ref.invalidate(_adminAi);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text('直連健康：${outcome['direct_health']}'),
+                      ));
+                    }
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('無法完成直連測試；請檢查權限、配額或服務。'),
+                      ));
+                    }
+                  }
+                },
+              ),
             ),
           const Text('Token / 成本：未計量，不推估金額。'),
           ref.watch(_adminUsage).when(

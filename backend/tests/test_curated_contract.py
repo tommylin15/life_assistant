@@ -10,7 +10,7 @@ from app.main import app
 from app.api.auth import current_user
 from app.db.session import get_db
 from app.api.curated import CuratedBatchIn, normalize_url, identity
-from app.api.ui_policies import UIPreferencesWrite, AIPolicyWrite, FEATURES
+from app.api.ui_policies import UIPreferencesWrite, AIPolicyWrite, FEATURES, _default_rollout
 
 
 class CuratedContractTests(unittest.TestCase):
@@ -76,6 +76,7 @@ class CuratedContractTests(unittest.TestCase):
             with TestClient(app) as client:
                 self.assertEqual(client.get("/api/v1/admin/ai/providers").status_code, 403)
                 self.assertEqual(client.get("/api/v1/admin/feature-rollouts").status_code, 403)
+                self.assertEqual(client.post("/api/v1/admin/ai/probe/gemini").status_code, 403)
 
     def test_owner_prefs_and_ai_allowlists_cannot_be_forged(self):
         for body in (
@@ -90,6 +91,7 @@ class CuratedContractTests(unittest.TestCase):
             AIPolicyWrite.model_validate({"expected_revision": 0,
                 "enabled": True, "allowed_providers": ["gemini", "gemini"]})
         self.assertNotIn("admin", FEATURES)
+        self.assertEqual(_default_rollout("events"), ("beta", "owner"))
 
 
 if __name__ == "__main__":

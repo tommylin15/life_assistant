@@ -18,6 +18,16 @@ class PlatformApi {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
+    final response = await _client.post(
+      _uri(path),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    if (response.statusCode >= 400) throw StateError('API ${response.statusCode}');
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) async {
     final response = await _client.put(
       _uri(path),

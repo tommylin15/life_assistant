@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'api_client.dart';
 import 'platform_api.dart';
+import 'habit_api.dart';
 
 final _todayDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final api = ref.read(apiClientProvider);
@@ -20,7 +21,11 @@ final _todayDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   Map<String, dynamic>? curated;
   try { curated = await ref.read(platformApiProvider).get('/free-events/curated'); }
   catch (_) { curated = null; }
-  return {'tasks': tasks, 'projects': projects, 'calendar': calendar, 'events': curated};
+  List<Map<String, dynamic>>? habits;
+  try { habits = await ref.read(habitApiProvider).getHabits(); }
+  catch (_) { habits = null; }
+  return {'tasks': tasks, 'projects': projects, 'calendar': calendar,
+          'events': curated, 'habits': habits};
 });
 
 class TodayPage extends ConsumerWidget {
@@ -54,7 +59,7 @@ class TodayPage extends ConsumerWidget {
             child: ListView(padding: const EdgeInsets.all(16), children: [
               Text('今日重點', style: Theme.of(context).textTheme.headlineSmall),
               for (final key in cards)
-                if (flags?[key] ?? true) _card(context, key, snapshot),
+                if (flags?[key] ?? true) _card(context, ref, key, snapshot),
             ]),
           ),
         ),
@@ -62,7 +67,7 @@ class TodayPage extends ConsumerWidget {
     );
   }
 
-  Widget _card(BuildContext context, String key, Map<String, dynamic> data) {
+  Widget _card(BuildContext context, WidgetRef ref, String key, Map<String, dynamic> data) {
     final tasks = (data['tasks'] as List).cast<Map<String, dynamic>>();
     final projects = (data['projects'] as List).cast<Map<String, dynamic>>();
     final filtered = tasks.where((t) {
@@ -80,9 +85,17 @@ class TodayPage extends ConsumerWidget {
             : filtered.map((t) => t['title'].toString()).join(' · '), '/tasks');
       case 'calendar':
         final cal = data['calendar'];
-        return _tile(context, '行事曆', cal == null
-            ? '未取得行事曆；請檢查 Google 連線或授權'
-            : '查看今日行程', '/calendar');
+        final entries = (cal is Map<String, dynamic> ? cal['events'] as List? : null) ?? [];
+        String summary = '今天沒有近期已取得的行程';
+        if (entries.isNotEmpty && entries.first is Map) {
+          final event = entries.first as Map;
+          final timing = event['start'] is Map ? event['start'] as Map : const {};
+          final start = timing['dateTime']?.toString() ?? timing['date']?.toString() ?? '日期未確認';
+          final place = event['location']?.toString() ?? '';
+          summary = '${event['summary'] ?? '未命名行程'} · $start${place.isEmpty ? '' : ' · $place'}';
+        }
+        return _tile(context, '下一個行程', cal == null
+            ? '未取得行事曆；請檢查 Google 連線或授權' : summary, '/calendar');
       case 'events':
         if (data['events'] == null) return const SizedBox.shrink();
         return _tile(context, '精選活動', events == null || events.isEmpty
@@ -92,9 +105,44 @@ class TodayPage extends ConsumerWidget {
           (p) => p['status'] == 'active',
         ).take(3).map((p) => p['name']).join(' · '), '/projects');
       case 'attention':
-        return const SizedBox.shrink(); // No invented universal alert source.
+        final now = DateTime.now();
+        final overdue = tasks.where((task) {
+          if (task['status'] == 'completed' || task['status'] == 'cancelled') return false;
+          final due = DateTime.tryParse(task['due_at']?.toString() ?? '')?.toLocal();
+          return due != null && due.isBefore(DateTime(now.year, now.month, now.day));
+        }).length;
+        if (overdue == 0) return const SizedBox.shrink();
+        return _tile(context, '需要關注', '有 $overdue 筆實際逾期的待辦', '/tasks');
       case 'habits':
-        return _tile(context, '習慣', '查看今天的習慣紀錄', '/more/habits');
+        final habits = data['habits'] as List<Map<String, dynamic>>?;
+        if (habits == null || habits.isEmpty) return const SizedBox.shrink();
+        return Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const ListTile(title: Text('今日習慣')),
+            for (final habit in habits.take(4))
+              ListTile(
+                title: Text(habit['title']?.toString() ??
+                    habit['name']?.toString() ?? '習慣'),
+                trailing: OutlinedButton(
+                  child: const Text('記錄完成'),
+                  onPressed: () async {
+                    try {
+                      await ref.read(habitApiProvider).completeHabit(habit['id'].toString());
+                      ref.invalidate(_todayDataProvider);
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('習慣完成紀錄未寫入')),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ),
+            TextButton(onPressed: () => context.go('/more/habits'),
+                child: const Text('查看全部習慣')),
+          ],
+        ));
       case 'notes':
         return _tile(context, '筆記', '開啟個人筆記', '/more/notes');
       case 'shopping':

@@ -2,6 +2,7 @@
 
 Defaults preserve existing functionality. All writes are identity-checked and audited.
 """
+import asyncio
 import os
 import uuid
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
@@ -39,6 +41,11 @@ DEFAULT_HOME = ["tasks", "calendar", "attention", "habits", "events", "projects"
 HOME_KEYS = set(DEFAULT_HOME) | {"notes", "shopping", "drive"}
 AI_PROVIDERS = ["gemini", "gemini_lite", "groq", "openrouter", "openai", "codex"]
 
+def _default_rollout(key: str) -> tuple[str, str]:
+    # New curated feature stays owner-only until actual V3 E2E release.
+    return ("beta", "owner") if key == "events" else ("enabled", "all")
+
+
 
 def is_owner(user: dict) -> bool:
     approved = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().casefold()
@@ -66,8 +73,9 @@ async def effective_features(db: AsyncSession, user: dict) -> list[dict]:
     result = []
     for key, (path, title) in FEATURES.items():
         policy = policies.get(key)
-        status = policy.status if policy else "enabled"
-        audience = policy.audience if policy else "all"
+        status, audience = (
+            (policy.status, policy.audience) if policy else _default_rollout(key)
+        )
         permitted = status not in ("hidden", "maintenance") and (
             audience == "all" or is_owner(user)
         ) and (status != "beta" or is_owner(user))
@@ -82,6 +90,8 @@ def feature_gate(key: str):
             return  # Non-production mock session from unit tests.
         row = await db.get(FeatureRollout, key)
         if row is None:
+            if key == "events" and not is_owner(user):
+                raise HTTPException(403, "Feature requires verified rollout")
             return
         if row.status in ("hidden", "maintenance") or row.audience == "owner" and not is_owner(user) or row.status == "beta" and not is_owner(user):
             raise HTTPException(403, "Feature is not available")
@@ -174,8 +184,8 @@ async def get_rollouts(
     policies = {r.feature_key: r for r in (await db.execute(select(FeatureRollout))).scalars().all()}
     response.headers["Cache-Control"] = "no-store"
     return {"features": [
-        {"key": key, "title": title, "status": policies[key].status if key in policies else "enabled",
-         "audience": policies[key].audience if key in policies else "all",
+        {"key": key, "title": title, "status": policies[key].status if key in policies else _default_rollout(key)[0],
+         "audience": policies[key].audience if key in policies else _default_rollout(key)[1],
          "revision": policies[key].revision if key in policies else 0}
         for key, (_, title) in FEATURES.items()
     ]}
@@ -242,10 +252,25 @@ async def ai_providers(
         for key in AI_PROVIDERS if key != "codex"
     }
     configured["codex"] = bool(config.settings.codex_primary_enabled)
+    probes = (await db.execute(
+        select(ExecutionLog)
+        .where(ExecutionLog.action_type == "admin.ai.health_probe")
+        .order_by(ExecutionLog.started_at.desc()).limit(60)
+    )).scalars().all()
+    most_recent = {}
+    for event in probes:
+        if event.entity_id in AI_PROVIDERS and event.entity_id not in most_recent:
+            most_recent[event.entity_id] = event
     response.headers["Cache-Control"] = "no-store"
     return {"policy": _ai_view(policy),
-            "providers": [{"key": k, "credential": "configured" if configured[k] else "missing",
-                           "direct_health": "not_tested"} for k in AI_PROVIDERS],
+            "providers": [{
+                "key": k, "credential": "configured" if configured[k] else "missing",
+                "direct_health": (
+                    most_recent[k].result if k in most_recent
+                    and most_recent[k].result in ("PASS", "FAIL") else "not_tested"
+                ),
+                "last_probe_at": most_recent[k].finished_at if k in most_recent else None,
+            } for k in AI_PROVIDERS],
             "usage_cost": "not_instrumented"}
 
 
@@ -289,6 +314,87 @@ async def update_ai_policy(
     _audit(db, user["sub"], "admin.ai_policy.update", f"enabled={body.enabled}, revision={revision}")
     await db.commit()
     return {"revision": revision, "enabled": body.enabled, "allowed_providers": body.allowed_providers}
+
+
+@router.post("/admin/ai/probe/{provider_name}")
+async def direct_ai_probe(
+    provider_name: str,
+    user: dict = Depends(owner_only),
+    db: AsyncSession = Depends(get_db),
+):
+    """A deliberately direct, owner-only harmless-fixture test; never fallback."""
+    from app import config
+    from app.services.ai_enrichment_provider import (
+        AIProviderError, DocumentEnrichmentContext, UnavailableAIEnrichmentProvider,
+        _setting, get_ai_enrichment_provider,
+    )
+
+    if provider_name not in AI_PROVIDERS:
+        raise HTTPException(404, "Unknown AI provider")
+    if provider_name == "codex":
+        raise HTTPException(409, "Private owner Codex direct probe requires separate access verification")
+    policy = await db.get(LifeAIPolicy, "drive")
+    if policy is not None and (
+        not policy.enabled or provider_name not in policy.allowed_providers
+    ):
+        raise HTTPException(409, "Provider disabled by platform policy")
+
+    # Persistent 15-minute rate gate with a unique (owner, action, bucket) key.
+    # A second request in the same bucket cannot start another paid model call.
+    now = datetime.now(timezone.utc)
+    bucket = int(now.timestamp() // 900)
+    record = ExecutionLog(
+        id=str(uuid.uuid4()), request_id=current_request_id(),
+        action_id=f"{provider_name}:{bucket}",
+        user_sub=user["sub"], action_type="admin.ai.health_probe",
+        entity_type="ai_provider", entity_id=provider_name,
+        provider=provider_name, status="running",
+        summary="Direct provider fixture probe",
+    )
+    db.add(record)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(429, "Provider health probe already attempted recently")
+
+    model_by_name = {
+        "gemini": "latest-3-flash",
+        "gemini_lite": "latest-3-flash-lite",
+        "groq": _setting("ai_enrichment_fallback_model", "AI_ENRICHMENT_FALLBACK_MODEL"),
+        "openrouter": _setting("ai_enrichment_tertiary_model", "AI_ENRICHMENT_TERTIARY_MODEL"),
+        "openai": _setting("ai_enrichment_model", "AI_ENRICHMENT_MODEL"),
+    }
+    result = "FAIL"
+    category = None
+    try:
+        adapter = get_ai_enrichment_provider(
+            provider=provider_name, model=model_by_name[provider_name]
+        )
+        if isinstance(adapter, UnavailableAIEnrichmentProvider):
+            raise AIProviderError("provider_unavailable")
+        fixture = DocumentEnrichmentContext(
+            document_id="synthetic-health-probe",
+            title="Fixture: weekly planning checklist",
+            mime_type="text/plain", document_text="A harmless weekly plan.",
+        )
+        async with asyncio.timeout(25):
+            await adapter.suggest_tags(fixture)
+        result = "PASS"
+    except AIProviderError as exc:
+        category = exc.code[:64]
+    except TimeoutError:
+        category = "timeout"
+    except Exception:
+        category = "provider_error"
+
+    record.status = "success" if result == "PASS" else "failed"
+    record.result = result
+    record.error_category = category
+    record.finished_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"provider": provider_name, "direct_health": result,
+            "error_category": category, "probe_at": record.finished_at}
 
 
 @router.get("/admin/ai/usage")

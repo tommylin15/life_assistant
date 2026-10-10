@@ -32,6 +32,7 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
           final mode = draft!['nav_mode'] as String;
           final pins = (draft!['pinned'] as List).cast<String>().toList();
           final home = (draft!['home_cards'] as List).cast<String>().toList();
+          final more = (draft!['more_order'] as List).cast<String>().toList();
           return ListView(padding: const EdgeInsets.all(16), children: [
             Text('選單位置', style: Theme.of(context).textTheme.titleLarge),
             DropdownButton<String>(
@@ -76,6 +77,28 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
                     onPressed: i == pins.length - 1 ? null : () => setState(() {
                       final value = pins.removeAt(i); pins.insert(i + 1, value);
                       draft!['pinned'] = pins;
+                    }),
+                  ),
+                ]),
+              ),
+            const SizedBox(height: 20),
+            Text('更多功能排序', style: Theme.of(context).textTheme.titleMedium),
+            for (var i = 0; i < more.length; i++)
+              ListTile(
+                title: Text(_titles[more[i]] ?? more[i]),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                    tooltip: '更多功能往上', icon: const Icon(Icons.arrow_upward),
+                    onPressed: i == 0 ? null : () => setState(() {
+                      final item = more.removeAt(i); more.insert(i - 1, item);
+                      draft!['more_order'] = more;
+                    }),
+                  ),
+                  IconButton(
+                    tooltip: '更多功能往下', icon: const Icon(Icons.arrow_downward),
+                    onPressed: i == more.length - 1 ? null : () => setState(() {
+                      final item = more.removeAt(i); more.insert(i + 1, item);
+                      draft!['more_order'] = more;
                     }),
                   ),
                 ]),

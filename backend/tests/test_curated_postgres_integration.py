@@ -61,6 +61,34 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
                                       city=None, category=None, starts_from=None)
             self.assertTrue(any(x["title"] == "Updated 1" for x in feed["items"]))
 
+    async def test_owner_release_and_ai_policy_races_are_rejected(self):
+        from unittest.mock import patch
+        from fastapi import HTTPException
+        from app.api.ui_policies import (
+            FeatureWrite, AIPolicyWrite, put_rollout, update_ai_policy,
+            get_rollouts, get_my_preferences,
+        )
+        owner = {"sub": f"ci-policy-{uuid.uuid4().hex}", "email": "ci-owner@example.org"}
+        with patch.dict(os.environ, {"ALLOWED_GOOGLE_EMAIL": "ci-owner@example.org"}):
+            async with self.sessions() as db:
+                flag = FeatureWrite(key="notes", expected_revision=0,
+                                    status="beta", audience="owner")
+                saved = await put_rollout(flag, user=owner, db=db)
+                self.assertEqual(saved["revision"], 1)
+                readback = await get_rollouts(Response(), _owner=owner, db=db)
+                note = next(item for item in readback["features"] if item["key"] == "notes")
+                self.assertEqual(note["status"], "beta")
+                with self.assertRaises(HTTPException) as conflict:
+                    await put_rollout(flag, user=owner, db=db)
+                self.assertEqual(conflict.exception.status_code, 409)
+                ai = AIPolicyWrite(expected_revision=0, enabled=False,
+                                   allowed_providers=["gemini"])
+                result = await update_ai_policy(ai, user=owner, db=db)
+                self.assertFalse(result["enabled"])
+                with self.assertRaises(HTTPException) as ai_conflict:
+                    await update_ai_policy(ai, user=owner, db=db)
+                self.assertEqual(ai_conflict.exception.status_code, 409)
+
     async def test_ui_preferences_revisions_and_account_isolation(self):
         owner = {"sub": f"ci-owner-{uuid.uuid4().hex}"}
         other = {"sub": f"ci-other-{uuid.uuid4().hex}"}

@@ -67,10 +67,18 @@ class AppShell extends ConsumerWidget {
         if (all.containsKey(key) && key != 'today') all[key]!,
       destinations.last,
     ];
+    final rest = (prefs?['more_order'] as List?)?.cast<String>() ??
+        ['notes', 'habits', 'events', 'shopping', 'drive', 'integrations'];
+    final railKeys = <String>[
+      ...pins,
+      ...rest,
+      ...all.keys.where((k) => k != 'today'),
+    ];
+    final ordered = railKeys.toSet().toList();
     final rail = <AppShellDestination>[
       destinations.first,
-      for (final entry in all.entries)
-        if (entry.key != 'today' && enabled(entry.key)) entry.value,
+      for (final key in ordered)
+        if (key != 'today' && all.containsKey(key) && enabled(key)) all[key]!,
       destinations.last,
     ];
     final isBottom = mode == 'bottom' ||

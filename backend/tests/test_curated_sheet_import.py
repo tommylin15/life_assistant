@@ -50,15 +50,21 @@ class CuratedSheetImportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate_approved_event_key"):
             parse_rows([HEADERS,row(**common),row(**common)])
 
-    def test_invalid_fees_and_dates_never_invent_values(self):
+    def test_unverified_dates_stay_unknown_but_non_numeric_fees_are_rejected(self):
         invalid = {"event_key":"bad","活動名稱":"活動",
                   "pool狀態":"selected","重要性星等":"5",
                   "主辦官方活動網址":"https://example.org/a"}
-        for change in ({"不可退實付C(NTD)":"價格待核"},
-                       {"開始時間(台北)":"未確認"}):
-            with self.subTest(change=change):
-                actual = invalid | change
-                self.assertEqual(parse_rows([HEADERS, row(**actual)])[1], [2])
+        with self.subTest(kind="unverified_fee"):
+            self.assertEqual(parse_rows([HEADERS, row(**(invalid | {"不可退實付C(NTD)":"價格待核"}))])[1], [2])
+        with self.subTest(kind="unverified_activity_date"):
+            items, rejected, _ = parse_rows([HEADERS, row(**(invalid | {
+                "開始時間(台北)": "報名2026-10-14 12:00；活動場次待核",
+                "結束時間(台北)": "2026-10-15（場次結束日待核）",
+            }))])
+            self.assertEqual(rejected, [])
+            self.assertEqual(len(items), 1)
+            self.assertIsNone(items[0].starts_on)
+            self.assertIsNone(items[0].ends_on)
 
 
 if __name__ == "__main__":

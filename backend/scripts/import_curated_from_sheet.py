@@ -42,8 +42,13 @@ def _date(raw: str) -> date | None:
         return None
     match = re.fullmatch(r"(\d{4}-\d{2}-\d{2})(?:\s+\d{2}:\d{2}(?::\d{2})?)?", raw)
     if not match:
-        raise ValueError("unsupported_date")
-    return date.fromisoformat(match.group(1))
+        # Commentary like "registration opens 10/14, event TBC" is not
+        # a verified activity date. Preserve the activity without a date.
+        return None
+    try:
+        return date.fromisoformat(match.group(1))
+    except ValueError:
+        return None
 
 
 def _amount(raw: str) -> Decimal | None:

@@ -268,3 +268,128 @@ jobs:
           done
           echo "::error::Exact-SHA V3 candidate did not complete within bounded check"
           exit 1
+
+  # One-time user-approved V3 production release. All genuine staging owner
+  # OAuth, PostgreSQL, live, rollback and retention gates stay unchanged.
+  v3-live-once:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[life-v3-live-once]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout exact approved production SHA
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require unchanged main and all four exact-SHA CI gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          for ATTEMPT in $(seq 1 120); do
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$GITHUB_SHA"
+            CHECKS="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100")"
+            FAILED="$(printf '%s' "$CHECKS" | jq '[.check_runs[] |
+              select(.name=="backend" or .name=="flutter" or .name=="deployment-scripts" or .name=="free-events-postgres") |
+              select(.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out")] | length')"
+            PASSED="$(printf '%s' "$CHECKS" | jq '[.check_runs[] |
+              select(.name=="backend" or .name=="flutter" or .name=="deployment-scripts" or .name=="free-events-postgres") |
+              select(.conclusion=="success") | .name] | unique | length')"
+            if (( FAILED > 0 )); then
+              echo "::error::Mandatory CI failed; release prohibited"
+              exit 1
+            fi
+            if (( PASSED == 4 )); then
+              echo "same_sha_ci=PASS sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Exact-SHA CI not fully successful"
+          exit 1
+
+      - name: Dispatch existing V3 gated live release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$GITHUB_SHA"
+          gh workflow run v3-release-ghcr.yml --ref main \
+            --raw-field release_sha="$GITHUB_SHA" \
+            --raw-field publish_staging=true \
+            --raw-field promote=true
+          echo "v3_live=REQUESTED sha=$GITHUB_SHA staging_owner_oauth=REQUIRED" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify V3 true staging OAuth and production promotion gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ATTEMPT in $(seq 1 600); do
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$GITHUB_SHA"
+            RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?per_page=50")"
+            SELECTED="$(printf '%s' "$RUNS" | jq -c --arg sha "$GITHUB_SHA" '
+              [.workflow_runs[] | select(.head_sha==$sha and .event=="workflow_dispatch")]
+              | sort_by(.run_number) | last // null')"
+            if [[ "$SELECTED" != "null" ]] && [[ "$(printf '%s' "$SELECTED" | jq -r '.status')" == "completed" ]]; then
+              RUN_ID="$(printf '%s' "$SELECTED" | jq -r '.id')"
+              RESULT="$(printf '%s' "$SELECTED" | jq -r '.conclusion')"
+              echo "v3_live=$RESULT run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+              test "$RESULT" = "success" || { echo "::error::V3 not PASS; block production Hosting"; exit 1; }
+              JOBS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100")"
+              printf '%s' "$JOBS" | jq -e '
+                [.jobs[].steps[] | select(
+                  .name=="Create 0%-traffic digest-pinned candidate" or
+                  .name=="Run real database/auth acceptance using release digest" or
+                  .name=="Verify pinned Preview API and static release" or
+                  .name=="Read-only fixed staging preview and rollback baseline preflight" or
+                  .name=="Apply additive 0015 schema before production cutover" or
+                  .name=="Rollback-only curated pool migration and personal UI runtime acceptance" or
+                  .name=="Pre-promotion Drive AI consent runtime acceptance" or
+                  .name=="Promote exact Preview to independent fixed staging live and verify owner OAuth" or
+                  .name=="Reconfirm source SHA and live traffic, then promote" or
+                  .name=="Post-promotion live health, OAuth redirect, PostgreSQL and access gates" or
+                  .name=="Controlled rollback rehearsal and restore promoted live traffic" or
+                  .name=="Retain latest 10 revisions after all live gates PASS"
+                ) | select(.conclusion=="success") | .name] | unique | length==12'
+              echo "v3_staging_oauth_prod_rollback=PASS run=$RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::V3 release did not complete, production Hosting prohibited"
+          exit 1
+
+      - name: Dispatch existing production Hosting only after V3 PASS
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$GITHUB_SHA"
+          gh workflow run deploy-firebase-hosting.yml --ref main
+          echo "production_hosting=REQUESTED sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify exact-SHA production Hosting and existing UI gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ATTEMPT in $(seq 1 320); do
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$GITHUB_SHA"
+            RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-firebase-hosting.yml/runs?per_page=50")"
+            SELECTED="$(printf '%s' "$RUNS" | jq -c --arg sha "$GITHUB_SHA" '
+              [.workflow_runs[] | select(.head_sha==$sha and .event=="workflow_dispatch")]
+              | sort_by(.run_number) | last // null')"
+            if [[ "$SELECTED" != "null" ]] && [[ "$(printf '%s' "$SELECTED" | jq -r '.status')" == "completed" ]]; then
+              RUN_ID="$(printf '%s' "$SELECTED" | jq -r '.id')"
+              RESULT="$(printf '%s' "$SELECTED" | jq -r '.conclusion')"
+              echo "production_hosting=$RESULT run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+              test "$RESULT" = "success"
+              BASE="https://gen-lang-client-0593591102.web.app"
+              test "$(curl -fsSL -H 'Cache-Control: no-cache' "$BASE/release.txt")" = "$GITHUB_SHA"
+              test "$(curl -sS -o /dev/null -w '%{http_code}' "$BASE/api/v1/tasks")" = 401
+              test "$(curl -sS -o /dev/null -w '%{http_code}' "$BASE/auth/me")" = 401
+              echo "production_hosting_and_ui=PASS sha=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::Exact-SHA production Hosting/UI did not complete"
+          exit 1

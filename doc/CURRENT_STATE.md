@@ -18,6 +18,12 @@ Exactly **ChatGPT-selected activities → authorized Life FastAPI `/api/v1/free-
 
 **Source implemented**: feature rollout API + owner UI, versioned account-owned personal navigation & Home cards, responsive bottom/rail/drawer, partial Home task/calendar/habits/events/projects cards, internal Drive AI admin allowlist/pause, aggregate-only usage and direct rate-limited probe. Personal Google OAuth/Drive AI content consent never delegated to administrator. **Actual per-device UI / provider smoke / runtime verification: NOT VERIFIED**. Usage tokens/cost, advanced budgets/alerts and owner E2E remain partial.
 
+## Fixed staging OAuth incident (2026-10-10)
+
+Live read-only OAuth redirect probe [#38022456431](https://github.com/tommylin15/life_assistant/actions/runs/38022456431): **fixed staging `/auth/login` FAIL** — `redirect_uri` still points to production `/auth/callback` while the `__session=oauth:` state cookie is set on the staging hostname; this explains user-observed post-Google-login `401 Missing session` at the cross-origin callback. SHA Preview also points to the production callback and is **not a valid Google login host**. Production `/auth/login` targets production and remains PASS for redirect origin only. Anonymous Flutter homepage checks [#38022194645](https://github.com/tommylin15/life_assistant/actions/runs/38022194645) PASS for all three sites, but **do not prove login**.
+
+The current `main` backend has `oauth_redirect_for_request` support for the fixed staging hostname; **the existing fixed staging live backend pin is not yet promoted to a version that returns this callback**, so this is a **deployment/runtime gap, not a confirmed new source-code defect**. Next gate is **staging-only** V3 pinned version release + real owner OAuth callback/session readback with production traffic and Hosting unchanged. Do not claim staging OAuth PASS, production cutover, or successful user login before those runtime results. The one-time read-only probe job was removed after the result.
+
 ## Evidence
 Prior V3 historical release [37959057237](https://github.com/tommylin15/life_assistant/actions/runs/37959057237) PASS for its own previous SHA only. P0/P1 candidate CI [38009774496](https://github.com/tommylin15/life_assistant/actions/runs/38009774496) had backend, ephemeral PostgreSQL, Flutter and deployment checks PASS for SHA `19f693263bc9c546a2d81239b9fc236cc53833e3`. Subsequent implementation changes must pass CI for their **own** SHA; historical PASS is not inherited.
 

@@ -60,6 +60,65 @@ class AuthApiTests(IsolatedAsyncioTestCase):
         self.assertEqual(auth.frontend_for_request(request),
                          "https://life-assistant-v3-stage-tl15.web.app")
 
+    async def test_explicit_staging_login_needs_no_forwarded_proxy_headers(self):
+        request = Request({"type": "http", "headers": [
+            (b"host", b"life-assistant-api-abc-uc.a.run.app"),
+            (b"x-forwarded-proto", b"http,https"),
+        ]})
+        with patch.object(auth.settings, "google_client_id", "client-id"):
+            response = await auth.staging_login(request)
+        query = parse_qs(urlparse(response.headers["location"]).query)
+        self.assertEqual(query["redirect_uri"], [auth.STAGING_REDIRECT_URI])
+        self.assertIn("oauth:staging:", response.headers["set-cookie"])
+        self.assertIn("HttpOnly", response.headers["set-cookie"])
+        self.assertIn("Secure", response.headers["set-cookie"])
+        # Preview and production still use their original callback path.
+        with patch.object(auth.settings, "google_client_id", "client-id"):
+            prod = await auth.login(request)
+        self.assertEqual(parse_qs(urlparse(prod.headers["location"]).query)["redirect_uri"],
+                         [auth.settings.google_redirect_uri])
+
+    async def test_explicit_staging_callback_uses_state_not_proxy_headers(self):
+        req = Request({"type": "http", "headers": [
+            (b"host", b"life-assistant-api-abc-uc.a.run.app"),
+        ]})
+        state = "n" * 32
+        callback_req = Request({"type": "http", "headers": [
+            (b"host", b"life-assistant-api-abc-uc.a.run.app"),
+            (b"cookie", f"__session=oauth:staging:{state}".encode()),
+        ]})
+        user = {"sub": "test", "email": "owner@example.test",
+                "name": "Owner", "exp": 9999999999}
+        with patch("app.api.auth._complete_login",
+                   new=AsyncMock(return_value=("jwt-token", user))) as complete, \
+             patch("app.api.auth._audit_staging_e2e", new_callable=AsyncMock) as audit:
+            response = await auth.callback("google-code", state, callback_req, object())
+        complete.assert_awaited_once_with("google-code", auth.STAGING_REDIRECT_URI)
+        audit.assert_awaited_once()
+        self.assertEqual(response.headers["location"],
+                         "https://life-assistant-v3-stage-tl15.web.app/")
+        self.assertIn("id:staging:jwt-token", response.headers["set-cookie"])
+        with patch("app.api.auth._verify_id_token",
+                   new=AsyncMock(return_value=user)) as verify:
+            session_request = Request({"type": "http", "headers": [
+                (b"cookie", b"__session=id:staging:jwt-token"),
+            ]})
+            logged_in = await auth.current_user(session_request)
+        verify.assert_awaited_once_with("jwt-token")
+        self.assertEqual(logged_in["email"], user["email"])
+        self.assertEqual(auth.oauth_redirect_for_request(session_request),
+                         auth.STAGING_REDIRECT_URI)
+
+    async def test_staging_callback_rejects_wrong_state_even_with_cookie(self):
+        callback_req = Request({"type": "http", "headers": [
+            (b"cookie", b"__session=oauth:staging:correct"),
+        ]})
+        with patch("app.api.auth._complete_login", new_callable=AsyncMock) as exchange:
+            with self.assertRaises(HTTPException) as ctx:
+                await auth.callback("google-code", "wrong", callback_req, object())
+        self.assertEqual(ctx.exception.status_code, 400)
+        exchange.assert_not_awaited()
+
     async def test_firebase_proxy_exact_fixed_origin_selects_staging(self):
         request = Request({"type": "http", "headers": [
             (b"host", b"life-assistant-api-abc-uc.a.run.app"),

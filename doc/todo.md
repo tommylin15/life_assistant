@@ -11,7 +11,7 @@
 | P1 | User personal bottom/rail/drawer and Home layout/card preferences | Source implemented; real device and accessibility acceptance NOT VERIFIED |
 | P1 | Drive AI admin provider allowlist/pause, health and usage | Source implemented; actual provider probes, budgets/tokens/cost and runtime NOT VERIFIED |
 | Acceptance | Exact main SHA CI, V3 candidate, Preview, fixed staging true OAuth, live API/DB/UI/connector, rollback | NOT VERIFIED for new release |
-| Operations | Read-only GCP old external Source Job/Scheduler status | Cloud Run Job existence **PASS** per inventory #38012860019; Scheduler state **NOT VERIFIED** pending scoped readback |
+| Operations | Read-only GCP old external Source Job/Scheduler status | Cloud Run Job exists per inventory #38012860019; Scheduler in `us-central1` **PASS (no matching jobs)** per #38013575831; other-region/external callers NOT VERIFIED |
 
 **CANCELLED, not pending**: MoC, TDX, EventGo/yii crawlers, official Excel/source registry, Queue/lease/ACK, old source 14-day acceptance, extra publication gate. Preserve legacy historical migrations/data non-destructively.
 

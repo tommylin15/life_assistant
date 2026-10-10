@@ -154,6 +154,8 @@ jobs:
           alembic current
           alembic upgrade 20261009_0014
           alembic current
+          alembic upgrade 20261010_0015
+          alembic current
       - name: Verify real PostgreSQL transactions, constraints, concurrency and read filters
         run: python -m unittest discover -s tests -p 'test_free_events_*postgres*.py' -v
       - name: Reproduce historical API create_all table collision and safely adopt schema

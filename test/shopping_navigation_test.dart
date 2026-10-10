@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:life_assistant/web/more_page.dart';
@@ -19,7 +20,7 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpWidget(ProviderScope(child: MaterialApp.router(routerConfig: router)));
     await tester.pumpAndSettle();
 
     expect(find.text('購物清單'), findsOneWidget);

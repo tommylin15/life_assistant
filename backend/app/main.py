@@ -15,6 +15,9 @@ from app.api.drive_note_import import router as drive_note_import_router
 from app.api.google_integrations import router as google_integrations_router
 from app.api.google_project import router as google_project_router
 from app.api.free_events import router as free_events_router
+from app.api.curated import router as curated_router
+from app.api.ui_policies import router as ui_policies_router, feature_gate
+from fastapi import Depends
 from app.api.habits import router as habits_router
 from app.api.notes import router as notes_router
 from app.api.projects import router as projects_router
@@ -134,15 +137,18 @@ async def ready():
 
 
 app.include_router(auth_router)
-app.include_router(tasks_router, prefix="/api/v1")
-app.include_router(projects_router, prefix="/api/v1")
-app.include_router(notes_router, prefix="/api/v1")
-app.include_router(habits_router, prefix="/api/v1")
-app.include_router(shopping_router, prefix="/api/v1")
+app.include_router(tasks_router, prefix="/api/v1", dependencies=[Depends(feature_gate("tasks"))])
+app.include_router(projects_router, prefix="/api/v1", dependencies=[Depends(feature_gate("projects"))])
+app.include_router(notes_router, prefix="/api/v1", dependencies=[Depends(feature_gate("notes"))])
+app.include_router(habits_router, prefix="/api/v1", dependencies=[Depends(feature_gate("habits"))])
+app.include_router(shopping_router, prefix="/api/v1", dependencies=[Depends(feature_gate("shopping"))])
 app.include_router(templates_router, prefix="/api/v1")
-app.include_router(drive_router, prefix="/api/v1")
-app.include_router(drive_note_import_router, prefix="/api/v1")
-app.include_router(google_integrations_router, prefix="/api/v1")
-app.include_router(google_project_router, prefix="/api/v1")
+app.include_router(drive_router, prefix="/api/v1", dependencies=[Depends(feature_gate("drive"))])
+app.include_router(drive_note_import_router, prefix="/api/v1", dependencies=[Depends(feature_gate("drive"))])
+app.include_router(google_integrations_router, prefix="/api/v1", dependencies=[Depends(feature_gate("integrations"))])
+app.include_router(google_project_router, prefix="/api/v1", dependencies=[Depends(feature_gate("integrations"))])
 app.include_router(activity_router, prefix="/api/v1")
-app.include_router(free_events_router, prefix="/api/v1")
+app.include_router(free_events_router, prefix="/api/v1", dependencies=[Depends(feature_gate("events"))])
+
+app.include_router(curated_router, prefix="/api/v1")
+app.include_router(ui_policies_router, prefix="/api/v1")

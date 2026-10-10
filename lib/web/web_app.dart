@@ -18,10 +18,15 @@ import 'projects_page.dart';
 import 'shopping_page.dart';
 import 'free_events_page.dart';
 import 'tasks_page.dart';
+import 'curated_events_page.dart';
+import 'platform_api.dart';
+import 'today_page.dart';
+import 'personalize_page.dart';
+import 'admin_center_page.dart';
 
 final _router = GoRouter(
   routes: [
-    GoRoute(path: '/', redirect: (_, __) => '/tasks'),
+    GoRoute(path: '/', redirect: (_, __) => '/today'),
     ShellRoute(
       builder: (context, state, child) => AuthGuard(
         child: AppShell(
@@ -33,46 +38,46 @@ final _router = GoRouter(
       routes: [
         GoRoute(
           path: '/today',
-          builder: (_, __) => const _SectionPlaceholderPage(
-            title: '首頁',
-            message: '首頁內容準備中',
-            icon: Icons.home_outlined,
-          ),
+          builder: (_, __) => const FeatureAccess(feature: 'today', child: TodayPage()),
         ),
-        GoRoute(path: '/tasks', builder: (_, __) => const TasksPage()),
-        GoRoute(path: '/calendar', builder: (_, __) => const CalendarPage()),
-        GoRoute(path: '/projects', builder: (_, __) => const ProjectsPage()),
+        GoRoute(path: '/tasks', builder: (_, __) => const FeatureAccess(feature: 'tasks', child: TasksPage())),
+        GoRoute(path: '/calendar', builder: (_, __) => const FeatureAccess(feature: 'calendar', child: CalendarPage())),
+        GoRoute(path: '/projects', builder: (_, __) => const FeatureAccess(feature: 'projects', child: ProjectsPage())),
         GoRoute(
           path: '/more/habits',
-          builder: (_, __) => const HabitsPage(),
+          builder: (_, __) => const FeatureAccess(feature: 'habits', child: HabitsPage()),
         ),
         GoRoute(
           path: '/more/shopping',
-          builder: (_, __) => const ShoppingPage(),
+          builder: (_, __) => const FeatureAccess(feature: 'shopping', child: ShoppingPage()),
         ),
         GoRoute(
           path: '/more/notes',
-          builder: (_, __) => const NotesPage(),
+          builder: (_, __) => const FeatureAccess(feature: 'notes', child: NotesPage()),
         ),
         GoRoute(
           path: '/more/drive/settings',
-          builder: (_, __) => const DriveSettingsPage(),
+          builder: (_, __) => const FeatureAccess(feature: 'drive', child: DriveSettingsPage()),
         ),
         GoRoute(
           path: '/more/drive',
-          builder: (_, __) => const DrivePage(),
+          builder: (_, __) => const FeatureAccess(feature: 'drive', child: DrivePage()),
         ),
-        GoRoute(path: '/more/events', builder: (_, __) => const FreeEventsPage()),
+        GoRoute(path: '/more/events', builder: (_, __) => const FeatureAccess(feature: 'events', child: FreeEventsPage())),
+        GoRoute(path: '/more/curated', builder: (_, __) =>
+            const FeatureAccess(feature: 'events', child: CuratedEventsPage())),
+        GoRoute(path: '/more/personalize', builder: (_, __) => const PersonalizePage()),
+        GoRoute(path: '/more/admin', builder: (_, __) => const AdminAccess(child: AdminCenterPage())),
         GoRoute(path: '/more', builder: (_, __) => const MorePage()),
       ],
     ),
     GoRoute(
       path: '/integrations',
-      builder: (_, __) => const AuthGuard(child: IntegrationsPage()),
+      builder: (_, __) => const AuthGuard(child: FeatureAccess(feature: 'integrations', child: IntegrationsPage())),
     ),
     GoRoute(
       path: '/acceptance',
-      builder: (_, __) => const AuthGuard(child: AcceptanceCenterPage()),
+      builder: (_, __) => const AuthGuard(child: AdminAccess(child: AcceptanceCenterPage())),
     ),
     GoRoute(path: '/login', builder: (_, __) => const LoginPage()),
   ],
@@ -109,36 +114,3 @@ class WebApp extends ConsumerWidget {
       );
 }
 
-class _SectionPlaceholderPage extends StatelessWidget {
-  const _SectionPlaceholderPage({
-    required this.title,
-    required this.message,
-    required this.icon,
-  });
-
-  final String title;
-  final String message;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(title)),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 48),
-                const SizedBox(height: 16),
-                Text(
-                  message,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-}

@@ -19,6 +19,7 @@ from app.models.drive import (  # noqa: F401
     ProjectDriveDocument,
 )
 from app.models.ai_provider_preference import AIProviderPreference  # noqa: F401
+from app.models.curated import CuratedActivity, FeatureRollout, UserUIPreference, LifeAIPolicy  # noqa: F401
 from app.models.free_events import (  # noqa: F401
     FreeEvent, FreeEventEvidence, FreeEventOrganizer,
     FreeEventRegistrationOpportunity, FreeEventSession, FreeEventSource,

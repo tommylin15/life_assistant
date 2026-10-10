@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:life_assistant/web/app_shell.dart';
 
@@ -7,7 +8,7 @@ Widget _hostShell({
   required String location,
   required ValueChanged<String> onNavigate,
 }) {
-  return MaterialApp(
+  return ProviderScope(child: MaterialApp(
     home: MediaQuery(
       data: MediaQueryData(size: size),
       child: AppShell(
@@ -16,7 +17,7 @@ Widget _hostShell({
         child: const Scaffold(body: Center(child: Text('content'))),
       ),
     ),
-  );
+  ));
 }
 
 void main() {

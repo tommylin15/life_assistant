@@ -18,6 +18,7 @@ from app.models.drive import (
     ProjectDriveDocument,
 )
 from app.models.migration_support import EntityTag, Tag
+from app.models.curated import LifeAIPolicy
 from app.models.note import Note
 from app.models.project import Project
 from app.services import drive_documents
@@ -29,6 +30,9 @@ from app.services.ai_enrichment_provider import (
     codex_owner_uuid,
     execute_provider_enrichment,
     get_ai_enrichment_provider,
+    UnavailableAIEnrichmentProvider,
+    FallbackAIEnrichmentProvider,
+    _setting,
 )
 
 _MAX_CANDIDATES = 20
@@ -315,17 +319,53 @@ async def enrich_document(
         existing_tags=existing_tags,
         max_related_notes=enrichment_settings.max_related_note_suggestions,
     )
+    # Apply governed platform pause/allow-list after individual consent checks.
+    # Missing policy retains the previously approved server configuration.
+    ai_policy = await db.get(LifeAIPolicy, "drive")
+    policy_active = not isinstance(ai_policy, LifeAIPolicy) or ai_policy.enabled
     resolved_provider = provider or get_ai_enrichment_provider(owner_id=codex_owner_uuid(user_sub))
+    if isinstance(ai_policy, LifeAIPolicy):
+        if not ai_policy.enabled or not ai_policy.allowed_providers:
+            resolved_provider = UnavailableAIEnrichmentProvider()
+        else:
+            from app import config
+            models = {
+                "gemini": "latest-3-flash",
+                "gemini_lite": "latest-3-flash-lite",
+                "groq": _setting("ai_enrichment_fallback_model", "AI_ENRICHMENT_FALLBACK_MODEL"),
+                "openrouter": _setting("ai_enrichment_tertiary_model", "AI_ENRICHMENT_TERTIARY_MODEL"),
+                "openai": _setting("ai_enrichment_model", "AI_ENRICHMENT_MODEL"),
+                "codex": str(config.settings.codex_shared_model or ""),
+            }
+            candidates = []
+            for name in ("gemini", "gemini_lite", "groq", "openrouter", "openai", "codex"):
+                if name not in ai_policy.allowed_providers:
+                    continue
+                if name == "codex" and not config.settings.codex_primary_enabled:
+                    continue
+                candidate = get_ai_enrichment_provider(
+                    provider=name, model=models[name], owner_id=codex_owner_uuid(user_sub),
+                )
+                if not isinstance(candidate, UnavailableAIEnrichmentProvider):
+                    candidates.append(candidate)
+            if not candidates:
+                resolved_provider = UnavailableAIEnrichmentProvider()
+            else:
+                resolved_provider = candidates[-1]
+                for candidate in reversed(candidates[:-1]):
+                    resolved_provider = FallbackAIEnrichmentProvider(candidate, resolved_provider)
+    allow_ai = enrichment_settings.allow_document_content and policy_active
     fingerprint = compute_enrichment_fingerprint(
         context,
         candidates,
         enable_tags=enrichment_settings.auto_tags_enabled,
         enable_related_notes=enrichment_settings.note_suggestions_enabled,
         provider=resolved_provider.provider_name,
-        model=resolved_provider.model_name,
+        model=(str(resolved_provider.model_name or '') +
+               (f':policy:{ai_policy.revision}' if isinstance(ai_policy, LifeAIPolicy) else '')),
     )
 
-    if enrichment_settings.allow_document_content and not force:
+    if allow_ai and not force:
         cached = (
             await db.execute(
                 select(DriveDocumentEnrichmentRun)
@@ -345,7 +385,7 @@ async def enrich_document(
         resolved_provider,
         context,
         candidates,
-        allow_ai=enrichment_settings.allow_document_content,
+        allow_ai=allow_ai,
         enable_tags=enrichment_settings.auto_tags_enabled,
         enable_related_notes=enrichment_settings.note_suggestions_enabled,
     )

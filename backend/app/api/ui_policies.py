@@ -67,6 +67,14 @@ def _audit(db: AsyncSession, user_sub: str, action: str, summary: str) -> None:
     ))
 
 
+async def _commit_versioned(db: AsyncSession) -> None:
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(409, "Concurrent settings change; reload") from exc
+
+
 async def effective_features(db: AsyncSession, user: dict) -> list[dict]:
     rows = (await db.execute(select(FeatureRollout))).scalars().all()
     policies = {row.feature_key: row for row in rows}
@@ -172,7 +180,7 @@ async def put_my_preferences(
             raise HTTPException(409, "Concurrent layout change")
         revision = old_revision + 1
     _audit(db, user["sub"], "ui.preferences.update", "Personal layout changed")
-    await db.commit()
+    await _commit_versioned(db)
     return {**fields, "revision": revision}
 
 
@@ -232,7 +240,7 @@ async def put_rollout(
             raise HTTPException(409, "Concurrent rollout change")
         revision += 1
     _audit(db, user["sub"], "admin.feature_rollout.update", f"feature={body.key} state={body.status}")
-    await db.commit()
+    await _commit_versioned(db)
     return {"key": body.key, "status": body.status, "audience": body.audience, "revision": revision}
 
 
@@ -314,7 +322,7 @@ async def update_ai_policy(
             raise HTTPException(409, "Concurrent AI policy change")
         revision += 1
     _audit(db, user["sub"], "admin.ai_policy.update", f"enabled={body.enabled}, revision={revision}")
-    await db.commit()
+    await _commit_versioned(db)
     return {"revision": revision, "enabled": body.enabled, "allowed_providers": body.allowed_providers}
 
 

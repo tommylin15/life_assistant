@@ -1,6 +1,5 @@
 """Versioned Drive handoff validation and transactional, URL-independent identity."""
 import hashlib
-import json
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -26,43 +25,35 @@ HEADERS = ("event_key", "content_hash", *BUSINESS_FIELDS[1:], "handoff_status",
            "handoff_updated_at_tpe", "life_ack_at_tpe", "life_import_result", "life_error")
 
 
-def content_hash(fields: dict) -> str:
-    # v1 canonical form is a sorted JSON object of all business cells as trimmed
-    # strings. Empty cells are ""; receipt columns never change the version.
-    canonical = {key: "" if fields.get(key) is None else str(fields[key]).strip() for key in BUSINESS_FIELDS}
-    return hashlib.sha256(json.dumps(canonical, ensure_ascii=False, sort_keys=True,
-                                    separators=(",", ":")).encode()).hexdigest()
-
-
 class HandoffItem(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     event_key: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_:./-]+$")
-    parent_event_key: str | None = Field(None, max_length=200, pattern=r"^[A-Za-z0-9_:./-]+$")
+    parent_event_key: str = Field(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_:./-]+$")
     record_type: Literal["main", "offer", "session"]
     title: str = Field(min_length=2, max_length=400)
     city: str | None = Field(None, max_length=100)
     district: str | None = Field(None, max_length=100)
     category: str | None = Field(None, max_length=100)
-    organizer: str | None = Field(None, max_length=400)
+    organizer: str = Field(min_length=1, max_length=400)
     start_at_tpe: date | datetime | None = None
     end_at_tpe: date | datetime | None = None
     venue: str | None = Field(None, max_length=1000)
-    official_url: str | None = Field(None, max_length=2048)
+    official_url: str = Field(min_length=1, max_length=2048)
     registration_url: str | None = Field(None, max_length=2048)
     source_url: str | None = Field(None, max_length=2048)
     importance_star: int = Field(ge=1, le=5)
-    opportunity_type: str | None = Field(None, max_length=100)
-    registration_open_at_tpe: datetime | None = None
-    registration_deadline_at_tpe: datetime | None = None
+    opportunity_type: Literal["一般活動", "報名", "限額優惠"]
+    registration_open_at_tpe: date | datetime | None = None
+    registration_deadline_at_tpe: date | datetime | None = None
     nonrefundable_cost_ntd: Decimal | None = Field(None, ge=0, le=10000000, decimal_places=2)
     refundable_deposit_ntd: Decimal | None = Field(None, ge=0, le=10000000, decimal_places=2)
     verified_benefit_ntd: Decimal | None = Field(None, ge=0, le=10000000, decimal_places=2)
     eligibility_limit: str | None = Field(None, max_length=1200)
-    evidence_summary: str | None = Field(None, max_length=1200)
+    evidence_summary: str = Field(min_length=1, max_length=1200)
     verified_at_tpe: datetime
     handoff_updated_at_tpe: datetime
 
-    @field_validator("start_at_tpe", "end_at_tpe", mode="before")
+    @field_validator("start_at_tpe", "end_at_tpe", "registration_open_at_tpe", "registration_deadline_at_tpe", mode="before")
     @classmethod
     def preserve_precision(cls, value):
         if isinstance(value, str):
@@ -76,8 +67,8 @@ class HandoffItem(BaseModel):
 
     @model_validator(mode="after")
     def consistent(self):
-        if not (self.official_url or self.registration_url):
-            raise ValueError("official_or_registration_url_required")
+        if self.importance_star not in (1, 3, 5):
+            raise ValueError("importance_requires_1_3_5")
         for key in ("start_at_tpe", "end_at_tpe", "registration_open_at_tpe",
                     "registration_deadline_at_tpe", "verified_at_tpe", "handoff_updated_at_tpe"):
             value = getattr(self, key)
@@ -88,19 +79,21 @@ class HandoffItem(BaseModel):
             end = self.end_at_tpe.date() if isinstance(self.end_at_tpe, datetime) else self.end_at_tpe
             if end < start or (isinstance(self.start_at_tpe, datetime) and isinstance(self.end_at_tpe, datetime) and self.end_at_tpe < self.start_at_tpe):
                 raise ValueError("activity_end_before_start")
-        if self.registration_open_at_tpe and self.registration_deadline_at_tpe and self.registration_deadline_at_tpe < self.registration_open_at_tpe:
-            raise ValueError("registration_deadline_before_open")
-        if self.parent_event_key == self.event_key:
+        if self.registration_open_at_tpe and self.registration_deadline_at_tpe:
+            start, end = self.registration_open_at_tpe, self.registration_deadline_at_tpe
+            start_day = start.date() if isinstance(start, datetime) else start
+            end_day = end.date() if isinstance(end, datetime) else end
+            if end_day < start_day or (isinstance(start, datetime) and isinstance(end, datetime) and end < start):
+                raise ValueError("registration_deadline_before_open")
+        if self.parent_event_key == self.event_key and self.record_type != "main":
             raise ValueError("self_parent_not_allowed")
-        if self.record_type != "main" and not self.parent_event_key:
-            raise ValueError("child_requires_parent")
         return self
 
     def curated(self) -> CuratedItemIn:
         def day(value):
             return value.date() if isinstance(value, datetime) else value
         return CuratedItemIn(
-            title=self.title, original_url=self.official_url or self.registration_url,
+            title=self.title, original_url=self.official_url,
             occurrence_key="sheet_" + hashlib.sha256(self.event_key.encode()).hexdigest()[:24],
             summary=self.evidence_summary, city=self.city, category=self.category,
             starts_on=day(self.start_at_tpe), ends_on=day(self.end_at_tpe),
@@ -108,9 +101,10 @@ class HandoffItem(BaseModel):
                      "conditional_free" if self.nonrefundable_cost_ntd == 0 else
                      "paid" if self.nonrefundable_cost_ntd is not None else "unknown",
             fee_amount=self.nonrefundable_cost_ntd, benefit_value=self.verified_benefit_ntd,
-            importance=self.importance_star, registration_deadline=self.registration_deadline_at_tpe,
+            importance=self.importance_star,
+            registration_deadline=self.registration_deadline_at_tpe if isinstance(self.registration_deadline_at_tpe, datetime) else None,
             registration_required=True if self.registration_url else None,
-            limited_offer=bool(self.opportunity_type),
+            limited_offer=self.opportunity_type in ("報名", "限額優惠"),
         )
 
 
@@ -134,6 +128,9 @@ async def upsert_handoff(db, item: HandoffItem, version: str) -> str:
             if previous > item.handoff_updated_at_tpe or (previous == item.handoff_updated_at_tpe and row.content_hash != version):
                 raise ValueError("superseded_or_conflicting_handoff_version")
     if result == "UNCHANGED":
+        stored = {k: v for k, v in (row.handoff_details or {}).items() if k != "handoff_updated_at_tpe"}
+        if stored != item.model_dump(mode="json", exclude={"handoff_updated_at_tpe"}):
+            raise ValueError("same_hash_changed_business_payload")
         row.handoff_details = {**row.handoff_details, "handoff_updated_at_tpe": item.handoff_updated_at_tpe.isoformat()}
         await db.commit()
         return result

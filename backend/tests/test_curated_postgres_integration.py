@@ -111,6 +111,7 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
         from app.services.curated_handoff import HandoffItem, upsert_handoff
         key = "ci:" + uuid.uuid4().hex
         item = HandoffItem(event_key=key, record_type="main", title="穩定鍵活動",
+            parent_event_key=key, organizer="主辦", opportunity_type="一般活動", evidence_summary="已核證",
             official_url=self.url, importance_star=5,
             verified_at_tpe="2026-10-10T09:00:00+08:00",
             handoff_updated_at_tpe="2026-10-10T09:00:00+08:00")
@@ -120,6 +121,9 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
         result = await asyncio.gather(*[apply(item, "a"*64) for _ in range(6)])
         self.assertEqual(result.count("CREATED"), 1)
         self.assertEqual(result.count("UNCHANGED"), 5)
+        conflicting = HandoffItem.model_validate({**item.model_dump(), "title": "same hash different content"})
+        with self.assertRaisesRegex(ValueError, "same_hash_changed_business"):
+            await apply(conflicting, "a"*64)
         updated = HandoffItem.model_validate({**item.model_dump(),
             "official_url": self.url + "/new", "handoff_updated_at_tpe": "2026-10-10T10:00:00+08:00"})
         self.assertEqual(await apply(updated, "b"*64), "UPDATED")
@@ -160,6 +164,7 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
         key = "ci:" + uuid.uuid4().hex
         city = uuid.uuid4().hex
         main = HandoffItem(event_key=key, record_type="main", title="主活動",
+            parent_event_key=key, organizer="主辦", opportunity_type="一般活動", evidence_summary="已核證",
             city=city, official_url=self.url, importance_star=3,
             verified_at_tpe="2026-10-10T09:00:00+08:00",
             handoff_updated_at_tpe="2026-10-10T09:00:00+08:00")

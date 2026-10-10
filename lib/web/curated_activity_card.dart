@@ -156,6 +156,9 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
   List<Widget> _details(Map<String, dynamic> item) {
     final details = item['handoff_details'] as Map? ?? const {};
     return [
+      Text('主辦：${details['organizer'] ?? '未知'} · 分類：${item['category'] ?? '未知'}'),
+      Text('活動類型：${details['opportunity_type'] ?? '未知'} · 區域：${details['district'] ?? '未知'}'),
+      Text('活動時段：${details['start_at_tpe'] ?? item['starts_on'] ?? '未知'} ～ ${details['end_at_tpe'] ?? item['ends_on'] ?? '未知'}'),
       Text('報名開放：${details['registration_open_at_tpe'] ?? '未知'}'),
       Text('報名截止：${details['registration_deadline_at_tpe'] ?? item['registration_deadline'] ?? '未知'}'),
       Text('可退押金：${details['refundable_deposit_ntd'] ?? '未知'}；退款／資格條件：${details['eligibility_limit'] ?? '請查主辦原頁'}'),

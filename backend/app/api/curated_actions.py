@@ -64,7 +64,7 @@ def calendar_payload(item, kind, body):
         payload.update(start={"dateTime": body.start.isoformat()}, end={"dateTime": body.end.isoformat()})
     else:
         raw = details.get("registration_open_at_tpe" if body.phase == "open" else "registration_deadline_at_tpe")
-        if not raw:
+        if not raw or "T" not in raw:
             raise HTTPException(422, "Verified registration time is unknown")
         moment = datetime.fromisoformat(raw)
         if moment <= datetime.now(timezone.utc):

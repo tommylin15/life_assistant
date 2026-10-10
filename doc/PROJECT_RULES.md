@@ -151,6 +151,8 @@ V2 Cloud Build 全文已歸檔：[archive/ci_cd_v2_policy.md](archive/ci_cd_v2_p
 
 ## 2026-10-10 現行文件與產品決策
 
+- **最新交接優先順序：以實際「交接資料／交接規格」為主，回頭調整 Life DB 與 UI，不要求探索表或正式探索文件迎合 Life。** 來源 SHA256 版本由探索端提供；Life 驗證格式、業務 payload、資料庫穩定鍵與同版本內容一致性。回執採 Sheet 的 CREATED／UPDATED／UNCHANGED 裸值；ACKED 也須由 Life 核對 DB，不能用 Sheet 狀態抑制新版。
+
 - **最新開發與權限安排：** 新交接表、穩定去重、活動呈現、限時機會／活動探索兩入口、個人動作先同批完成開發，再與後台及個人首頁一起做正式上線驗收。AI 管理補強暫緩，AI 管理相關能力限制 admin；這項限制不適用於活動新功能。活動是否開放、開放對象由 admin 在既有後台設定，不另設程式外的公開開放核准旗標。
 
 - 現況：[CURRENT_STATE.md](CURRENT_STATE.md)；產品與權限：[CURRENT_PRODUCT_ARCHITECTURE.md](CURRENT_PRODUCT_ARCHITECTURE.md)；執行順序：[phase1_delivery_order.md](phase1_delivery_order.md)。現行程式與 runtime 永遠優先於文件的歷史快照。

@@ -1,14 +1,14 @@
 """Daily fixed-Sheet handoff importer; commit first, then version-checked receipt."""
 import asyncio
 import os
-import json
+import re
 import uuid
 from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
 import httpx
 from pydantic import ValidationError
 from app.db.session import SessionLocal, engine
-from app.services.curated_handoff import HEADERS, BUSINESS_FIELDS, HandoffItem, content_hash, upsert_handoff
+from app.services.curated_handoff import HEADERS, BUSINESS_FIELDS, HandoffItem, upsert_handoff
 
 SHEET_ID = "1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4"
 TAB = "交接資料"
@@ -38,26 +38,16 @@ def parse_rows(values):
 
 
 def validate_record(record):
-    if record["content_hash"] != content_hash(record):
-        raise ValueError("content_hash_mismatch")
+    # The Sheet owns canonical hashing; Life validates its version and payload.
+    if not re.fullmatch(r"[a-f0-9]{64}", record["content_hash"]):
+        raise ValueError("invalid_content_hash")
     return HandoffItem.model_validate({key: record[key] or None for key in BUSINESS_FIELDS + ("handoff_updated_at_tpe",)})
 
 
-def receipt_value(record, result):
-    return json.dumps({"result": result, "event_key": record["event_key"],
-                       "content_hash": record["content_hash"]}, separators=(",", ":"), ensure_ascii=False)
-
-
 def acknowledged(record):
-    try:
-        receipt = json.loads(record["life_import_result"])
-    except (ValueError, TypeError):
-        return False
-    return (isinstance(receipt, dict) and record["handoff_status"] == "ACKED"
-            and record["content_hash"] == content_hash(record)
-            and receipt.get("event_key") == record["event_key"]
-            and receipt.get("content_hash") == record["content_hash"]
-            and receipt.get("result") in ("CREATED", "UPDATED", "UNCHANGED"))
+    # Only called after the database has verified this exact business version.
+    return (record["handoff_status"] == "ACKED" and bool(record["life_ack_at_tpe"])
+            and record["life_import_result"] in ("CREATED", "UPDATED", "UNCHANGED"))
 
 
 class SheetClient:
@@ -90,18 +80,18 @@ class SheetClient:
         matches = [r for r in records if r["event_key"] == snapshot["event_key"]]
         if len(matches) != 1 or any(matches[0][k] != snapshot[k] for k in BUSINESS_FIELDS + ("content_hash", "handoff_updated_at_tpe")):
             return False
-        if acknowledged(matches[0]):
+        if not error and result == "UNCHANGED" and acknowledged(matches[0]):
             return True
         row_number = next(i for i, row in enumerate(values[1:], 2) if row and str(row[0]).strip() == snapshot["event_key"])
         now = datetime.now(timezone(timedelta(hours=8))).isoformat()
         await self.request("POST", "values:batchUpdate", json={"valueInputOption": "RAW", "data": [
             {"range": f"'{TAB}'!Z{row_number}", "values": [["ERROR" if error else "ACKED"]]},
-            {"range": f"'{TAB}'!AB{row_number}:AD{row_number}", "values": [["" if error else now, receipt_value(snapshot, result), error]]},
+            {"range": f"'{TAB}'!AB{row_number}:AD{row_number}", "values": [["" if error else now, "" if error else result, error]]},
         ]})
         readback = parse_rows(await self.read())
         current = next((r for r in readback if r["event_key"] == snapshot["event_key"]), None)
         return bool(current and all(current[k] == snapshot[k] for k in BUSINESS_FIELDS + ("content_hash",))
-                    and current["life_import_result"] == receipt_value(snapshot, result)
+                    and current["life_import_result"] == ("" if error else result)
                     and current["handoff_status"] == ("ERROR" if error else "ACKED"))
 
 
@@ -114,11 +104,8 @@ async def run_import(sheet=None, sessions=SessionLocal):
     result = {"run_id": uuid.uuid4().hex, "mode": "apply" if applying else "dry_run",
               "created": 0, "updated": 0, "unchanged": 0, "invalid": 0, "ack_failed": 0}
     for record in rows:
-        # Sheets has no atomic cell-value compare-and-set. A version-qualified
-        # receipt makes a late/stale ACK invalid, even when a row moved between
-        # the check and write. Never skip or clean a row based on status alone.
-        if acknowledged(record):
-            continue
+        # A bare Sheet receipt cannot prove which version is in PostgreSQL.
+        # Recheck ACKED rows too; never skip a new version because of an old ACK.
         try:
             item = validate_record(record)
         except (ValueError, ValidationError):

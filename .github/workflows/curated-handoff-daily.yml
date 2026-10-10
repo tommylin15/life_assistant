@@ -1,0 +1,46 @@
+name: Daily curated Sheet handoff
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 1 * * *' # 09:30 Asia/Taipei
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: life-assistant-v3-production-release
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.ref == 'refs/heads/main' && vars.LIFE_CURATED_HANDOFF_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      JOB: life-assistant-free-events
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Reuse the verified production image and existing Job
+        shell: bash
+        run: |
+          set -euo pipefail
+          REVISION="$(gcloud run services describe life-assistant-api --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json | jq -er '[.status.traffic[] | select((.percent // 0)==100)] | if length==1 then .[0].revisionName else error("ambiguous live traffic") end')"
+          gcloud run revisions describe "$REVISION" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/live.json"
+          IMAGE_REF="$(python -c 'import json,sys; sys.path.insert(0,".github/scripts"); from v3_image_identity import canonical; print(canonical(json.load(open(sys.argv[1]))["spec"]["containers"][0]["image"]))' "$RUNNER_TEMP/live.json")"
+          python .github/scripts/v3_image_identity.py --resource revision --json "$RUNNER_TEMP/live.json" --expected "$IMAGE_REF"
+          gcloud run jobs update "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --image "$IMAGE_REF" --command python --args=-m,scripts.import_curated_from_sheet --update-env-vars=LIFE_CURATED_SHEET_ID=1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4,LIFE_CURATED_IMPORT_APPLY=1 --quiet
+          gcloud run jobs describe "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/job.json"
+          python .github/scripts/v3_image_identity.py --resource job --json "$RUNNER_TEMP/job.json" --expected "$IMAGE_REF"
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$JOB" gcloud run jobs execute "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --task-timeout 10m --wait --quiet
+          echo "handoff_job=PASS revision=$REVISION image=$IMAGE_REF; source=the fixed 30-column Sheet" >> "$GITHUB_STEP_SUMMARY"

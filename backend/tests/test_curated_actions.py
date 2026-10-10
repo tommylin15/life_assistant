@@ -26,6 +26,13 @@ class ActivityActionTests(unittest.IsolatedAsyncioTestCase):
             calendar_payload(self.item(), "reminder", ActionWrite(active=True))
         self.assertEqual(ctx.exception.status_code, 422)
 
+    def test_date_only_registration_does_not_invent_midnight_reminder(self):
+        item = self.item()
+        item.handoff_details = {"registration_open_at_tpe": "2099-10-12"}
+        with self.assertRaises(HTTPException) as ctx:
+            calendar_payload(item, "reminder", ActionWrite(active=True))
+        self.assertEqual(ctx.exception.status_code, 422)
+
     async def test_owned_tasks_are_hidden_from_other_account(self):
         db = AsyncMock()
         db.get.return_value = Task(id="x", title="私人活動", user_sub="owner")

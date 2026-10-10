@@ -43,12 +43,17 @@ void main() {
     ], child: MaterialApp(home: Scaffold(body: SingleChildScrollView(
       child: CuratedActivityCard(items: const [
         {'identity_key': 'one', 'title': '測試活動', 'importance': 5,
+         'category': '親子活動', 'handoff_details': {'organizer': '文學館',
+           'opportunity_type': '報名', 'district': '中西區', 'start_at_tpe': '2026-10-24T10:30:00+08:00'},
          'original_url': 'https://example.org/e'},
       ]),
     )))));
     await tester.pumpAndSettle();
     expect(api.calls, isEmpty);
     expect(find.textContaining('未知'), findsWidgets);
+    expect(find.text('主辦：文學館 · 分類：親子活動'), findsOneWidget);
+    expect(find.text('活動類型：報名 · 區域：中西區'), findsOneWidget);
+    expect(find.textContaining('2026-10-24T10:30:00+08:00'), findsOneWidget);
     final save = find.widgetWithText(FilterChip, '收藏');
     await tester.ensureVisible(save);
     await tester.tap(save);

@@ -23,22 +23,22 @@
 | 雙方交接回執 | `handoff_status`, `handoff_updated_at_tpe`, `life_ack_at_tpe`, `life_import_result`, `life_error` |
 
 - `event_key` 是穩定活動／優惠鍵、`parent_event_key` 是主題父鍵，`record_type` 區分 main／offer／session；`content_hash` 用規格化**業務欄位**計 SHA256，須排除交接狀態／回執／掃描批次，不因重跑而改變。這些鍵都不能由列號、run_id 或目前時間臨時產生。
-- hash 的 v1 精確格式：使用 `backend/app/services/curated_handoff.py` 的 24 個 `BUSINESS_FIELDS`（包含 `event_key`，不含 `content_hash`、狀態及回執）。每格轉字串、去頭尾空白，空格值為 `""`；JSON 依欄名排序，UTF-8、不轉義中文字、分隔符 `,`／`:` 且無額外空白，最後 SHA256 hex。探索端須用同一格式，不能用自己的欄位集合。
+- **2026-10-10 使用者最新決策：交接表規格優先，Life DB/UI 配合，不回頭修改探索表或文件。** `content_hash` 是探索端提供的業務版本 SHA256；Life 驗證64位十六進位格式與全部業務欄位，不強迫探索端採用 Life 自訂的 JSON 序列化。PostgreSQL 同鍵同 hash 時必須再比對已保存的完整業務內容；同 hash 卻改內容拒收 ERROR，不能假稱 UNCHANGED。
 - 1／3／5 星是價值、不是可報名或有空位的證據；報名開放、截止、活動期間不能互相混用。未知費用／押金／福利不填零；未知時間留空，只有日期的來源不得補造午夜。所有可核定時點使用 ISO 8601 帶 +08:00。
 - 只有主辦證據、費用、活動身分等達到探索規格的交接 Gate 才能成為 `READY`；待核五星、官方時點衝突、關鍵資格不明或只有第三方索引者留原精選池等待，不因原表內 `selected` 就批量全搬。Life 只做結構和安全驗證，不代替探索核證。
 
 ## 每日定期匯入與回執
 
-1. Life 以固定 ID 讀 `交接資料`，先比對表頭／欄位契約，處理 `READY`、可重試 `ERROR` 及回執版本不符的 `ACKED`。只有有效且版本相符的 `ACKED` 才跳過。表內 `event_key` 不可重複，異常失敗關閉並記錄，不能讀取錯表仍宣稱成功。
+1. Life 以固定 ID 讀 `交接資料`，先比對表頭／欄位契約，處理 `READY`、可重試 `ERROR` 及全部 `ACKED`。ACKED 每輪仍核對 DB；只有已驗證同版本、同業務內容的成功回執才不重寫。表內 `event_key` 不可重複，異常失敗關閉並記錄，不能讀取錯表仍宣稱成功。
 2. **去重持久化必須在 Life PostgreSQL**：以 `source=chatgpt_drive_handoff`＋`event_key` 建立永久唯一對應，並保存最後成功 `content_hash`。同鍵同 hash → `UNCHANGED`；同鍵新 hash → `UPDATED`；新鍵 → `CREATED`。**現有 backend 的 `identity_key` 是 canonical URL＋occurrence_key 的 SHA256，不等於 Drive 的 `event_key`；原始網址一換可能多建一筆**。正式介接前先檢查 schema，採最小 additive mapping/migration 和兼容性測試，不得假定去重已完成。
-3. DB transaction **commit 成功後**，Life 再重新讀取 Sheet，以穩定鍵重新找列並核對業務欄位、hash 及 handoff 更新時點，再寫回並讀回。`life_import_result` 現為 JSON 字串，例如 `{"result":"CREATED","event_key":"main:e","content_hash":"完整64位hash"}`；result 僅 CREATED／UPDATED／UNCHANGED。Sheets 沒有原子條件寫入，因此只有 status=ACKED 且回執的 key/hash 符合目前列才算完成。舊回執或移列競態不得抑制新版入庫；不符時下輪重送。探索端須同步此判定，不能只看 ACKED 或裸結果文字。
+3. DB transaction **commit 成功後**，Life 再重新讀取 Sheet，以穩定鍵重新找列並核對全部業務欄位、hash 及 handoff 更新時點，再寫回並讀回。依實際 Sheet 規格，`life_import_result` 是裸字串 CREATED／UPDATED／UNCHANGED，失敗留空並寫 life_error，不增加 JSON 回執要求。Life 每輪連 ACKED 也核對 PostgreSQL，以資料庫版本與內容作可靠收據；已正確 ACK 的版本不重設成功時間。Sheets 不提供原子條件寫入，不能宣稱完全排除跨寫入方移列競態；寫後不符報 PARTIAL，下輪再核對／修復，不能憑 Sheet status 跳過新版。
 4. 匯入失敗保留列並寫 `ERROR`／脫敏 `life_error`；若 DB 已 commit 但回 Sheet 失敗，下輪相同鍵與 hash 由資料庫冪等處理（UNCHANGED）並補 ACK。允許部分成功但整體報 PARTIAL／FAIL；每輪留可稽核 run id、imported/unchanged/invalid 計數與真實 DB、Drive readback。
-5. **探索端滾動 30 天清理**：只清有效版本回執的 `ACKED` 且可信 `life_ack_at_tpe` 已超過 30 天的版本；刪前重新讀回目前 key/hash 與 JSON 回執核對；`READY`、`ERROR`、未回執、回執不符或同鍵新版本**永不清理**。Life 停機可導致交接表暫時增長，正確性優先；永久去重依靠 PostgreSQL 而非 Excel 累積歷史。
+5. **探索端滾動 30 天清理**：沿用交接規格，只清 ACKED 且可信 life_ack_at_tpe 超過30天、精選池仍保存活動的列；清前再確認目前 key/hash。READY、ERROR、無可靠回執或新版不得清除。Life 不修改探索端清理流程；永久去重依靠 PostgreSQL，不依靠交接表歷史。
 
 ## 授權與實作落差
 
 - 只授權指定交接 Sheet 給 Life Job 專用 service account；不能公開分享，不建立長效 SA JSON key。既有 Job 設計的 **Viewer＋`spreadsheets.readonly` 只能讀、不能回寫 ACK/ERROR**；新實作需最小必要的單表 Editor／Sheets write scope、校驗 Google 身分並防止其他文件被讀寫。憑證、Token 不進 Sheet／Log。
-- 固定設定的 `LIFE_CURATED_SHEET_ID` 應指向**新 ID**；不能沿用舊精選池。GCP Scheduler 在 ChatGPT 探索預期結束後啟動；呼叫 Cloud Run Jobs Google API 使用 OAuth access token（不是 Cloud Run service 的 OIDC）。只有 staging dry-run、真實 apply、DB／Flutter／回執驗證 PASS 後才能啟用。
+- 固定設定的 `LIFE_CURATED_SHEET_ID` 應指向**新 ID**；不能沿用舊精選池。`.github/workflows/curated-handoff-daily.yml` 每日台北09:30或手動，以既有 WIF 觸發既有 GCP Python Job `life-assistant-free-events`，映像取已正式切流且 Ready 的 GHCR immutable digest，與發布共用併發鎖。不新增付費 Scheduler／Job、不恢復來源 crawler；只有 staging dry-run、真實 apply、DB／Flutter／回執驗證 PASS 並完成正式切流後，才設定 repository variable `LIFE_CURATED_HANDOFF_ENABLED=true` 啟用。這是排程啟用條件，不改活動的 admin 開放設定。
 - GitHub 現有 importer 若仍讀舊 `精選活動`／`pool狀態=selected`、僅 Sheets readonly 或使用 URL identity，應標 **IMPLEMENTATION GAP**。需求須經現況程式盤點、tests、CI、staging、PG、Flutter、Drive ACK 實際驗收；文件更新不等於 Job 已改造、授權、排程或部署。
 
-**2026-10-10 實況**：新交接 Sheet 建立、30 欄／規格分頁／readback **PASS**；刻意初始 **0 筆**，未把未核證的舊精選池資料直接上傳。探索實際輸出合格 READY、Life Job 讀寫、新 identity mapping、ACK/ERROR、30 天清理和 DB/UI E2E **NOT VERIFIED**。
+**2026-10-10 最新實況**：真實 Sheet已有3筆 READY，欄位／來源 payload 本機驗證 PASS；使用者明確授權的單表 Editor 分享及權限讀回 PASS。Life Job實際入庫／ACK、DB/UI E2E與排程尚待驗收；不把本機驗證當成上線。

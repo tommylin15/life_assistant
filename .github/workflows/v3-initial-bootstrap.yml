@@ -396,7 +396,7 @@ jobs:
 
   stage-home-readback-once:
     # User-reported staging root JSON 401; diagnostic is read-only.
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[life-stage-home-probe1]')
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[life-stage-home-probe2]')
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -409,8 +409,8 @@ jobs:
             "preview|https://life-assistant-v3-stage-tl15--v3-37299e392f-fkak5lm7.web.app" \
             "staging|https://life-assistant-v3-stage-tl15.web.app" \
             "production|https://gen-lang-client-0593591102.web.app"; do
-            label="\${target%%|*}"
-            origin="\${target#*|}"
+            label="${target%%|*}"
+            origin="${target#*|}"
             for path in / /index.html /login /today /release.txt /auth/me /api/v1/tasks; do
               headers="$(mktemp)"
               body="$(mktemp)"
@@ -421,7 +421,7 @@ jobs:
               if grep -qi '<!doctype html' "$body" && grep -q 'flutter_bootstrap.js' "$body"; then html=YES; fi
               missing_session=NO
               if grep -q '"Missing session"' "$body"; then missing_session=YES; fi
-              echo "site=$label path=$path http=$status content_type=\${ct:-missing} flutter_html=$html missing_session=$missing_session" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "site=$label path=$path http=$status content_type=${ct:-missing} flutter_html=$html missing_session=$missing_session" | tee -a "$GITHUB_STEP_SUMMARY"
               if [[ "$path" == / || "$path" == /index.html || "$path" == /login || "$path" == /today ]]; then
                 if [[ "$status" != 200 || "$html" != YES ]]; then BAD=1; fi
               fi

@@ -207,9 +207,11 @@ async def put_rollout(
     if body.key not in FEATURES:
         raise HTTPException(422, "Unknown feature")
     if body.status == "enabled" and body.key == "events" and body.audience == "all":
-        # The curated feature cannot be released publicly by a flag alone;
-        # only verified production releases may activate it.
-        raise HTTPException(409, "Curated event public rollout requires release gate")
+        # Release engineering must set this non-secret flag only AFTER the
+        # exact production SHA, real connector, OAuth, and DB readback pass.
+        # The admin toggle alone can never launch an unverified new feature.
+        if os.environ.get("LIFE_CURATED_PUBLIC_ROLLOUT_APPROVED") != "1":
+            raise HTTPException(409, "Curated event public rollout requires release gate")
     row = await db.get(FeatureRollout, body.key)
     revision = row.revision if row else 0
     if revision != body.expected_revision:

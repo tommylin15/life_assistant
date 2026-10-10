@@ -21,7 +21,7 @@
 | Staging/production V3 | exact SHA CI, public GHCR digest, candidate, SHA preview pinned rewrites, fixed staging owner Google OAuth, live API/DB/UI and rollback | **NOT VERIFIED** for this release |
 | Legacy resources | read-only inspect residual Cloud Run source Job / Cloud Scheduler triggers; do not delete without explicit confirmation | NOT VERIFIED |
 
-**Release safety**: New feature **events** defaults to owner-only beta. Production rollout to all users is deliberately blocked in the admin mutation until a separate release gate is proven/implemented; a public toggle by itself is insufficient. Do not bypass this lock to claim P0 DONE. Preserve previous live Hosting and Cloud Run traffic if any gate is unknown.
+**Release safety**: New feature **events** defaults to owner-only beta. Production rollout to all users requires the separately controlled non-secret `LIFE_CURATED_PUBLIC_ROLLOUT_APPROVED=1` runtime flag, set **only after** exact-SHA V3, real ChatGPT connector, owner OAuth and database readbacks pass. Without it, the owner/admin public enable operation fails with HTTP 409. The flag is not set by these code changes, and a public toggle by itself is insufficient. Do not bypass this lock to claim P0 DONE. Preserve previous live Hosting and Cloud Run traffic if any gate is unknown.
 
 ## Known incomplete pieces
 - The actual ChatGPT scheduled connector cannot inherit user browser Google OAuth, and current GitHub changes do not inject a production connector secret.

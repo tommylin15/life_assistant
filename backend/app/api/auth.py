@@ -31,6 +31,13 @@ def oauth_redirect_for_request(request: Request) -> str:
     Never derive a redirect from an arbitrary forwarded host: an attacker may
     supply X-Forwarded-Host through an unauthenticated Cloud Run request.
     """
+    # OAuth flow provenance survives Firebase's opaque proxy headers. Only a
+    # successfully verified stage session or a stage-login state may select the
+    # fixed, allowlisted staging callback; never use an arbitrary URL supplied
+    # by a request parameter.
+    session = request.cookies.get(SESSION_COOKIE, "")
+    if session.startswith(("oauth:staging:", "id:staging:")):
+        return STAGING_REDIRECT_URI
     hostname = request.headers.get("host", "").split(":", 1)[0].lower()
     forwarded = request.headers.get("x-forwarded-host", "").strip().lower()
     # Firebase Hosting typically forwards to a Cloud Run *.run.app Host, while
@@ -91,7 +98,12 @@ async def _audit_staging_e2e(
     if not (
         allowed and str(user.get("email", "")).strip().lower() == allowed
         and revision.startswith("life-assistant-api-")
-        and oauth_redirect_for_request(request) == STAGING_REDIRECT_URI
+        and (
+            request.cookies.get(SESSION_COOKIE, "").startswith(
+                ("oauth:staging:", "id:staging:")
+            )
+            or oauth_redirect_for_request(request) == STAGING_REDIRECT_URI
+        )
     ):
         return
     log = await start_execution(
@@ -106,18 +118,32 @@ async def current_user(request: Request) -> dict:
     session = request.cookies.get(SESSION_COOKIE, "")
     if not session.startswith("id:"):
         raise _http_error(401, "Missing session")
-    return await _verify_id_token(session.removeprefix("id:"))
+    token = session.removeprefix("id:")
+    if token.startswith("staging:"):
+        token = token.removeprefix("staging:")
+    return await _verify_id_token(token)
 
 
 @router.get("/login")
 async def login(request: Request):
+    return await _login(request, force_staging=False)
+
+
+@router.get("/staging/login")
+async def staging_login(request: Request):
+    # The route is a fixed choice, not an attacker-provided redirect target.
+    # A production-domain caller cannot receive the staging callback cookie.
+    return await _login(request, force_staging=True)
+
+
+async def _login(request: Request, *, force_staging: bool):
     if not settings.google_client_id:
         raise _http_error(503, "Google OAuth client ID is not configured")
 
     state = secrets.token_urlsafe(32)
     params = {
         "client_id": settings.google_client_id,
-        "redirect_uri": oauth_redirect_for_request(request),
+        "redirect_uri": STAGING_REDIRECT_URI if force_staging else oauth_redirect_for_request(request),
         "response_type": "code",
         "scope": SCOPES,
         "state": state,
@@ -125,7 +151,7 @@ async def login(request: Request):
     response = RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}")
     response.set_cookie(
         SESSION_COOKIE,
-        f"oauth:{state}",
+        f"oauth:staging:{state}" if force_staging else f"oauth:{state}",
         max_age=600,
         httponly=True,
         secure=True,
@@ -177,18 +203,20 @@ async def callback(
 ):
     session = request.cookies.get(SESSION_COOKIE, "")
     if session.startswith("oauth:"):
-        expected_state = session.removeprefix("oauth:")
+        is_staging = session.startswith("oauth:staging:")
+        expected_state = session.removeprefix("oauth:staging:" if is_staging else "oauth:")
         if not expected_state or not secrets.compare_digest(state, expected_state):
             raise _http_error(400, "Invalid OAuth state")
 
-        id_token, user = await _complete_login(code, oauth_redirect_for_request(request))
+        callback_uri = STAGING_REDIRECT_URI if is_staging else oauth_redirect_for_request(request)
+        id_token, user = await _complete_login(code, callback_uri)
         await _audit_staging_e2e(db, request, user, "staging_google_callback")
         max_age = max(1, min(3600, int(user["exp"]) - int(time.time())))
         frontend_url = frontend_for_request(request) + "/"
         response = RedirectResponse(frontend_url)
         response.set_cookie(
             SESSION_COOKIE,
-            f"id:{id_token}",
+            f"id:staging:{id_token}" if is_staging else f"id:{id_token}",
             max_age=max_age,
             httponly=True,
             secure=True,

@@ -13,9 +13,16 @@ const _sage = Color(0xFF7F9278);
 const _sageSoft = Color(0xFFDDE6D8);
 const _apricotSoft = Color(0xFFF4DFCE);
 
-String get _loginUrl => _configuredAuthBase.isEmpty
-    ? '/auth/login'
-    : '$_configuredAuthBase/auth/login';
+String get _loginUrl {
+  // Firebase Hosting can obscure the original site Host in Cloud Run.
+  // Use an explicit, fixed staging OAuth entrypoint for the fixed staging UI.
+  if (Uri.base.host == 'life-assistant-v3-stage-tl15.web.app') {
+    return '/auth/staging/login';
+  }
+  return _configuredAuthBase.isEmpty
+      ? '/auth/login'
+      : '$_configuredAuthBase/auth/login';
+}
 
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});

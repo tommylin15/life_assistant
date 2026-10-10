@@ -29,6 +29,7 @@ TOKEN="$(gcloud auth print-access-token)"
 ATTEMPTED=0
 BASELINE=""
 PREVIEW_VERSION=""
+PHASE="preflight"
 
 hosting_get() {
   curl --fail --silent --show-error --retry 2 \
@@ -68,12 +69,19 @@ verify_live() {
   live_snapshot "${WORK}/stage-after-releases.json"
   local current
   current="$(release_version "${WORK}/stage-after-releases.json" live)"
-  [[ "$current" == "$expected" ]] || return 1
+  if [[ "$current" != "$expected" ]]; then
+    echo "staging_live_readback=FAIL layer=hosting_version" >&2
+    return 1
+  fi
   version_get "$current" "${WORK}/stage-after-version.json"
   snapshot_cloud "${WORK}/cloud-after.json"
   local visible
   visible="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "${STAGE_URL}/release.txt")"
-  [[ "$visible" == "$expected_sha" ]] || return 1
+  if [[ "$visible" != "$expected_sha" ]]; then
+    echo "staging_live_readback=RETRY layer=static_sha" >&2
+    return 1
+  fi
+  echo "staging_live_readback=PASS layer=hosting_version_and_static_sha"
   python - "${WORK}/stage-after-version.json" "${WORK}/cloud-after.json" "${expected_revision}" <<'PY'
 import json,sys
 sys.path.insert(0, ".github/scripts")
@@ -83,7 +91,28 @@ cloud=json.load(open(sys.argv[2]))
 routes=pinned_routes(version, cloud, sys.argv[3] if sys.argv[3] else None)
 assert set(routes)=={"/api/**","/auth/**"}
 PY
-  [[ "$(curl -sS -o /dev/null -w '%{http_code}' "${STAGE_URL}/api/v1/tasks")" == 401 ]]
+  local api_http
+  api_http="$(curl -sS -o /dev/null -w '%{http_code}' "${STAGE_URL}/api/v1/tasks" || true)"
+  if [[ "$api_http" != 401 ]]; then
+    echo "staging_live_readback=FAIL layer=api_401 status=$api_http" >&2
+    return 1
+  fi
+  echo "staging_live_readback=PASS layer=pins_and_api_401"
+}
+# Firebase live REST version may update before the CDN serves the new SHA.
+# Retry boundedly without relaxing exact SHA, pinned rewrite or API auth gates.
+verify_live_bounded() {
+  local n
+  for ((n=1;n<=24;n++)); do
+    if verify_live "$@"; then
+      echo "staging_live_ready=PASS attempt=$n"
+      return 0
+    fi
+    echo "staging_live_ready=RETRY attempt=$n" >&2
+    if ((n<24)); then sleep 5; fi
+  done
+  echo "staging_live_ready=FAIL bounded_24_attempts" >&2
+  return 1
 }
 restore_stage() {
   live_snapshot "${WORK}/rollback-before.json" || return 1
@@ -100,12 +129,15 @@ restore_stage() {
   hosting_post "$BASELINE" "${WORK}/rollback-response.json" || return 1
   local previous_sha
   previous_sha="$(cat "${WORK}/prior-live-sha")"
-  verify_live "$BASELINE" "$previous_sha" "" || return 1
+  verify_live_bounded "$BASELINE" "$previous_sha" "" || return 1
   echo "staging_rollback=PASS restored_version=${BASELINE}"
 }
 cleanup() {
   local status=$?
   trap - EXIT
+  if ((status != 0)); then
+    echo "staging_release=FAIL phase=${PHASE}" >&2
+  fi
   if ((status != 0)) && ((ATTEMPTED == 1)); then
     if ! restore_stage; then
       echo "staging_rollback=FAIL manual_review_required" >&2
@@ -153,17 +185,29 @@ fi
 # on THIS exact candidate revision, recorded after this timestamp, may approve it.
 CANARY_START_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ATTEMPTED=1
+PHASE="staging_version_publish"
 hosting_post "$PREVIEW_VERSION" "${WORK}/staging-release.json"
 python - "${WORK}/staging-release.json" "$PREVIEW_VERSION" <<'PY'
 import json,sys
 data=json.load(open(sys.argv[1]))
 assert data.get("version",{}).get("name")==sys.argv[2], "staging release version mismatch"
 PY
-verify_live "$PREVIEW_VERSION" "$RELEASE_SHA" "$CANDIDATE_REVISION"
+PHASE="staging_live_readback"
+verify_live_bounded "$PREVIEW_VERSION" "$RELEASE_SHA" "$CANDIDATE_REVISION"
+PHASE="staging_google_redirect"
 curl -sS -D "${WORK}/stage-oauth-headers" -o /dev/null "${STAGE_URL}/auth/login"
-grep -Eiq '^location: https://accounts[.]google[.]com/o/oauth2/' "${WORK}/stage-oauth-headers"
-grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' \
-  "${WORK}/stage-oauth-headers"
+if ! grep -Eiq '^location: https://accounts[.]google[.]com/o/oauth2/' "${WORK}/stage-oauth-headers"; then
+  echo "staging_google_redirect=FAIL not_google" >&2
+  exit 1
+fi
+if ! grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' \
+  "${WORK}/stage-oauth-headers"; then
+  echo "staging_google_redirect=FAIL wrong_callback" >&2
+  exit 1
+fi
+echo "staging_google_redirect=PASS fixed_staging_callback"
+PHASE="owner_google_auth"
+echo "staging_oauth_canary=ACTIVE url=${STAGE_URL}/auth/login" | tee -a "$GITHUB_STEP_SUMMARY"
 
 # This job reads only authenticated owner callback + session evidence. No fake
 # login and no bypass if the owner cannot complete Google OAuth on staging.
@@ -173,6 +217,7 @@ grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth
   --args="-m,scripts.verify_staging_google_e2e,$CANDIDATE_REVISION,$CANARY_START_UTC" \
   --task-timeout 10m --wait --quiet
 
+PHASE="production_traffic_unchanged"
 # No production traffic changed during staged live testing.
 snapshot_cloud "${WORK}/cloud-final.json"
 python - "${WORK}/cloud-before.json" "${WORK}/cloud-final.json" <<'PY'

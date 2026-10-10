@@ -153,6 +153,8 @@ V2 Cloud Build 全文已歸檔：[archive/ci_cd_v2_policy.md](archive/ci_cd_v2_p
 
 - **最新交接優先順序：以實際「交接資料／交接規格」為主，回頭調整 Life DB 與 UI，不要求探索表或正式探索文件迎合 Life。** 來源 SHA256 版本由探索端提供；Life 驗證格式、業務 payload、資料庫穩定鍵與同版本內容一致性。回執採 Sheet 的 CREATED／UPDATED／UNCHANGED 裸值；ACKED 也須由 Life 核對 DB，不能用 Sheet 狀態抑制新版。
 
+- **2026-10-10 最新探索交接放寬規則（取代全面核證才能 READY 的舊門檻）：** 產品目的為**提前通知值得注意的活動、開報及限量優惠**，不是保證現在可報名或仍有名額。精選池 selected 且具有穩定 event_key、可回查的官方／主辦授權／可靠來源 URL、可識別活動身分與有據的活動日或開報節點時，原則上可送入交接 Sheet（不限五星）；「五星潛力待核」、名額未知、資格／費用／時間細節未齊，不再一律封鎖。**重要性星等與核證程度分開**，在 evidence_summary 明記「待核／資訊衝突／費用未知」，Life UI 如實顯示並連回來源；不假造免費、福利價值、零費用、日期、庫存與報名成功。無法識別、無可追溯來源、確認取消／明確過期的活動不交接；衝突的精確開報時間不任選其一，而是保留有據活動日期／文字預告並將時點欄留空。保留 event_key/content_hash 去重與 DB commit 後 ACK。若 Life 必填欄位與這個缺值政策衝突，應調整 Life importer，而非補造探索資料。詳見 [交接契約](curated_sheet_job_ingestion.md)。
+
 - **最新開發與權限安排：** 新交接表、穩定去重、活動呈現、限時機會／活動探索兩入口、個人動作先同批完成開發，再與後台及個人首頁一起做正式上線驗收。AI 管理補強暫緩，AI 管理相關能力限制 admin；這項限制不適用於活動新功能。活動是否開放、開放對象由 admin 在既有後台設定，不另設程式外的公開開放核准旗標。
 
 - 現況：[CURRENT_STATE.md](CURRENT_STATE.md)；產品與權限：[CURRENT_PRODUCT_ARCHITECTURE.md](CURRENT_PRODUCT_ARCHITECTURE.md)；執行順序：[phase1_delivery_order.md](phase1_delivery_order.md)。現行程式與 runtime 永遠優先於文件的歷史快照。

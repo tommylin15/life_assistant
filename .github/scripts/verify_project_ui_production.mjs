@@ -76,6 +76,18 @@ async function installApiMocks(page) {
     const { pathname } = new URL(request.url());
     observed.requestTrace.push({ method, pathname });
 
+    if (pathname === '/api/v1/me/ui-preferences' && method === 'GET') {
+      return fulfillJson(route, 200, {
+        revision: 0, nav_mode: 'auto', pinned: ['tasks', 'calendar', 'projects'],
+        more_order: [], home_cards: [],
+      });
+    }
+    if (pathname === '/api/v1/ui/features' && method === 'GET') {
+      return fulfillJson(route, 200, {
+        features: ['today', 'tasks', 'calendar', 'projects'].map((key) => ({key, available: true})),
+      });
+    }
+
     if (pathname === '/api/v1/projects' && method === 'GET') {
       return fulfillJson(route, 200, projects);
     }

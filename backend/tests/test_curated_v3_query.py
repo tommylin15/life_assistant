@@ -9,7 +9,7 @@ from app.api.curated import (
     CuratedActivity, _activity_filters, _group_key_value,
     _group_key, REGIONS, TAIPEI,
 )
-from app.api.curated_actions import ActionWrite, _task_due, calendar_payload
+from app.api.curated_actions import ActionWrite, _task_due, calendar_payload, calendar_unchanged
 
 
 class CuratedV3UnitTest(unittest.TestCase):
@@ -67,6 +67,24 @@ class CuratedV3UnitTest(unittest.TestCase):
         self.assertEqual(result["reminders"], {"useDefault": False, "overrides": []})
         self.assertEqual(result["location"], "台北市")
         self.assertTrue(result["description"].startswith("活動網址：https://events.example.com/register"))
+
+    def test_calendar_edit_protection_checks_user_editable_fields(self):
+        baseline = {
+            "summary": "活動日期參考：測試",
+            "description": "活動網址：https://events.example.com",
+            "location": "台北",
+            "start": {"date": "2026-11-10"},
+            "end": {"date": "2026-11-11"},
+        }
+        self.assertTrue(calendar_unchanged(
+            {**baseline, "start": {"date": "2026-11-10", "timeZone": "Asia/Taipei"}},
+            baseline,
+        ))
+        self.assertFalse(calendar_unchanged({**baseline, "summary": "我的編輯"}, baseline))
+        self.assertFalse(calendar_unchanged({**baseline, "location": "另一個地址"}, baseline))
+        self.assertFalse(calendar_unchanged(
+            {**baseline, "start": {"date": "2026-11-12"}}, baseline
+        ))
 
     def test_task_due_requires_user_choice(self):
         item = SimpleNamespace(registration_deadline=datetime(2026, 12, 1, tzinfo=timezone.utc),

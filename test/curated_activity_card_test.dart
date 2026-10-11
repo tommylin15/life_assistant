@@ -73,7 +73,7 @@ void main() {
     await tester.pumpWidget(ProviderScope(overrides: [
       platformApiProvider.overrideWithValue(api),
       sessionIdentityProvider.overrideWithValue('batch@tests.local'),
-    ], child: MaterialApp(home: Scaffold(body: ListView(children: [
+    ], child: MaterialApp(home: Scaffold(body: SingleChildScrollView(child: Column(children: [
       CuratedActivityCard(
         actionIds: sharedIds,
         items: [{'identity_key': first, 'title': '親子活動',
@@ -82,7 +82,7 @@ void main() {
         actionIds: sharedIds,
         items: [{'identity_key': second, 'title': '城市漫遊',
           'handoff_details': const {}, 'original_url': 'https://example.org/b'}]),
-    ])))));
+    ]))))));
     await tester.pumpAndSettle();
     expect(api.reads.where((path) => path.contains('/actions?activity_ids=')).length, 1);
   });

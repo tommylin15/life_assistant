@@ -437,7 +437,15 @@ async def run_acceptance() -> None:
             _expect(response, 200, "Successful enrichment")
             enriched = _json_object(response, "Successful enrichment")
             if enriched.get("status") != "succeeded" or enriched.get("cache_hit") is not False:
-                raise AssertionError("First consented enrichment was not a fresh success")
+                # Bounded, non-sensitive acceptance metadata; the runtime's
+                # Cloud Logging view may not be granted to release deployer.
+                raise AssertionError(
+                    "First consented enrichment was not a fresh success: "
+                    f"status={enriched.get('status')!r} "
+                    f"error_code={enriched.get('error_code')!r} "
+                    f"cache_hit={enriched.get('cache_hit')!r} "
+                    f"tag_calls={provider.tag_calls} note_calls={provider.note_calls}"
+                )
             if provider.tag_calls != 1 or provider.note_calls != 1:
                 raise AssertionError("Provider stages were not called exactly once")
             suggestions = enriched.get("note_suggestions") or []

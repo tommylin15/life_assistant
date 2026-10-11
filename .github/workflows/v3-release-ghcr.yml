@@ -9,7 +9,7 @@ on:
         default: false
         type: boolean
       publish_staging:
-        description: "Publish the pinned Preview to fixed staging live; OAuth acceptance is not a release gate"
+        description: "Publish pinned Preview to staging with automated OAuth redirect checks; no manual Owner login"
         required: true
         default: false
         type: boolean
@@ -416,7 +416,7 @@ jobs:
             --to-revisions="$CANDIDATE_REVISION=100" --quiet
           echo "promotion=ATTEMPTED revision=$CANDIDATE_REVISION" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Post-promotion live health, OAuth redirect, PostgreSQL and access gates
+      - name: Post-promotion live health, PostgreSQL and access gates
         if: ${{ inputs.promote }}
         shell: bash
         run: |

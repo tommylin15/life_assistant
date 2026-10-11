@@ -139,12 +139,28 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
                 }), child: const Text('清除篩選')),
               ]));
           }
-          return Column(children: [
-            for (final group in groups)
+          Widget activityCard(List<Map<String, dynamic>> group) =>
               CuratedActivityCard(
                 key: ValueKey('group-${group.first['parent_event_key'] ?? group.first['handoff_event_key'] ?? group.first['identity_key']}'),
-                items: group, entry: widget.entry, onChanged: _refreshPages),
-          ]);
+                items: group, entry: widget.entry, onChanged: _refreshPages);
+          // One comfortable mobile column; two independently-sized desktop
+          // columns (no fixed-height GridView that clips expanded offers).
+          return LayoutBuilder(builder: (context, constraints) {
+            if (constraints.maxWidth < 840) {
+              return Column(children: [
+                for (final group in groups) activityCard(group),
+              ]);
+            }
+            return Column(children: [
+              for (var i = 0; i < groups.length; i += 2)
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(child: activityCard(groups[i])),
+                  const SizedBox(width: 12),
+                  Expanded(child: i + 1 < groups.length
+                      ? activityCard(groups[i + 1]) : const SizedBox.shrink()),
+                ]),
+            ]);
+          });
         },
       ));
     }

@@ -15,7 +15,7 @@
 | P1 | 活動建立原有 Task、確認是否設報名時間／網址可點 | SOURCE IMPLEMENTED；新增 Task/DB/readback 跨功能實測 NOT VERIFIED |
 | P1 | Google Calendar 全天 transparent 日期標記、Life 日曆開網址 | SOURCE IMPLEMENTED；真實 OAuth／Google & Life 雙向 readback NOT VERIFIED |
 | UI | 三種風格與亮暗切換、六功能視覺辨識／首頁／筆記卡片 | SOURCE IMPLEMENTED（基礎與局部卡片）；海報完整插畫和 18 視圖視覺驗收 PARTIAL |
-| Release | 合併的單次 CI／staging／驗收／發布 | 最新 SHA 必須重跑，本輪未有最終合格證據 |
+| Release | 合併的單次 CI／staging／驗收／發布 | 最新程式再啟動完整 CI；先前 #886 CI PASS 屬於舊 SHA，最新版本 staging/owner OAuth/runtime NOT VERIFIED |
 
 ## B. 必要整合測試／驗收
 
@@ -30,3 +30,5 @@
 - CI/CD V3：每次 main SHA 的完整測試、GHCR digest、候選／固定 staging exact-SHA、Google owner OAuth、API/DB/Flutter 真實 readback 獨立驗收；既有固定 staging OAuth 曾對舊 SHA PASS，不可當成本 SHA 或 UX V3 PASS。[CURRENT_STATE](CURRENT_STATE.md)
 - Admin rollout／個人導覽與首頁卡片維持現有模式；Drive AI admin provider 補強仍 Deferred，不阻擋活動 UX。
 - **持續取消**：Life 端來源 crawler、舊 Excel source scanner、Queue／claim／lease、第二輪 AI、重啟舊來源 14 天驗收、為本期新增 AI 向量搜尋／GPS／推播／代搶票。舊 DB/migration/API 留相容，不做破壞性刪除。
+
+**2026-10-11 最新整合補強：** 已加入三風格 × 四寬度 × 六功能的基礎 Widget 測試、活動桌面雙欄、共享 action readback 與跨入口刷新、可編輯待辦標題安全驗證，以及取消／過期報名的歷史收藏呈現。完整真實畫面、連動 Google OAuth、staging SHA 均待新 SHA 驗收。不得把先前 staging #38 或任何舊 SHA 的結果當作本批 PASS。

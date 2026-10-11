@@ -4,6 +4,7 @@ import 'browser_navigation.dart';
 import 'platform_api.dart';
 import 'session_identity.dart';
 import 'activity_link.dart';
+import 'visual_system.dart';
 
 final curatedActionsProvider = FutureProvider<Map<String, dynamic>>((ref) {
   if (ref.watch(sessionIdentityProvider) == null) {
@@ -140,12 +141,24 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
     final item = main;
     final theme = Theme.of(context);
     final urgent = widget.entry == 'opportunities';
-    final accent = urgent ? const Color(0xFFD56D70) : const Color(0xFFE09A4B);
+    final visualStyle = ref.watch(lifeAppearanceProvider).style;
+    final accent = switch (visualStyle) {
+      LifeVisualStyle.warm => urgent ? const Color(0xFFC77775) : const Color(0xFFB68B52),
+      LifeVisualStyle.fresh => urgent ? const Color(0xFFF07665) : const Color(0xFF159E9A),
+      LifeVisualStyle.focus => urgent ? const Color(0xFF777C9A) : const Color(0xFF527D8D),
+    };
     final d = item['handoff_details'] as Map? ?? const {};
     final saved = savedOverride ?? widget.items.any((e) => e['saved'] == true);
     final ids = widget.items.map((e) => e['identity_key']).join(',');
     final actions = ref.watch(curatedPageActionsProvider(ids));
     final values = (actions.asData?.value['items'] as List?) ?? const [];
+    final nowTaipei = DateTime.now().toUtc().add(const Duration(hours: 8));
+    final today = '${nowTaipei.year}-${nowTaipei.month.toString().padLeft(2, '0')}-${nowTaipei.day.toString().padLeft(2, '0')}';
+    final endDate = item['ends_on']?.toString();
+    final ended = endDate != null && DateTime.tryParse(endDate) != null &&
+        endDate.substring(0, 10).compareTo(today) < 0;
+    final full = urgent && item['registration_status'] == 'full';
+    final closed = urgent && item['registration_status'] == 'closed';
     final importantDate = urgent
       ? (d['registration_open_at_tpe'] ?? d['registration_deadline_at_tpe'] ??
         item['registration_deadline'])
@@ -181,6 +194,10 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
                 _EventChip(Icons.place_outlined, item['city']?.toString() ?? '地區待確認'),
                 if (item['fee_kind'] == 'free')
                   const _EventChip(Icons.sell_outlined, '免費'),
+                if (ended || closed)
+                  const _EventChip(Icons.event_busy_outlined, '已結束／截止'),
+                if (full)
+                  const _EventChip(Icons.info_outline, '已額滿'),
                 if (widget.items.length > 1)
                   _EventChip(Icons.layers_outlined, '${widget.items.length} 個場次'),
               ]),

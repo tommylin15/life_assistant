@@ -91,6 +91,26 @@ void main() {
     expect(api.reads.where((path) => path.contains('/actions?activity_ids=')).length, 2);
   });
 
+  testWidgets('saved opportunity distinguishes opening, deadline and expiration', (tester) async {
+    final api = _Api();
+    await tester.pumpWidget(ProviderScope(overrides: [
+      platformApiProvider.overrideWithValue(api),
+      sessionIdentityProvider.overrideWithValue('historic@tests.local'),
+    ], child: MaterialApp(home: Scaffold(body: SingleChildScrollView(
+      child: CuratedActivityCard(entry: 'opportunities', items: const [
+        {'identity_key': 'deadline-historic', 'title': '已過報名截止日期',
+         'starts_on': '2099-12-31', 'saved': true,
+         'handoff_details': {'registration_open_at_tpe': '2001-01-01',
+           'registration_deadline_at_tpe': '2001-01-07'},
+         'original_url': 'https://example.org/historic'},
+      ]),
+    )))));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('開報：2001-01-01'), findsOneWidget);
+    expect(find.textContaining('截止：2001-01-07'), findsOneWidget);
+    expect(find.text('已結束／截止'), findsOneWidget);
+  });
+
   testWidgets('V3 card hides stars and toggles main bookmark explicitly', (tester) async {
     final api = _Api();
     await tester.pumpWidget(ProviderScope(overrides: [

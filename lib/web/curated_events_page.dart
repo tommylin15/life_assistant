@@ -5,154 +5,258 @@ import 'session_identity.dart';
 import 'curated_activity_card.dart';
 import 'visual_system.dart';
 
-const _pageSize = 50;
-final curatedListProvider = FutureProvider.family<Map<String, dynamic>, String>(
-  (ref, query) {
-    if (ref.watch(sessionIdentityProvider) == null) throw StateError('Authentication required');
-    return ref.read(platformApiProvider).get('/free-events/curated?$query');
-  },
-);
+final curatedListProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, query) {
+  if (ref.watch(sessionIdentityProvider) == null) {
+    throw StateError('Authentication required');
+  }
+  return ref.read(platformApiProvider).get('/free-events/curated?$query');
+});
+
+final curatedOptionsProvider = FutureProvider<Map<String, dynamic>>((ref) {
+  if (ref.watch(sessionIdentityProvider) == null) {
+    throw StateError('Authentication required');
+  }
+  return ref.read(platformApiProvider).get('/free-events/curated/filters');
+});
 
 class CuratedEventsPage extends ConsumerStatefulWidget {
-  const CuratedEventsPage({super.key, this.entry = 'all'});
+  const CuratedEventsPage({super.key, this.entry = 'explore'});
   final String entry;
   @override
   ConsumerState<CuratedEventsPage> createState() => _CuratedEventsPageState();
 }
 
 class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
+  final search = TextEditingController();
+  String keyword = '';
+  String quick = '';
+  String region = '';
   String city = '';
   String category = '';
-  DateTime? startsFrom;
-  int stars = 1;
-  int offset = 0;
+  String fee = '';
+  DateTime? from;
+  bool savedOnly = false;
+  List<int> offsets = [0];
 
-  String get _query {
+  bool get opportunity => widget.entry == 'opportunities';
+
+  static const opportunityChips = {
+    'opening_soon': '即將開報', 'opening_today': '今天開報',
+    'closing_soon': '3 天內截止', 'limited': '限額優惠',
+    'unknown_time': '時間待公布', 'latest': '最新收錄',
+  };
+  static const explorationChips = {
+    'ongoing': '正在進行', 'weekend': '本週末',
+    'next_7': '7 天內開始', 'next_30': '30 天內開始',
+    'free': '免費活動', 'latest': '最新收錄',
+  };
+  static const regions = {
+    '': '全台', 'north': '北部', 'central': '中部',
+    'south': '南部', 'east': '東部', 'islands': '離島',
+  };
+
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
+  void filter(VoidCallback change) => setState(() {
+    change();
+    offsets = [0];
+  });
+
+  String _query(int offset) {
     final params = <String, String>{
-      'limit': '$_pageSize', 'offset': '$offset', 'min_importance': '$stars', 'entry': widget.entry,
+      'entry': opportunity ? 'opportunities' : 'explore',
+      'limit': offset == 0 ? '5' : '10',
+      'offset': '$offset',
     };
+    if (keyword.isNotEmpty) params['keyword'] = keyword;
+    if (quick.isNotEmpty) params['quick'] = quick;
+    if (region.isNotEmpty) params['region'] = region;
     if (city.isNotEmpty) params['city'] = city;
     if (category.isNotEmpty) params['category'] = category;
-    if (startsFrom != null) {
-      final d = startsFrom!;
-      params['starts_from'] =
-          '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    if (fee.isNotEmpty) params['fee_kind'] = fee;
+    if (savedOnly) params['saved_only'] = 'true';
+    if (from != null) {
+      final d = from!;
+      params['starts_from'] = '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
     }
     return Uri(queryParameters: params).query;
   }
 
-  void _filter(VoidCallback change) {
-    setState(() {
-      change();
-      offset = 0;
-    });
+  void _refreshPages() {
+    for (final offset in offsets) {
+      ref.invalidate(curatedListProvider(_query(offset)));
+    }
+    ref.invalidate(curatedPageActionsProvider); // family cache is per visible event
   }
 
   @override
   Widget build(BuildContext context) {
-    final query = _query;
-    final result = ref.watch(curatedListProvider(query));
+    final chips = opportunity ? opportunityChips : explorationChips;
+    final optionState = ref.watch(curatedOptionsProvider);
+    final options = optionState.asData?.value ?? const {};
+    final wide = MediaQuery.sizeOf(context).width >= 920;
+    final pages = <Widget>[];
+    var hasMore = false;
+    int? nextOffset;
+    var loadingLast = false;
+    for (final offset in offsets) {
+      final key = _query(offset);
+      final result = ref.watch(curatedListProvider(key));
+      final last = offset == offsets.last;
+      pages.add(result.when(
+        loading: () {
+          if (last) loadingLast = true;
+          return const Padding(padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()));
+        },
+        error: (_, __) => Padding(padding: const EdgeInsets.all(12),
+          child: Row(children: [
+            const Expanded(child: Text('活動載入失敗，請檢查連線後重試。')),
+            TextButton(onPressed: () => ref.invalidate(curatedListProvider(key)),
+              child: const Text('重試')),
+          ])),
+        data: (data) {
+          if (last) {
+            hasMore = data['has_more'] == true;
+            nextOffset = int.tryParse(data['next_cursor']?.toString() ?? '');
+          }
+          final items = (data['items'] as List? ?? const [])
+              .whereType<Map<String, dynamic>>().toList();
+          final groups = groupActivities(items);
+          if (groups.isEmpty && offset == 0) {
+            return Padding(padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(children: [
+                const Icon(Icons.search_off_outlined, size: 44),
+                const SizedBox(height: 8),
+                const Text('目前沒有符合條件的活動'),
+                TextButton(onPressed: () => filter(() {
+                  keyword = ''; search.clear(); quick = ''; region = '';
+                  city = ''; category = ''; fee = ''; from = null; savedOnly = false;
+                }), child: const Text('清除篩選')),
+              ]));
+          }
+          return Column(children: [
+            for (final group in groups)
+              CuratedActivityCard(
+                key: ValueKey('group-${group.first['parent_event_key'] ?? group.first['handoff_event_key'] ?? group.first['identity_key']}'),
+                items: group, entry: widget.entry, onChanged: _refreshPages),
+          ]);
+        },
+      ));
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.entry == 'opportunities' ? '限時機會' : widget.entry == 'explore' ? '活動探索' : '活動精選池'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: '重新整理',
-            onPressed: () => ref.invalidate(curatedListProvider(query)),
-          ),
-        ],
-      ),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
-        LifeFeatureHeader(feature: widget.entry == 'opportunities'
+      appBar: AppBar(title: Text(opportunity ? '限時機會' : '活動探索'),
+        actions: [IconButton(tooltip: '重新整理', onPressed: _refreshPages,
+          icon: const Icon(Icons.refresh))]),
+      body: Center(child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1160),
+        child: ListView(padding: const EdgeInsets.all(16), children: [
+          LifeFeatureHeader(feature: opportunity
             ? LifeVisualFeature.opportunities : LifeVisualFeature.explore),
-        const SizedBox(height: 12),
-        const Text('由 ChatGPT 精選。重要性、價值及報名資訊仍以活動原站為準。'),
-        const SizedBox(height: 12),
-        TextField(
-          decoration: const InputDecoration(
-            labelText: '地區（完整名稱，按搜尋送出）',
-            prefixIcon: Icon(Icons.location_on_outlined),
-          ),
-          textInputAction: TextInputAction.search,
-          onSubmitted: (value) => _filter(() => city = value.trim()),
-        ),
-        TextField(
-          decoration: const InputDecoration(
-            labelText: '類別（完整名稱，按搜尋送出）',
-            prefixIcon: Icon(Icons.category_outlined),
-          ),
-          textInputAction: TextInputAction.search,
-          onSubmitted: (value) => _filter(() => category = value.trim()),
-        ),
-        DropdownButtonFormField<int>(
-          value: stars,
-          decoration: const InputDecoration(labelText: '最低重要性'),
-          items: [1, 2, 3, 4, 5].map((s) =>
-              DropdownMenuItem(value: s, child: Text('$s 星以上'))).toList(),
-          onChanged: (value) => _filter(() => stars = value ?? 1),
-        ),
-        const SizedBox(height: 8),
-        Row(children: [
-          TextButton.icon(
-            icon: const Icon(Icons.date_range),
-            label: Text(startsFrom == null
-                ? '選擇開始日期' : '開始日期：${startsFrom!.year}/${startsFrom!.month}/${startsFrom!.day}'),
-            onPressed: () async {
-              final now = DateTime.now();
-              final selected = await showDatePicker(
-                context: context,
-                initialDate: startsFrom ?? now,
-                firstDate: DateTime(2000),
-                lastDate: DateTime(2100),
-              );
-              if (selected != null && mounted) {
-                _filter(() => startsFrom = selected);
-              }
-            },
-          ),
-          if (startsFrom != null)
-            IconButton(
-              icon: const Icon(Icons.clear),
-              tooltip: '清除日期',
-              onPressed: () => _filter(() => startsFrom = null),
-            ),
-        ]),
-        const SizedBox(height: 12),
-        result.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, __) => const ListTile(
-            title: Text('活動資料暫時無法讀取'),
-            subtitle: Text('可能尚未開放此功能，或連線已中斷。請重新整理。'),
-          ),
-          data: (json) {
-            final items = (json['items'] as List?)?.cast<Map<String, dynamic>>() ??
-                <Map<String, dynamic>>[];
-            return Column(children: [
-              if (items.isEmpty) const ListTile(
-                title: Text('目前沒有符合條件的精選活動'),
-                subtitle: Text('尚未匯入或篩選條件沒有符合結果。未知資料不會偽裝成已驗證。'),
-              ),
-              for (final group in groupActivities(items))
-                CuratedActivityCard(items: group),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                TextButton(
-                  onPressed: offset == 0 ? null :
-                      () => setState(() => offset -= _pageSize),
-                  child: const Text('上一頁'),
+          const SizedBox(height: 12),
+          const Text('活動與報名資訊以原站為準；收藏不代表已報名。'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: search,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              hintText: '搜尋標題、主辦、地點、活動內容',
+              suffixIcon: IconButton(
+                tooltip: '搜尋',
+                onPressed: () => filter(() => keyword = search.text.trim()),
+                icon: const Icon(Icons.arrow_forward)),
+              border: const OutlineInputBorder()),
+            onSubmitted: (v) => filter(() => keyword = v.trim())),
+          const SizedBox(height: 12),
+          Wrap(spacing: 7, runSpacing: 8, children: [
+            ChoiceChip(label: const Text('全部'),
+              selected: !savedOnly,
+              onSelected: (_) => filter(() => savedOnly = false)),
+            ChoiceChip(label: const Text('已收藏'),
+              avatar: const Icon(Icons.bookmark_outline, size: 17),
+              selected: savedOnly,
+              onSelected: (_) => filter(() => savedOnly = true)),
+          ]),
+          const SizedBox(height: 8),
+          SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+            for (final entry in chips.entries)
+              Padding(padding: const EdgeInsets.only(right: 7),
+                child: ChoiceChip(label: Text(entry.value),
+                  selected: quick == entry.key,
+                  onSelected: (on) => filter(() => quick = on ? entry.key : ''))),
+          ])),
+          const SizedBox(height: 12),
+          ExpansionTile(
+            title: const Text('更多篩選'),
+            leading: const Icon(Icons.tune),
+            children: [
+              Wrap(spacing: 10, runSpacing: 10, children: [
+                DropdownButton<String>(
+                  value: region, items: [
+                    for (final e in regions.entries)
+                      DropdownMenuItem(value: e.key, child: Text(e.value))],
+                  onChanged: (v) => filter(() => region = v ?? ''),
                 ),
-                Text('第 ${offset ~/ _pageSize + 1} 頁'),
-                TextButton(
-                  onPressed: (json['returned'] as num? ?? 0) < _pageSize ? null :
-                      () => setState(() => offset += _pageSize),
-                  child: const Text('下一頁'),
+                DropdownButton<String>(
+                  value: city,
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('全部縣市')),
+                    for (final c in (options['cities'] as List? ?? const []))
+                      if (c is String && c.isNotEmpty)
+                        DropdownMenuItem(value: c, child: Text(c)),
+                  ],
+                  onChanged: (v) => filter(() => city = v ?? ''),
                 ),
+                DropdownButton<String>(
+                  value: category,
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('全部類別')),
+                    for (final c in (options['categories'] as List? ?? const []))
+                      if (c is String && c.isNotEmpty)
+                        DropdownMenuItem(value: c, child: Text(c)),
+                  ],
+                  onChanged: (v) => filter(() => category = v ?? ''),
+                ),
+                DropdownButton<String>(
+                  value: fee,
+                  items: const [
+                    DropdownMenuItem(value: '', child: Text('不限費用')),
+                    DropdownMenuItem(value: 'free', child: Text('免費')),
+                    DropdownMenuItem(value: 'paid', child: Text('付費')),
+                    DropdownMenuItem(value: 'conditional_free', child: Text('條件免費')),
+                    DropdownMenuItem(value: 'unknown', child: Text('費用未知')),
+                  ],
+                  onChanged: (v) => filter(() => fee = v ?? ''),
+                ),
+                OutlinedButton.icon(icon: const Icon(Icons.event),
+                  label: Text(from == null ? '活動開始日期' :
+                    '${from!.year}/${from!.month}/${from!.day}'),
+                  onPressed: () async {
+                    final picked = await showDatePicker(context: context,
+                      initialDate: from ?? DateTime.now(),
+                      firstDate: DateTime(2000), lastDate: DateTime(2100));
+                    if (picked != null) filter(() => from = picked);
+                  }),
               ]),
-            ]);
-          },
-        ),
-      ]),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...pages,
+          if (loadingLast) const SizedBox(height: 12),
+          if (hasMore && nextOffset != null)
+            Center(child: OutlinedButton.icon(
+              key: const ValueKey('curated-load-more'),
+              onPressed: () => setState(() => offsets.add(nextOffset!)),
+              icon: const Icon(Icons.expand_more),
+              label: const Text('再看 10 筆'))),
+        ]),
+      )),
     );
   }
-
 }

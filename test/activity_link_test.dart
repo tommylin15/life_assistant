@@ -5,6 +5,9 @@ void main() {
   test('only HTTPS public-looking host is linked', () {
     expect(validActivityUrl('https://events.example.com/a')?.host,
         'events.example.com');
+    expect(validActivityUrl('https://events.example.com:443/signup')?.path,
+        '/signup');
+    expect(validActivityUrl(null), isNull);
     for (final url in [
       'javascript:alert(1)', 'http://events.example.com',
       'https://localhost/', 'https://host.local/a',

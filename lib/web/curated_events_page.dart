@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'platform_api.dart';
 import 'session_identity.dart';
 import 'curated_activity_card.dart';
+import 'visual_system.dart';
 
 const _pageSize = 50;
 final curatedListProvider = FutureProvider.family<Map<String, dynamic>, String>(
@@ -63,6 +64,9 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
         ],
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
+        LifeFeatureHeader(feature: widget.entry == 'opportunities'
+            ? LifeVisualFeature.opportunities : LifeVisualFeature.explore),
+        const SizedBox(height: 12),
         const Text('由 ChatGPT 精選。重要性、價值及報名資訊仍以活動原站為準。'),
         const SizedBox(height: 12),
         TextField(

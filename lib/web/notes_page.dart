@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'note_api.dart';
 import 'note_drive_relations.dart';
+import 'visual_system.dart';
 
 final _notesProvider = FutureProvider.family<_Workspace, String>((ref, query) async {
   final api = ref.read(noteApiProvider);
@@ -75,6 +76,10 @@ class _NotesPageState extends ConsumerState<NotesPage> {
           constraints: const BoxConstraints(maxWidth: 1040),
           child: CustomScrollView(
             slivers: [
+              const SliverPadding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                sliver: SliverToBoxAdapter(child: LifeFeatureHeader(feature: LifeVisualFeature.notes)),
+              ),
               SliverPadding(
                 padding: const EdgeInsets.all(16),
                 sliver: SliverToBoxAdapter(

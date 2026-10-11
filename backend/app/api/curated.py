@@ -153,60 +153,237 @@ async def ingest_curated_batch(
     return {"accepted": len(unique), "duplicates_within_batch": len(body.items) - len(unique)}
 
 
+
+# V3 browse is a PostgreSQL GROUP query. Each page contains main event groups,
+# never a partial page of child offers; no Flutter-side DB-wide filtering.
+from zoneinfo import ZoneInfo
+from datetime import timedelta
+import re
+from sqlalchemy import and_, cast, Date, desc, literal
+from app.models.curated_actions import CuratedPersonalAction
+
+TAIPEI = ZoneInfo("Asia/Taipei")
+REGIONS = {
+    "north": ("臺北市", "台北市", "新北市", "基隆市", "桃園市", "新竹市", "新竹縣", "宜蘭縣"),
+    "central": ("苗栗縣", "臺中市", "台中市", "彰化縣", "南投縣", "雲林縣"),
+    "south": ("嘉義市", "嘉義縣", "臺南市", "台南市", "高雄市", "屏東縣"),
+    "east": ("花蓮縣", "臺東縣", "台東縣"),
+    "islands": ("澎湖縣", "金門縣", "連江縣"),
+}
+
+def _group_key(model=CuratedActivity):
+    parent = func.coalesce(model.parent_event_key, model.handoff_event_key)
+    return case(
+        (parent.is_not(None), func.concat("handoff:", parent)),
+        else_=func.concat("legacy:", model.identity_key),
+    )
+
+def _registration_open_date():
+    raw = CuratedActivity.handoff_details["registration_open_at_tpe"].as_string()
+    # Avoid cast errors when optional upstream time is missing or malformed.
+    return cast(case(
+        (raw.op("~")(r"^\d{4}-\d{2}-\d{2}"), func.left(raw, 10)),
+        else_=None,
+    ), Date)
+
+def _taipei_deadline_date():
+    return cast(func.timezone("Asia/Taipei", CuratedActivity.registration_deadline), Date)
+
+def _activity_filters(statement, *, entry, quick, keyword, region, city, district,
+                      category, fee_kind, starts_from, today, saved_only, user_sub):
+    start = CuratedActivity.starts_on
+    end = CuratedActivity.ends_on
+    opening = _registration_open_date()
+    deadline = _taipei_deadline_date()
+    if entry == "opportunities":
+        statement = statement.where(or_(CuratedActivity.registration_required.is_(True),
+                                         CuratedActivity.limited_offer.is_(True)))
+    if not saved_only:
+        statement = statement.where(CuratedActivity.registration_status.notin_(["closed"])
+            if entry == "opportunities" else literal(True))
+        # Ends_on is authoritative only when present. Unknown end is not expired.
+        statement = statement.where(or_(end.is_(None), end >= today))
+    if keyword:
+        normalized = re.sub(r"\s+", " ", keyword).strip()
+        if normalized:
+            pattern = "%" + normalized.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_") + "%"
+            fields = [
+                CuratedActivity.title, CuratedActivity.city, CuratedActivity.summary,
+                CuratedActivity.handoff_details["organizer"].as_string(),
+                CuratedActivity.handoff_details["venue"].as_string(),
+                CuratedActivity.handoff_details["district"].as_string(),
+                CuratedActivity.handoff_details["evidence_summary"].as_string(),
+            ]
+            statement = statement.where(or_(*(f.ilike(pattern, escape="\\") for f in fields)))
+    if city:
+        statement = statement.where(CuratedActivity.city == city)
+    if region:
+        statement = statement.where(CuratedActivity.city.in_(REGIONS[region]))
+    if district:
+        statement = statement.where(CuratedActivity.handoff_details["district"].as_string() == district)
+    if category:
+        statement = statement.where(CuratedActivity.category == category)
+    if fee_kind:
+        statement = statement.where(CuratedActivity.fee_kind == fee_kind)
+    if starts_from:
+        statement = statement.where(or_(end >= starts_from, and_(end.is_(None), start >= starts_from)))
+    if quick == "latest" or not quick:
+        return statement
+    if entry == "opportunities":
+        if quick == "opening_soon":
+            statement = statement.where(opening.between(today, today + timedelta(days=7)))
+        elif quick == "opening_today":
+            statement = statement.where(opening == today)
+        elif quick == "closing_soon":
+            statement = statement.where(deadline.between(today, today + timedelta(days=3)))
+        elif quick == "limited":
+            statement = statement.where(CuratedActivity.limited_offer.is_(True))
+        elif quick == "unknown_time":
+            statement = statement.where(opening.is_(None), deadline.is_(None))
+    else:
+        if quick == "ongoing":
+            statement = statement.where(start <= today,
+                or_(end >= today, and_(end.is_(None), start == today)))
+        elif quick == "weekend":
+            saturday = today + timedelta(days=(5 - today.weekday()) % 7)
+            sunday = saturday + timedelta(days=1)
+            statement = statement.where(start <= sunday,
+                or_(end >= saturday, and_(end.is_(None), start >= saturday)))
+        elif quick == "next_7":
+            statement = statement.where(start.between(today, today + timedelta(days=7)))
+        elif quick == "next_30":
+            statement = statement.where(start.between(today, today + timedelta(days=30)))
+        elif quick == "free":
+            statement = statement.where(CuratedActivity.fee_kind == "free")
+    return statement
+
 @router.get("/curated")
 async def list_curated(
     response: Response,
-    limit: int = Query(20, ge=1, le=50),
-    offset: int = Query(0, ge=0, le=5000),
+    limit: int = Query(5, ge=1, le=50),
+    offset: int = Query(0, ge=0, le=50000),
     city: str | None = Query(None, max_length=100),
     category: str | None = Query(None, max_length=100),
     starts_from: date | None = None,
-    min_importance: int = Query(1, ge=1, le=5),
+    min_importance: int = Query(1, ge=1, le=5),  # legacy connector compatibility only
     _user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
     entry: Literal["all", "opportunities", "explore"] = "all",
+    keyword: str | None = Query(None, max_length=120),
+    quick: str | None = Query(None, max_length=24),
+    region: Literal["north", "central", "south", "east", "islands"] | None = None,
+    district: str | None = Query(None, max_length=100),
+    fee_kind: Literal["free", "paid", "conditional_free", "unknown"] | None = None,
+    saved_only: bool = False,
 ):
     if _user and isinstance(db, AsyncSession):
         await feature_gate("events" if entry == "all" else entry)(user=_user, db=db)
-    statement = select(CuratedActivity).where(CuratedActivity.importance >= min_importance)
-    if entry == "opportunities":
-        statement = statement.where(or_(CuratedActivity.registration_required.is_(True), CuratedActivity.limited_offer.is_(True)))
-    if city:
-        statement = statement.where(CuratedActivity.city == city)
-    if category:
-        statement = statement.where(CuratedActivity.category == category)
-    if starts_from:
-        statement = statement.where(
-            (CuratedActivity.starts_on.is_(None)) | (CuratedActivity.starts_on >= starts_from)
-        )
-    handoff_key = func.coalesce(CuratedActivity.parent_event_key, CuratedActivity.handoff_event_key)
-    group_key = case((handoff_key.is_not(None), func.concat("handoff:", handoff_key)),
-                     else_=func.concat("legacy:", CuratedActivity.identity_key))
-    groups = statement.with_only_columns(
-        group_key.label("group_key"), func.max(CuratedActivity.importance).label("rank"),
-        func.min(CuratedActivity.starts_on).label("day"),
-    ).group_by(group_key).order_by(
-        func.max(CuratedActivity.importance).desc(),
-        func.min(CuratedActivity.starts_on).asc().nulls_last(), group_key,
-    ).offset(offset).limit(limit).subquery()
-    rows = (await db.execute(select(CuratedActivity).join(groups, group_key == groups.c.group_key)
-        .order_by(groups.c.rank.desc(), groups.c.day.asc().nulls_last(), groups.c.group_key,
-                  CuratedActivity.handoff_event_key.asc().nulls_last()))).scalars().all()
+    today = datetime.now(TAIPEI).date()
+    if quick and quick not in (
+        {"latest", "opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"}
+        if entry == "opportunities"
+        else {"latest", "ongoing", "weekend", "next_7", "next_30", "free"}
+    ):
+        raise HTTPException(422, "Unsupported quick filter")
+    group = _group_key()
+    statement = _activity_filters(
+        select(CuratedActivity), entry=entry, quick=quick,
+        keyword=keyword, region=region, city=city, district=district,
+        category=category, fee_kind=fee_kind, starts_from=starts_from,
+        today=today, saved_only=saved_only, user_sub=_user.get("sub"),
+    )
+    # Legacy child saves and newer main saves both make the whole group saved.
+    saves = (select(group.label("g"))
+             .join(CuratedPersonalAction,
+                   CuratedPersonalAction.activity_id == CuratedActivity.identity_key)
+             .where(CuratedPersonalAction.kind == "save",
+                    CuratedPersonalAction.active.is_(True),
+                    CuratedPersonalAction.user_sub == _user.get("sub", ""))
+             .distinct().subquery())
+    if saved_only:
+        statement = statement.where(group.in_(select(saves.c.g)))
+    opening = _registration_open_date()
+    deadline = _taipei_deadline_date()
+    order_day = (
+        func.min(func.coalesce(deadline, opening, CuratedActivity.starts_on))
+        if entry == "opportunities"
+        else func.min(case(
+            (CuratedActivity.starts_on <= today,
+             case((CuratedActivity.ends_on >= today, literal(today)),
+                  else_=CuratedActivity.starts_on)),
+            else_=CuratedActivity.starts_on,
+        ))
+    )
+    grouped = statement.with_only_columns(
+        group.label("g"), order_day.label("day"),
+        func.min(CuratedActivity.created_at).label("created"),
+    ).group_by(group).subquery()
+    if quick == "latest":
+        sorting = (grouped.c.created.desc(), grouped.c.g.asc())
+    else:
+        sorting = (grouped.c.day.asc().nulls_last(), grouped.c.g.asc())
+    selected = (await db.execute(
+        select(grouped.c.g, grouped.c.day, grouped.c.created)
+        .order_by(*sorting).offset(offset).limit(limit + 1)
+    )).all()
+    page = selected[:limit]
+    keys = [r.g for r in page]
+    rows = []
+    if keys:
+        rows = (await db.execute(
+            select(CuratedActivity).where(_group_key().in_(keys))
+            .order_by(CuratedActivity.created_at, CuratedActivity.identity_key)
+        )).scalars().all()
+    lookup = {key: idx for idx, key in enumerate(keys)}
+    rows.sort(key=lambda item: (lookup.get(
+        ("handoff:" + (item.parent_event_key or item.handoff_event_key))
+        if item.parent_event_key or item.handoff_event_key else "legacy:" + item.identity_key,
+        100000),
+        0 if (item.handoff_details or {}).get("record_type") == "main" else 1,
+        item.identity_key,
+    ))
+    saved_page = set()
+    if keys:
+        saved_page = set((await db.scalars(select(saves.c.g).where(saves.c.g.in_(keys)))).all())
     response.headers["Cache-Control"] = "no-store"
     return {"items": [
         {
             **{field: getattr(row, field) for field in (
                 "identity_key", "title", "original_url", "occurrence_key",
                 "summary", "city", "category", "starts_on", "ends_on", "fee_kind",
-                "fee_amount", "benefit_value", "on_site_spending", "importance",
+                "fee_amount", "benefit_value", "on_site_spending",
                 "registration_required", "registration_status", "limited_offer",
-                "registration_deadline", "updated_at", "handoff_event_key", "parent_event_key", "handoff_details",
-            )}
+                "registration_deadline", "created_at", "updated_at",
+                "handoff_event_key", "parent_event_key", "handoff_details",
+            )},
+            "saved": ((_group_key_value(row)) in saved_page),
         }
         for row in rows
-    ], "returned": len({("handoff", r.parent_event_key or r.handoff_event_key) if r.handoff_event_key
-                        else ("legacy", r.identity_key) for r in rows}), "policy": "chatgpt_curated_unverified"}
+    ], "returned": len(page), "has_more": len(selected) > limit,
+       "next_cursor": str(offset + len(page)) if len(selected) > limit else None,
+       "policy": "v3_source_unverified"}
 
+def _group_key_value(row: CuratedActivity) -> str:
+    key = row.parent_event_key or row.handoff_event_key
+    return "handoff:" + key if key else "legacy:" + row.identity_key
+
+@router.get("/curated/filters")
+async def curated_filters(
+    response: Response,
+    _user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # Only existing DB values become filter options; no predicted places.
+    if _user and isinstance(db, AsyncSession):
+        await feature_gate("explore")(user=_user, db=db)
+    cities = (await db.scalars(select(CuratedActivity.city).distinct()
+        .where(CuratedActivity.city.is_not(None))
+        .order_by(CuratedActivity.city))).all()
+    categories = (await db.scalars(select(CuratedActivity.category).distinct()
+        .where(CuratedActivity.category.is_not(None))
+        .order_by(CuratedActivity.category))).all()
+    response.headers["Cache-Control"] = "no-store"
+    return {"cities": cities, "categories": categories}
 
 @router.get("/curated/status")
 async def curated_owner_status(

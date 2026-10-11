@@ -1,5 +1,10 @@
 # life_assistant — Current State (2026-10-10)
 
+## 2026-10-11｜交接批次 CI/CD 映像責任移轉（待實際部署驗證）
+
+GitHub 舊每日 09:30 `curated-handoff-daily.yml` 已從 source 移除 `schedule`，保留 `workflow_dispatch` 手動備援；備援只驗正式 live 與 Job digest／固定匯入設定，不再自行更新 Job 映像。正式 `v3-release-ghcr.yml` 在 `promote=true` 且 live、回滾、Revision 保留關卡通過後更新現有 `life-assistant-free-events` Job 的 GHCR immutable digest／Python importer／交接 Sheet 固定 ID 與 apply，驗證 Job readback，不執行匯入。GAS 接收排程尚未啟動；舊 cron 取消後暫無自動接收，部署／runtime/DB ACK 待驗收，不能標 DONE。詳見 [交接契約](curated_sheet_job_ingestion.md) 及 [V3 policy](ci_cd_ghcr_release_policy.md)。
+
+
 ## 本批開發與驗收安排（2026-10-10 最新）
 
 - 新交接表、穩定去重、活動卡片、兩個入口及個人動作已在工作樹實作；開發驗證與 deployed／runtime 驗收分開記錄。細節見 [活動規格](curated_activity_user_features.md)。

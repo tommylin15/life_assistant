@@ -40,7 +40,7 @@
 ## 授權與實作落差
 
 - 只授權指定交接 Sheet 給 Life Job 專用 service account；不能公開分享，不建立長效 SA JSON key。既有 Job 設計的 **Viewer＋`spreadsheets.readonly` 只能讀、不能回寫 ACK/ERROR**；新實作需最小必要的單表 Editor／Sheets write scope、校驗 Google 身分並防止其他文件被讀寫。憑證、Token 不進 Sheet／Log。
-- 固定設定的 `LIFE_CURATED_SHEET_ID` 應指向**新 ID**；不能沿用舊精選池。`.github/workflows/curated-handoff-daily.yml` 每日台北09:30或手動，以既有 WIF 觸發既有 GCP Python Job `life-assistant-free-events`，映像取已正式切流且 Ready 的 GHCR immutable digest，與發布共用併發鎖。不新增付費 Scheduler／Job、不恢復來源 crawler；只有 staging dry-run、真實 apply、DB／Flutter／回執驗證 PASS 並完成正式切流後，才設定 repository variable `LIFE_CURATED_HANDOFF_ENABLED=true` 啟用。這是排程啟用條件，不改活動的 admin 開放設定。
+- **2026-10-11 排程責任移轉**：原 `.github/workflows/curated-handoff-daily.yml` 已移除每日 09:30 `schedule`，僅保留受 `LIFE_CURATED_HANDOFF_ENABLED=true` 控制的手動 `workflow_dispatch` 備援；此 workflow 僅確認正式 API 的唯一 100% Ready Revision、不可變 GHCR digest、既有 `life-assistant-free-events` Job 映像及固定 Sheet／command／apply 設定一致後，才允許人工觸發，**不再更新 Job 映像、環境變數或 command**。正式 V3 `.github/workflows/v3-release-ghcr.yml` 在 `promote=true`、正式健康／資料庫／OAuth、回滾演練及 Revision 保留步驟全部 PASS 後，由同一 deployer WIF 對現有 Job 做 image/command/args/固定 Sheet 和 apply 設定更新並 readback；不建立 Job、不執行匯入、不在 staging-only 發布更新。GAS 09:30 接收觸發需另行驗證最小 IAM、真實 DB／Sheet ACK 及開關才啟用；**移除 GitHub cron 不等於 GAS 已上線，目前定時接收暫停，禁止同時啟用雙入口**。
 - GitHub 現有 importer 若仍讀舊 `精選活動`／`pool狀態=selected`、僅 Sheets readonly 或使用 URL identity，應標 **IMPLEMENTATION GAP**。需求須經現況程式盤點、tests、CI、staging、PG、Flutter、Drive ACK 實際驗收；文件更新不等於 Job 已改造、授權、排程或部署。
 
 **2026-10-10 最新實況**：真實 Sheet已有3筆 READY，欄位／來源 payload 本機驗證 PASS；使用者明確授權的單表 Editor 分享及權限讀回 PASS。Life Job實際入庫／ACK、DB/UI E2E與排程尚待驗收；不把本機驗證當成上線。

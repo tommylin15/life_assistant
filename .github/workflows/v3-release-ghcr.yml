@@ -518,6 +518,42 @@ jobs:
           jq -r '"revision_retention=\(.status) remaining=\(.remaining_count) deleted=\(.deleted | length)"' \
             "$RUNNER_TEMP/v3-retention.json" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Pin curated handoff Job after verified production promotion
+        if: ${{ inputs.promote && success() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          HANDOFF_JOB=life-assistant-free-events
+          # The daily importer no longer updates image/command/env. Only a
+          # successful promoted production release may reconcile its Job.
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/handoff-live-service.json"
+          gcloud run revisions describe "$CANDIDATE_REVISION" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/handoff-live-revision.json"
+          python .github/scripts/v3_curated_handoff_alignment.py \
+            --mode live --json "$RUNNER_TEMP/handoff-live-service.json" \
+            --revision-json "$RUNNER_TEMP/handoff-live-revision.json" \
+            --expected-revision "$CANDIDATE_REVISION" --expected-image "$IMAGE_REF"
+          # Existing Job must be present; never create a new service or job.
+          gcloud run jobs describe "$HANDOFF_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/handoff-job-before.json"
+          gcloud run jobs update "$HANDOFF_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --image "$IMAGE_REF" --command python \
+            --args=-m,scripts.import_curated_from_sheet \
+            --update-env-vars=LIFE_CURATED_SHEET_ID=1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4,LIFE_CURATED_IMPORT_APPLY=1 \
+            --quiet
+          gcloud run jobs describe "$HANDOFF_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/handoff-job-after.json"
+          python .github/scripts/v3_curated_handoff_alignment.py \
+            --mode job --json "$RUNNER_TEMP/handoff-job-after.json" \
+            --expected-image "$IMAGE_REF"
+          echo "curated_handoff_image=PASS source=promoted-production-digest job=$HANDOFF_JOB execution=NOT_RUN" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish stage verdict
         if: always()
         run: |

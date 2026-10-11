@@ -119,3 +119,11 @@ ChatGPT reads **GitHub Actions run/job logs** through its connected GitHub acces
 5. Record Actions run, source SHA, public GHCR digest/readback, WIF identity, Cloud Run revision/0% state, candidate and Preview results, promotion/rollback simulations, live runtime/integration, plus absence of new pipeline Cloud Build/GCS/Artifact Registry API writes. Cost comparison must be measured, not assumed.
 
 **Latest verified release status (2026-10-09):** V3 deployment/production-ready service / five disabled legacy triggers / scoped legacy GCS+AR resource removal **PASS** on the run IDs in §0. A new release still requires its own tests/deployment/runtime/integration evidence; neither this documentation commit nor historical PASS closes all product Phase 1 gates. **Overall Phase 1 PARTIAL**. Historical V2 failures remain historical evidence.
+
+## 2026-10-11｜交接 Job 映像同步責任移轉（source changes; runtime pending）
+
+- 每日交接 GitHub workflow `curated-handoff-daily.yml` **不再宣告 schedule**；僅留手動 `workflow_dispatch`，保留 `LIFE_CURATED_HANDOFF_ENABLED` gate 及與發布共用的 concurrency lock。手動備援僅做正式 live／Job digest 與固定匯入契約 readback 後執行；無權在每次執行時更新 Job 映像。
+- **唯一自動配置同步 owner 為正式 V3 production release**：`v3-release-ghcr.yml` 僅 `inputs.promote && success()` 且 live gates、回滾演練及保留 10 個 Revision 程序之後執行，先驗證唯一 100% 正式 revision 就是當次候選且 immutable GHCR digest 一致，再更新既有 `life-assistant-free-events` 的映像、Python importer 與固定 30 欄 Sheet ID／apply，最後讀回 digest 與 Job contract。Staging-only、CI PASS、preview 或 `promote=false` 都不能更新它；此步不執行 Job。
+- `.github/scripts/v3_curated_handoff_alignment.py` 與 `tests/test_v3_curated_handoff_alignment.py` 覆蓋 fail-closed live digest／Job config／cron 關閉；CI deployment-scripts gate 必須 PASS。
+- **不改 production traffic、現有 service account、Secret、資料庫資料，不新增 paid Job／Scheduler**。正式 API 已切流而 Job sync 失敗時，release 結果 FAIL，工作需人工處理，不把舊 Job 誤稱 synced；GAS 前置檢查不得啟動不同映像。
+- 本次 GitHub 變更代表 source migration；最新 SHA 真實 CI／production release readback、GAS Job 呼叫、真實 PostgreSQL UPSERT／Sheet ACK 都要各自驗收。關閉舊 cron 代表尚未啟用 GAS 時接收無自動排程，並非本輪已完成端對端。

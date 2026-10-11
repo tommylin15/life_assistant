@@ -225,6 +225,7 @@ jobs:
           python -m py_compile .github/scripts/v3_firebase_error.py
           python -m py_compile .github/scripts/v3_gcs_object_inventory.py
           python -m py_compile .github/scripts/v3_image_identity.py
+          python -m py_compile .github/scripts/v3_curated_handoff_alignment.py
           python -m py_compile .github/scripts/v3_revision_retention.py
           python -m py_compile .github/scripts/v3_gcp_inventory.py
           python -m py_compile .github/scripts/v3_free_event_retirement_readback.py
@@ -238,6 +239,9 @@ jobs:
 
       - name: Test V3 Cloud Run GHCR digest/cache identity
         run: python -m unittest tests/test_v3_image_identity.py -v
+
+      - name: Test curated handoff image alignment and decommissioned cron
+        run: python -m unittest tests/test_v3_curated_handoff_alignment.py -v
 
       - name: Test V3 revision retention fail-closed contracts
         run: python -m unittest tests/test_v3_revision_retention.py -v

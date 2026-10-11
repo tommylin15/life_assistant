@@ -375,7 +375,10 @@ async def curated_filters(
 ):
     # Only existing DB values become filter options; no predicted places.
     if _user and isinstance(db, AsyncSession):
-        await feature_gate("explore")(user=_user, db=db)
+        from app.api.ui_policies import effective_features
+        features = await effective_features(db, _user)
+        if not any(x['available'] for x in features if x['key'] in ('explore', 'opportunities')):
+            raise HTTPException(403, 'Activity features unavailable')
     cities = (await db.scalars(select(CuratedActivity.city).distinct()
         .where(CuratedActivity.city.is_not(None))
         .order_by(CuratedActivity.city))).all()

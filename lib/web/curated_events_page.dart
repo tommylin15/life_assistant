@@ -6,6 +6,7 @@ import 'curated_activity_card.dart';
 import 'visual_system.dart';
 
 final curatedListProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, query) {
+  ref.watch(curatedMutationEpochProvider);
   if (ref.watch(sessionIdentityProvider) == null) {
     throw StateError('Authentication required');
   }

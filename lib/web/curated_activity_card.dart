@@ -218,19 +218,30 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
                         label: const Text('前往網址')),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.add_task),
-                      label: const Text('建立待辦'),
-                      onPressed: saving || actions.isLoading || actions.hasError ||
-                          values.any((a) => a['activity_id'] == child['identity_key'] &&
-                            a['kind'] == 'task' && a['active'] == true)
-                        ? null : () => _taskDialog(child)),
+                      label: Text(values.any((a) => a['activity_id'] == child['identity_key'] &&
+                          a['kind'] == 'task' && a['active'] == true) ? '取消活動待辦' : '建立待辦'),
+                      onPressed: saving || actions.isLoading || actions.hasError
+                        ? null : () async {
+                          final active = values.any((a) => a['activity_id'] == child['identity_key'] &&
+                            a['kind'] == 'task' && a['active'] == true);
+                          if (active) {
+                            await _act(child, 'task', false);
+                          } else {
+                            await _taskDialog(child);
+                          }
+                        }),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.event_available_outlined),
-                      label: const Text('日曆日期標記'),
+                      label: Text(values.any((a) => a['activity_id'] == child['identity_key'] &&
+                          a['kind'] == 'calendar_info' && a['active'] == true)
+                          ? '移除日期標記' : '日曆日期標記'),
                       onPressed: saving || actions.isLoading || actions.hasError ||
-                          child['starts_on'] == null ||
-                          values.any((a) => a['activity_id'] == child['identity_key'] &&
-                            a['kind'] == 'calendar_info' && a['active'] == true)
-                        ? null : () => _act(child, 'calendar_info', true)),
+                          child['starts_on'] == null
+                        ? null : () async {
+                          final active = values.any((a) => a['activity_id'] == child['identity_key'] &&
+                            a['kind'] == 'calendar_info' && a['active'] == true);
+                          await _act(child, 'calendar_info', !active);
+                        }),
                   ]),
                 ],
               )),

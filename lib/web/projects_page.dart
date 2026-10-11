@@ -372,12 +372,18 @@ class _ProjectCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      project.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    Row(children: [
+                      Container(width: 38, height: 38,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6586B2).withValues(alpha: .13),
+                          borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.folder_outlined,
+                          color: Color(0xFF6586B2))),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(project.name,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700))),
+                    ]),
                     if ((project.summary ?? '').trim().isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Text(

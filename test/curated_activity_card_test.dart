@@ -107,7 +107,10 @@ void main() {
     )))));
     await tester.pumpAndSettle();
     expect(find.textContaining('開報：2001-01-01'), findsOneWidget);
-    expect(find.textContaining('截止：2001-01-07'), findsOneWidget);
+    // Both the compact date chip and detail text intentionally include the
+    // same deadline; verify each exact label instead of ambiguous contains.
+    expect(find.text('截止：2001-01-07'), findsOneWidget);
+    expect(find.text('報名截止：2001-01-07'), findsOneWidget);
     expect(find.text('已結束／截止'), findsOneWidget);
   });
 

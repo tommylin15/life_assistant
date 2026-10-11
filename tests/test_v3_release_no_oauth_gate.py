@@ -1,4 +1,4 @@
-"""Owner-approved V3 release change: no manual/automatic OAuth acceptance gate."""
+"""Owner-approved V3 release: automated OAuth checks remain; human sign-in is not gated."""
 import unittest
 from pathlib import Path
 
@@ -10,17 +10,26 @@ HOSTING = ROOT / ".github/workflows/deploy-firebase-hosting.yml"
 DISPATCH = ROOT / ".github/workflows/v3-auto-production-hosting-after-release.yml"
 
 class ReleaseWithoutOAuthGate(unittest.TestCase):
-    def test_no_oauth_login_or_callback_validation_in_release_workflows(self):
+    def test_no_interactive_owner_callback_session_gate(self):
         for path in (RELEASE, STAGE, ALT_STAGE, HOSTING):
             with self.subTest(path=path.name):
-                text = path.read_text(encoding="utf-8")
-                for forbidden in (
-                    "verify_staging_google_e2e", "staging_oauth_canary=ACTIVE",
-                    "staging_e2e=true", "run_drive_google_integration_acceptance",
-                    "/auth/login", "/auth/staging/login", "oauth-redirect",
-                    "oauth=PASS",
-                ):
-                    self.assertNotIn(forbidden, text)
+                content = path.read_text(encoding="utf-8")
+                for marker in ("scripts.verify_staging_google_e2e",
+                               "staging_oauth_canary=ACTIVE", "staging_canary_next=",
+                               "staging_e2e=true", 'PHASE="owner_google_auth"'):
+                    self.assertNotIn(marker, content)
+
+    def test_automated_google_oauth_checks_are_release_gates(self):
+        release, stage, alt, hosting = (
+            x.read_text(encoding="utf-8") for x in
+            (RELEASE, STAGE, ALT_STAGE, HOSTING))
+        self.assertIn("stage-oauth-preview-headers", release)
+        self.assertIn("oauth:staging:", release)
+        self.assertIn("DRIVE_ACCEPTANCE_GOOGLE_FILE_ID", release)
+        self.assertIn("scripts.run_drive_google_integration_acceptance", release)
+        self.assertIn("staging_google_redirect=PASS fixed_staging_callback", stage)
+        self.assertIn("redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app", alt)
+        self.assertIn("hosting_check=auth_redirect:PASS", hosting)
 
     def test_candidate_sha_staging_401_rollback_and_production_hosting_still_gated(self):
         r, s, h, d = (f.read_text(encoding="utf-8") for f in

@@ -61,7 +61,8 @@ class FixedStagingWorkflowTests(unittest.TestCase):
     def test_staging_has_no_owner_oauth_gate_but_requires_pinned_401_readback(self):
         self.assertNotIn("staging_oauth_canary", self.staging)
         self.assertNotIn("verify_staging_google_e2e", self.staging)
-        self.assertNotIn("/auth/staging/login", self.staging)
+        self.assertIn("/auth/staging/login", self.staging)
+        self.assertIn("staging_google_redirect=PASS fixed_staging_callback", self.staging)
         self.assertIn("staging_live_readback=PASS layer=pins_and_api_401", self.staging)
         self.assertIn("production_traffic_unchanged", self.staging)
 

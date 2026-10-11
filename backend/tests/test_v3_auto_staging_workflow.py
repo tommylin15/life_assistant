@@ -57,7 +57,8 @@ class AutoStagingAfterCIContractTests(unittest.TestCase):
 
     def test_real_preview_and_pinned_staging_gates_are_not_bypassed(self):
         self.assertIn("Verify pinned Preview API and static release", self.release)
-        self.assertIn("preview=PASS release-sha=$RELEASE_SHA pinned-api-401=PASS", self.release)
+        self.assertIn("stage-oauth-preview-headers", self.release)
+        self.assertIn("stage-oauth-rewrite-and-state=PASS", self.release)
         self.assertNotIn("staging_oauth_canary=ACTIVE", self.release)
         self.assertIn("Promote exact Preview to independent fixed staging live and verify pinned routes", self.release)
         self.assertIn("bash scripts/v3_fixed_staging_release.sh", self.release)

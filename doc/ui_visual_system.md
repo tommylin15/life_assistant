@@ -88,3 +88,12 @@
 - 新增 72 種六功能／三主題／四種視窗寬度 Widget 基礎驗收，另加共享 action 載入、變更刷新測試。**測試通過不等於瀏覽器畫面與真實 Google OAuth 已通過**。
 
 本次程式合併後須核對完整 CI 與確切 release SHA。前一輪 Staging #38 與本次最新 main 不能混為同一版本；即使舊流程 PASS，這批仍未取得自身 staging／runtime 證據。
+
+## 2026-10-11 續作整合驗收註記
+
+- 同頁活動最多 100 個 64 字元 ID 共用一批個人 action readback；超過限制仍依群組讀取。Riverpod mutation epoch 讓兩入口收藏與操作狀態及時刷新。
+- 建立待辦的標題驗證與 dialog lifecycle 修正；活動卡片採手機單欄／桌面雙欄，子場次可展開。
+- 新增跨 320／375／768／1440px 的 72 組功能 Widget 驗證，與同頁 action 批次及收藏後刷新測試。
+- 活動網址拒絕直接 IP 與不合法 host；一般列表排除已取消或已知報名截止的機會，收藏歷史仍可查看。
+
+**驗收規則：** 本批新 SHA 應另有 Flutter、Backend、PostgreSQL、CI、Staging SHA、Owner OAuth、Task／Google Calendar 讀回與手機／桌面實際畫面的獨立證據。舊 Staging 候選 PASS 不等於新版 PASS；缺少證據保留 PARTIAL。

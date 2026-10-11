@@ -75,16 +75,41 @@ class ActivityActionTests(unittest.IsolatedAsyncioTestCase):
         db = AsyncMock()
         db.add = MagicMock()
         item = self.item()
+        created = calendar_payload(item, "calendar_info", ActionWrite(active=True))
+        baseline = {k: created.get(k) for k in ("summary", "description", "location", "start", "end")}
+        previous = CuratedPersonalAction(user_sub="u", activity_id=item.identity_key,
+            kind="calendar_info", active=True,
+            payload={"calendar_group": "group", "generated_calendar": baseline},
+            entity_id="old", updated_at=datetime.now(timezone.utc))
+        db.get.side_effect = [item, previous]
+        db.scalar.return_value = None
+        async def google(*args, **kwargs):
+            if args[3] == "GET":
+                return SimpleNamespace(status_code=200, json=lambda: baseline)
+            return SimpleNamespace(status_code=204)
+        with patch("app.api.curated_actions._request_google", AsyncMock(side_effect=google)) as request:
+            await set_action(item.identity_key, "calendar_info", ActionWrite(active=False), {"sub":"u"}, db)
+        self.assertEqual(previous.payload["calendar_group"], "group")
+        self.assertFalse(previous.active)
+        self.assertEqual(request.call_args.args[3], "DELETE")
+
+    async def test_legacy_calendar_without_snapshot_is_not_silently_deleted(self):
+        db = AsyncMock()
+        db.add = MagicMock()
+        item = self.item()
         previous = CuratedPersonalAction(user_sub="u", activity_id=item.identity_key,
             kind="calendar_info", active=True, payload={"calendar_group": "group"},
             entity_id="old", updated_at=datetime.now(timezone.utc))
         db.get.side_effect = [item, previous]
         db.scalar.return_value = None
         with patch("app.api.curated_actions._request_google", AsyncMock()) as request:
-            await set_action(item.identity_key, "calendar_info", ActionWrite(active=False), {"sub":"u"}, db)
-        self.assertEqual(previous.payload["calendar_group"], "group")
-        self.assertFalse(previous.active)
-        self.assertEqual(request.call_args.args[3], "DELETE")
+            with self.assertRaises(HTTPException) as ctx:
+                await set_action(item.identity_key, "calendar_info",
+                    ActionWrite(active=False), {"sub": "u"}, db)
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertTrue(previous.active)
+        db.commit.assert_not_awaited()
+        request.assert_not_awaited()
 
     async def test_calendar_reactivation_gets_new_id_after_cancel(self):
         db = AsyncMock()

@@ -47,3 +47,22 @@
 6. GitHub CI、staging Hosting release SHA、API rewrite、實際登入和可操作畫面各自驗證。**未取得真實畫面證據不得宣稱與海報相同。**
 
 本批定位：**implementation PARTIAL，runtime NOT VERIFIED**。待功能與視覺驗收後，再決定是否加強素材資產、卡片版式與跨裝置偏好同步。
+
+
+## 2026-10-11 聯合交付：視覺系統 + 活動 UX V3
+
+同一批 source 修改包括：
+- Material 三風格／亮暗模式、六功能專屬 accent/header、首頁卡片、待辦／專案／筆記細節。
+- 新版活動「限時機會／活動探索」兩個入口，舊 /more/curated 和 /more/events 相容轉向 /more/explore；舊 events 導覽偏好映射至 explore，保留首頁 events 卡片資料。
+- API: 主活動群組 server-side 5+10 查詢、時間／最新速查、標題／主辦／地點／摘要中文包含搜尋、地區／縣市／類別／費用、共享已收藏模式。星等保留 DB，不再做 UI 篩選及預設排序。
+- 收藏主活動、Task 顯式日期選擇、Google Calendar 全天透明日期標記。活動專屬 HTTPS 網址在 Task 和 Life Calendar 可直接開啟；不臆造已報名、時段或名額。
+- 保留舊個人 action 資料和 API；V3 UI 只顯示收藏／建立待辦／日曆日期標記。
+- \`backend/tests/test_curated_v3_query.py\` 與 \`test/activity_link_test.dart\` 追蹤重要查詢、連結與日期規則。
+
+**驗收不得跳級**：
+- Flutter / backend 測試、CI、release、runtime 和整合各自列出 PASS / FAIL / NOT VERIFIED。
+- 真實使用者的 OAuth／Calendar readback、Task DB readback、群組分頁讀回與手機／桌面對照畫面須待 staging 驗證。
+- 現有 preference 外觀儲存仍為本機／帳號隔離，跨裝置雲同步仍未實作。
+- 部分 UX 例如所有行政區選單、跨查詢穩定 snapshot cursor、高密度海報插畫還需根據真實資料與視覺檢測調整，不宣稱已完成。
+
+本批 source 為 PARTIAL，只有全部 CI + staging + 實際操作均核實後才可能標 DONE。

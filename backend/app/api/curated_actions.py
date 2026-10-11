@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from app.db.session import get_db
 from app.models.curated import CuratedActivity
 from app.models.curated_actions import CuratedPersonalAction
 from app.models.task import Task
+from app.api.curated import normalize_url
 
 router = APIRouter(prefix="/free-events/curated", tags=["curated-personal-actions"])
 KINDS = Literal["save", "follow", "task", "calendar_info", "calendar_registration", "calendar_confirmed", "reminder"]
@@ -37,20 +38,63 @@ class ActionWrite(BaseModel):
     phase: Literal["open", "deadline"] = "open"
     lead_minutes: int = Field(60, ge=0, le=10080)
     tracking_status: Literal["interested", "waiting", "submitted", "confirmed", "waitlisted", "failed", "cancelled"] = "interested"
+    task_due_choice: Literal["none", "open", "deadline", "custom"] = "none"
+    task_due_at: datetime | None = None
+    task_title: str | None = Field(default=None, max_length=400)
     @model_validator(mode="after")
     def times(self):
         if (self.start is None) != (self.end is None):
             raise ValueError("start_end_pair_required")
         if self.start and (self.start.utcoffset() is None or self.end.utcoffset() is None or self.end <= self.start):
             raise ValueError("invalid_confirmed_times")
+        if self.task_due_at is not None and self.task_due_at.utcoffset() is None:
+            raise ValueError("Task due date must include timezone")
+        if self.task_due_choice == "custom" and self.task_due_at is None:
+            raise ValueError("Custom task date is missing")
         return self
+
+
+def _item_url(item) -> str:
+    details = item.handoff_details or {}
+    preferred = details.get("registration_url") or details.get("official_url")
+    if isinstance(preferred, str):
+        try:
+            return normalize_url(preferred)
+        except ValueError:
+            pass
+    return normalize_url(item.original_url)
+
+
+def _task_due(item, body):
+    details = item.handoff_details or {}
+    if body.task_due_choice == "none":
+        return None
+    if body.task_due_choice == "custom":
+        return body.task_due_at
+    if body.task_due_choice == "deadline":
+        raw = details.get("registration_deadline_at_tpe")
+        if item.registration_deadline is not None:
+            return item.registration_deadline
+    else:
+        raw = details.get("registration_open_at_tpe")
+    if not isinstance(raw, str) or "T" not in raw:
+        raise HTTPException(422, "Selected registration time is not available")
+    try:
+        parsed = datetime.fromisoformat(raw)
+        if parsed.utcoffset() is None:
+            raise ValueError("tz")
+        return parsed
+    except ValueError as exc:
+        raise HTTPException(422, "Selected registration time is unverified") from exc
 
 
 def calendar_payload(item, kind, body):
     details = item.handoff_details or {}
     prefix = {"calendar_info": "活動日期參考", "calendar_registration": "報名時間提醒",
               "calendar_confirmed": "確定參與", "reminder": "報名預警"}[kind]
-    payload = {"summary": f"{prefix}：{item.title}", "description": item.original_url,
+    payload = {"summary": f"{prefix}：{item.title}",
+               "description": f"活動網址：{_item_url(item)}", 
+               "location": details.get("venue") or None,
                "transparency": "opaque" if kind == "calendar_confirmed" else "transparent",
                "reminders": {"useDefault": False, "overrides": []}}
     if kind == "calendar_info":
@@ -78,9 +122,18 @@ def calendar_payload(item, kind, body):
 
 
 @router.get("/actions")
-async def my_actions(response: Response, user: dict = Depends(activity_access), db: AsyncSession = Depends(get_db)):
-    # shortcut: return at most 1000 actions per account; paginate before offering larger personal libraries.
-    rows = (await db.execute(select(CuratedPersonalAction).where(CuratedPersonalAction.user_sub == user["sub"]).limit(1000))).scalars().all()
+async def my_actions(response: Response, user: dict = Depends(activity_access), db: AsyncSession = Depends(get_db),
+                     activity_ids: str | None = Query(None, max_length=6500)):
+    statement = select(CuratedPersonalAction).where(CuratedPersonalAction.user_sub == user["sub"])
+    if activity_ids:
+        ids = activity_ids.split(",")
+        if len(ids) > 100 or any(len(i) != 64 or not all(c in "0123456789abcdef" for c in i) for i in ids):
+            raise HTTPException(422, "Invalid activity id list")
+        statement = statement.where(CuratedPersonalAction.activity_id.in_(ids))
+    else:
+        # Compatibility callers are bounded; V3 passes explicit page IDs.
+        statement = statement.order_by(CuratedPersonalAction.updated_at.desc()).limit(1000)
+    rows = (await db.execute(statement)).scalars().all()
     response.headers["Cache-Control"] = "no-store"
     return {"items": [{"activity_id": r.activity_id, "kind": r.kind, "active": r.active,
                        "entity_id": r.entity_id, "payload": r.payload} for r in rows]}
@@ -94,6 +147,27 @@ async def set_action(activity_id: str, kind: KINDS, body: ActionWrite,
         raise HTTPException(404, "Activity not found")
     lock = int.from_bytes(hashlib.sha256(f"curated-actions:{user['sub']}".encode()).digest()[:8], "big", signed=True)
     await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock})
+    if kind == "save":
+        # A single bookmark belongs to a parent event. Preserve old child saves
+        # and collapse them when the user next toggles that parent.
+        group = item.parent_event_key or item.handoff_event_key
+        if group:
+            siblings = (await db.execute(select(CuratedActivity).where(
+                (CuratedActivity.parent_event_key == group) |
+                (CuratedActivity.handoff_event_key == group)
+            ))).scalars().all()
+            parent = next((r for r in siblings
+                if (r.handoff_details or {}).get("record_type") == "main"), None)
+            item = parent or min(siblings, key=lambda r: r.identity_key, default=item)
+            old_saves = (await db.execute(select(CuratedPersonalAction).where(
+                CuratedPersonalAction.user_sub == user["sub"],
+                CuratedPersonalAction.kind == "save",
+                CuratedPersonalAction.activity_id.in_([r.identity_key for r in siblings])
+            ))).scalars().all()
+            for old in old_saves:
+                if old.activity_id != item.identity_key:
+                    old.active = False
+            activity_id = item.identity_key
     key = (user["sub"], activity_id, kind)
     record = await db.get(CuratedPersonalAction, key)
     payload = body.model_dump(mode="json")
@@ -109,34 +183,35 @@ async def set_action(activity_id: str, kind: KINDS, body: ActionWrite,
         db.add(record)
     if kind == "task":
         if body.active:
-            # A stable action row + transaction lock prevents retry duplicates.
-            task = Task(id=str(uuid.uuid4()), user_sub=user["sub"], title=f"處理活動：{item.title}",
-                        note=item.original_url, source_type="curated", source_ref=item.identity_key,
-                        due_at=item.registration_deadline)
+            # No deadline is silently invented; user explicitly confirms the choice.
+            title = (body.task_title or f"處理活動：{item.title}").strip()
+            if not title:
+                raise HTTPException(422, "Task title is required")
+            url = _item_url(item)
+            note = f"活動網址：{url}"
+            task = Task(id=str(uuid.uuid4()), user_sub=user["sub"], title=title,
+                        note=note, source_type="curated", source_ref=item.identity_key,
+                        due_at=_task_due(item, body))
             db.add(task)
             record.entity_id = task.id
+            payload["generated_title"] = title
+            payload["generated_note"] = note
         elif record.entity_id:
             task = await db.get(Task, record.entity_id)
             if task and task.user_sub == user["sub"]:
-                # Keep a user-edited personal copy; explicit cancel only cancels
-                # the original generated task rather than deleting user data.
-                task.status = "cancelled"
+                # Do not overwrite/delete a personally edited Task.
+                prior = record.payload or {}
+                if (prior.get("generated_title") == task.title and
+                    prior.get("generated_note") == task.note):
+                    task.status = "cancelled"
     elif kind.startswith("calendar_") or kind == "reminder":
         if body.active:
             event_payload = calendar_payload(item, kind, body)
             # Group same-parent, same-phase notifications without combining
             # distinct offers in the activity database.
             group = item.parent_event_key or item.handoff_event_key or activity_id
-            if item.handoff_event_key:
-                siblings = (await db.execute(select(CuratedActivity).where(
-                    (CuratedActivity.handoff_event_key == group) | (CuratedActivity.parent_event_key == group)
-                ))).scalars().all()
-                links = {item.original_url}
-                for sibling in siblings:
-                    links.add(sibling.original_url)
-                    if (sibling.handoff_details or {}).get("registration_url"):
-                        links.add(sibling.handoff_details["registration_url"])
-                event_payload["description"] = "\n".join(sorted(links))
+            # The event links to the exact selected child/offer, never an
+            # ambiguous list of unrelated sibling registration URLs.
             time_key = event_payload["start"]
             namespace = "handoff" if item.handoff_event_key else "legacy"
             calendar_group = hashlib.sha256(f"{user['sub']}:{namespace}:{group}:{kind}:{body.phase}:{time_key}:{body.lead_minutes}".encode()).hexdigest()

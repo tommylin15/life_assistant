@@ -5,7 +5,7 @@ import 'visual_system.dart';
 
 const _titles = <String, String>{
   'today':'首頁', 'tasks':'待辦', 'calendar':'日曆', 'projects':'專案',
-  'notes':'筆記', 'habits':'習慣', 'shopping':'購物', 'events':'精選活動', 'opportunities':'限時機會', 'explore':'活動探索',
+  'notes':'筆記', 'habits':'習慣', 'shopping':'購物', 'opportunities':'限時機會', 'explore':'活動探索',
   'drive':'Drive', 'integrations':'Google 整合', 'attention':'待關注',
 };
 
@@ -89,7 +89,7 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
                 style: Theme.of(context).textTheme.titleMedium),
             Wrap(spacing: 6, children: [
               for (final key in ['tasks','calendar','projects','notes','habits',
-                'shopping','events','opportunities','explore','drive','integrations'])
+                'shopping','opportunities','explore','drive','integrations'])
                 FilterChip(
                   label: Text(_titles[key] ?? key),
                   selected: pins.contains(key),
@@ -184,7 +184,7 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
                 onPressed: saving ? null : () => setState(() {
                   draft!['nav_mode'] = 'auto';
                   draft!['pinned'] = ['tasks', 'calendar', 'projects'];
-                  draft!['more_order'] = ['notes', 'habits', 'events', 'shopping', 'drive', 'integrations'];
+                  draft!['more_order'] = ['notes', 'habits', 'opportunities', 'explore', 'shopping', 'drive', 'integrations'];
                   draft!['home_cards'] = ['tasks', 'calendar', 'attention', 'habits', 'events', 'projects'];
                 }),
                 child: const Text('還原預設'),

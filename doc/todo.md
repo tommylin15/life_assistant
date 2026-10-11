@@ -1,20 +1,21 @@
 # Life — Active TODO（2026-10-11）
 
-**唯一活動產品規格：** [UX V3｜活動使用者功能](curated_activity_user_features.md)；下列狀態取代 10/10 過時的星等 UI、七種個人操作與第三個「精選」導覽工項。產品規格 APPROVED；新 UX 的 source、CI、runtime 尚 **NOT VERIFIED**。
+**唯一活動產品規格：** [UX V3｜活動使用者功能](curated_activity_user_features.md)。2026-10-11 已將 UX V3 與三風格視覺共用元件寫進 main，完整測試與 staging/readback 獨立驗收。新 source 為 **PARTIAL**，不得將新 CI 或部署標成已驗收；以下是仍須特別核對的關卡。
 
-## A. 活動 UX V3 與待辦／日曆串接
+## A. 活動 UX V3 與三風格 UI（2026-10-11 source 已進 main）
 
-| Priority | 工項 | Source / Verification |
+| Priority | 工項 | 本次 source 狀態與待核對證據 |
 |---|---|---|
-| P0 | 合併三入口為「限時機會」「活動探索」兩個使用者入口，舊精選路徑轉址，停用舊免費活動主導覽但保留舊 API／資料 | 既有三入口 source 存在；UX V3 **NOT IMPLEMENTED** |
-| P0 | UI 全面隱藏星等，取消 API 以星等篩選／預設排序 | 現有星等 UI/API 仍在：**NOT IMPLEMENTED** |
-| P0 | 各入口預設查 5 個主活動群組、再看 10 個；限時／活動時間排序，最新收錄、跨日期、已確認失效及未知時間語意 | 現有 API 預設 20、Flutter 每頁 50，先按星等排序：**NOT IMPLEMENTED** |
-| P0 | 六種速查各入口、一般搜尋（標題／主辦／地點／現有摘要），後端 DB 全量查詢 | 現有城市／類別完全相等篩選，無 keyword 搜尋：**NOT IMPLEMENTED** |
-| P1 | 固定縣市→北中南東離島、縣市／行政區選項、DB 類別與費用篩選；不做定位或 AI | **NOT IMPLEMENTED** |
-| P1 | 主活動一次收藏，兩入口「全部／已收藏」切換，保留已結束收藏、去重和舊收藏遷移 | `save` per activity 已有；主活動共用收藏／清單 **NOT IMPLEMENTED** |
-| P1 | 活動建立既有 Task：確認到期日、來源網址與正確子活動，待辦列表直接點「前往網址」 | Task.note/source_type/ref 基礎 **SOURCE IMPLEMENTED**；待辦頁仍純文字 URL，跨功能驗收 **NOT VERIFIED** |
-| P1 | 活動日期標記用既有 Google Calendar 全天透明事件，帶地點與活動網址，Life 日曆直接點「前往網址」 | Google description/transparent 基礎 **SOURCE IMPLEMENTED**；日曆頁仍純文字 URL，真實 Google OAuth/readback **NOT VERIFIED** |
-| P1 | 卡片縮減為收藏／待辦／日曆標記／前往網址，保留主活動與子場次、回上一頁篩選狀態 | **NOT IMPLEMENTED** |
+| P0 | 兩入口＋舊精選路徑相容轉向、保留首頁 events 卡 | SOURCE IMPLEMENTED；Flutter／staging navigation NOT VERIFIED |
+| P0 | 星等從活動 UI 隱藏、取消星等預設排序 | SOURCE IMPLEMENTED；DB 保留舊欄位，API 相容參數忽略；需 SQL／畫面證據 |
+| P0 | 5 主群組首載、後續 10 群組、has_more 與穩定主子分組 | SOURCE IMPLEMENTED；offset 跨上游更新可能頁面漂移，真正 snapshot cursor 尚 PARTIAL |
+| P0 | 兩入口各六速查、中文搜尋、跨日與最新收錄 | SOURCE IMPLEMENTED；台北時區／取消與 unknown runtime E2E NOT VERIFIED |
+| P1 | 固定區域、縣市／行政區／類別／費用篩選 | SOURCE IMPLEMENTED；行政區以文字完整相等輸入，動態下拉選單未實作 |
+| P1 | 兩入口主活動收藏／已收藏、舊子場次收藏兼容 | SOURCE IMPLEMENTED；PostgreSQL 跨帳號／舊收藏／重新入庫 E2E NOT VERIFIED |
+| P1 | 活動建立原有 Task、確認是否設報名時間／網址可點 | SOURCE IMPLEMENTED；新增 Task/DB/readback 跨功能實測 NOT VERIFIED |
+| P1 | Google Calendar 全天 transparent 日期標記、Life 日曆開網址 | SOURCE IMPLEMENTED；真實 OAuth／Google & Life 雙向 readback NOT VERIFIED |
+| UI | 三種風格與亮暗切換、六功能視覺辨識／首頁／筆記卡片 | SOURCE IMPLEMENTED（基礎與局部卡片）；海報完整插畫和 18 視圖視覺驗收 PARTIAL |
+| Release | 合併的單次 CI／staging／驗收／發布 | 最新 SHA 必須重跑，本輪未有最終合格證據 |
 
 ## B. 必要整合測試／驗收
 

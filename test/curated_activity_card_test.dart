@@ -7,10 +7,14 @@ import 'package:life_assistant/web/session_identity.dart';
 
 class _Api extends PlatformApi {
   final calls = <Map<String, dynamic>>[];
+  final reads = <String>[];
   bool saved = false;
 
   @override
-  Future<Map<String, dynamic>> get(String path) async => {'items': const []};
+  Future<Map<String, dynamic>> get(String path) async {
+    reads.add(path);
+    return {'items': const []};
+  }
 
   @override
   Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) async {
@@ -59,6 +63,28 @@ void main() {
     expect(find.text('已結束／截止'), findsOneWidget);
     expect(find.textContaining('★'), findsNothing);
     expect(find.byTooltip('取消收藏'), findsOneWidget);
+  });
+
+  testWidgets('two cards on the same page share one action read', (tester) async {
+    final api = _Api();
+    final first = List.filled(64, 'a').join();
+    final second = List.filled(64, 'b').join();
+    final sharedIds = '${first},${second}';
+    await tester.pumpWidget(ProviderScope(overrides: [
+      platformApiProvider.overrideWithValue(api),
+      sessionIdentityProvider.overrideWithValue('batch@tests.local'),
+    ], child: MaterialApp(home: Scaffold(body: ListView(children: [
+      CuratedActivityCard(
+        actionIds: sharedIds,
+        items: [{'identity_key': first, 'title': '親子活動',
+          'handoff_details': const {}, 'original_url': 'https://example.org/a'}]),
+      CuratedActivityCard(
+        actionIds: sharedIds,
+        items: [{'identity_key': second, 'title': '城市漫遊',
+          'handoff_details': const {}, 'original_url': 'https://example.org/b'}]),
+    ])))));
+    await tester.pumpAndSettle();
+    expect(api.reads.where((path) => path.contains('/actions?activity_ids=')).length, 1);
   });
 
   testWidgets('V3 card hides stars and toggles main bookmark explicitly', (tester) async {

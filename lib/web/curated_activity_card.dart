@@ -28,7 +28,11 @@ List<List<Map<String, dynamic>>> groupActivities(List<Map<String, dynamic>> item
 }
 
 
+// A successful personal action invalidates cached results in both entry pages.
+final curatedMutationEpochProvider = StateProvider<int>((ref) => 0);
+
 final curatedPageActionsProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, ids) {
+  ref.watch(curatedMutationEpochProvider);
   if (ref.watch(sessionIdentityProvider) == null) {
     throw StateError('Authentication required');
   }
@@ -46,6 +50,12 @@ class CuratedActivityCard extends ConsumerStatefulWidget {
 }
 
 class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
+  @override
+  void didUpdateWidget(covariant CuratedActivityCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.items, widget.items)) savedOverride = null;
+  }
+
   bool saving = false;
   String? message;
   bool? savedOverride;
@@ -75,6 +85,7 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
       ref.invalidate(curatedPageActionsProvider(
         widget.items.map((e) => e['identity_key']).join(',')));
       if (kind == 'save') savedOverride = active;
+      ref.read(curatedMutationEpochProvider.notifier).state++;
       widget.onChanged?.call();
       if (mounted) setState(() => message = active ? '個人操作已建立' : '個人操作已更新');
     } catch (_) {

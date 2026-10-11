@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'browser_navigation.dart';
 import 'platform_api.dart';
 import 'session_identity.dart';
+import 'activity_link.dart';
 
 final curatedActionsProvider = FutureProvider<Map<String, dynamic>>((ref) {
   if (ref.watch(sessionIdentityProvider) == null) {
@@ -25,9 +26,20 @@ List<List<Map<String, dynamic>>> groupActivities(List<Map<String, dynamic>> item
   }).toList();
 }
 
+
+final curatedPageActionsProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, ids) {
+  if (ref.watch(sessionIdentityProvider) == null) {
+    throw StateError('Authentication required');
+  }
+  return ref.read(platformApiProvider).get('/free-events/curated/actions?activity_ids=$ids');
+});
+
 class CuratedActivityCard extends ConsumerStatefulWidget {
-  const CuratedActivityCard({super.key, required this.items});
+  const CuratedActivityCard({super.key, required this.items,
+    required this.entry, this.onChanged});
   final List<Map<String, dynamic>> items;
+  final String entry;
+  final VoidCallback? onChanged;
   @override
   ConsumerState<CuratedActivityCard> createState() => _CuratedActivityCardState();
 }
@@ -35,136 +47,238 @@ class CuratedActivityCard extends ConsumerStatefulWidget {
 class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
   bool saving = false;
   String? message;
-  static const kinds = {
-    'save': '收藏', 'follow': '追蹤', 'task': '加入待辦',
-    'calendar_info': '標記活動日期（不占用時間）',
-    'calendar_registration': '標記報名時間', 'calendar_confirmed': '確定參與行程',
-    'reminder': '報名提前提醒（Google Calendar）',
-  };
-  static const trackingStatuses = {'interested': '想報名', 'waiting': '等開放',
-    'submitted': '已送出／待確認', 'confirmed': '成功', 'waitlisted': '候補',
-    'failed': '失敗', 'cancelled': '取消'};
+  bool? savedOverride;
 
-  Future<void> change(Map<String, dynamic> item, String kind, bool active) async {
-    final body = <String, dynamic>{'active': active};
-    if (active && kind == 'follow') {
-      final status = await showDialog<String>(context: context, builder: (ctx) => SimpleDialog(
-        title: const Text('個人追蹤狀態（不代表官方報名結果）'), children: [
-          for (final entry in trackingStatuses.entries)
-            SimpleDialogOption(onPressed: () => Navigator.pop(ctx, entry.key), child: Text(entry.value)),
-        ],
-      ));
-      if (status == null || !mounted) return;
-      body['tracking_status'] = status;
+  Map<String, dynamic> get main {
+    for (final item in widget.items) {
+      if ((item['handoff_details'] as Map?)?['record_type'] == 'main') return item;
     }
-    if (active && (kind == 'calendar_registration' || kind == 'reminder')) {
-      final phase = await showDialog<String>(context: context, builder: (ctx) => SimpleDialog(
-        title: const Text('選擇提醒時點'), children: [
-          SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'open'), child: const Text('報名開放')),
-          SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'deadline'), child: const Text('報名截止')),
-        ],
-      ));
-      if (phase == null || !mounted) return;
-      body['phase'] = phase;
-      if (kind == 'reminder') {
-        final lead = await showDialog<int>(context: context, builder: (ctx) => SimpleDialog(
-          title: const Text('提前多久提醒'), children: [
-            for (final minutes in [60, 1440]) SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, minutes),
-              child: Text(minutes == 60 ? '一小時' : '一天'),
-            ),
-          ],
-        ));
-        if (lead == null || !mounted) return;
-        body['lead_minutes'] = lead;
-      }
-    }
-    if (active && kind == 'calendar_confirmed') {
-      final day = await showDatePicker(context: context, initialDate: DateTime.now(),
-          firstDate: DateTime(2000), lastDate: DateTime(2100));
-      if (day == null || !mounted) return;
-      final start = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 9, minute: 0), helpText: '實際參與開始');
-      if (start == null || !mounted) return;
-      final end = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 10, minute: 0), helpText: '實際參與結束');
-      if (end == null || !mounted) return;
-      final begins = DateTime(day.year, day.month, day.day, start.hour, start.minute);
-      final ends = DateTime(day.year, day.month, day.day, end.hour, end.minute);
-      if (!ends.isAfter(begins)) {
-        setState(() => message = '結束時間必須晚於開始時間');
-        return;
-      }
-      body['start'] = begins.toUtc().toIso8601String();
-      body['end'] = ends.toUtc().toIso8601String();
-    }
+    return widget.items.first;
+  }
+
+  Uri? _url(Map<String, dynamic> item) {
+    final d = item['handoff_details'] as Map? ?? const {};
+    return validActivityUrl(d['registration_url']?.toString()) ??
+      validActivityUrl(d['official_url']?.toString()) ??
+      validActivityUrl(item['original_url']?.toString());
+  }
+
+  Future<void> _act(Map<String, dynamic> item, String kind, bool active,
+      {Map<String, dynamic> data = const {}}) async {
     setState(() { saving = true; message = null; });
     try {
-      await ref.read(platformApiProvider).put('/free-events/curated/${item['identity_key']}/actions/$kind', body);
-      ref.invalidate(curatedActionsProvider);
-      if (mounted) setState(() => message = active ? '已加入' : '已取消；原待辦會標為取消');
+      await ref.read(platformApiProvider).put(
+        '/free-events/curated/${item['identity_key']}/actions/$kind',
+        {'active': active, ...data},
+      );
+      ref.invalidate(curatedPageActionsProvider(
+        widget.items.map((e) => e['identity_key']).join(',')));
+      if (kind == 'save') savedOverride = active;
+      widget.onChanged?.call();
+      if (mounted) setState(() => message = active ? '個人操作已建立' : '個人操作已更新');
     } catch (_) {
-      if (mounted) setState(() => message = '未完成操作。請確認日期／報名時間、Google Calendar 授權或連線，再重試。');
+      if (mounted) setState(() => message = '操作未完成；請檢查資料、授權或連線。');
     } finally {
       if (mounted) setState(() => saving = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final actions = ref.watch(curatedActionsProvider);
-    final values = (actions.asData?.value['items'] as List?) ?? const [];
-    final main = widget.items.first;
-    return Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(main['title']?.toString() ?? '', style: Theme.of(context).textTheme.titleMedium),
-        if (widget.items.length > 1) Text('${widget.items.length} 個活動／優惠／場次，合併顯示'),
-        for (final item in widget.items) ExpansionTile(
-          initiallyExpanded: widget.items.length == 1,
-          title: Text(item['title']?.toString() ?? ''),
-          subtitle: Text('${'★' * ((item['importance'] as num?)?.toInt() ?? 1)} · ${item['city'] ?? '地區未知'}'),
-          children: [Padding(padding: const EdgeInsets.all(8), child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('活動日期：${item['starts_on'] ?? '未知'} ～ ${item['ends_on'] ?? '未知'}'),
-              Text('不可退費用：${item['fee_amount'] ?? '未知'} · 福利面額：${item['benefit_value'] ?? '未知'}'),
-              ..._details(item),
-              const Text('星等代表價值；不代表已開放報名或仍有名額。'),
-              Wrap(children: [
-                TextButton.icon(icon: const Icon(Icons.open_in_new), label: const Text('活動原頁'),
-                  onPressed: () => ref.read(browserNavigationProvider).openExternal(item['original_url'].toString())),
-                if ((item['handoff_details'] as Map?)?['registration_url'] != null)
-                  TextButton(onPressed: () => ref.read(browserNavigationProvider).openExternal(
-                      (item['handoff_details'] as Map)['registration_url'].toString()), child: const Text('報名／優惠原頁')),
+  Future<void> _taskDialog(Map<String, dynamic> item) async {
+    final title = TextEditingController(text: '處理活動：${item['title'] ?? ''}');
+    final d = item['handoff_details'] as Map? ?? const {};
+    final open = d['registration_open_at_tpe']?.toString();
+    final end = d['registration_deadline_at_tpe']?.toString() ??
+      item['registration_deadline']?.toString();
+    var selection = 'none';
+    try {
+      final choice = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (dialog) => StatefulBuilder(builder: (dialog, redraw) =>
+          AlertDialog(
+            title: const Text('建立待辦'),
+            content: SizedBox(width: 390, child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(controller: title, maxLength: 400,
+                  decoration: const InputDecoration(labelText: '待辦名稱')),
+                const Align(alignment: Alignment.centerLeft, child: Text('到期日選擇')),
+                RadioGroup<String>(
+                  groupValue: selection,
+                  onChanged: (v) => redraw(() => selection = v ?? 'none'),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const RadioListTile<String>(value: 'none', title: Text('不設日期')),
+                    if (open != null && open.contains('T'))
+                      RadioListTile<String>(value: 'open',
+                        title: Text('報名開放：$open')),
+                    if (end != null && end.contains('T'))
+                      RadioListTile<String>(value: 'deadline',
+                        title: Text('報名截止：$end')),
+                  ]),
+                ),
+                const Text('會建立在原本待辦功能，並附上活動網址。'),
               ]),
-              if (actions.isLoading) const LinearProgressIndicator(),
-              if (actions.hasError) const Text('無法讀取個人操作狀態，請重新整理。'),
-              Wrap(spacing: 6, children: [for (final kind in kinds.keys)
-                FilterChip(label: Text(kinds[kind]!),
-                  selected: values.any((a) => a['activity_id'] == item['identity_key'] && a['kind'] == kind && a['active'] == true),
-                  onSelected: saving || actions.isLoading || actions.hasError ? null : (active) => change(item, kind, active)),
-              ]),
-              for (final action in values.where((a) => a['activity_id'] == item['identity_key'] && a['kind'] == 'follow' && a['active'] == true))
-                Text('個人追蹤：${trackingStatuses[(action['payload'] as Map?)?['tracking_status']] ?? '未知'}（不代表官方報名結果）'),
-              if (values.any((a) => a['activity_id'] == item['identity_key'] && a['kind'] == 'follow' && a['active'] == true))
-                TextButton(onPressed: saving ? null : () => change(item, 'follow', true), child: const Text('更新個人追蹤狀態')),
+            )),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialog),
+                child: const Text('取消')),
+              FilledButton(onPressed: title.text.trim().isEmpty ? null :
+                () => Navigator.pop(dialog, {
+                  'task_title': title.text.trim(), 'task_due_choice': selection,
+                }), child: const Text('建立')),
             ],
-          ))],
+          ),
         ),
-        if (message != null) Text(message!),
-      ],
-    )));
+      );
+      if (choice != null && mounted) await _act(item, 'task', true, data: choice);
+    } finally {
+      title.dispose();
+    }
   }
 
-  List<Widget> _details(Map<String, dynamic> item) {
-    final details = item['handoff_details'] as Map? ?? const {};
-    return [
-      Text('主辦：${details['organizer'] ?? '未知'} · 分類：${item['category'] ?? '未知'}'),
-      Text('活動類型：${details['opportunity_type'] ?? '未知'} · 區域：${details['district'] ?? '未知'}'),
-      Text('活動時段：${details['start_at_tpe'] ?? item['starts_on'] ?? '未知'} ～ ${details['end_at_tpe'] ?? item['ends_on'] ?? '未知'}'),
-      Text('報名開放：${details['registration_open_at_tpe'] ?? '未知'}'),
-      Text('報名截止：${details['registration_deadline_at_tpe'] ?? item['registration_deadline'] ?? '未知'}'),
-      Text('可退押金：${details['refundable_deposit_ntd'] ?? '未知'}；退款／資格條件：${details['eligibility_limit'] ?? '請查主辦原頁'}'),
-      Text('地點：${details['venue'] ?? '未知'}'),
-      Text('來源證據：${details['evidence_summary'] ?? item['summary'] ?? '待核'}'),
-      Text('查核時間：${details['verified_at_tpe'] ?? '未知'}'),
-    ];
+  @override
+  Widget build(BuildContext context) {
+    if (widget.items.isEmpty) return const SizedBox.shrink();
+    final item = main;
+    final theme = Theme.of(context);
+    final urgent = widget.entry == 'opportunities';
+    final accent = urgent ? const Color(0xFFD56D70) : const Color(0xFFE09A4B);
+    final d = item['handoff_details'] as Map? ?? const {};
+    final saved = savedOverride ?? widget.items.any((e) => e['saved'] == true);
+    final ids = widget.items.map((e) => e['identity_key']).join(',');
+    final actions = ref.watch(curatedPageActionsProvider(ids));
+    final values = (actions.asData?.value['items'] as List?) ?? const [];
+    final importantDate = urgent
+      ? (d['registration_open_at_tpe'] ?? d['registration_deadline_at_tpe'] ??
+        item['registration_deadline'])
+      : item['starts_on'];
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(gradient: LinearGradient(
+            colors: [accent.withValues(alpha: .14), theme.colorScheme.surface])),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(width: 52, height: 52,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: .15),
+                borderRadius: BorderRadius.circular(17)),
+              child: Icon(urgent ? Icons.confirmation_number_outlined :
+                Icons.explore_outlined, color: accent, size: 28)),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(item['title']?.toString() ?? '未命名活動',
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 5),
+              if (item['summary']?.toString().trim().isNotEmpty == true)
+                Text(item['summary'].toString(), maxLines: 2,
+                  overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
+              const SizedBox(height: 8),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                if (importantDate != null)
+                  _EventChip(Icons.event_outlined, importantDate.toString()),
+                _EventChip(Icons.place_outlined, item['city']?.toString() ?? '地區待確認'),
+                if (item['fee_kind'] == 'free')
+                  const _EventChip(Icons.sell_outlined, '免費'),
+                if (widget.items.length > 1)
+                  _EventChip(Icons.layers_outlined, '${widget.items.length} 個場次'),
+              ]),
+            ])),
+            IconButton(
+              key: ValueKey('activity-bookmark-${item['identity_key']}'),
+              tooltip: saved ? '取消收藏' : '收藏',
+              icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border,
+                color: saved ? accent : null),
+              onPressed: saving ? null : () => _act(item, 'save', !saved)),
+          ]),
+        ),
+        for (final child in widget.items)
+          ExpansionTile(
+            key: ValueKey('activity-detail-${child['identity_key']}'),
+            initiallyExpanded: widget.items.length == 1,
+            title: Text(widget.items.length == 1 ? '詳情與個人操作' :
+              (child['title']?.toString() ?? '相關場次')),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            children: [
+              Align(alignment: Alignment.centerLeft, child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  for (final line in _details(child))
+                    Padding(padding: const EdgeInsets.only(bottom: 5),
+                      child: Text(line, style: theme.textTheme.bodySmall)),
+                  const Text('報名狀態／名額請以活動原站為準。'),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 7, children: [
+                    if (_url(child) case final url?)
+                      FilledButton.icon(
+                        key: ValueKey('activity-url-${child['identity_key']}'),
+                        onPressed: () => ref.read(browserNavigationProvider)
+                          .openExternal(url.toString()),
+                        icon: const Icon(Icons.open_in_new, size: 18),
+                        label: const Text('前往網址')),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.add_task),
+                      label: const Text('建立待辦'),
+                      onPressed: saving || actions.isLoading || actions.hasError ||
+                          values.any((a) => a['activity_id'] == child['identity_key'] &&
+                            a['kind'] == 'task' && a['active'] == true)
+                        ? null : () => _taskDialog(child)),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.event_available_outlined),
+                      label: const Text('日曆日期標記'),
+                      onPressed: saving || actions.isLoading || actions.hasError ||
+                          child['starts_on'] == null ||
+                          values.any((a) => a['activity_id'] == child['identity_key'] &&
+                            a['kind'] == 'calendar_info' && a['active'] == true)
+                        ? null : () => _act(child, 'calendar_info', true)),
+                  ]),
+                ],
+              )),
+            ],
+          ),
+        if (actions.isLoading) const LinearProgressIndicator(minHeight: 2),
+        if (actions.hasError)
+          const Padding(padding: EdgeInsets.all(12),
+            child: Text('個人操作狀態暫時無法取得')),
+        if (message != null) Padding(padding: const EdgeInsets.all(12),
+          child: Text(message!, style: theme.textTheme.bodySmall)),
+      ]),
+    );
   }
+
+  List<String> _details(Map<String, dynamic> item) {
+    final d = item['handoff_details'] as Map? ?? const {};
+    final rows = <String>[
+      '活動日期：${item['starts_on'] ?? '待確認'} ～ ${item['ends_on'] ?? '待確認'}',
+      '主辦：${d['organizer'] ?? '待確認'}',
+      '地點：${d['venue'] ?? item['city'] ?? '待確認'}',
+      '報名開放：${d['registration_open_at_tpe'] ?? '待公布'}',
+      '報名截止：${d['registration_deadline_at_tpe'] ?? item['registration_deadline'] ?? '待公布'}',
+      '費用：${item['fee_kind'] == 'free' ? '免費' : item['fee_kind'] == 'paid' ? '付費' : '待確認'}',
+    ];
+    if (d['eligibility_limit']?.toString().isNotEmpty == true) {
+      rows.add('資格：${d['eligibility_limit']}');
+    }
+    if (d['evidence_summary']?.toString().isNotEmpty == true) {
+      rows.add('來源：${d['evidence_summary']}');
+    }
+    return rows;
+  }
+}
+
+class _EventChip extends StatelessWidget {
+  const _EventChip(this.icon, this.label);
+  final IconData icon;
+  final String label;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(20)),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 15, color: Theme.of(context).colorScheme.primary),
+      const SizedBox(width: 5),
+      Text(label, style: Theme.of(context).textTheme.labelSmall),
+    ]),
+  );
 }

@@ -6,6 +6,7 @@ import 'api_client.dart';
 import 'platform_api.dart';
 import 'habit_api.dart';
 import 'session_identity.dart';
+import 'visual_system.dart';
 
 final _todayDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   if (ref.watch(sessionIdentityProvider) == null) {
@@ -61,7 +62,31 @@ class TodayPage extends ConsumerWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1060),
             child: ListView(padding: const EdgeInsets.all(16), children: [
-              Text('今日重點', style: Theme.of(context).textTheme.headlineSmall),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: LinearGradient(colors: [
+                    Theme.of(context).colorScheme.primary.withValues(alpha: .12),
+                    Theme.of(context).colorScheme.surface,
+                  ]),
+                ),
+                child: Row(children: [
+                  Icon(Icons.wb_sunny_outlined, size: 32,
+                    color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('今日重點', style: Theme.of(context).textTheme.headlineMedium),
+                      const SizedBox(height: 4),
+                      Text('生活的每一步，都能在這裡找到。',
+                        style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  )),
+                ]),
+              ),
+              const SizedBox(height: 12),
               for (final key in cards)
                 if (flags?[key] ?? true) _card(context, ref, key, snapshot),
             ]),
@@ -157,11 +182,34 @@ class TodayPage extends ConsumerWidget {
     }
   }
 
-  Widget _tile(BuildContext context, String title, String summary, String route) =>
-      Card(child: ListTile(
-        title: Text(title),
-        subtitle: Text(summary.isEmpty ? '目前沒有資料' : summary),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => context.go(route),
-      ));
+  Widget _tile(BuildContext context, String title, String summary, String route) {
+    final feature = switch (route) {
+      '/tasks' => LifeVisualFeature.tasks,
+      '/calendar' => LifeVisualFeature.calendar,
+      '/projects' => LifeVisualFeature.projects,
+      '/more/notes' => LifeVisualFeature.notes,
+      '/more/curated' || '/more/explore' => LifeVisualFeature.explore,
+      '/more/opportunities' => LifeVisualFeature.opportunities,
+      _ => null,
+    };
+    final tint = feature?.color ?? Theme.of(context).colorScheme.primary;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Card(clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          leading: Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(color: tint.withValues(alpha: .13),
+              borderRadius: BorderRadius.circular(13)),
+            child: Icon(feature?.icon ?? Icons.dashboard_customize_outlined, color: tint),
+          ),
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: Text(summary.isEmpty ? '目前沒有資料' : summary,
+            maxLines: 3, overflow: TextOverflow.ellipsis),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => context.go(route),
+        )),
+    );
+  }
 }

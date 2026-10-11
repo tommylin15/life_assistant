@@ -125,7 +125,7 @@ def calendar_payload(item, kind, body):
 async def my_actions(response: Response, user: dict = Depends(activity_access), db: AsyncSession = Depends(get_db),
                      activity_ids: str | None = Query(None, max_length=6500)):
     statement = select(CuratedPersonalAction).where(CuratedPersonalAction.user_sub == user["sub"])
-    if activity_ids:
+    if isinstance(activity_ids, str) and activity_ids:
         ids = activity_ids.split(",")
         if len(ids) > 100 or any(len(i) != 64 or not all(c in "0123456789abcdef" for c in i) for i in ids):
             raise HTTPException(422, "Invalid activity id list")

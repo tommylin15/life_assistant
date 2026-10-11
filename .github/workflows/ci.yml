@@ -249,6 +249,9 @@ jobs:
       - name: Test V3 staging version and pinned Cloud Run revision gates
         run: python -m unittest tests/test_v3_staging_gate.py -v
 
+      - name: Test gated same-SHA production Hosting auto-dispatch and rollback
+        run: python -m unittest tests/test_v3_auto_production_hosting_workflow.py -v
+
       - name: Test OAuth canary diagnostics without Cloud Logging permissions
         run: python -m unittest tests/test_v3_oauth_diagnostics.py -v
       - name: Test retired free-events Scheduler classification

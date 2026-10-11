@@ -90,7 +90,6 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
     for (final offset in offsets) {
       ref.invalidate(curatedListProvider(_query(offset)));
     }
-    ref.invalidate(curatedPageActionsProvider); // family cache is per visible event
   }
 
   @override
@@ -98,7 +97,6 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
     final chips = opportunity ? opportunityChips : explorationChips;
     final optionState = ref.watch(curatedOptionsProvider);
     final options = optionState.asData?.value ?? const {};
-    final wide = MediaQuery.sizeOf(context).width >= 920;
     final pages = <Widget>[];
     var hasMore = false;
     int? nextOffset;

@@ -72,6 +72,44 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
+      - name: Set up gcloud for production readback
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Guard same-SHA promoted backend and snapshot production Hosting
+        id: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_SHA"
+          gcloud run services describe life-assistant-api \
+            --project "$GCP_PROJECT_ID" --region us-central1 --format=json \
+            > "$RUNNER_TEMP/hosting-backend-service.json"
+          LIVE_REVISION="$(jq -er '
+            [.status.traffic[] | select((.percent // 0) == 100)] |
+            if length == 1 then .[0].revisionName else error("unexpected production traffic") end
+          ' "$RUNNER_TEMP/hosting-backend-service.json")"
+          gcloud run revisions describe "$LIVE_REVISION" \
+            --project "$GCP_PROJECT_ID" --region us-central1 --format=json \
+            > "$RUNNER_TEMP/hosting-backend-revision.json"
+          EXPECTED_DIGEST="$(docker buildx imagetools inspect \
+            "ghcr.io/tommylin15/life_assistant-backend:$RELEASE_SHA" \
+            --format '{{.Manifest.Digest}}')"
+          [[ "$EXPECTED_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          EXPECTED_IMAGE="ghcr.io/tommylin15/life_assistant-backend@$EXPECTED_DIGEST"
+          python .github/scripts/v3_image_identity.py --resource revision \
+            --json "$RUNNER_TEMP/hosting-backend-revision.json" \
+            --expected "$EXPECTED_IMAGE"
+          TOKEN="$(gcloud auth print-access-token)"
+          curl -fsS --retry 3 -H "Authorization: Bearer $TOKEN" \
+            "https://firebasehosting.googleapis.com/v1beta1/sites/$GCP_PROJECT_ID/releases?pageSize=10" \
+            > "$RUNNER_TEMP/production-hosting-before.json"
+          PREVIOUS="$(jq -er '.releases | max_by(.releaseTime) | .version.name' \
+            "$RUNNER_TEMP/production-hosting-before.json")"
+          [[ "$PREVIOUS" == "sites/$GCP_PROJECT_ID/versions/"* ]]
+          echo "version=$PREVIOUS" >> "$GITHUB_OUTPUT"
+          echo "production_hosting_preflight=PASS sha=$RELEASE_SHA backend_revision=$LIVE_REVISION prior_hosting=$PREVIOUS" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -81,7 +119,23 @@ jobs:
         run: npm install --global firebase-tools
 
       - name: Deploy Firebase Hosting
+        id: firebase_publish
         run: firebase deploy --only hosting --project "$GCP_PROJECT_ID" --non-interactive
+
+      - name: Capture exact published production Hosting version
+        id: published
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          curl -fsS --retry 3 -H "Authorization: Bearer $TOKEN" \
+            "https://firebasehosting.googleapis.com/v1beta1/sites/$GCP_PROJECT_ID/releases?pageSize=10" \
+            > "$RUNNER_TEMP/production-hosting-after.json"
+          PUBLISHED="$(jq -er '.releases | max_by(.releaseTime) | .version.name' \
+            "$RUNNER_TEMP/production-hosting-after.json")"
+          [[ "$PUBLISHED" == "sites/$GCP_PROJECT_ID/versions/"* ]]
+          echo "version=$PUBLISHED" >> "$GITHUB_OUTPUT"
+          echo "production_hosting_publish=ATTEMPTED version=$PUBLISHED sha=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify Firebase Hosting
         run: |
@@ -242,3 +296,41 @@ jobs:
           name: project-ui-production-acceptance-${{ env.RELEASE_SHA }}
           path: /tmp/project-ui-acceptance.png
           if-no-files-found: ignore
+
+      - name: Restore previous production Hosting on failed readback
+        if: ${{ failure() && steps.firebase_publish.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIOUS="${{ steps.baseline.outputs.version }}"
+          PUBLISHED="${{ steps.published.outputs.version }}"
+          [[ "$PREVIOUS" == "sites/$GCP_PROJECT_ID/versions/"* ]]
+          if [[ -z "$PUBLISHED" ]]; then
+            echo "::error::production_hosting_rollback=NOT_VERIFIED published_version_unavailable; manual review required"
+            exit 1
+          fi
+          TOKEN="$(gcloud auth print-access-token)"
+          BASE="https://firebasehosting.googleapis.com/v1beta1/sites/$GCP_PROJECT_ID"
+          curl -fsS --retry 3 -H "Authorization: Bearer $TOKEN" \
+            "$BASE/releases?pageSize=10" > "$RUNNER_TEMP/hosting-rollback-current.json"
+          CURRENT="$(jq -er '.releases | max_by(.releaseTime) | .version.name' \
+            "$RUNNER_TEMP/hosting-rollback-current.json")"
+          if [[ "$CURRENT" == "$PREVIOUS" ]]; then
+            echo "production_hosting_rollback=NOT_NEEDED already_previous_version" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ "$CURRENT" != "$PUBLISHED" ]]; then
+            echo "::error::production_hosting_rollback=NOT_VERIFIED concurrent_release_detected; manual review required"
+            exit 1
+          fi
+          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"message":"Restore prior production Hosting after failed V3 verification"}' \
+            "$BASE/releases?versionName=$PREVIOUS" \
+            > "$RUNNER_TEMP/hosting-rollback-response.json"
+          curl -fsS --retry 3 -H "Authorization: Bearer $TOKEN" \
+            "$BASE/releases?pageSize=10" > "$RUNNER_TEMP/hosting-rollback-after.json"
+          RESTORED="$(jq -er '.releases | max_by(.releaseTime) | .version.name' \
+            "$RUNNER_TEMP/hosting-rollback-after.json")"
+          test "$RESTORED" = "$PREVIOUS"
+          echo "production_hosting_rollback=PASS restored_version=$PREVIOUS" >> "$GITHUB_STEP_SUMMARY"

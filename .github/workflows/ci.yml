@@ -164,6 +164,10 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_curated_postgres_integration.py' -v
       - name: Verify rollback-only 0016 production-style runtime smoke on CI PostgreSQL
         run: python -m scripts.run_curated_pool_runtime_acceptance
+      # Run the *same* bounded synthetic provider/consent acceptance before
+      # deploying. It uses CI PostgreSQL and never calls Google or a real AI.
+      - name: Verify Drive AI opt-in and opt-out runtime on CI PostgreSQL
+        run: python -m scripts.run_drive_ai_enrichment_acceptance
       - name: Reproduce historical API create_all table collision and safely adopt schema
         shell: bash
         run: |

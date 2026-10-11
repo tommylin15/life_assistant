@@ -85,6 +85,10 @@ void main() {
     ]))))));
     await tester.pumpAndSettle();
     expect(api.reads.where((path) => path.contains('/actions?activity_ids=')).length, 1);
+    await tester.tap(find.byTooltip('收藏').first);
+    await tester.pumpAndSettle();
+    // Both cards see the same refreshed state through a single provider call.
+    expect(api.reads.where((path) => path.contains('/actions?activity_ids=')).length, 2);
   });
 
   testWidgets('V3 card hides stars and toggles main bookmark explicitly', (tester) async {

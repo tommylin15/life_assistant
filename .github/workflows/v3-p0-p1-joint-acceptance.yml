@@ -98,13 +98,24 @@ jobs:
             status="$(curl -sS -o /dev/null -w '%{http_code}' "$STAGE_URL$path")"
             test "$status" = 401 || { echo "::error::Staging $path unexpected status=$status"; exit 1; }
           done
+          curl -sS -D "$RUNNER_TEMP/stage-login" -o /dev/null "$STAGE_URL/auth/login"
+          python - "$RUNNER_TEMP/stage-login" <<'PY'
+          import sys
+          from urllib.parse import urlparse,parse_qs
+          headers=open(sys.argv[1],encoding="utf-8").read().splitlines()
+          links=[x.split(":",1)[1].strip() for x in headers if x.lower().startswith("location:")]
+          assert len(links)==1 and urlparse(links[0]).netloc=="accounts.google.com"
+          callback=parse_qs(urlparse(links[0]).query).get("redirect_uri",[""])[0]
+          assert callback=="https://life-assistant-v3-stage-tl15.web.app/auth/callback", "Staging OAuth callback mismatch"
+          print("staging_oauth_redirect=PASS fixed_staging_domain")
+          PY
           # This is only unauthenticated access control: it cannot establish
           # actual database aggregates or a completed Google login.
           PROD_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "$PROD_URL/api/v1/free-events/status")"
           test "$PROD_STATUS" = 401 || { echo "::error::P0 owner API not deployed/protected: status=$PROD_STATUS"; exit 1; }
           echo "p0_owner_only_boundary=PASS unauthenticated_401" >> "$GITHUB_STEP_SUMMARY"
           echo "p0_actual_db_aggregate_counts=NOT_VERIFIED real_owner_session_required" >> "$GITHUB_STEP_SUMMARY"
-          echo "staging_https_release_sha_pins_401=PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "staging_https_release_sha_pins_redirect=PASS" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Reconfirm production isolation and annotate partial E2E gates
         shell: bash

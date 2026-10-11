@@ -130,7 +130,11 @@ jobs:
           jq -e '.status=="PASS"' "$RUNNER_TEMP/gate.json"
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL/api/v1/free-events")" = 401
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL/auth/me")" = 401
-          echo "preview_sha_pins_api_401=PASS" >> "$GITHUB_STEP_SUMMARY"
+          curl -sS -D "$RUNNER_TEMP/login-headers.txt" -o /dev/null "$PREVIEW_URL/auth/login"
+          grep -Fiq 'location: https://accounts.google.com/' "$RUNNER_TEMP/login-headers.txt"
+          # Preview is a different ephemeral hostname. A preview OAuth redirect
+          # cannot prove the fixed staging callback; that is a separate live gate.
+          echo "preview_sha_pins_api_auth=PASS; owner_login_e2e=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify staging-only source and job preconditions
         if: ${{ inputs.apply }}
@@ -215,6 +219,9 @@ jobs:
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/api/v1/free-events")" = 401
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/api/v1/free-events/status")" = 401
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/auth/me")" = 401
+          curl -sS -D "$RUNNER_TEMP/live-login.txt" -o /dev/null "$LIVE_URL/auth/login"
+          grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' "$RUNNER_TEMP/live-login.txt"
+          echo "staging_oauth_redirect=PASS fixed_staging_domain; owner_login_e2e=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
           gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" --region "$REGION" --format=json > "$RUNNER_TEMP/run-after.json"
           jq -c '[.status.traffic[] | select((.percent//0)>0) | {revisionName,percent}] | sort_by(.revisionName)' "$RUNNER_TEMP/run-after.json" > "$RUNNER_TEMP/production-traffic-after.json"
           cmp "$RUNNER_TEMP/production-traffic-before.json" "$RUNNER_TEMP/production-traffic-after.json"
@@ -222,7 +229,7 @@ jobs:
           test "$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod-releases-after.json")" = "$(cat "$RUNNER_TEMP/prod-version-before.txt")"
           mutated=0
           trap - ERR EXIT INT TERM HUP
-          echo "staging_live_smoke=PASS sha=$RELEASE_SHA version=$VERSION; production_hosting_and_traffic=UNCHANGED; oauth=NOT_TESTED" >> "$GITHUB_STEP_SUMMARY"
+          echo "staging_live_smoke=PASS sha=$RELEASE_SHA version=$VERSION; production_hosting_and_traffic=UNCHANGED; oauth_redirect=PASS owner_login_e2e=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Record preflight-only result when not publishing
         if: ${{ !inputs.apply }}

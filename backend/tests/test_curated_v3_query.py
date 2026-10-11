@@ -52,6 +52,25 @@ class CuratedV3UnitTest(unittest.TestCase):
         self.assertIn("ends_on", sql)
         self.assertIn("starts_on", sql)
 
+    def test_default_opportunities_exclude_expired_deadlines_and_cancellations(self):
+        base = dict(
+            entry="opportunities", quick="latest", keyword=None, region=None,
+            city=None, district=None, category=None, fee_kind=None,
+            starts_from=None, today=date(2026, 10, 11), user_sub="owner",
+        )
+        ordinary = str(_activity_filters(
+            select(CuratedActivity), saved_only=False, **base,
+        ).compile(dialect=postgresql.dialect()))
+        saved = str(_activity_filters(
+            select(CuratedActivity), saved_only=True, **base,
+        ).compile(dialect=postgresql.dialect()))
+        # Normal opportunities respect a verified deadline and cancellation;
+        # saved history remains accessible after its action window expires.
+        self.assertIn("registration_deadline", ordinary)
+        self.assertIn("registration_status", ordinary)
+        self.assertNotIn("registration_deadline", saved)
+        self.assertNotIn("registration_status", saved)
+
     def test_calendar_source_url_and_transparent_exclusive_end(self):
         item = SimpleNamespace(
             title="測試活動",

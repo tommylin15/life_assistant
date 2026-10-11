@@ -32,7 +32,6 @@ class AppShell extends ConsumerWidget {
   static const _extra = <String, AppShellDestination>{
     'notes': AppShellDestination(path: '/more/notes', label: '筆記', icon: Icons.description_outlined, selectedIcon: Icons.description),
     'habits': AppShellDestination(path: '/more/habits', label: '習慣', icon: Icons.repeat, selectedIcon: Icons.repeat),
-    'events': AppShellDestination(path: '/more/curated', label: '精選', icon: Icons.event_outlined, selectedIcon: Icons.event),
     'opportunities': AppShellDestination(path: '/more/opportunities', label: '限時機會', icon: Icons.timer_outlined, selectedIcon: Icons.timer),
     'explore': AppShellDestination(path: '/more/explore', label: '活動探索', icon: Icons.explore_outlined, selectedIcon: Icons.explore),
     'shopping': AppShellDestination(path: '/more/shopping', label: '購物', icon: Icons.shopping_cart_outlined, selectedIcon: Icons.shopping_cart),
@@ -54,8 +53,8 @@ class AppShell extends ConsumerWidget {
     final width = MediaQuery.sizeOf(context).width;
     final prefs = ref.watch(uiPreferencesProvider).asData?.value;
     final flags = ref.watch(effectiveFeaturesProvider).asData?.value;
-    final pins = (prefs?['pinned'] as List?)?.cast<String>() ??
-        ['tasks', 'calendar', 'projects'];
+    final pins = ((prefs?['pinned'] as List?)?.cast<String>() ??
+        ['tasks', 'calendar', 'projects']).map((s) => s == 'events' ? 'explore' : s).toSet().toList();
     final mode = prefs?['nav_mode'] as String? ?? 'auto';
     final all = <String, AppShellDestination>{
       'today': destinations[0], 'tasks': destinations[1],
@@ -69,8 +68,9 @@ class AppShell extends ConsumerWidget {
         if (all.containsKey(key) && key != 'today') all[key]!,
       destinations.last,
     ];
-    final rest = (prefs?['more_order'] as List?)?.cast<String>() ??
-        ['notes', 'habits', 'events', 'opportunities', 'explore', 'shopping', 'drive', 'integrations'];
+    final rest = ((prefs?['more_order'] as List?)?.cast<String>() ??
+        ['notes', 'habits', 'opportunities', 'explore', 'shopping', 'drive', 'integrations'])
+        .map((s) => s == 'events' ? 'explore' : s).toSet().toList();
     final railKeys = <String>[
       ...pins,
       ...rest,

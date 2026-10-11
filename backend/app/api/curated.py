@@ -199,7 +199,7 @@ def _activity_filters(statement, *, entry, quick, keyword, region, city, distric
         statement = statement.where(or_(CuratedActivity.registration_required.is_(True),
                                          CuratedActivity.limited_offer.is_(True)))
     if not saved_only:
-        statement = statement.where(CuratedActivity.registration_status.notin_(["closed"])
+        statement = statement.where(CuratedActivity.registration_status.notin_(["closed", "full"])
             if entry == "opportunities" else literal(True))
         # Ends_on is authoritative only when present. Unknown end is not expired.
         statement = statement.where(or_(end.is_(None), end >= today))
@@ -316,8 +316,17 @@ async def list_curated(
         statement = statement.where(group.in_(select(saves.c.g)))
     opening = _registration_open_date()
     deadline = _taipei_deadline_date()
+    # Registration dates are not interchangeable with activity dates.
+    # Past opening dates should not outrank upcoming deadlines; unknown
+    # registration dates sort last instead of being invented from starts_on.
+    future_opening = case((opening >= today, opening), else_=None)
+    future_deadline = case((deadline >= today, deadline), else_=None)
+    actionable_today = case(
+        (CuratedActivity.registration_status == "open", literal(today)),
+        else_=None,
+    )
     order_day = (
-        func.min(func.coalesce(deadline, opening, CuratedActivity.starts_on))
+        func.min(func.least(future_opening, future_deadline, actionable_today))
         if entry == "opportunities"
         else func.min(case(
             (CuratedActivity.starts_on <= today,

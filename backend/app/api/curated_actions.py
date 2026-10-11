@@ -232,6 +232,15 @@ async def set_action(activity_id: str, kind: KINDS, body: ActionWrite,
             generation = latest.isoformat() if latest else "initial"
             event_id = active_member.entity_id if active_member else hashlib.sha256(f"{calendar_group}:{generation}".encode()).hexdigest()
             payload["calendar_group"] = calendar_group
+            if kind == "calendar_info":
+                # Snapshot what Life actually authored, not every child label.
+                # Shared parent/date members reuse the first member's baseline.
+                payload["generated_calendar"] = (
+                    (active_member.payload or {}).get("generated_calendar")
+                    if active_member and (active_member.payload or {}).get("generated_calendar")
+                    else {k: event_payload.get(k) for k in
+                          ("summary", "description", "location", "start", "end")}
+                )
             url = CALENDAR_EVENTS_URL + "/" + event_id
             existing = await _request_google(db, user["sub"], SERVICE_SCOPES["calendar"][0], "GET", url, preserve_transaction=True, allowed_status=(404, 410))
             if existing.status_code in (404, 410):
@@ -245,6 +254,32 @@ async def set_action(activity_id: str, kind: KINDS, body: ActionWrite,
                 CuratedPersonalAction.user_sub == user["sub"], CuratedPersonalAction.entity_id == record.entity_id,
                 CuratedPersonalAction.active.is_(True), CuratedPersonalAction.activity_id != activity_id))
             if other is None:
+                if kind == "calendar_info":
+                    baseline = (record.payload or {}).get("generated_calendar")
+                    if not baseline:
+                        # Legacy events do not have a creation snapshot. Never
+                        # erase a potentially hand-edited Google event blindly.
+                        raise HTTPException(409, "Calendar event has no safe removal baseline; review it in Google Calendar")
+                    remote = await _request_google(
+                        db, user["sub"], SERVICE_SCOPES["calendar"][0], "GET",
+                        CALENDAR_EVENTS_URL + "/" + record.entity_id,
+                        preserve_transaction=True, allowed_status=(404, 410),
+                    )
+                    if remote.status_code == 200:
+                        actual = remote.json()
+                        unchanged = (
+                            all(actual.get(k) == baseline.get(k)
+                                for k in ("summary", "description", "location"))
+                            and all(
+                                (actual.get(k) or {}).get("date") ==
+                                (baseline.get(k) or {}).get("date")
+                                for k in ("start", "end")
+                            )
+                        )
+                        if not unchanged:
+                            raise HTTPException(
+                                409, "Calendar event has been edited; do not delete personal changes"
+                            )
                 await _request_google(db, user["sub"], SERVICE_SCOPES["calendar"][0], "DELETE",
                     CALENDAR_EVENTS_URL + "/" + record.entity_id, preserve_transaction=True, allowed_status=(404, 410))
     record.active = body.active

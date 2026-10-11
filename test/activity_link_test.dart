@@ -11,6 +11,9 @@ void main() {
       'https://user:pass@events.example.com',
       'https://events.example.com:8080/a',
       'https://events.example.com/a b',
+      'https://127.0.0.1/inside', 'https://192.168.1.2/status',
+      'https://8.8.8.8/', 'https://999.999.999.999/',
+      'https://.invalid.example/a',
     ]) {
       expect(validActivityUrl(url), isNull, reason: url);
     }

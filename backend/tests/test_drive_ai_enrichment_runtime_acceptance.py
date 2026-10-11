@@ -1,3 +1,4 @@
+import asyncio
 import py_compile
 import unittest
 import uuid
@@ -33,6 +34,17 @@ class DriveAIEnrichmentRuntimeAcceptanceContractTests(unittest.TestCase):
         self.assertIs(resolver(owner_id=uuid.uuid4()), provider)
         self.assertEqual(provider.tag_calls, 0)
         self.assertEqual(provider.note_calls, 0)
+
+    def test_synthetic_personal_consent_does_not_change_global_ai_policy(self):
+        from app.services import drive_enrichment
+        from app.models.curated import LifeAIPolicy
+        self.assertIsNot(acceptance._acceptance_platform_policy,
+                         drive_enrichment._load_life_ai_policy)
+        self.assertIsNone(asyncio.run(acceptance._acceptance_platform_policy(object())))
+        source = self.script_path.read_text(encoding="utf-8")
+        self.assertIn("original_policy_resolver = drive_enrichment._load_life_ai_policy", source)
+        self.assertIn("drive_enrichment._load_life_ai_policy = original_policy_resolver", source)
+        self.assertNotIn("delete(LifeAIPolicy)", source)
 
     def test_runner_covers_privacy_cache_tags_suggestions_and_exact_cleanup(self):
         source = self.script_path.read_text(encoding="utf-8")
@@ -111,6 +123,7 @@ class DriveAIEnrichmentRolloutIsolationTests(unittest.IsolatedAsyncioTestCase):
             observed.update(acceptance.app.dependency_overrides)
             raise RuntimeError("stop before requests")
 
+        original_policy_resolver = acceptance.drive_enrichment._load_life_ai_policy
         with patch.object(acceptance, "_seed", new_callable=AsyncMock), patch.object(
             acceptance, "_cleanup", new_callable=AsyncMock
         ) as cleanup, patch.object(
@@ -119,6 +132,7 @@ class DriveAIEnrichmentRolloutIsolationTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(acceptance.AcceptanceStageError):
                 await acceptance.run_acceptance()
         cleanup.assert_awaited_once()
+        self.assertIs(acceptance.drive_enrichment._load_life_ai_policy, original_policy_resolver)
         self.assertEqual(set(observed), {acceptance.current_user, acceptance.DRIVE_FEATURE_GATE})
         self.assertIsNone(observed[acceptance.DRIVE_FEATURE_GATE]())
         self.assertFalse(set(observed) & set(acceptance.app.dependency_overrides))

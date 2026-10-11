@@ -124,6 +124,13 @@ class AcceptanceProvider(AIEnrichmentProvider):
         ]
 
 
+async def _acceptance_platform_policy(db: object) -> None:
+    # The synthetic run tests personal opt-in/out independently of the actual
+    # tenant-wide administrator pause. Never mutate the real platform policy.
+    del db
+    return None
+
+
 async def _acceptance_user() -> dict:
     return dict(ACCEPTANCE_USER)
 
@@ -368,6 +375,7 @@ async def run_acceptance() -> None:
     google_file_id = f"acceptance-drive-ai-file-{run_id}"
     provider = AcceptanceProvider(existing_tag_name, generated_tag_name, note_ids)
     original_provider_resolver = drive_enrichment.get_ai_enrichment_provider
+    original_policy_resolver = drive_enrichment._load_life_ai_policy
     primary_error: BaseException | None = None
     stage = "seed"
 
@@ -383,6 +391,7 @@ async def run_acceptance() -> None:
             label=label,
         )
         drive_enrichment.get_ai_enrichment_provider = _acceptance_provider_resolver(provider)
+        drive_enrichment._load_life_ai_policy = _acceptance_platform_policy
         app.dependency_overrides[current_user] = _acceptance_user
         # Test consent independently of admin rollout in this isolated runner.
         app.dependency_overrides[DRIVE_FEATURE_GATE] = lambda: None
@@ -552,6 +561,7 @@ async def run_acceptance() -> None:
         primary_error = AcceptanceStageError(stage, exc)
     finally:
         drive_enrichment.get_ai_enrichment_provider = original_provider_resolver
+        drive_enrichment._load_life_ai_policy = original_policy_resolver
         app.dependency_overrides.pop(current_user, None)
         app.dependency_overrides.pop(DRIVE_FEATURE_GATE, None)
         try:

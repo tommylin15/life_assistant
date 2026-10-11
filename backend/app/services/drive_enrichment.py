@@ -282,6 +282,11 @@ async def _run_view(
     }
 
 
+async def _load_life_ai_policy(db: AsyncSession) -> LifeAIPolicy | None:
+    """Read the real administrator policy unless a synthetic acceptance isolates it."""
+    return await db.get(LifeAIPolicy, "drive")
+
+
 async def enrich_document(
     db: AsyncSession,
     user_sub: str,
@@ -321,7 +326,7 @@ async def enrich_document(
     )
     # Apply governed platform pause/allow-list after individual consent checks.
     # Missing policy retains the previously approved server configuration.
-    ai_policy = await db.get(LifeAIPolicy, "drive")
+    ai_policy = await _load_life_ai_policy(db)
     policy_active = not isinstance(ai_policy, LifeAIPolicy) or ai_policy.enabled
     resolved_provider = provider or get_ai_enrichment_provider(owner_id=codex_owner_uuid(user_sub))
     if isinstance(ai_policy, LifeAIPolicy):

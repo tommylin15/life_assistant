@@ -191,7 +191,19 @@ assert data.get("version",{}).get("name")==sys.argv[2], "staging release version
 PY
 PHASE="staging_live_readback"
 verify_live_bounded "$PREVIEW_VERSION" "$RELEASE_SHA" "$CANDIDATE_REVISION"
-# OAuth callback/session verification is not a release or promotion gate.
+PHASE="staging_google_redirect"
+curl -sS -D "${WORK}/stage-oauth-headers" -o /dev/null "${STAGE_URL}/auth/staging/login"
+if ! grep -Eiq '^location: https://accounts[.]google[.]com/o/oauth2/' "${WORK}/stage-oauth-headers"; then
+  echo "staging_google_redirect=FAIL not_google" >&2
+  exit 1
+fi
+if ! grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' \
+  "${WORK}/stage-oauth-headers"; then
+  echo "staging_google_redirect=FAIL wrong_callback" >&2
+  exit 1
+fi
+echo "staging_google_redirect=PASS fixed_staging_callback"
+# Automated OAuth redirect verified; interactive owner callback/session not required.
 PHASE="production_traffic_unchanged"
 # No production traffic changed during staged live testing.
 snapshot_cloud "${WORK}/cloud-final.json"
@@ -204,5 +216,5 @@ after=protected_traffic(json.load(open(sys.argv[2])))
 assert before==after, "production Cloud Run traffic changed during staging"
 PY
 
-echo "staging_live=PASS sha=$RELEASE_SHA version=$PREVIEW_VERSION oauth=NOT_TESTED traffic_unchanged=true"
+echo "staging_live=PASS sha=$RELEASE_SHA version=$PREVIEW_VERSION oauth_redirect=PASS owner_login_e2e=NOT_VERIFIED traffic_unchanged=true"
 echo "staging_live=PASS sha=$RELEASE_SHA version=$PREVIEW_VERSION" >> "$GITHUB_STEP_SUMMARY"

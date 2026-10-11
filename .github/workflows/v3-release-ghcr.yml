@@ -171,7 +171,7 @@ jobs:
           echo "CANDIDATE_REVISION=$REVISION" >> "$GITHUB_ENV"
           echo "candidate=PASS revision=$REVISION traffic=0 digest=$IMAGE_REF" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Candidate health, database readiness and 401 access control
+      - name: Candidate health, database readiness, auth and authorization
         run: |
           set -euo pipefail
           URL="${{ steps.candidate.outputs.url }}"
@@ -179,7 +179,12 @@ jobs:
           curl --fail --silent --show-error --retry 3 --retry-delay 3 "$URL/ready" >/dev/null
           HTTP="$(curl --silent --output /dev/null --write-out '%{http_code}' "$URL/api/v1/tasks")"
           test "$HTTP" = 401
-          echo "candidate_http=PASS health,ready,401" >> "$GITHUB_STEP_SUMMARY"
+          curl --silent --show-error --dump-header "$RUNNER_TEMP/v3-login-headers" \
+            --output /dev/null "$URL/auth/login"
+          grep -Eiq '^location: https://accounts\.google\.com/o/oauth2/' "$RUNNER_TEMP/v3-login-headers"
+          grep -Fq 'redirect_uri=https%3A%2F%2Fgen-lang-client-0593591102.web.app%2Fauth%2Fcallback' \
+            "$RUNNER_TEMP/v3-login-headers"
+          echo "candidate_http=PASS health,ready,401,oauth-redirect" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pin migration job to same immutable release digest (do not execute)
         if: ${{ inputs.promote || inputs.publish_staging }}
@@ -309,12 +314,48 @@ jobs:
           # A new Firebase Hosting channel may 404 until CDN propagation.
           # Do not accept an incorrect SHA, an insecure API status or timeout.
           python scripts/v3_verify_preview.py
-          echo "preview=PASS release-sha=$RELEASE_SHA pinned-api-401=PASS" >> "$GITHUB_STEP_SUMMARY"
+          # Probe the real Firebase -> Cloud Run rewrite BEFORE touching staging
+          # live; the stage OAuth entrypoint must work even when the proxy
+          # hides the original Host / X-Forwarded-Host. No Google login follows.
+          curl --fail --silent --show-error --dump-header "$RUNNER_TEMP/stage-oauth-preview-headers" \
+            --output /dev/null "$PREVIEW_URL/auth/staging/login"
+          grep -Eiq '^location: https://accounts[.]google[.]com/o/oauth2/' \
+            "$RUNNER_TEMP/stage-oauth-preview-headers"
+          grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' \
+            "$RUNNER_TEMP/stage-oauth-preview-headers"
+          grep -Eiq '^set-cookie: __session=' "$RUNNER_TEMP/stage-oauth-preview-headers"
+          grep -Fq 'oauth:staging:' "$RUNNER_TEMP/stage-oauth-preview-headers"
+          echo "preview=PASS release-sha=$RELEASE_SHA 401-protected stage-oauth-rewrite-and-state=PASS" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Read-only fixed staging preview and rollback baseline preflight
         if: ${{ inputs.publish_staging }}
         shell: bash
         run: bash scripts/v3_fixed_staging_release.sh --preflight-only
+
+      - name: Require real Google integration fixture and acceptance before promotion
+        if: ${{ inputs.promote }}
+        run: |
+          set -euo pipefail
+          gcloud run jobs describe "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/v3-real-provider-job.json"
+          python - "$RUNNER_TEMP/v3-real-provider-job.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          containers=d.get("spec",{}).get("template",{}).get("spec",{}).get("template",{}).get("spec",{}).get("containers",[])
+          if not containers:
+              raise SystemExit("Cannot verify real Google fixture in job metadata")
+          keys={e.get("name") for c in containers for e in c.get("env",[])}
+          required={"DRIVE_ACCEPTANCE_USER_SUB","DRIVE_ACCEPTANCE_GOOGLE_FILE_ID"}
+          if not required.issubset(keys):
+              raise SystemExit("Real Google fixture missing; not accepting synthetic gates as real OAuth")
+          PY
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.run_drive_google_integration_acceptance \
+            --task-timeout 10m --wait --quiet
+          echo "real_google_drive_integration=PASS" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Rollback-only curated pool migration and personal UI runtime acceptance
         if: ${{ inputs.promote || inputs.publish_staging }}
@@ -375,7 +416,7 @@ jobs:
             --to-revisions="$CANDIDATE_REVISION=100" --quiet
           echo "promotion=ATTEMPTED revision=$CANDIDATE_REVISION" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Post-promotion live health, PostgreSQL and access gates
+      - name: Post-promotion live health, OAuth redirect, PostgreSQL and access gates
         if: ${{ inputs.promote }}
         shell: bash
         run: |
@@ -386,6 +427,10 @@ jobs:
           curl --fail --silent --show-error --retry 3 "$SERVICE_URL/ready" >/dev/null
           test "$(curl -s -o /dev/null -w '%{http_code}' "$SERVICE_URL/api/v1/tasks")" = 401
           test "$(curl -s -o /dev/null -w '%{http_code}' "$SERVICE_URL/api/v1/free-events")" = 401
+          curl -sS -D "$RUNNER_TEMP/v3-live-login-headers" -o /dev/null \
+            "$FRONTEND_URL/auth/login"
+          grep -Fq 'redirect_uri=https%3A%2F%2Fgen-lang-client-0593591102.web.app%2Fauth%2Fcallback' \
+            "$RUNNER_TEMP/v3-live-login-headers"
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
             | jq -e --arg rev "$CANDIDATE_REVISION" \
@@ -401,7 +446,7 @@ jobs:
               --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
               --args="-m,$MODULE" --task-timeout 10m --wait --quiet
           done
-          echo "live=PASS health,ready,401,postdeploy-integration" >> "$GITHUB_STEP_SUMMARY"
+          echo "live=PASS health,ready,401,oauth-redirect,postdeploy-integration" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Controlled rollback rehearsal and restore promoted live traffic
         if: ${{ inputs.promote && success() }}

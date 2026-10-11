@@ -159,18 +159,25 @@ async def set_action(activity_id: str, kind: KINDS, body: ActionWrite,
             parent = next((r for r in siblings
                 if (r.handoff_details or {}).get("record_type") == "main"), None)
             item = parent or min(siblings, key=lambda r: r.identity_key, default=item)
+            # Stable synthetic ID is independent of canonical URL and changing
+            # child identities. Prefix distinguishes it from 64-hex URL keys.
+            group_identity = "handoff:" + group
+            activity_id = "g:" + hashlib.sha256(group_identity.encode()).hexdigest()[:62]
             old_saves = (await db.execute(select(CuratedPersonalAction).where(
                 CuratedPersonalAction.user_sub == user["sub"],
                 CuratedPersonalAction.kind == "save",
                 CuratedPersonalAction.activity_id.in_([r.identity_key for r in siblings])
             ))).scalars().all()
             for old in old_saves:
-                if old.activity_id != item.identity_key:
-                    old.active = False
-            activity_id = item.identity_key
+                old.active = False
+        else:
+            group_identity = None
     key = (user["sub"], activity_id, kind)
     record = await db.get(CuratedPersonalAction, key)
     payload = body.model_dump(mode="json")
+    if kind == "save" and group_identity:
+        # Postgres lookup follows parent_group even when its URL/identity changes.
+        payload["parent_group"] = group_identity
     if not body.active and record and record.payload.get("calendar_group"):
         payload["calendar_group"] = record.payload["calendar_group"]
     same_payload = record is not None and all(record.payload.get(k) == v for k, v in payload.items())

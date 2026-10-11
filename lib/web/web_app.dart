@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../app/theme/app_theme.dart';
 import 'visual_system.dart';
 import 'acceptance_center_page.dart';
 import 'calendar_page.dart';

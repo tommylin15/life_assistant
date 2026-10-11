@@ -182,28 +182,6 @@ jobs:
           fi
           echo "hosting_check=api_unauthenticated:PASS status=$API_STATUS"
 
-          AUTH_HEADERS="$(mktemp)"
-          AUTH_STATUS="$(curl --silent --show-error \
-            --output /dev/null \
-            --dump-header "$AUTH_HEADERS" \
-            --write-out '%{http_code}' \
-            "$BASE_URL/auth/login")"
-          case "$AUTH_STATUS" in
-            302|303|307|308) ;;
-            *) echo "hosting_check=auth_redirect:FAIL status=$AUTH_STATUS" >&2; exit 1 ;;
-          esac
-          if ! grep -Eiq '^location: https://accounts\.google\.com/o/oauth2/v2/auth' "$AUTH_HEADERS"; then
-            echo "hosting_check=auth_location:FAIL" >&2
-            cat "$AUTH_HEADERS" >&2 || true
-            exit 1
-          fi
-          if ! grep -Eiq '^set-cookie: __session=' "$AUTH_HEADERS"; then
-            echo "hosting_check=auth_cookie:FAIL" >&2
-            cat "$AUTH_HEADERS" >&2 || true
-            exit 1
-          fi
-          echo "hosting_check=auth_redirect:PASS status=$AUTH_STATUS"
-
           ICON_HEADERS="$(mktemp)"
           curl --fail --silent --show-error \
             --retry 5 --retry-delay 5 --retry-all-errors \

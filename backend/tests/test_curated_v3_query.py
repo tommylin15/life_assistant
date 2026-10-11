@@ -32,7 +32,7 @@ class CuratedV3UnitTest(unittest.TestCase):
             category=None, fee_kind=None, starts_from=None,
             today=date(2026, 10, 11), saved_only=False, user_sub="owner",
         )
-        compiled = str(stmt.compile(dialect=postgresql.dialect()))
+        compiled = str(stmt.compile(dialect=postgresql.dialect(), compile_kwargs={'literal_binds': True}))
         self.assertIn("ILIKE", compiled.upper())
         self.assertIn("organizer", compiled)
         self.assertIn("venue", compiled)

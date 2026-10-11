@@ -215,7 +215,7 @@ echo "staging_oauth_canary=ACTIVE url=${STAGE_URL}/auth/staging/login" | tee -a 
   gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
   --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
   --args="-m,scripts.verify_staging_google_e2e,$CANDIDATE_REVISION,$CANARY_START_UTC" \
-  --task-timeout 10m --wait --quiet
+  --task-timeout 20m --wait --quiet
 
 PHASE="production_traffic_unchanged"
 # No production traffic changed during staged live testing.

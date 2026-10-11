@@ -18,6 +18,8 @@ ACTION_TYPES = ("staging_google_callback", "staging_google_session")
 # Exit codes propagate via Cloud Run task status even if Cloud Logging is inaccessible.
 OWNER_EVIDENCE_MISSING_EXIT = 20
 VERIFICATION_ERROR_EXIT = 21
+# Human approval must leave enough time for ChatGPT notification and browser OAuth.
+CANARY_EVIDENCE_WINDOW = timedelta(minutes=15)
 
 
 class OwnerEvidenceTimeout(TimeoutError):
@@ -58,7 +60,7 @@ async def verified_owner_oauth_pair() -> bool:
 async def run() -> None:
     # A bounded staging-only canary: no automatic Google sign-in simulation,
     # no production traffic changes, no recording of user_sub or credentials.
-    deadline = datetime.now(timezone.utc) + timedelta(minutes=6)
+    deadline = datetime.now(timezone.utc) + CANARY_EVIDENCE_WINDOW
     while datetime.now(timezone.utc) < deadline:
         if await verified_owner_oauth_pair():
             print("staging_true_google_callback_and_session=PASS", flush=True)

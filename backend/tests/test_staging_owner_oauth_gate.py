@@ -19,6 +19,14 @@ class StagingOwnerOAuthGateTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, expected_exit)
         return output.getvalue()
 
+    def test_human_oauth_canary_and_cloud_run_job_deadline_are_aligned(self):
+        from datetime import timedelta
+        from pathlib import Path
+        self.assertEqual(gate.CANARY_EVIDENCE_WINDOW, timedelta(minutes=15))
+        staging = Path(__file__).resolve().parents[2] / "scripts/v3_fixed_staging_release.sh"
+        content = staging.read_text()
+        self.assertIn("--task-timeout 20m --wait --quiet", content)
+
     def test_missing_owner_evidence_is_distinct_from_db_failure(self):
         line = self._run_failure(gate.OwnerEvidenceTimeout("not received"), gate.OWNER_EVIDENCE_MISSING_EXIT)
         self.assertIn("staging_oauth_e2e=NOT_VERIFIED", line)

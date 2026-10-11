@@ -174,6 +174,8 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
         endDate.substring(0, 10).compareTo(today) < 0;
     final full = urgent && item['registration_status'] == 'full';
     final closed = urgent && item['registration_status'] == 'closed';
+    final cancelled = item['registration_status'] == 'cancelled' ||
+        item['registration_status'] == 'canceled';
     final importantDate = urgent
       ? (d['registration_open_at_tpe'] ?? d['registration_deadline_at_tpe'] ??
         item['registration_deadline'])
@@ -209,7 +211,9 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
                 _EventChip(Icons.place_outlined, item['city']?.toString() ?? '地區待確認'),
                 if (item['fee_kind'] == 'free')
                   const _EventChip(Icons.sell_outlined, '免費'),
-                if (ended || closed)
+                if (cancelled)
+                  const _EventChip(Icons.event_busy_outlined, '已取消'),
+                if (!cancelled && (ended || closed))
                   const _EventChip(Icons.event_busy_outlined, '已結束／截止'),
                 if (full)
                   const _EventChip(Icons.info_outline, '已額滿'),

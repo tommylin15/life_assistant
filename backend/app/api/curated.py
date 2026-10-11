@@ -300,11 +300,17 @@ async def list_curated(
     # Legacy child saves and newer main saves both make the whole group saved.
     saves = (select(group.label("g"))
              .select_from(CuratedActivity)
-             .join(CuratedPersonalAction,
-                   CuratedPersonalAction.activity_id == CuratedActivity.identity_key)
-             .where(CuratedPersonalAction.kind == "save",
-                    CuratedPersonalAction.active.is_(True),
-                    CuratedPersonalAction.user_sub == _user.get("sub", ""))
+             .join(CuratedPersonalAction, and_(
+                 CuratedPersonalAction.kind == "save",
+                 CuratedPersonalAction.active.is_(True),
+                 CuratedPersonalAction.user_sub == _user.get("sub", ""),
+                 or_(
+                     # Legacy child saves remain visible until the next toggle.
+                     CuratedPersonalAction.activity_id == CuratedActivity.identity_key,
+                     # V3 stable parent saves survive canonical URL changes.
+                     CuratedPersonalAction.payload["parent_group"].as_string() == group,
+                 ),
+             ))
              .distinct().subquery())
     if saved_only:
         statement = statement.where(group.in_(select(saves.c.g)))

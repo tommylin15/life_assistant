@@ -5,7 +5,7 @@ import 'visual_system.dart';
 
 const _titles = <String, String>{
   'today':'首頁', 'tasks':'待辦', 'calendar':'日曆', 'projects':'專案',
-  'notes':'筆記', 'habits':'習慣', 'shopping':'購物', 'opportunities':'限時機會', 'explore':'活動探索',
+  'notes':'筆記', 'habits':'習慣', 'shopping':'購物', 'events':'精選活動', 'opportunities':'限時機會', 'explore':'活動探索',
   'drive':'Drive', 'integrations':'Google 整合', 'attention':'待關注',
 };
 
@@ -30,7 +30,13 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => const Center(child: Text('無法取得介面偏好')),
         data: (value) {
-          draft ??= Map<String, dynamic>.from(value);
+          draft ??= {
+            ...value,
+            'pinned': ((value['pinned'] as List).cast<String>())
+                .map((s) => s == 'events' ? 'explore' : s).toSet().toList(),
+            'more_order': ((value['more_order'] as List).cast<String>())
+                .map((s) => s == 'events' ? 'explore' : s).toSet().toList(),
+          };
           final mode = draft!['nav_mode'] as String;
           final pins = (draft!['pinned'] as List).cast<String>().toList();
           final home = (draft!['home_cards'] as List).cast<String>().toList();

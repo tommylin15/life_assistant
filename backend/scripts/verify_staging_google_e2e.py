@@ -16,6 +16,10 @@ CANARY_START_UTC = "REPLACE_ME"
 ACTION_TYPES = ("staging_google_callback", "staging_google_session")
 
 
+class OwnerEvidenceTimeout(TimeoutError):
+    """This release did not receive both genuine owner events in its canary window."""
+
+
 async def verified_owner_oauth_pair() -> bool:
     revision = EXPECTED_REVISION
     start = datetime.fromisoformat(CANARY_START_UTC.replace("Z", "+00:00"))
@@ -56,14 +60,22 @@ async def run() -> None:
             print("staging_true_google_callback_and_session=PASS", flush=True)
             return
         await asyncio.sleep(12)
-    raise RuntimeError("staging_true_google_callback_and_session=NOT_VERIFIED")
+    raise OwnerEvidenceTimeout("Owner callback/session pair not received")
 
 
 def main() -> None:
     try:
         asyncio.run(run())
-    except Exception:
-        print("staging_oauth_e2e=FAIL_OR_TIMEOUT; staging_rollback_required", flush=True)
+    except OwnerEvidenceTimeout:
+        # The owner did not complete a same-revision callback/session pair.
+        # Do not misclassify absence of evidence as a database outage.
+        print("staging_oauth_e2e=NOT_VERIFIED reason=missing_owner_callback_session; staging_rollback_required", flush=True)
+        raise SystemExit(1) from None
+    except Exception as exc:
+        # Exception messages may carry connection endpoints/credentials;
+        # logging the exception class only is safe and sufficient to distinguish
+        # an operational failure from lack of user authorization.
+        print(f"staging_oauth_e2e=FAIL reason=verification_error error_type={type(exc).__name__}; staging_rollback_required", flush=True)
         raise SystemExit(1) from None
 
 

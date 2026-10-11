@@ -18,6 +18,8 @@
 
 **真實 owner OAuth 是仍需本人互動的驗收門檻**：當 `staging_oauth_canary=ACTIVE` 出現，使用固定 staging 的 `/auth/staging/login` 完成 Google 登入後，同一瀏覽器進入 `/auth/me?staging_e2e=true`。CI 或匿名 HTTP redirect 不足以替代本人登入；沒有同次登入稽核紀錄時原流程判 FAIL，回復 staging 原版本。**自動開始不等於自動完成真人驗收**，不得把這類失敗寫成已上線。
 
+**2026-10-11 發布診斷改善（待該 SHA 的 CI／runtime 核實）：** `backend/scripts/verify_staging_google_e2e.py` 使用 Task 退出碼 `20` 表示本次 Owner callback＋session 證據在 canary 期間未取得（`NOT VERIFIED`），`21` 表示驗證器異常（`FAIL`）。共用診斷腳本僅在實際執行此驗證模組時，透過 Cloud Run Executions/Tasks 的唯讀狀態輸出分類，不依賴 `logging.logEntries.list` 權限；其他退出碼仍不推定原因。**兩類都使當次 staging 發布失敗並啟動既有 rollback**，不得因 `NOT VERIFIED` 將驗收當成 PASS。可執行的匿名測試為 `tests/test_v3_oauth_diagnostics.py`，後端失敗分類測試為 `backend/tests/test_staging_owner_oauth_gate.py`。目前 #38 仍只有 Task exit 1 的歷史證據，不能利用新版分類倒推舊失敗原因。
+
 ## 每次 staging 發布順序（程式保護已實作、實際發布未驗證）
 
 > 新的 V3 workflow 有獨立的 `workflow_dispatch.publish_staging` 布林欄位，預設 `false`。只有勾選才會執行 `scripts/v3_fixed_staging_release.sh`。該腳本先獨立唯讀核對上一個 staging live 版本、preview release SHA 與 API/auth 的真正 Hosting version pinned revision；只有 source/rollback baseline 齊全才允許更新，且只會對 staging site 使用 Firebase REST `releases.create?versionName=...` 將**已驗證的同一 version** 發布至 staging live。驗證失敗會在同一腳本嘗試用先前**確定的 Hosting version**回復，並核對固定入口 SHA、兩條 rewrite 的 pins。實際執行 PASS 尚未取得。

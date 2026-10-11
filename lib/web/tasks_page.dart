@@ -373,6 +373,7 @@ class _TaskOverview extends StatelessWidget {
   Widget build(BuildContext context) {
     final errorColor = overdueCount > 0 ? Theme.of(context).colorScheme.error : null;
     return Card(
+      color: Theme.of(context).colorScheme.primary.withValues(alpha: .06),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Wrap(

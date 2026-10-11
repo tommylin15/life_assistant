@@ -146,9 +146,9 @@ class CloudBuildV2Tests(unittest.TestCase):
                 self.assertIn('MAIN_SHA', source)
                 self.assertIn('all(.[];', source)
                 for gate in (
-                    'Promote exact Preview to independent fixed staging live and verify owner OAuth',
+                    'Promote exact Preview to independent fixed staging live and verify pinned routes',
                     'Reconfirm source SHA and live traffic, then promote',
-                    'Post-promotion live health, OAuth redirect, PostgreSQL and access gates',
+                    'Post-promotion live health, PostgreSQL and access gates',
                     'Controlled rollback rehearsal and restore promoted live traffic',
                     'Retain latest 10 revisions after all live gates PASS',
                     'Pin curated handoff Job after verified production promotion',

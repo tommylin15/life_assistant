@@ -43,9 +43,11 @@ class CuratedV3ReleaseGateTests(unittest.TestCase):
         self.assertIn("UserUIPreference", self.script)
         self.assertNotIn("await db.commit()", self.script)
 
-    def test_promotion_remains_opt_in_and_google_fixture_required(self):
+    def test_promotion_remains_opt_in_without_google_fixture_gate(self):
         self.assertIn("default: false", self.workflow)
-        self.assertIn("DRIVE_ACCEPTANCE_GOOGLE_FILE_ID", self.workflow)
+        self.assertNotIn("DRIVE_ACCEPTANCE_GOOGLE_FILE_ID", self.workflow)
+        self.assertNotIn("verify_staging_google_e2e", self.workflow)
+        self.assertIn("inputs.promote && !inputs.publish_staging", self.workflow)
         self.assertIn("PROMOTION=NOT REQUESTED", self.workflow)
         self.assertIn("--no-traffic --tag", self.workflow)
         self.assertIn("cancel-in-progress: false", self.workflow)

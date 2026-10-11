@@ -6,7 +6,6 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 RELEASE = ROOT / ".github/workflows/v3-release-ghcr.yml"
 SCRIPT = ROOT / "scripts/v3_fixed_staging_release.sh"
-AUTH_GATE = ROOT / "backend/scripts/verify_staging_google_e2e.py"
 
 
 class FixedStagingWorkflowTests(unittest.TestCase):
@@ -14,7 +13,6 @@ class FixedStagingWorkflowTests(unittest.TestCase):
     def setUpClass(cls):
         cls.release = RELEASE.read_text(encoding="utf-8")
         cls.staging = SCRIPT.read_text(encoding="utf-8")
-        cls.oauth = AUTH_GATE.read_text(encoding="utf-8")
 
     def test_staging_promotion_is_separate_explicit_manual_boolean(self):
         self.assertIn("publish_staging:", self.release)
@@ -50,7 +48,7 @@ class FixedStagingWorkflowTests(unittest.TestCase):
             'restore_stage',
             'hosting_post "$BASELINE"',
             'staging_rollback=FAIL',
-            'staging_google_e2e',
+            'staging_live_readback=PASS layer=pins_and_api_401',
             'snapshot_cloud',
             'protected_traffic',
             'staging_live=PASS',
@@ -60,11 +58,12 @@ class FixedStagingWorkflowTests(unittest.TestCase):
         self.assertNotIn('firebase deploy', s)
         self.assertNotIn('firebase hosting:clone', s)
 
-    def test_staging_oauth_canary_takes_real_revision_and_time_arguments(self):
-        self.assertIn("EXPECTED_REVISION, CANARY_START_UTC = sys.argv[1:]", self.oauth)
-        self.assertIn("count(DISTINCT action_type)=2", self.oauth)
-        self.assertIn("staging_google_callback", self.oauth)
-        self.assertIn("staging_google_session", self.oauth)
+    def test_staging_has_no_owner_oauth_gate_but_requires_pinned_401_readback(self):
+        self.assertNotIn("staging_oauth_canary", self.staging)
+        self.assertNotIn("verify_staging_google_e2e", self.staging)
+        self.assertNotIn("/auth/staging/login", self.staging)
+        self.assertIn("staging_live_readback=PASS layer=pins_and_api_401", self.staging)
+        self.assertIn("production_traffic_unchanged", self.staging)
 
 
 if __name__ == "__main__":

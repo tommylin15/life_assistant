@@ -224,6 +224,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
                   onChanged: (v) => filter(() => category = v ?? ''),
                 ),
                 SizedBox(width: 150, child: TextFormField(
+                  key: ValueKey('activity-district-$district'),
                   initialValue: district,
                   decoration: const InputDecoration(labelText: '行政區', hintText: '例如：中正區'),
                   textInputAction: TextInputAction.search,

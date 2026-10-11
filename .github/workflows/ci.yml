@@ -225,7 +225,6 @@ jobs:
           python -m py_compile backend/scripts/run_drive_knowledge_runtime_acceptance.py
           python -m py_compile backend/scripts/run_drive_google_integration_acceptance.py
           python -m py_compile backend/scripts/run_curated_pool_runtime_acceptance.py
-          python -m py_compile backend/scripts/verify_staging_google_e2e.py
           python -m py_compile .github/scripts/v3_firebase_error.py
           python -m py_compile .github/scripts/v3_gcs_object_inventory.py
           python -m py_compile .github/scripts/v3_image_identity.py
@@ -256,7 +255,8 @@ jobs:
       - name: Test gated same-SHA production Hosting auto-dispatch and rollback
         run: python -m unittest tests/test_v3_auto_production_hosting_workflow.py -v
 
-      - name: Test OAuth canary diagnostics without Cloud Logging permissions
-        run: python -m unittest tests/test_v3_oauth_diagnostics.py -v
+      - name: Test removed release OAuth gates and retained access controls
+        run: python -m unittest tests/test_v3_release_no_oauth_gate.py -v
+
       - name: Test retired free-events Scheduler classification
         run: python -m unittest tests/test_v3_free_event_retirement_readback.py -v

@@ -130,19 +130,13 @@ jobs:
           jq -e '.status=="PASS"' "$RUNNER_TEMP/gate.json"
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL/api/v1/free-events")" = 401
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL/auth/me")" = 401
-          curl -sS -D "$RUNNER_TEMP/login-headers.txt" -o /dev/null "$PREVIEW_URL/auth/login"
-          grep -Fiq 'location: https://accounts.google.com/' "$RUNNER_TEMP/login-headers.txt"
-          # Preview is a different ephemeral hostname. A preview OAuth redirect
-          # cannot prove the fixed staging callback; that is a separate live gate.
-          echo "preview_sha_pins_api_auth=PASS; fixed_origin_oauth=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
+          echo "preview_sha_pins_api_401=PASS" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify bounded staging-only canary preconditions
+      - name: Verify staging-only source and job preconditions
         if: ${{ inputs.apply }}
         shell: bash
         run: |
           set -euo pipefail
-          test -f backend/scripts/verify_staging_google_e2e.py
-          python -m py_compile backend/scripts/verify_staging_google_e2e.py
           gcloud run jobs describe life-assistant-db-migrate \
             --project "$GCP_PROJECT_ID" --region "$REGION" --format=json \
             > "$RUNNER_TEMP/staging-db-readonly-job.json"
@@ -158,7 +152,7 @@ jobs:
           assert any(e["name"] in ("DATABASE_URL","LIFE_ASSISTANT_BUNDLE") for e in container.get("env",[]))
           print("bounded_existing_read_only_job=PASS")
           PY
-          echo "staging_canary_scope=STAGING_ONLY; production_traffic=UNTOUCHED; timeout=6m" >> "$GITHUB_STEP_SUMMARY"
+          echo "staging_scope=STAGING_ONLY; production_traffic=UNTOUCHED; oauth_release_gate=REMOVED" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Release exact verified Preview Hosting version to staging live with rollback
         if: ${{ inputs.apply }}
@@ -182,7 +176,7 @@ jobs:
                   if test "$(curl -fsSL -H 'Cache-Control: no-cache' "https://$STAGE_SITE.web.app/release.txt")" = "$OLD_SHA" &&
                      test "$(curl -sS -o /dev/null -w '%{http_code}' "https://$STAGE_SITE.web.app/api/v1/free-events")" = 401 &&
                      test "$(curl -sS -o /dev/null -w '%{http_code}' "https://$STAGE_SITE.web.app/auth/me")" = 401; then
-                    echo "staging_rollback_technical=PASS previous=$OLD_VERSION old_sha=$OLD_SHA api_auth=PASS; prior_true_oauth=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
+                    echo "staging_rollback_technical=PASS previous=$OLD_VERSION old_sha=$OLD_SHA api_401=PASS" >> "$GITHUB_STEP_SUMMARY"
                   else
                     echo "::error::ROLLBACK FAIL: prior static release/API/auth behavior not restored"
                   fi
@@ -221,38 +215,6 @@ jobs:
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/api/v1/free-events")" = 401
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/api/v1/free-events/status")" = 401
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$LIVE_URL/auth/me")" = 401
-          curl -sS -D "$RUNNER_TEMP/live-login.txt" -o /dev/null "$LIVE_URL/auth/login"
-          grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' "$RUNNER_TEMP/live-login.txt"
-          # A fixed-domain Google callback is only testable on staging live,
-          # never on an expiring SHA Preview URL. For the first real E2E proof,
-          # clone only to staging live for a strictly bounded six-minute canary.
-          # The SQL gate requires TWO actual Google-authenticated owner actions:
-          # successful code exchange/callback, then authenticated /auth/me.
-          # Failures here execute this same shell step's staging-only rollback.
-          CANARY_STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "staging_oauth_canary=ACTIVE url=$LIVE_URL/auth/login" | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "staging_canary_next=Owner must complete Google login then open $LIVE_URL/auth/me?staging_e2e=true on SAME browser session" | tee -a "$GITHUB_STEP_SUMMARY"
-          PAYLOAD="$(python - "$EXPECTED_REVISION" "$CANARY_STARTED" <<'PY'
-          import base64,re,sys
-          from pathlib import Path
-          source=Path("backend/scripts/verify_staging_google_e2e.py").read_text(encoding="utf-8")
-          rev,start=sys.argv[1:]
-          assert re.fullmatch(r"life-assistant-api-[A-Za-z0-9-]+",rev)
-          assert re.fullmatch(r"[0-9T:\-]+Z",start)
-          assert source.count('EXPECTED_REVISION = "REPLACE_ME"')==1
-          assert source.count('CANARY_START_UTC = "REPLACE_ME"')==1
-          source=source.replace('EXPECTED_REVISION = "REPLACE_ME"',f'EXPECTED_REVISION = "{rev}"')
-          source=source.replace('CANARY_START_UTC = "REPLACE_ME"',f'CANARY_START_UTC = "{start}"')
-          print(base64.b64encode(source.encode()).decode())
-          PY
-          )"
-          RUN_JOB_MAX_WAIT_SECONDS=510 \
-            .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-db-migrate \
-            gcloud run jobs execute life-assistant-db-migrate \
-            --project "$GCP_PROJECT_ID" --region "$REGION" \
-            --args="-c,exec(__import__('base64').b64decode('$PAYLOAD'))" \
-            --task-timeout 8m --wait --quiet
-          echo "staging_true_google_callback_and_session=PASS bounded_owner_audit" >> "$GITHUB_STEP_SUMMARY"
           gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" --region "$REGION" --format=json > "$RUNNER_TEMP/run-after.json"
           jq -c '[.status.traffic[] | select((.percent//0)>0) | {revisionName,percent}] | sort_by(.revisionName)' "$RUNNER_TEMP/run-after.json" > "$RUNNER_TEMP/production-traffic-after.json"
           cmp "$RUNNER_TEMP/production-traffic-before.json" "$RUNNER_TEMP/production-traffic-after.json"
@@ -260,9 +222,9 @@ jobs:
           test "$(jq -r '.releases | max_by(.releaseTime) | .version.name' "$RUNNER_TEMP/prod-releases-after.json")" = "$(cat "$RUNNER_TEMP/prod-version-before.txt")"
           mutated=0
           trap - ERR EXIT INT TERM HUP
-          echo "staging_live_smoke=PASS sha=$RELEASE_SHA version=$VERSION; production_hosting_and_traffic=UNCHANGED; true_OAuth_login=PASS owner_callback_and_session" >> "$GITHUB_STEP_SUMMARY"
+          echo "staging_live_smoke=PASS sha=$RELEASE_SHA version=$VERSION; production_hosting_and_traffic=UNCHANGED; oauth=NOT_TESTED" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Record preflight-only result when not publishing
         if: ${{ !inputs.apply }}
         run: |
-          echo "staging_live=NOT MODIFIED; guarded preflight only; true OAuth E2E not claimed" >> "$GITHUB_STEP_SUMMARY"
+          echo "staging_live=NOT MODIFIED; guarded preflight only; oauth=NOT_TESTED" >> "$GITHUB_STEP_SUMMARY"

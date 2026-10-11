@@ -128,6 +128,12 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
           final items = (data['items'] as List? ?? const [])
               .whereType<Map<String, dynamic>>().toList();
           final groups = groupActivities(items);
+          final visibleIds = items.map((x) => x['identity_key']?.toString() ?? '').toList();
+          // The actions API has an explicit 100-ID/6500-char upper bound.
+          // Fall back to per-group queries for unusually large parent groups.
+          final batchedActionIds = visibleIds.length <= 100 &&
+              visibleIds.every((id) => RegExp(r'^[0-9a-f]{64}$').hasMatch(id))
+              ? visibleIds.join(',') : null;
           if (groups.isEmpty && offset == 0) {
             return Padding(padding: const EdgeInsets.symmetric(vertical: 24),
               child: Column(children: [
@@ -143,7 +149,8 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
           Widget activityCard(List<Map<String, dynamic>> group) =>
               CuratedActivityCard(
                 key: ValueKey('group-${group.first['parent_event_key'] ?? group.first['handoff_event_key'] ?? group.first['identity_key']}'),
-                items: group, entry: widget.entry, onChanged: _refreshPages);
+                items: group, entry: widget.entry,
+                actionIds: batchedActionIds, onChanged: _refreshPages);
           // One comfortable mobile column; two independently-sized desktop
           // columns (no fixed-height GridView that clips expanded offers).
           return LayoutBuilder(builder: (context, constraints) {

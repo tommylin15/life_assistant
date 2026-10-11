@@ -389,7 +389,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                                 allowBare: event.title.startsWith('活動日期參考：'));
                               if (url == null) return const SizedBox.shrink();
                               return TextButton.icon(
-                                onPressed: () => navigateBrowser(url.toString()),
+                                onPressed: () => openExternalBrowser(url.toString()),
                                 icon: const Icon(Icons.open_in_new),
                                 label: const Text('前往網址'));
                             }),

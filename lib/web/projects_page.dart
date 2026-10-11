@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import 'project_api.dart';
+import 'visual_system.dart';
 
 final _projectWorkspaceProvider = FutureProvider<_ProjectWorkspace>((ref) async {
   final api = ref.read(projectApiProvider);
@@ -77,6 +78,10 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage> {
         constraints: const BoxConstraints(maxWidth: 1040),
         child: CustomScrollView(
           slivers: [
+            const SliverPadding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+              sliver: SliverToBoxAdapter(child: LifeFeatureHeader(feature: LifeVisualFeature.projects)),
+            ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               sliver: SliverToBoxAdapter(

@@ -28,6 +28,8 @@ class TaskOut(BaseModel):
     id: str
     title: str
     note: str | None
+    source_type: str | None = None
+    source_ref: str | None = None
     status: TaskStatus
     priority: TaskPriority
     due_at: datetime | None

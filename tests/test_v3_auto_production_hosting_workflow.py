@@ -82,7 +82,7 @@ class AutoProductionHostingContractTests(unittest.TestCase):
                     if line.strip() and not line.startswith("          "):
                         break
                     script.append(line[10:] if line.startswith("          ") else "")
-                result = subprocess.run(["bash", "-n"], input="\\n".join(script),
+                result = subprocess.run(["bash", "-n"], input=chr(10).join(script),
                                         text=True, capture_output=True, check=False)
                 self.assertEqual(result.returncode, 0, result.stderr)
 

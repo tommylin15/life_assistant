@@ -1,13 +1,12 @@
 // Implementable Life Assistant visual system for Flutter Web.
 // The concept-art posters are references, not images rendered as app screens.
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/theme/app_theme.dart';
 import 'session_identity.dart';
+import 'appearance_storage.dart';
 
 enum LifeVisualStyle { warm, fresh, focus }
 
@@ -47,7 +46,7 @@ class LifeAppearanceController extends StateNotifier<LifeAppearance> {
     if (account == null || account.isEmpty) return const LifeAppearance();
     try {
       final key = 'life.appearance.v1.${sha256.convert(utf8.encode(account.toLowerCase()))}';
-      final raw = html.window.localStorage[key];
+      final raw = getStoredAppearance(key);
       if (raw == null) return const LifeAppearance();
       final json = jsonDecode(raw) as Map<String, dynamic>;
       return LifeAppearance(
@@ -79,10 +78,10 @@ class LifeAppearanceController extends StateNotifier<LifeAppearance> {
   void _persist() {
     if (_key == null) return;
     try {
-      html.window.localStorage[_key!] = jsonEncode({
+      setStoredAppearance(_key!, jsonEncode({
         'style': state.style.name,
         'mode': state.mode.name,
-      });
+      }));
     } catch (_) {
       // In-memory selection still works in browsers with restricted storage.
     }
@@ -175,6 +174,22 @@ abstract class LifeVisualTheme {
       ),
       inputDecorationTheme: base.inputDecorationTheme.copyWith(
         fillColor: paper,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radius * .75),
+          borderSide: BorderSide(color: primary, width: 1.5),
+        ),
+      ),
+      checkboxTheme: base.checkboxTheme.copyWith(
+        fillColor: WidgetStateProperty.resolveWith((states) =>
+          states.contains(WidgetState.selected) ? primary : Colors.transparent),
+        checkColor: WidgetStatePropertyAll(scheme.onPrimary),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primary,
+          side: BorderSide(color: primary),
+          minimumSize: const Size(0, 44),
+        ),
       ),
       chipTheme: base.chipTheme.copyWith(
         selectedColor: soft,

@@ -7,11 +7,12 @@ import 'browser_navigation_stub.dart'
 export 'browser_navigation_contract.dart';
 
 void navigateBrowser(String url) => implementation.navigateBrowser(url);
+void openExternalBrowser(String url) => implementation.openExternalBrowser(url);
 
 class _DefaultBrowserNavigation implements BrowserNavigation {
   @override
   Future<void> openExternal(String url) async {
-    navigateBrowser(url);
+    openExternalBrowser(url);
   }
 }
 

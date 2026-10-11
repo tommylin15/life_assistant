@@ -78,7 +78,7 @@ class LifeAppearanceController extends StateNotifier<LifeAppearance> {
   void _persist() {
     if (_key == null) return;
     try {
-      setStoredAppearance(_key!, jsonEncode({
+      setStoredAppearance(_key, jsonEncode({
         'style': state.style.name,
         'mode': state.mode.name,
       }));

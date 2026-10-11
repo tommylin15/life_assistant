@@ -8,9 +8,9 @@ Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL。Life
 
 最新核准入口：**ChatGPT 探索／核證 → Drive 精選池 → [獨立交接 Sheet](https://docs.google.com/spreadsheets/d/1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4/edit) → Life 每日 GCP Job → 單一 PostgreSQL curated pool**；Life 不做來源爬蟲、舊 Queue 或第二次 AI。既有 direct batch API 尚是相容 source 實作，不能冒充新 Job 已部署。唯一輸入規格：[Sheet Job 交接契約](curated_sheet_job_ingestion.md)；[現有 API](free_events_candidate_ingestion_contract.md) 作相容對照。
 
-## 使用者產品（規劃）
+## 使用者產品（活動 UX V3，2026-10-11）
 
-同一精選池提供兩個可重疊的使用者功能：**限時機會**（追蹤報名／限量／提醒／待辦）與 **活動探索**（收藏、日期標記、旅遊規劃候選）。使用者自主勾選個人待辦、行事曆、通知或未來行程；日曆資訊標記、行動提醒、確定行程必須分開。星等、報名屬性、時效性、旅遊用途不能混為單一等級。**唯一詳細功能規格：[curated_activity_user_features.md](curated_activity_user_features.md)**。
+**唯一正式細節規格：[活動 UX V3](curated_activity_user_features.md)**。前端只有「限時機會／活動探索」兩個活動入口，單一精選池，第三個「精選」退出導覽；無使用者星等顯示／排序／篩選。各入口預設從 PostgreSQL 查 5 個主活動群組，續看 10 個，支援最新收錄、時間速查、一般搜尋與少量篩選。使用者僅能自行選擇收藏、建立既有 Task、Google Calendar 活動日期標記。**Task 與 Life 日曆都要可從既有項目直接點「前往網址」**；日曆標記是全天 transparent、不占 busy。這些是核准 UX，不等於已實作或部署，現況見 [CURRENT_STATE](CURRENT_STATE.md)，工項見 [TODO](todo.md)。
 
 ## 管理端與個人化
 
@@ -20,4 +20,4 @@ Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL。Life
 
 ## Implementation ≠ release
 
-截至此份規格整理時，source 有 curated API / Alembic 0015 / 單一 Flutter 精選池以及泛用的 rollout／個人導覽功能。**兩個活動入口、個人追蹤/待辦/日曆/預警、旅遊候選尚未完成；真實 ChatGPT connector、正式 production rollout 和本 SHA runtime 不因文件修改而自動 PASS。** 
+現有 GitHub main 已有 curated API/資料模型、兩入口 source、帳號隔離 action 與 Task/Google Calendar 的基本來源寫入；但 UX V3 的查詢、收藏、連結可點、刪除重複入口與實際 runtime **NOT VERIFIED**。源碼、CI、staging 與 production E2E 各自判定，不以本文件宣稱完成。

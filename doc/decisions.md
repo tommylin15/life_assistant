@@ -1,27 +1,22 @@
-# life_assistant — Current Confirmed Decisions (2026-10-10)
+# life_assistant — Current Confirmed Decisions (2026-10-11)
 
-本文件只保留**現行**決策；歷史 Queue、文化部/TDX、來源掃描、舊 CI/CD、未採納的活動流程和當時的狀態完整留在 [歷史決策快照](archive/decisions_through_2026-10-10.md)。目前 code/runtime 優先於文件聲稱的完成度，治理優先於此文件見 [PROJECT_RULES](PROJECT_RULES.md)。
+本文件僅保留現行已核准方向；歷史決策見 [archive](archive/decisions_through_2026-10-10.md)。實作狀態以 GitHub main 和 runtime evidence 為準，最高規則見 [PROJECT_RULES](PROJECT_RULES.md)。
 
-## 平台與責任
+## 平台與邊界
 
-- Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL；Flutter Web 是主要交付面，SQLite 是既有資料和遷移來源；不得破壞性清空。
-- Life 負責 Data + UI + API + Execution + Integration、自己的 ChatGPT Bridge／MCP、權限與 audit；通用 Agent reasoning/orchestration 屬 omniAgent。詳見 [project boundary](project_boundary.md)。
-- Google 整合採帳號獨立授權、最小權限、可驗證寫入與失敗處理。個人隱私資料不得在全站管理員功能中暴露。
-- CI/CD 使用 V3 GitHub Actions → public GHCR digest → Cloud Run candidate → gated Firebase Hosting；詳見 [唯一 V3 policy](ci_cd_ghcr_release_policy.md)。Production release 需獨立驗收，預設保留最近十個受保護條件約束的 revisions。
+- Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL；不破壞已有 SQLite／PostgreSQL 個人資料。
+- Life 專案負責 Data、UI、API、Execution、Integration、自己的 Bridge/MCP、權限與 audit；通用 Agent reasoning 由 omniAgent 負責。
+- Google 個人資料依帳號獨立 OAuth 與授權；GitHub Actions V3 → public GHCR digest → Cloud Run candidate → gated Firebase Hosting。正式 release 需獨立驗收。
 
-## 精選池與使用者功能
+## 活動來源與使用者功能
 
-- 最新活動入口：ChatGPT 探索／核證 → Drive 精選池 → **[獨立交接資料 Sheet](https://docs.google.com/spreadsheets/d/1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4/edit)** → Life 每日 GCP Job（永久 event_key/content_hash 去重、PostgreSQL upsert、版本一致 ACKED/ERROR）→ Flutter。交接資料僅滾動保留 ACK 後30天，不以 Excel 永久保留歷史。原 direct API 僅作相容，Life 來源 crawler／舊 Queue/lease/claim／第二次 AI 持續取消。新 Job 和 ACK 實作 **NOT VERIFIED**。詳見 [現行流程](taiwan_free_events_discovery_plan.md) 和 [交接契約](curated_sheet_job_ingestion.md)。
-- **兩個使用者功能入口**：「限時機會」（報名／限量／預警／待辦）與「活動探索」（活動日期標記／收藏／旅遊候選）；同一活動可同時屬於兩者，沒有兩份資料庫。
-- 使用者自行選擇個人追蹤、提醒、待辦、行事曆與未來行程；價值星等、急迫度、是否要報名、旅遊用途相互獨立。所有行事曆資訊標記、報名時間提醒、確定行程有不同語意。唯一詳細規格：[精選池使用者功能](curated_activity_user_features.md)。
-- 此產品決策為 **APPROVED DESIGN**；當前 UI/API 只有單一精選池 baseline，兩入口與個人整合不可標示實作或部署完成。
+- 唯一預設交接：ChatGPT 探索／核證 → Drive 精選池 → 獨立交接 Sheet → Life 每日 GCP Job 依永久 event_key/content_hash PostgreSQL 去重、DB commit 後版本一致 ACKED/ERROR。Life 不重啟 crawler、舊 Queue/claim/lease、第二輪 AI；既有 direct API/舊資料留相容。Job／正式 E2E 狀態仍需驗證。[資料契約](curated_sheet_job_ingestion.md)
+- **2026-10-11 UX V3 最新決策，優先於 10/10 的活動 UI 敘述**：只有「限時機會／活動探索」兩個使用者入口，共用一個活動池；「精選」退出第三個導覽。使用者星等全部隱藏，不作排序或篩選；上游評級欄保留不動。
+- 進頁 server-side 依各入口時間接近程度載入 **5 個主活動群組**，再看 **10 筆**；提供「最新收錄」（首次入庫時間）、符合時間語意的一鍵速查、中文一般搜尋（標題／主辦／地點／現有活動摘要）、地區固定映射及精簡篩選；不做 GPS／AI 搜尋。未核實資訊仍顯示未知，不自行推論名額與日期。
+- **只保留三個個人操作**：收藏（兩入口共用已收藏篩選）、建立待辦、日曆日期標記。兩者要與現有 Task／Google Calendar 相容並把可靠活動網址帶入；在待辦頁和 Life 日曆頁都能點「前往網址」開活動。日曆資訊標記是全天 transparent、不占 busy、不自動提醒；不能把未知報名或活動日期寫成假時間。
+- 活動權限由既有 admin rollout 管理；個人收藏／待辦／日曆依帳號隔離，使用者自行選擇，不自動建立行事曆／待辦、通知／代報名；早期追蹤、預警、確定參與和旅遊候選不再是本期 UI 要求，舊資料/API 先留兼容。**唯一詳細且具待辦與日曆相容性差異的規格**：[活動 UX V3](curated_activity_user_features.md)。
 
-## 管理、個人化與 AI
+## 管理與現況
 
-- 管理員僅管理共用精選資料、功能 rollout、Life 內部 Drive AI Provider policy；ChatGPT 探索和平台 AI Provider 是不同系統。
-- 使用者依自己帳號設定手機底部/桌面側邊導覽排序、首頁卡片、Google consent；後台不可代替個人同意。參照 [CURRENT_PRODUCT_ARCHITECTURE](CURRENT_PRODUCT_ARCHITECTURE.md) 和 [AI policy](ai_provider_policy.md)。
-- 未來旅遊行程編排只保留可擴充介面；未核准完整旅遊系統、未授權自動報名或付款。
-
-## 追蹤與現況
-
-交付順序看 [phase1_delivery_order](phase1_delivery_order.md)、[TODO](todo.md)；實作與驗收看 [CURRENT_STATE](CURRENT_STATE.md)。過時決策不因 archive 保留就恢復效力。
+- 管理員只管共用精選活動、功能 rollout、Life 內部 Drive AI Provider，不代替使用者操作私人 Google 資料；使用者可設定導覽與首頁卡片。
+- 上述 UX V3 為**產品規格**而非已完成程式；工作清單看 [TODO](todo.md)，實際 release/runtime 看 [CURRENT_STATE](CURRENT_STATE.md)。不因文件完成宣稱產品驗收 PASS。

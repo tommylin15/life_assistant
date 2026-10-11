@@ -1,37 +1,31 @@
-# Life — Active TODO (2026-10-10)
+# Life — Active TODO（2026-10-11）
 
-## 本批開發與驗收安排（2026-10-10 最新）
+**唯一活動產品規格：** [UX V3｜活動使用者功能](curated_activity_user_features.md)；下列狀態取代 10/10 過時的星等 UI、七種個人操作與第三個「精選」導覽工項。產品規格 APPROVED；新 UX 的 source、CI、runtime 尚 **NOT VERIFIED**。
 
-- 新交接表、穩定去重、活動卡片、兩個入口及個人動作已在工作樹實作；開發驗證與 deployed／runtime 驗收分開記錄。細節見 [活動規格](curated_activity_user_features.md)。
-- 活動能否開放一般使用者由 admin 在後台設定。AI 管理補強暫緩，僅 AI 管理相關能力限 admin；不把這項限制套用到全部新功能。
-- 下一輪合併新活動功能、後台及個人首頁做正式上線驗收。真實 Sheet write scope／版本回執、GCP Job、Google Calendar 與新 SHA 的 CI／staging 尚待驗證；舊版測試站登入已完成。
+## A. 活動 UX V3 與待辦／日曆串接
 
-
-## 測試站驗收更新（2026-10-10；優先於下方歷史快照）
-
-- **固定測試站發布與真實 owner Google 登入驗收：PASS / 已完成。** [V3 run 38030697455](https://github.com/tommylin15/life_assistant/actions/runs/38030697455) 的 real database/auth、Preview、fixed staging preflight，以及「Promote exact Preview to independent fixed staging live and verify owner OAuth」均 success。使用者於本次對話確認 https://life-assistant-v3-stage-tl15.web.app 已能正常登入使用。
-- 測試站 `release.txt` 實際讀回 `3fb06169ad01a065fef60eecc2010c459970746e`，與上述成功發布 SHA 一致。先前 wrong_callback、Missing session 與未驗收敘述是修復前歷史，不再列為目前登入 blocker。
-- **後續版本發布是獨立狀態：** main `4219510cf2764c7b7bce9286ec2374d9ca36a1df` 的 CI success，但 [run 38037092043](https://github.com/tommylin15/life_assistant/actions/runs/38037092043) 在 real database/auth acceptance failure，尚未執行 Preview 或固定 staging 發布。不可據此把既有可用測試站改標 FAIL；也不可把測試站已驗收推定為最新 main 或 production 已發布。
-- 下一步仍是新交接 Sheet → Life Job → PostgreSQL → ACK/ERROR 的實作與真實驗收，以及活動產品待辦；不要求重做已完成版本的測試站登入驗收。
-
-**Release status PARTIAL.** P0/P1 implementation foundations are in main; production E2E acceptance is NOT VERIFIED.
-
-| Priority | Task | Status |
+| Priority | 工項 | Source / Verification |
 |---|---|---|
-| P0 | Dedicated curated table, bounded ChatGPT batch POST, HTTPS validation, idempotent upsert, signed-in GET | Implemented in source; ephemeral PG CI PASS on previous candidate; production NOT VERIFIED |
-| P0 | Flutter curated UI, category/region/date/server filters, 1–5 stars, cost/benefit and registration unknowns | Basic list and city/star UI implemented; comprehensive device verification NOT VERIFIED |
-| P0 | Drive 交接表 READY → Life GCP Job 讀取 → event_key/content_hash PostgreSQL upsert → Sheet ACKED/ERROR、30天保留、owner/Flutter readback | **APPROVED / NOT VERIFIED**；既有 direct API 僅相容 |
-| P1 | Owner curated summary/errors and global feature rollout | Baseline source implemented; full error dashboard and controlled public rollout incomplete |
-| P1 | User personal bottom/rail/drawer and Home layout/card preferences | Source implemented; real device and accessibility acceptance NOT VERIFIED |
-| Deferred | Drive AI admin provider allowlist/pause, health and usage | 既有 admin source 保留；補強與 provider／budget 驗收暫緩，不阻擋一般功能上線 |
-| Acceptance | Exact main SHA CI and new release API/DB/UI/handoff/rollback | Staging release + true owner OAuth PASS for 3fb0616; main 4219510 CI PASS, subsequent release DB/auth FAIL; new handoff/production acceptance outstanding |
-| Operations | Read-only GCP old external Source Job/Scheduler status | Cloud Run Job exists per inventory #38012860019; Scheduler in `us-central1` **PASS (no matching jobs)** per #38013575831; other-region/external callers NOT VERIFIED |
+| P0 | 合併三入口為「限時機會」「活動探索」兩個使用者入口，舊精選路徑轉址，停用舊免費活動主導覽但保留舊 API／資料 | 既有三入口 source 存在；UX V3 **NOT IMPLEMENTED** |
+| P0 | UI 全面隱藏星等，取消 API 以星等篩選／預設排序 | 現有星等 UI/API 仍在：**NOT IMPLEMENTED** |
+| P0 | 各入口預設查 5 個主活動群組、再看 10 個；限時／活動時間排序，最新收錄、跨日期、已確認失效及未知時間語意 | 現有 API 預設 20、Flutter 每頁 50，先按星等排序：**NOT IMPLEMENTED** |
+| P0 | 六種速查各入口、一般搜尋（標題／主辦／地點／現有摘要），後端 DB 全量查詢 | 現有城市／類別完全相等篩選，無 keyword 搜尋：**NOT IMPLEMENTED** |
+| P1 | 固定縣市→北中南東離島、縣市／行政區選項、DB 類別與費用篩選；不做定位或 AI | **NOT IMPLEMENTED** |
+| P1 | 主活動一次收藏，兩入口「全部／已收藏」切換，保留已結束收藏、去重和舊收藏遷移 | `save` per activity 已有；主活動共用收藏／清單 **NOT IMPLEMENTED** |
+| P1 | 活動建立既有 Task：確認到期日、來源網址與正確子活動，待辦列表直接點「前往網址」 | Task.note/source_type/ref 基礎 **SOURCE IMPLEMENTED**；待辦頁仍純文字 URL，跨功能驗收 **NOT VERIFIED** |
+| P1 | 活動日期標記用既有 Google Calendar 全天透明事件，帶地點與活動網址，Life 日曆直接點「前往網址」 | Google description/transparent 基礎 **SOURCE IMPLEMENTED**；日曆頁仍純文字 URL，真實 Google OAuth/readback **NOT VERIFIED** |
+| P1 | 卡片縮減為收藏／待辦／日曆標記／前往網址，保留主活動與子場次、回上一頁篩選狀態 | **NOT IMPLEMENTED** |
 
-| P1 product | One-parent event card grouping distinct offers/sessions; two user entries 限時機會／活動探索 with overlapping membership, evidence-aware advance-opening display and original links | **SOURCE IMPLEMENTED / runtime NOT VERIFIED** — [canonical spec](curated_activity_user_features.md) |
-| P1 data/API contract | Stable event_key and parent/offer grouping, opening times, evidence and refundable deposit semantics via additive 0016 migration | **SOURCE IMPLEMENTED / 本機 PostgreSQL PASS；release DB NOT VERIFIED** |
-| P1 personal actions | Opt-in account-owned watchlist, Task, Calendar information marks versus registration reminders versus confirmed schedule; group duplicate alerts and keep users isolated | **SOURCE IMPLEMENTED / 真實 Calendar NOT VERIFIED**；提醒為 Calendar popup |
-| Future | Travel itinerary candidate handoff from curated events and accepted registrations | **DESIGN EXTENSION ONLY / NOT IMPLEMENTED** |
+## B. 必要整合測試／驗收
 
-**CANCELLED, not pending**: Life 端 MoC/TDX/EventGo/yii 來源 crawler、舊來源 Excel scanner、Queue/claim/lease、第二輪 AI、舊來源14天驗收、額外發布閘。**新 Sheet ACKED 是匯入回執，不是舊 Queue ACK。** 保留 legacy migrations/data。
+- PostgreSQL：parent／child 去重與收藏映射、中文搜尋、5+10 分頁、穩定排序、時區 Asia/Taipei、跨日活動、未知時間、失效收藏。
+- Task：從活動產生的 Task 在既有待辦列表看得到、可編輯完成／取消、能點活動 URL；不因重試或同活動兩入口重複建立；授權及不同帳號隔離，原始網址更新不靜默覆寫私人備註。
+- Calendar：只有有據活動日期才能建立 Google 全天資訊標記；exclusive end、transparent、不預設提醒；Life 與 Google 都可讀回，Life 日曆可點 URL；OAuth/失敗時不虛報成功，跨帳號、去重和取消處理有證據。
+- 回寫後分層回報 **implementation / tests / CI / staging deployment / runtime / integration = PASS / FAIL / NOT VERIFIED**，完整才可標 DONE。
 
-Follow [consolidated P0/P1 acceptance](P0_P1_CONSOLIDATED_ACCEPTANCE_2026-10-10.md).
+## C. 仍未完成的資料／發布工作（不因 UX 文件完成而關閉）
+
+- [交接契約](curated_sheet_job_ingestion.md)：真實 Drive「交接資料」READY → GCP Job 讀取 → PostgreSQL 穩定鍵／版本去重 → DB commit → Sheet ACKED/ERROR → owner/Flutter 讀回，與 30 天 ACK 清理；真實 Sheet scope、Job、runtime **NOT VERIFIED**。
+- CI/CD V3：每次 main SHA 的完整測試、GHCR digest、候選／固定 staging exact-SHA、Google owner OAuth、API/DB/Flutter 真實 readback 獨立驗收；既有固定 staging OAuth 曾對舊 SHA PASS，不可當成本 SHA 或 UX V3 PASS。[CURRENT_STATE](CURRENT_STATE.md)
+- Admin rollout／個人導覽與首頁卡片維持現有模式；Drive AI admin provider 補強仍 Deferred，不阻擋活動 UX。
+- **持續取消**：Life 端來源 crawler、舊 Excel source scanner、Queue／claim／lease、第二輪 AI、重啟舊來源 14 天驗收、為本期新增 AI 向量搜尋／GPS／推播／代搶票。舊 DB/migration/API 留相容，不做破壞性刪除。

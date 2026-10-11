@@ -7,6 +7,7 @@ import '../app/theme/app_tokens.dart';
 import 'browser_navigation.dart';
 import 'calendar_api.dart';
 import 'visual_system.dart';
+import 'activity_link.dart';
 
 DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
 DateTime _monthOnly(DateTime date) => DateTime(date.year, date.month);
@@ -381,6 +382,17 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                             Text('地點：' + event.location),
                           if (event.description.isNotEmpty)
                             Text(event.description),
+                          if (event.title.startsWith('活動日期參考：') ||
+                              event.description.startsWith('活動網址：'))
+                            Builder(builder: (context) {
+                              final url = activityUrlInText(event.description,
+                                allowBare: event.title.startsWith('活動日期參考：'));
+                              if (url == null) return const SizedBox.shrink();
+                              return TextButton.icon(
+                                onPressed: () => navigateBrowser(url.toString()),
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('前往網址'));
+                            }),
                         ],
                       ),
                     ),

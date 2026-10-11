@@ -199,8 +199,18 @@ def _activity_filters(statement, *, entry, quick, keyword, region, city, distric
         statement = statement.where(or_(CuratedActivity.registration_required.is_(True),
                                          CuratedActivity.limited_offer.is_(True)))
     if not saved_only:
-        statement = statement.where(CuratedActivity.registration_status.notin_(["closed", "full"])
-            if entry == "opportunities" else literal(True))
+        # Cancelled activities are excluded from both ordinary entries, but
+        # personal bookmarks remain retrievable with an explicit status.
+        statement = statement.where(CuratedActivity.registration_status.notin_(
+            ["cancelled", "canceled"]
+        ))
+        if entry == "opportunities":
+            statement = statement.where(CuratedActivity.registration_status.notin_(
+                ["closed", "full"]
+            ))
+            # A known past registration deadline cannot be presented as
+            # something the user can still act on.
+            statement = statement.where(or_(deadline.is_(None), deadline >= today))
         # Ends_on is authoritative only when present. Unknown end is not expired.
         statement = statement.where(or_(end.is_(None), end >= today))
     if keyword:

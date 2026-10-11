@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'platform_api.dart';
+import 'visual_system.dart';
 
 const _titles = <String, String>{
   'today':'首頁', 'tasks':'待辦', 'calendar':'日曆', 'projects':'專案',
@@ -22,6 +23,7 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(uiPreferencesProvider);
+    final appearance = ref.watch(lifeAppearanceProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('個人化介面')),
       body: data.when(
@@ -34,6 +36,44 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
           final home = (draft!['home_cards'] as List).cast<String>().toList();
           final more = (draft!['more_order'] as List).cast<String>().toList();
           return ListView(padding: const EdgeInsets.all(16), children: [
+            Text('外觀風格', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final style in LifeVisualStyle.values)
+                ChoiceChip(
+                  key: ValueKey('visual-style-' + style.name),
+                  label: Text(style.label),
+                  avatar: Icon(
+                    style == LifeVisualStyle.warm ? Icons.spa_outlined :
+                    style == LifeVisualStyle.fresh ? Icons.wb_sunny_outlined : Icons.auto_awesome_mosaic_outlined,
+                    size: 18,
+                  ),
+                  selected: appearance.style == style,
+                  onSelected: (_) => ref.read(lifeAppearanceProvider.notifier).setStyle(style),
+                ),
+            ]),
+            const SizedBox(height: 6),
+            Text(appearance.style.description,
+              style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 14),
+            Text('亮暗模式', style: Theme.of(context).textTheme.titleMedium),
+            Wrap(spacing: 8, children: [
+              for (final mode in ThemeMode.values)
+                ChoiceChip(
+                  key: ValueKey('appearance-mode-' + mode.name),
+                  label: Text(switch (mode) {
+                    ThemeMode.system => '跟隨系統',
+                    ThemeMode.light => '淺色',
+                    ThemeMode.dark => '深色',
+                  }),
+                  selected: appearance.mode == mode,
+                  onSelected: (_) => ref.read(lifeAppearanceProvider.notifier).setMode(mode),
+                ),
+            ]),
+            const SizedBox(height: 4),
+            Text('外觀會立即套用並儲存在目前瀏覽器、目前帳號。跨裝置同步尚未實作。',
+              style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 24),
             Text('選單位置', style: Theme.of(context).textTheme.titleLarge),
             DropdownButton<String>(
               value: mode,

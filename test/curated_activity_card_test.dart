@@ -42,6 +42,25 @@ void main() {
     expect(groups.single.first['identity_key'], 'b');
   });
 
+  testWidgets('saved expired activity remains labeled, not silently disguised', (tester) async {
+    final api = _Api();
+    await tester.pumpWidget(ProviderScope(overrides: [
+      platformApiProvider.overrideWithValue(api),
+      sessionIdentityProvider.overrideWithValue('sample@tests.local'),
+    ], child: MaterialApp(home: Scaffold(body: SingleChildScrollView(
+      child: CuratedActivityCard(entry: 'opportunities', items: const [
+        {'identity_key': 'historic', 'title': '過往優惠', 'importance': 5,
+         'ends_on': '2001-01-01', 'registration_status': 'closed',
+         'saved': true, 'handoff_details': {},
+         'original_url': 'https://example.org/historic'},
+      ]),
+    )))));
+    await tester.pumpAndSettle();
+    expect(find.text('已結束／截止'), findsOneWidget);
+    expect(find.textContaining('★'), findsNothing);
+    expect(find.byTooltip('取消收藏'), findsOneWidget);
+  });
+
   testWidgets('V3 card hides stars and toggles main bookmark explicitly', (tester) async {
     final api = _Api();
     await tester.pumpWidget(ProviderScope(overrides: [

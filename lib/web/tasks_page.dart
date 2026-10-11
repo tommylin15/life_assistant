@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 
 import 'task_api.dart';
 import 'visual_system.dart';
+import 'activity_link.dart';
+import 'browser_navigation.dart';
 
 final _taskWorkspaceProvider = FutureProvider<_TaskWorkspace>((ref) async {
   final api = ref.read(taskApiProvider);
@@ -481,6 +483,18 @@ class _TaskCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall,
                         ),
+                      ],
+                      if (task.sourceType == 'curated' ||
+                          (task.note?.startsWith('活動網址：') ?? false)) ...[
+                        Builder(builder: (context) {
+                          final url = activityUrlInText(task.note, allowBare: true);
+                          if (url == null) return const SizedBox.shrink();
+                          return Padding(padding: const EdgeInsets.only(top: 6),
+                            child: TextButton.icon(
+                              onPressed: () => navigateBrowser(url.toString()),
+                              icon: const Icon(Icons.open_in_new, size: 18),
+                              label: const Text('前往網址')));
+                        }),
                       ],
                       const SizedBox(height: 8),
                       Wrap(
@@ -1177,6 +1191,7 @@ class _TaskView {
     required this.dueAt,
     required this.reminderAt,
     required this.projectId,
+    required this.sourceType,
   });
 
   factory _TaskView.fromJson(Map<String, dynamic> json) {
@@ -1189,6 +1204,7 @@ class _TaskView {
       dueAt: DateTime.tryParse(json['due_at']?.toString() ?? ''),
       reminderAt: DateTime.tryParse(json['reminder_at']?.toString() ?? ''),
       projectId: json['project_id']?.toString(),
+      sourceType: json['source_type']?.toString(),
     );
   }
 
@@ -1200,6 +1216,7 @@ class _TaskView {
   final DateTime? dueAt;
   final DateTime? reminderAt;
   final String? projectId;
+  final String? sourceType;
 
   bool get isCompleted => status == 'completed';
   bool get isCancelled => status == 'cancelled';

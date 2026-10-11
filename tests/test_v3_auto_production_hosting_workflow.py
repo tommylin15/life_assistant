@@ -51,6 +51,41 @@ class AutoProductionHostingContractTests(unittest.TestCase):
         self.assertIn("steps.gate.outputs.dispatch == 'true'", content)
         self.assertIn("workflow_dispatch:", HOSTING.read_text())
 
+    def test_hosting_readback_is_pinned_to_promoted_digest_and_rollback(self):
+        hosting = HOSTING.read_text()
+        self.assertIn("Guard same-SHA promoted backend and snapshot production Hosting", hosting)
+        self.assertIn("test \"$(git rev-parse HEAD)\" = \"$RELEASE_SHA\"", hosting)
+        self.assertIn("docker buildx imagetools inspect", hosting)
+        self.assertIn("v3_image_identity.py --resource revision", hosting)
+        self.assertIn("Capture exact published production Hosting version", hosting)
+        self.assertIn("id: firebase_publish", hosting)
+        self.assertIn("Restore previous production Hosting on failed readback", hosting)
+        self.assertIn("steps.firebase_publish.outcome == 'success'", hosting)
+        self.assertIn('[[ "$CURRENT" != "$PUBLISHED" ]]', hosting)
+        self.assertIn('"$BASE/releases?versionName=$PREVIOUS"', hosting)
+        self.assertIn('test "$RESTORED" = "$PREVIOUS"', hosting)
+
+    def test_all_production_hosting_shell_steps_parse(self):
+        hosting = HOSTING.read_text()
+        for name in (
+            "Guard same-SHA promoted backend and snapshot production Hosting",
+            "Capture exact published production Hosting version",
+            "Restore previous production Hosting on failed readback",
+        ):
+            with self.subTest(step=name):
+                start = hosting.index("      - name: " + name)
+                block = hosting[start:].split("        run: |", 1)[1]
+                script = []
+                for line in block.splitlines()[1:]:
+                    if line.startswith("      - name:"):
+                        break
+                    if line.strip() and not line.startswith("          "):
+                        break
+                    script.append(line[10:] if line.startswith("          ") else "")
+                result = subprocess.run(["bash", "-n"], input="\\n".join(script),
+                                        text=True, capture_output=True, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_workflow_shell_steps_parse(self):
         content = DISPATCHER.read_text()
         snippets = []

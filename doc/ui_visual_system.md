@@ -76,3 +76,5 @@
 - 新增 PostgreSQL 帳號隔離／父活動 identity 變更收藏測試與 Calendar 人工編輯保護測試。
 
 **未決驗收：** 本次修正後的新 SHA 需完整 CI、固定 staging SHA、owner Google callback+session、PostgreSQL／Task／Calendar 實際讀回、320–1440px 及三風格實際 UI；未具備時維持 PARTIAL。若 staging 因 owner OAuth 沒有在單次 canary 期間內完成，嚴格標 FAIL，不能繞過當作 PASS。
+
+- 三風格在活動卡片使用獨立的暖心／活力／專注功能色，不再由三風格共用固定活動色；已收藏且可證實已過期／報名關閉／已額滿的舊活動加明確狀態標籤，不以不存在的庫存或日程填值。測試涵蓋逾期收藏標籤。

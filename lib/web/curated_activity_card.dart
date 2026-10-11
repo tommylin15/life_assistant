@@ -41,10 +41,13 @@ final curatedPageActionsProvider = FutureProvider.family<Map<String, dynamic>, S
 
 class CuratedActivityCard extends ConsumerStatefulWidget {
   const CuratedActivityCard({super.key, required this.items,
-    this.entry = 'explore', this.onChanged});
+    this.entry = 'explore', this.onChanged, this.actionIds});
   final List<Map<String, dynamic>> items;
   final String entry;
   final VoidCallback? onChanged;
+  /// Optional list of all visible activity IDs on the current server page.
+  /// One scoped request is shared by sibling cards instead of an N+1 fetch.
+  final String? actionIds;
   @override
   ConsumerState<CuratedActivityCard> createState() => _CuratedActivityCardState();
 }
@@ -82,8 +85,6 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
         '/free-events/curated/${item['identity_key']}/actions/$kind',
         {'active': active, ...data},
       );
-      ref.invalidate(curatedPageActionsProvider(
-        widget.items.map((e) => e['identity_key']).join(',')));
       if (kind == 'save') savedOverride = active;
       ref.read(curatedMutationEpochProvider.notifier).state++;
       widget.onChanged?.call();
@@ -160,7 +161,8 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
     };
     final d = item['handoff_details'] as Map? ?? const {};
     final saved = savedOverride ?? widget.items.any((e) => e['saved'] == true);
-    final ids = widget.items.map((e) => e['identity_key']).join(',');
+    final ids = widget.actionIds ??
+        widget.items.map((e) => e['identity_key']).join(',');
     final actions = ref.watch(curatedPageActionsProvider(ids));
     final values = (actions.asData?.value['items'] as List?) ?? const [];
     final nowTaipei = DateTime.now().toUtc().add(const Duration(hours: 8));

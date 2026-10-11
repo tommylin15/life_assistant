@@ -97,54 +97,56 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
   }
 
   Future<void> _taskDialog(Map<String, dynamic> item) async {
-    final title = TextEditingController(text: '處理活動：${item['title'] ?? ''}');
+    var title = '處理活動：${item['title'] ?? ''}';
     final d = item['handoff_details'] as Map? ?? const {};
     final open = d['registration_open_at_tpe']?.toString();
     final end = d['registration_deadline_at_tpe']?.toString() ??
-      item['registration_deadline']?.toString();
+        item['registration_deadline']?.toString();
     var selection = 'none';
-    try {
-      final choice = await showDialog<Map<String, String>>(
-        context: context,
-        builder: (dialog) => StatefulBuilder(builder: (dialog, redraw) =>
-          AlertDialog(
-            title: const Text('建立待辦'),
-            content: SizedBox(width: 390, child: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                TextField(controller: title, maxLength: 400,
-                  decoration: const InputDecoration(labelText: '待辦名稱')),
-                const Align(alignment: Alignment.centerLeft, child: Text('到期日選擇')),
-                RadioGroup<String>(
-                  groupValue: selection,
-                  onChanged: (v) => redraw(() => selection = v ?? 'none'),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const RadioListTile<String>(value: 'none', title: Text('不設日期')),
-                    if (open != null && open.contains('T'))
-                      RadioListTile<String>(value: 'open',
-                        title: Text('報名開放：$open')),
-                    if (end != null && end.contains('T'))
-                      RadioListTile<String>(value: 'deadline',
-                        title: Text('報名截止：$end')),
-                  ]),
-                ),
-                const Text('會建立在原本待辦功能，並附上活動網址。'),
-              ]),
-            )),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(dialog),
-                child: const Text('取消')),
-              FilledButton(onPressed: title.text.trim().isEmpty ? null :
-                () => Navigator.pop(dialog, {
-                  'task_title': title.text.trim(), 'task_due_choice': selection,
-                }), child: const Text('建立')),
-            ],
-          ),
+    final choice = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(builder: (dialog, redraw) =>
+        AlertDialog(
+          title: const Text('建立待辦'),
+          content: SizedBox(width: 390, child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextFormField(
+                initialValue: title,
+                maxLength: 400,
+                decoration: const InputDecoration(labelText: '待辦名稱'),
+                onChanged: (value) => redraw(() => title = value),
+              ),
+              const Align(alignment: Alignment.centerLeft, child: Text('到期日選擇')),
+              RadioGroup<String>(
+                groupValue: selection,
+                onChanged: (v) => redraw(() => selection = v ?? 'none'),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const RadioListTile<String>(value: 'none', title: Text('不設日期')),
+                  if (open != null && open.contains('T'))
+                    RadioListTile<String>(value: 'open',
+                      title: Text('報名開放：$open')),
+                  if (end != null && end.contains('T'))
+                    RadioListTile<String>(value: 'deadline',
+                      title: Text('報名截止：$end')),
+                ]),
+              ),
+              const Text('會建立在原本待辦功能，並附上活動網址。'),
+            ]),
+          )),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialog),
+              child: const Text('取消')),
+            FilledButton(
+              onPressed: title.trim().isEmpty ? null : () => Navigator.pop(dialog, {
+                'task_title': title.trim(), 'task_due_choice': selection,
+              }),
+              child: const Text('建立'),
+            ),
+          ],
         ),
-      );
-      if (choice != null && mounted) await _act(item, 'task', true, data: choice);
-    } finally {
-      title.dispose();
-    }
+      ),
+    );
+    if (choice != null && mounted) await _act(item, 'task', true, data: choice);
   }
 
   @override

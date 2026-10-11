@@ -240,7 +240,10 @@ async def me(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if staging_e2e:
+    # A verified fixed-staging login should produce its session-side OAuth
+    # evidence on the ordinary /auth/me request, without a hidden query flag.
+    # _audit_staging_e2e still checks the real Google owner + K_REVISION.
+    if staging_e2e or request.cookies.get(SESSION_COOKIE, "").startswith("id:staging:"):
         await _audit_staging_e2e(db, request, user, "staging_google_session")
     return {
         "email": user["email"],

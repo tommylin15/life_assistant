@@ -106,6 +106,38 @@ class AuthApiTests(IsolatedAsyncioTestCase):
         self.assertEqual(auth.oauth_redirect_for_request(session_request),
                          auth.STAGING_REDIRECT_URI)
 
+    async def test_me_auto_records_verified_staging_session_without_query_flag(self):
+        stage = Request({"type": "http", "headers": [
+            (b"host", b"life-assistant-api-abc-uc.a.run.app"),
+            (b"cookie", b"__session=id:staging:verified-owner-token"),
+        ]})
+        user = {"sub": "owner-sub", "email": "owner@example.test", "name": "Owner"}
+        db = object()
+        with patch("app.api.auth._audit_staging_e2e", new_callable=AsyncMock) as audit:
+            result = await auth.me(stage, user=user, db=db)
+        self.assertEqual(result, {"email": "owner@example.test", "name": "Owner"})
+        audit.assert_awaited_once_with(db, stage, user, "staging_google_session")
+
+    async def test_me_does_not_audit_ordinary_production_session(self):
+        prod = Request({"type": "http", "headers": [
+            (b"host", b"gen-lang-client-0593591102.web.app"),
+            (b"cookie", b"__session=id:verified-owner-token"),
+        ]})
+        user = {"sub": "owner-sub", "email": "owner@example.test", "name": "Owner"}
+        with patch("app.api.auth._audit_staging_e2e", new_callable=AsyncMock) as audit:
+            result = await auth.me(prod, user=user, db=object())
+        self.assertEqual(result["email"], user["email"])
+        audit.assert_not_awaited()
+
+    async def test_me_preserves_explicit_staging_e2e_compatibility(self):
+        stage = Request({"type": "http", "headers": [
+            (b"cookie", b"__session=id:staging:verified-owner-token"),
+        ]})
+        user = {"sub": "owner-sub", "email": "owner@example.test", "name": "Owner"}
+        with patch("app.api.auth._audit_staging_e2e", new_callable=AsyncMock) as audit:
+            await auth.me(stage, staging_e2e=True, user=user, db=object())
+        audit.assert_awaited_once()
+
     async def test_staging_callback_rejects_wrong_state_even_with_cookie(self):
         callback_req = Request({"type": "http", "headers": [
             (b"cookie", b"__session=oauth:staging:correct"),

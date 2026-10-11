@@ -81,6 +81,24 @@ class _NotesPageState extends ConsumerState<NotesPage> {
                 sliver: SliverToBoxAdapter(child: LifeFeatureHeader(feature: LifeVisualFeature.notes)),
               ),
               SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                sliver: SliverToBoxAdapter(child: Card(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: .07),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(children: [
+                      const Icon(Icons.lightbulb_outline, size: 28),
+                      const SizedBox(width: 12),
+                      const Expanded(child: Text('想到什麼，就先記下來。')),
+                      OutlinedButton.icon(
+                        onPressed: () => _edit(workspace),
+                        icon: const Icon(Icons.edit_note),
+                        label: const Text('隨手寫')),
+                    ]),
+                  ),
+                )),
+              ),
+              SliverPadding(
                 padding: const EdgeInsets.all(16),
                 sliver: SliverToBoxAdapter(
                   child: Row(
@@ -130,12 +148,19 @@ class _NotesPageState extends ConsumerState<NotesPage> {
                     itemBuilder: (_, index) {
                       final note = workspace.notes[index];
                       return Card(
+                        color: Color.lerp(Theme.of(context).colorScheme.surface,
+                          const Color(0xFFBE9468), index.isEven ? .075 : .035),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             ListTile(
                               onTap: () => _edit(workspace, note: note),
-                              leading: const Icon(Icons.description_outlined),
+                              leading: Container(
+                                width: 42, height: 42,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: .09),
+                                  borderRadius: BorderRadius.circular(13)),
+                                child: const Icon(Icons.sticky_note_2_outlined)),
                               title: Text(note.displayTitle),
                               subtitle: Text(
                                 [

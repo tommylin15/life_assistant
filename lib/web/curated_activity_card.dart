@@ -176,10 +176,15 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
     final closed = urgent && item['registration_status'] == 'closed';
     final cancelled = item['registration_status'] == 'cancelled' ||
         item['registration_status'] == 'canceled';
-    final importantDate = urgent
-      ? (d['registration_open_at_tpe'] ?? d['registration_deadline_at_tpe'] ??
-        item['registration_deadline'])
-      : item['starts_on'];
+    final registrationOpen = d['registration_open_at_tpe']?.toString();
+    final registrationDeadline = (d['registration_deadline_at_tpe'] ??
+        item['registration_deadline'])?.toString();
+    // Dates are displayed with their explicit meaning; activity start is not
+    // substituted for an unverified registration opening/deadline.
+    final pastDeadline = urgent && registrationDeadline != null &&
+        registrationDeadline.length >= 10 &&
+        DateTime.tryParse(registrationDeadline.substring(0, 10)) != null &&
+        registrationDeadline.substring(0, 10).compareTo(today) < 0;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -206,14 +211,18 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
                   overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
               const SizedBox(height: 8),
               Wrap(spacing: 6, runSpacing: 6, children: [
-                if (importantDate != null)
-                  _EventChip(Icons.event_outlined, importantDate.toString()),
+                if (urgent && registrationOpen != null)
+                  _EventChip(Icons.event_outlined, '開報：$registrationOpen'),
+                if (urgent && registrationDeadline != null)
+                  _EventChip(Icons.event_busy_outlined, '截止：$registrationDeadline'),
+                if (!urgent && item['starts_on'] != null)
+                  _EventChip(Icons.event_outlined, '活動：${item['starts_on']}'),
                 _EventChip(Icons.place_outlined, item['city']?.toString() ?? '地區待確認'),
                 if (item['fee_kind'] == 'free')
                   const _EventChip(Icons.sell_outlined, '免費'),
                 if (cancelled)
                   const _EventChip(Icons.event_busy_outlined, '已取消'),
-                if (!cancelled && (ended || closed))
+                if (!cancelled && (ended || closed || pastDeadline))
                   const _EventChip(Icons.event_busy_outlined, '已結束／截止'),
                 if (full)
                   const _EventChip(Icons.info_outline, '已額滿'),

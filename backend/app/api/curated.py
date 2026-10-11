@@ -294,6 +294,7 @@ async def list_curated(
     )
     # Legacy child saves and newer main saves both make the whole group saved.
     saves = (select(group.label("g"))
+             .select_from(CuratedActivity)
              .join(CuratedPersonalAction,
                    CuratedPersonalAction.activity_id == CuratedActivity.identity_key)
              .where(CuratedPersonalAction.kind == "save",

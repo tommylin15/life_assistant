@@ -78,3 +78,13 @@
 **未決驗收：** 本次修正後的新 SHA 需完整 CI、固定 staging SHA、owner Google callback+session、PostgreSQL／Task／Calendar 實際讀回、320–1440px 及三風格實際 UI；未具備時維持 PARTIAL。若 staging 因 owner OAuth 沒有在單次 canary 期間內完成，嚴格標 FAIL，不能繞過當作 PASS。
 
 - 三風格在活動卡片使用獨立的暖心／活力／專注功能色，不再由三風格共用固定活動色；已收藏且可證實已過期／報名關閉／已額滿的舊活動加明確狀態標籤，不以不存在的庫存或日程填值。測試涵蓋逾期收藏標籤。
+
+## 2026-10-11 聯合發布補強
+
+- 活動的個人操作成功後，以 Riverpod mutation version 同步刷新限時機會／活動探索的查詢及 action 狀態，避免兩入口共用收藏仍顯示舊值。
+- 同一主活動查詢頁把不超過 100 個合法 64-hex identity 的個人操作狀態批次讀取，卡片共用快取，減少逐卡 HTTP GET。超出既有 API 限制時退回逐群組。
+- 活動「建立待辦」對話框採 Flutter Form 狀態管理，避免 controller 在關閉轉場時過早釋放；空名稱不得提交。
+- 外部網址擋下數字 IP／不合法 host；活動桌面版雙欄並可展開，手機單欄。
+- 新增 72 種六功能／三主題／四種視窗寬度 Widget 基礎驗收，另加共享 action 載入、變更刷新測試。**測試通過不等於瀏覽器畫面與真實 Google OAuth 已通過**。
+
+本次程式合併後須核對完整 CI 與確切 release SHA。前一輪 Staging #38 與本次最新 main 不能混為同一版本；即使舊流程 PASS，這批仍未取得自身 staging／runtime 證據。

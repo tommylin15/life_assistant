@@ -6,6 +6,7 @@ import '../app/design_system/app_components.dart';
 import '../app/theme/app_tokens.dart';
 import 'browser_navigation.dart';
 import 'calendar_api.dart';
+import 'visual_system.dart';
 
 DateTime _dateOnly(DateTime date) => DateTime(date.year, date.month, date.day);
 DateTime _monthOnly(DateTime date) => DateTime(date.year, date.month);
@@ -275,6 +276,8 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const LifeFeatureHeader(feature: LifeVisualFeature.calendar),
+                const SizedBox(height: AppSpacing.lg),
                 Text('我的 Google 行程',
                     style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: AppSpacing.xs),

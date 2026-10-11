@@ -278,6 +278,11 @@ async def list_curated(
 ):
     if _user and isinstance(db, AsyncSession):
         await feature_gate("events" if entry == "all" else entry)(user=_user, db=db)
+    # Direct callers in connector/integration tests bypass FastAPI's Query coercion.
+    # Normalize omitted Query descriptors without changing HTTP validation.
+    if not isinstance(quick, (str, type(None))): quick = None
+    if not isinstance(keyword, (str, type(None))): keyword = None
+    if not isinstance(district, (str, type(None))): district = None
     today = datetime.now(TAIPEI).date()
     if quick and quick not in (
         {"latest", "opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"}

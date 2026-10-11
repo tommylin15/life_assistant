@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import 'task_api.dart';
+import 'visual_system.dart';
 
 final _taskWorkspaceProvider = FutureProvider<_TaskWorkspace>((ref) async {
   final api = ref.read(taskApiProvider);
@@ -86,6 +87,10 @@ class _TasksPageState extends ConsumerState<TasksPage> {
         constraints: const BoxConstraints(maxWidth: 1040),
         child: CustomScrollView(
           slivers: [
+            const SliverPadding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+              sliver: SliverToBoxAdapter(child: LifeFeatureHeader(feature: LifeVisualFeature.tasks)),
+            ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               sliver: SliverToBoxAdapter(

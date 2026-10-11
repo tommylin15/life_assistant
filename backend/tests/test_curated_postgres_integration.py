@@ -185,5 +185,72 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual({r["title"] for r in feed["items"]}, {"主活動", "不同優惠"})
 
 
+    async def test_v3_bookmark_survives_parent_url_replacement_and_is_private(self):
+        from app.api.curated_actions import set_action, ActionWrite
+        from app.services.curated_handoff import HandoffItem, upsert_handoff
+        from app.models.curated_actions import CuratedPersonalAction
+
+        key = "ci:bookmark:" + uuid.uuid4().hex
+        owner = {"sub": "ci-bookmark-owner-" + uuid.uuid4().hex}
+        other = {"sub": "ci-bookmark-other-" + uuid.uuid4().hex}
+        handoff = HandoffItem(
+            event_key=key, parent_event_key=key, record_type="main",
+            title="收藏在網址更新後仍然保留", organizer="主辦", opportunity_type="一般活動",
+            evidence_summary="已核證", official_url=self.url,
+            importance_star=3, start_at_tpe="2026-12-01T10:00:00+08:00",
+            handoff_updated_at_tpe="2026-10-11T10:00:00+08:00",
+        )
+        async with self.sessions() as db:
+            await upsert_handoff(db, handoff, "c"*64)
+            original = (await db.execute(select(CuratedActivity).where(
+                CuratedActivity.handoff_event_key == key
+            ))).scalar_one()
+            first_id = original.identity_key
+            saved = await set_action(first_id, "save", ActionWrite(active=True),
+                                     owner, db)
+            self.assertTrue(saved["active"])
+            mine = await list_curated(
+                Response(), _user=owner, db=db, entry="explore",
+                saved_only=True, city=None, category=None, starts_from=None,
+                keyword="收藏在網址更新後", quick=None, limit=5, offset=0,
+                region=None, district=None, fee_kind=None,
+            )
+            self.assertEqual(mine["returned"], 1)
+            self.assertTrue(mine["items"][0]["saved"])
+            not_mine = await list_curated(
+                Response(), _user=other, db=db, entry="explore",
+                saved_only=True, city=None, category=None, starts_from=None,
+                keyword="收藏在網址更新後", quick=None, limit=5, offset=0,
+                region=None, district=None, fee_kind=None,
+            )
+            self.assertEqual(not_mine["returned"], 0)
+
+            # The source identity may change when the upstream canonical URL
+            # moves; the saved parent group must stay independent of URL IDs.
+            original.identity_key = uuid.uuid4().hex + uuid.uuid4().hex
+            await db.commit()
+            remapped = await list_curated(
+                Response(), _user=owner, db=db, entry="explore",
+                saved_only=True, city=None, category=None, starts_from=None,
+                keyword="收藏在網址更新後", quick=None, limit=5, offset=0,
+                region=None, district=None, fee_kind=None,
+            )
+            self.assertEqual(remapped["returned"], 1)
+            self.assertTrue(remapped["items"][0]["saved"])
+            self.assertNotEqual(remapped["items"][0]["identity_key"], first_id)
+            off = await set_action(
+                remapped["items"][0]["identity_key"], "save",
+                ActionWrite(active=False), owner, db,
+            )
+            self.assertFalse(off["active"])
+            none_left = await list_curated(
+                Response(), _user=owner, db=db, entry="explore",
+                saved_only=True, city=None, category=None, starts_from=None,
+                keyword="收藏在網址更新後", quick=None, limit=5, offset=0,
+                region=None, district=None, fee_kind=None,
+            )
+            self.assertEqual(none_left["returned"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

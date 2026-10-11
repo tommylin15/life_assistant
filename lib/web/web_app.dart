@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app/theme/app_theme.dart';
+import 'visual_system.dart';
 import 'acceptance_center_page.dart';
 import 'calendar_page.dart';
 import 'app_shell.dart';
@@ -106,13 +107,16 @@ class WebApp extends ConsumerWidget {
   const WebApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => MaterialApp.router(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appearance = ref.watch(lifeAppearanceProvider);
+    return MaterialApp.router(
         title: '生活助理',
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
-        themeMode: ThemeMode.system,
+        theme: LifeVisualTheme.build(appearance.style, Brightness.light),
+        darkTheme: LifeVisualTheme.build(appearance.style, Brightness.dark),
+        themeMode: appearance.mode,
         routerConfig: _router,
       );
+  }
 }
 

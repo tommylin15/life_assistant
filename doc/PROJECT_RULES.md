@@ -127,7 +127,7 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 
 ## GCP / CI/CD / IAM
 
-- 2026-10-08 **CI/CD V3** 決策已取代 Cloud Build-led V2 主線；新版文件見 `ci_cd_ghcr_release_policy.md`。V3 已有真實 release 完成證據；每次新 SHA、來源 Job、前後端 OAuth、資料庫及應用整合仍各自獨立驗收，不能由此推定 PASS。
+- 2026-10-08 **CI/CD V3** 決策已取代 Cloud Build-led V2 主線；新版文件見 `ci_cd_ghcr_release_policy.md`。V3 已有真實 release 完成證據；每次新 SHA、來源 Job、資料庫及應用整合仍各自獨立驗收；OAuth 發布驗收依 2026-10-12 最新決策取消，不能由此推定 PASS。
 
 - 正式派版優先走 `GitHub main → GitHub Actions → tests/build → GCP → runtime/integration validation`。
 - GitHub Actions 對 `gen-lang-client-0593591102` 使用 OIDC / Workload Identity Federation；不得建立長效 Service Account JSON key 作為一般部署憑證。
@@ -136,9 +136,16 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 - 下列高風險操作仍需使用者明確確認：重大 IAM / Service Account 擴權、跨專案或跨組織權限、production credential / secret rotation、刪除 production GCP / database / Firebase 資源、destructive migration、可能造成重大 production outage 的權限或資源變更。
 - 可使用本機 WSL 執行 dev migration、Linux/shell 驗證（包含 `bash -n`）與 GCP dev 驗收；production 部署仍以 GitHub Actions 為主線。
 
-## CI/CD V3 — 正式目標（2026-10-08，優先於下方歷史 V2）
+## 2026-10-12 最新決策：全面取消 CI/CD 的 OAuth 驗收門檻
 
-- **單一正式目標**：`ChatGPT → GitHub main → GitHub Actions 完整測試/發布公開 GHCR digest → GCP API → GitHub Actions Logs → ChatGPT`。`main` push 先執行完整 CI；**2026-10-10 使用者最新核准變更**：只有四個 CI Job 全 PASS 的當次 `main` SHA，才由 `.github/workflows/v3-auto-staging-after-ci.yml` 的 `workflow_run` 自動啟動既有 V3 **staging-only** 發布（`promote=false`、`publish_staging=true`）。嚴格核對 CI push 來源、SHA 等於當前 main、避免重複發布；不對 PR／手動 CI／過期 SHA 發布。正式 production 切流仍需另外明確手動要求，不得由自動 staging 啟動。既有 GHCR digest、Cloud Run 0% 候選、Preview、真實 Google owner OAuth、失敗恢復與可稽核驗收不可略過。
+- Owner 已明確決定：**從 life_assistant 的 CI/CD／V3 發布、Staging、正式 Cloud Run promotion、Firebase Hosting 和相關讀回流程中，移除所有 OAuth 驗收**。包含真人 Owner Google 登入、callback/session 配對、OAuth redirect/cookie 測試、Google OAuth fixture 驗收及任何等待人工操作的 release gate。不可因沒有這些證據而使發布失敗，也不得把未測試的 OAuth 宣稱為 PASS。
+- 這僅取消**發布驗收**，**不移除** Google OAuth 登入、callback、Session、使用者權限、token 驗證、Google 整合、個人資料隔離與既有應用程式安全邏輯。保留程式單元測試、安全與認證授權檢查；CI/CD 仍須驗證沒有認證的 API 請求回傳 401、SHA／GHCR digest、Preview pinned rewrites、DB migration、功能整合、正式流量及回滾。
+- 自動 Staging 可在無 Owner 介入下完成。**正式 production promotion 仍需要從 `main` 的明確手動 workflow_dispatch（`promote=true`、`publish_staging=true`）**，通過其餘所有發版門檻才准切流；Hosting 仍由成功的同 SHA 正式 Release 觸發。不得擴張為每次 main push 自動切換正式版。
+- 此最新核准決策優先於本文件及 `ci_cd_ghcr_release_policy.md` 內早期關於「真實 Owner OAuth 必須通過才能發布」的敘述。未執行真人 OAuth 的驗收結果一律列為 **NOT VERIFIED（依決策不列為 release blocker）**；不得偽稱 Google 登入 E2E 已完成。
+
+## CI/CD V3 — 正式目標（2026-10-08，依上述 2026-10-12 更新）
+
+- **單一正式目標**：`ChatGPT → GitHub main → GitHub Actions 完整測試/發布公開 GHCR digest → GCP API → GitHub Actions Logs → ChatGPT`。`main` push 先執行完整 CI；**2026-10-10 使用者最新核准變更**：只有四個 CI Job 全 PASS 的當次 `main` SHA，才由 `.github/workflows/v3-auto-staging-after-ci.yml` 的 `workflow_run` 自動啟動既有 V3 **staging-only** 發布（`promote=false`、`publish_staging=true`）。嚴格核對 CI push 來源、SHA 等於當前 main、避免重複發布；不對 PR／手動 CI／過期 SHA 發布。正式 production 切流仍需另外明確手動要求，不得由自動 staging 啟動。既有 GHCR digest、Cloud Run 0% 候選、Preview、401 存取控制、失敗恢復與可稽核的非 OAuth 驗收不可略過。
 - 新流程不得呼叫 Cloud Build、不得主動寫 GCS/Artifact Registry，也不得新增其 repo/bucket；過去 Cloud Build 僅允許獨立、WIF **唯讀** 診斷。部署採**分離的最小權限 deployer**；唯讀 WIF 無法部署。
 - Cloud Run **僅允許直接讀取公開 GHCR package 的 immutable manifest digest**；package visibility/讀取、live/candidate digest、服務身份和 0% tagged URL 安全均需實測。私人 GHCR 所需的 Artifact Registry remote repo 與本決策衝突，因此失敗關閉，不自動替換架構。
 - 禁止因寫好文件而標示 V3 DONE。切換前盤點現有 workflow/Cloud Build triggers，實作後先取得 Actions、GHCR、WIF、0% revision、真實候選/Preview/Live、rollback 及未觸發 Cloud Build/未主動寫 GCS/AR 證據；再停用舊入口，不刪歷史記錄。

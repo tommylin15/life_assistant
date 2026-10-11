@@ -15,6 +15,10 @@ EXPECTED_REVISION = "REPLACE_ME"
 CANARY_START_UTC = "REPLACE_ME"
 ACTION_TYPES = ("staging_google_callback", "staging_google_session")
 
+# Exit codes propagate via Cloud Run task status even if Cloud Logging is inaccessible.
+OWNER_EVIDENCE_MISSING_EXIT = 20
+VERIFICATION_ERROR_EXIT = 21
+
 
 class OwnerEvidenceTimeout(TimeoutError):
     """This release did not receive both genuine owner events in its canary window."""
@@ -70,13 +74,13 @@ def main() -> None:
         # The owner did not complete a same-revision callback/session pair.
         # Do not misclassify absence of evidence as a database outage.
         print("staging_oauth_e2e=NOT_VERIFIED reason=missing_owner_callback_session; staging_rollback_required", flush=True)
-        raise SystemExit(1) from None
+        raise SystemExit(OWNER_EVIDENCE_MISSING_EXIT) from None
     except Exception as exc:
         # Exception messages may carry connection endpoints/credentials;
         # logging the exception class only is safe and sufficient to distinguish
         # an operational failure from lack of user authorization.
         print(f"staging_oauth_e2e=FAIL reason=verification_error error_type={type(exc).__name__}; staging_rollback_required", flush=True)
-        raise SystemExit(1) from None
+        raise SystemExit(VERIFICATION_ERROR_EXIT) from None
 
 
 if __name__ == "__main__":

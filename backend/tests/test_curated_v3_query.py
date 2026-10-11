@@ -58,13 +58,17 @@ class CuratedV3UnitTest(unittest.TestCase):
             city=None, district=None, category=None, fee_kind=None,
             starts_from=None, today=date(2026, 10, 11), user_sub="owner",
         )
-        ordinary = str(_activity_filters(
+        ordinary_query = _activity_filters(
             select(CuratedActivity), saved_only=False, **base,
-        ).compile(dialect=postgresql.dialect()))
-        saved = str(_activity_filters(
+        )
+        saved_query = _activity_filters(
             select(CuratedActivity), saved_only=True, **base,
-        ).compile(dialect=postgresql.dialect()))
-        # Normal opportunities respect a verified deadline and cancellation;
+        )
+        # Inspect predicates only, not SELECT columns (which include these
+        # fields even when the saved-only filters correctly omit them).
+        ordinary = str(ordinary_query.whereclause.compile(dialect=postgresql.dialect()))
+        saved = str(saved_query.whereclause.compile(dialect=postgresql.dialect()))
+        # Normal opportunities respect a known deadline and cancellation;
         # saved history remains accessible after its action window expires.
         self.assertIn("registration_deadline", ordinary)
         self.assertIn("registration_status", ordinary)

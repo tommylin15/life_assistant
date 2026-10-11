@@ -57,6 +57,13 @@ esac
         self.assertIn("staging_oauth_e2e=FAIL reason=verifier_runtime_error", log)
         self.assertNotIn("missing_owner_callback_session", summary)
 
+    def test_unknown_canary_exit_stays_unclassified(self):
+        code, log, summary = self._run(1)
+        self.assertEqual(code, 1)
+        self.assertIn("staging_oauth_e2e=NOT_VERIFIED reason=unclassified_job_failure exit=1", log)
+        self.assertNotIn("missing_owner_callback_session", summary)
+        self.assertNotIn("verifier_runtime_error", log)
+
     def test_other_jobs_cannot_inherit_oauth_reason(self):
         code, log, summary = self._run(20, marker=False)
         self.assertEqual(code, 1)

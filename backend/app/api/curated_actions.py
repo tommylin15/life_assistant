@@ -88,6 +88,17 @@ def _task_due(item, body):
         raise HTTPException(422, "Selected registration time is unverified") from exc
 
 
+def calendar_unchanged(actual: dict, baseline: dict) -> bool:
+    """Only cancel a Life-authored event if relevant user-editable fields match."""
+    return (
+        all(actual.get(k) == baseline.get(k)
+            for k in ("summary", "description", "location"))
+        and all((actual.get(k) or {}).get("date") ==
+                (baseline.get(k) or {}).get("date")
+                for k in ("start", "end"))
+    )
+
+
 def calendar_payload(item, kind, body):
     details = item.handoff_details or {}
     prefix = {"calendar_info": "活動日期參考", "calendar_registration": "報名時間提醒",
@@ -267,16 +278,7 @@ async def set_action(activity_id: str, kind: KINDS, body: ActionWrite,
                     )
                     if remote.status_code == 200:
                         actual = remote.json()
-                        unchanged = (
-                            all(actual.get(k) == baseline.get(k)
-                                for k in ("summary", "description", "location"))
-                            and all(
-                                (actual.get(k) or {}).get("date") ==
-                                (baseline.get(k) or {}).get("date")
-                                for k in ("start", "end")
-                            )
-                        )
-                        if not unchanged:
+                        if not calendar_unchanged(actual, baseline):
                             raise HTTPException(
                                 409, "Calendar event has been edited; do not delete personal changes"
                             )

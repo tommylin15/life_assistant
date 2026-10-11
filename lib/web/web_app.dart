@@ -16,7 +16,6 @@ import 'more_page.dart';
 import 'notes_page.dart';
 import 'projects_page.dart';
 import 'shopping_page.dart';
-import 'free_events_page.dart';
 import 'tasks_page.dart';
 import 'curated_events_page.dart';
 import 'platform_api.dart';

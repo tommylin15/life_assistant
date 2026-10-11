@@ -36,7 +36,7 @@ final curatedPageActionsProvider = FutureProvider.family<Map<String, dynamic>, S
 
 class CuratedActivityCard extends ConsumerStatefulWidget {
   const CuratedActivityCard({super.key, required this.items,
-    required this.entry, this.onChanged});
+    this.entry = 'explore', this.onChanged});
   final List<Map<String, dynamic>> items;
   final String entry;
   final VoidCallback? onChanged;

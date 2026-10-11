@@ -492,7 +492,7 @@ class _TaskCard extends StatelessWidget {
                           if (url == null) return const SizedBox.shrink();
                           return Padding(padding: const EdgeInsets.only(top: 6),
                             child: TextButton.icon(
-                              onPressed: () => navigateBrowser(url.toString()),
+                              onPressed: () => openExternalBrowser(url.toString()),
                               icon: const Icon(Icons.open_in_new, size: 18),
                               label: const Text('前往網址')));
                         }),

@@ -66,3 +66,13 @@
 - 部分 UX 例如所有行政區選單、跨查詢穩定 snapshot cursor、高密度海報插畫還需根據真實資料與視覺檢測調整，不宣稱已完成。
 
 本批 source 為 PARTIAL，只有全部 CI + staging + 實際操作均核實後才可能標 DONE。
+
+
+## 2026-10-11 UX V3 後續一致性修正（本次合併驗收）
+
+- 主活動收藏保存為依 `handoff:event_key` 推導的帳號私有穩定動作鍵，不依網址 identity；既有子場次收藏仍可查詢、在下次切換時合併，不需要 destructive migration。
+- 限時機會排序只採未過期且有據的報名開放／截止時間；無據的時間不得取活動日來偽裝開報。
+- 活動卡片的待辦、Google 全天日期標記可明確取消／移除；對人工更改過的 Google 事件做基準比較，資訊不符拒絕自動刪除。沒有歷史基準的舊事件也不盲目刪除。
+- 新增 PostgreSQL 帳號隔離／父活動 identity 變更收藏測試與 Calendar 人工編輯保護測試。
+
+**未決驗收：** 本次修正後的新 SHA 需完整 CI、固定 staging SHA、owner Google callback+session、PostgreSQL／Task／Calendar 實際讀回、320–1440px 及三風格實際 UI；未具備時維持 PARTIAL。若 staging 因 owner OAuth 沒有在單次 canary 期間內完成，嚴格標 FAIL，不能繞過當作 PASS。

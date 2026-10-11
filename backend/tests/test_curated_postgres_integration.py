@@ -2,6 +2,7 @@
 import os
 import uuid
 import unittest
+from unittest import mock
 from datetime import date
 
 from fastapi import Response
@@ -185,14 +186,17 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual({r["title"] for r in feed["items"]}, {"主活動", "不同優惠"})
 
 
+    @mock.patch.dict(os.environ, {"ALLOWED_GOOGLE_EMAIL": "ci-v3-owner@example.org"})
     async def test_v3_bookmark_survives_parent_url_replacement_and_is_private(self):
         from app.api.curated_actions import set_action, ActionWrite
         from app.services.curated_handoff import HandoffItem, upsert_handoff
         from app.models.curated_actions import CuratedPersonalAction
 
         key = "ci:bookmark:" + uuid.uuid4().hex
-        owner = {"sub": "ci-bookmark-owner-" + uuid.uuid4().hex}
-        other = {"sub": "ci-bookmark-other-" + uuid.uuid4().hex}
+        owner = {"sub": "ci-bookmark-owner-" + uuid.uuid4().hex,
+                 "email": "ci-v3-owner@example.org"}
+        other = {"sub": "ci-bookmark-other-" + uuid.uuid4().hex,
+                 "email": "ci-v3-owner@example.org"}
         handoff = HandoffItem(
             event_key=key, parent_event_key=key, record_type="main",
             title="收藏在網址更新後仍然保留", organizer="主辦", opportunity_type="一般活動",

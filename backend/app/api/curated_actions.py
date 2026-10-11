@@ -174,7 +174,7 @@ async def set_action(activity_id: str, kind: KINDS, body: ActionWrite,
     if not body.active and record and record.payload.get("calendar_group"):
         payload["calendar_group"] = record.payload["calendar_group"]
     same_payload = record is not None and all(record.payload.get(k) == v for k, v in payload.items())
-    if record and record.active == body.active and not (kind == "follow" and body.active and not same_payload):
+    if record and record.active == body.active and kind != "save" and not (kind == "follow" and body.active and not same_payload):
         if body.active and not same_payload:
             raise HTTPException(409, "Cancel the previous action before choosing new times")
         return {"active": record.active, "entity_id": record.entity_id, "unchanged": True}

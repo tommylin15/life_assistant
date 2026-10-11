@@ -33,6 +33,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
   String region = '';
   String city = '';
   String category = '';
+  String district = '';
   String fee = '';
   DateTime? from;
   bool savedOnly = false;
@@ -77,6 +78,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
     if (region.isNotEmpty) params['region'] = region;
     if (city.isNotEmpty) params['city'] = city;
     if (category.isNotEmpty) params['category'] = category;
+    if (district.isNotEmpty) params['district'] = district;
     if (fee.isNotEmpty) params['fee_kind'] = fee;
     if (savedOnly) params['saved_only'] = 'true';
     if (from != null) {
@@ -133,7 +135,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
                 const Text('目前沒有符合條件的活動'),
                 TextButton(onPressed: () => filter(() {
                   keyword = ''; search.clear(); quick = ''; region = '';
-                  city = ''; category = ''; fee = ''; from = null; savedOnly = false;
+                  city = ''; district = ''; category = ''; fee = ''; from = null; savedOnly = false;
                 }), child: const Text('清除篩選')),
               ]));
           }
@@ -221,6 +223,12 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
                   ],
                   onChanged: (v) => filter(() => category = v ?? ''),
                 ),
+                SizedBox(width: 150, child: TextFormField(
+                  initialValue: district,
+                  decoration: const InputDecoration(labelText: '行政區', hintText: '例如：中正區'),
+                  textInputAction: TextInputAction.search,
+                  onFieldSubmitted: (v) => filter(() => district = v.trim()),
+                )),
                 DropdownButton<String>(
                   value: fee,
                   items: const [

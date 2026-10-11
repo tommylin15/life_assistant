@@ -75,6 +75,24 @@ if [ -n "$EXECUTION" ]; then
       --region "$GCP_REGION" \
       --format='value(status.lastAttemptResult.exitCode)' || true)"
     echo "$JOB_NAME task exit code: ${TASK_EXIT:-unknown}"
+    # Cloud Run task exit code is in the Executions API and needs no
+    # Cloud Logging Viewer. Distinguish owner absence from a broken verifier
+    # only for this particular canary module; do not infer all job exit 20s.
+    if [[ " $* " == *"scripts.verify_staging_google_e2e"* ]]; then
+      case "$TASK_EXIT" in
+        20)
+          echo "::error::staging_oauth_e2e=NOT_VERIFIED reason=missing_owner_callback_session (Cloud Run task exit=20)"
+          echo "staging_oauth_e2e=NOT_VERIFIED reason=missing_owner_callback_session" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          ;;
+        21)
+          echo "::error::staging_oauth_e2e=FAIL reason=verifier_runtime_error (Cloud Run task exit=21)"
+          echo "staging_oauth_e2e=FAIL reason=verifier_runtime_error" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          ;;
+        *)
+          echo "::error::staging_oauth_e2e=NOT_VERIFIED reason=unclassified_job_failure exit=${TASK_EXIT:-unknown}"
+          ;;
+      esac
+    fi
     gcloud run jobs executions tasks describe "$TASK" \
       --project "$GCP_PROJECT_ID" \
       --region "$GCP_REGION" \

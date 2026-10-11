@@ -198,6 +198,7 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
             title="收藏在網址更新後仍然保留", organizer="主辦", opportunity_type="一般活動",
             evidence_summary="已核證", official_url=self.url,
             importance_star=3, start_at_tpe="2026-12-01T10:00:00+08:00",
+            verified_at_tpe="2026-10-11T10:00:00+08:00",
             handoff_updated_at_tpe="2026-10-11T10:00:00+08:00",
         )
         async with self.sessions() as db:

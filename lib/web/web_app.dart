@@ -63,9 +63,8 @@ final _router = GoRouter(
           path: '/more/drive',
           builder: (_, __) => const FeatureAccess(feature: 'drive', child: DrivePage()),
         ),
-        GoRoute(path: '/more/events', builder: (_, __) => const FeatureAccess(feature: 'events', child: FreeEventsPage())),
-        GoRoute(path: '/more/curated', builder: (_, __) =>
-            const FeatureAccess(feature: 'events', child: CuratedEventsPage())),
+        GoRoute(path: '/more/events', redirect: (_, __) => '/more/explore'),
+        GoRoute(path: '/more/curated', redirect: (_, __) => '/more/explore'),
         GoRoute(path: '/more/opportunities', builder: (_, __) => const FeatureAccess(feature: 'opportunities', child: CuratedEventsPage(entry: 'opportunities'))),
         GoRoute(path: '/more/explore', builder: (_, __) => const FeatureAccess(feature: 'explore', child: CuratedEventsPage(entry: 'explore'))),
         GoRoute(path: '/more/personalize', builder: (_, __) => const PersonalizePage()),

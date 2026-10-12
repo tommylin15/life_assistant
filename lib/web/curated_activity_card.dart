@@ -160,6 +160,8 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
       LifeVisualStyle.warm => urgent ? const Color(0xFFC77775) : const Color(0xFFB68B52),
       LifeVisualStyle.fresh => urgent ? const Color(0xFFF07665) : const Color(0xFF159E9A),
       LifeVisualStyle.focus => urgent ? const Color(0xFF777C9A) : const Color(0xFF527D8D),
+      LifeVisualStyle.animated => urgent ? const Color(0xFFE57435) : const Color(0xFF357DC9),
+      LifeVisualStyle.pinkBubble => urgent ? const Color(0xFFC74D8A) : const Color(0xFFAF609C),
     };
     final d = item['handoff_details'] as Map? ?? const {};
     final saved = savedOverride ?? widget.items.any((e) => e['saved'] == true);

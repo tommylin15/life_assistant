@@ -400,6 +400,7 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
           );
         },
       )),
+      ]),
     );
   }
 

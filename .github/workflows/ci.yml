@@ -160,12 +160,16 @@ jobs:
           alembic current
           alembic upgrade 20261012_0017
           alembic current
+          alembic upgrade 20261012_0018
+          alembic current
       - name: Verify real PostgreSQL transactions, constraints, concurrency and read filters
         run: python -m unittest discover -s tests -p 'test_free_events_*postgres*.py' -v
       - name: Verify curated ingestion and per-user preferences on real PostgreSQL
         run: python -m unittest discover -s tests -p 'test_curated_postgres_integration.py' -v
       - name: Verify rollback-only 0016 production-style runtime smoke on CI PostgreSQL
-        run: python -m scripts.run_curated_pool_runtime_acceptance
+        run: |
+          python -m scripts.run_curated_pool_runtime_acceptance
+          python -m scripts.run_private_ownership_acceptance
       # Run the *same* bounded synthetic provider/consent acceptance before
       # deploying. It uses CI PostgreSQL and never calls Google or a real AI.
       - name: Verify Drive AI opt-in and opt-out runtime on CI PostgreSQL

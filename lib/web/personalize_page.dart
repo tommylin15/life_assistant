@@ -34,8 +34,12 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
             ...value,
             'pinned': ((value['pinned'] as List).cast<String>())
                 .map((s) => s == 'events' ? 'explore' : s).toSet().toList(),
-            'more_order': ((value['more_order'] as List).cast<String>())
-                .map((s) => s == 'events' ? 'explore' : s).toSet().toList(),
+            'more_order': <String>[
+              ...((value['more_order'] as List).cast<String>())
+                  .map((s) => s == 'events' ? 'explore' : s),
+              ...['tasks','calendar','projects','notes','habits','shopping',
+                'opportunities','explore','drive','integrations'],
+            ].toSet().toList(),
           };
           final mode = draft!['nav_mode'] as String;
           final pins = (draft!['pinned'] as List).cast<String>().toList();
@@ -80,18 +84,18 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
             Text('外觀會立即套用並儲存在目前瀏覽器、目前帳號。跨裝置同步尚未實作。',
               style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 24),
-            Text('選單位置', style: Theme.of(context).textTheme.titleLarge),
+            Text('左側完整選單與底部快捷同時顯示', style: Theme.of(context).textTheme.titleLarge),
             DropdownButton<String>(
               value: mode,
               items: const [
-                DropdownMenuItem(value: 'auto', child: Text('自動（依螢幕寬度）')),
-                DropdownMenuItem(value: 'bottom', child: Text('底部')),
-                DropdownMenuItem(value: 'sidebar', child: Text('左側 / 手機抽屜')),
+                DropdownMenuItem(value: 'auto', child: Text('寬螢幕固定左側／手機抽屜')),
+                DropdownMenuItem(value: 'bottom', child: Text('左側選單點開時顯示')),
+                DropdownMenuItem(value: 'sidebar', child: Text('寬螢幕固定左側／手機抽屜')),
               ],
               onChanged: (s) => setState(() => draft!['nav_mode'] = s ?? 'auto'),
             ),
             const SizedBox(height: 20),
-            Text('底部捷徑（首頁、更多固定，最多選 3 項）',
+            Text('底部四個快捷（首頁固定，其餘三項可選）',
                 style: Theme.of(context).textTheme.titleMedium),
             Wrap(spacing: 6, children: [
               for (final key in ['tasks','calendar','projects','notes','habits',
@@ -128,7 +132,7 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
                 ]),
               ),
             const SizedBox(height: 20),
-            Text('更多功能排序', style: Theme.of(context).textTheme.titleMedium),
+            Text('左側完整選單排序', style: Theme.of(context).textTheme.titleMedium),
             for (var i = 0; i < more.length; i++)
               ListTile(
                 title: Text(_titles[more[i]] ?? more[i]),
@@ -190,7 +194,7 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
                 onPressed: saving ? null : () => setState(() {
                   draft!['nav_mode'] = 'auto';
                   draft!['pinned'] = ['tasks', 'calendar', 'projects'];
-                  draft!['more_order'] = ['notes', 'habits', 'opportunities', 'explore', 'shopping', 'drive', 'integrations'];
+                  draft!['more_order'] = ['tasks', 'calendar', 'projects', 'notes', 'habits', 'opportunities', 'explore', 'shopping', 'drive', 'integrations'];
                   draft!['home_cards'] = ['tasks', 'calendar', 'attention', 'habits', 'events', 'projects'];
                 }),
                 child: const Text('還原預設'),

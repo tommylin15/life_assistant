@@ -27,6 +27,7 @@ class NotesPage extends ConsumerStatefulWidget {
 class _NotesPageState extends ConsumerState<NotesPage> {
   final _search = TextEditingController();
   String _query = '';
+  String? _categoryFilter; // null: all, empty: uncategorized
 
   @override
   void dispose() {
@@ -45,6 +46,18 @@ class _NotesPageState extends ConsumerState<NotesPage> {
       appBar: AppBar(
         title: const Text('筆記'),
         actions: [
+          IconButton(
+            key: const ValueKey('note-categories-open'),
+            tooltip: '筆記分類',
+            icon: const Icon(Icons.folder_open_outlined),
+            onPressed: workspace == null ? null : () => showModalBottomSheet<void>(
+              context: context,
+              builder: (sheet) => SafeArea(
+                child: SizedBox(height: 400,
+                  child: _categoryMenu(workspace, closeOnTap: sheet)),
+              ),
+            ),
+          ),
           if (wide)
             Padding(
               padding: const EdgeInsets.only(right: 16),
@@ -71,7 +84,13 @@ class _NotesPageState extends ConsumerState<NotesPage> {
     );
   }
 
-  Widget _content(_Workspace workspace) => Align(
+  Widget _content(_Workspace workspace) {
+    final shown = workspace.notes.where((note) => _categoryFilter == null ||
+        (note.category ?? '') == _categoryFilter).toList();
+    return Row(children: [
+      if (MediaQuery.sizeOf(context).width >= 900)
+        SizedBox(width: 192, child: _categoryMenu(workspace)),
+      Expanded(child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1040),
@@ -131,23 +150,24 @@ class _NotesPageState extends ConsumerState<NotesPage> {
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                   sliver: SliverToBoxAdapter(
-                    child: Text('搜尋「$_query」：${workspace.notes.length} 筆'),
+                    child: Text('搜尋「$_query」：${shown.length} 筆'),
                   ),
                 ),
-              if (workspace.notes.isEmpty)
+              if (shown.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
-                    child: Text(_query.isEmpty ? '還沒有筆記' : '找不到符合的筆記'),
+                    child: Text(_categoryFilter != null ? '此分類目前沒有符合的筆記' :
+                        _query.isEmpty ? '還沒有筆記' : '找不到符合的筆記'),
                   ),
                 )
               else
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                   sliver: SliverList.builder(
-                    itemCount: workspace.notes.length,
+                    itemCount: shown.length,
                     itemBuilder: (_, index) {
-                      final note = workspace.notes[index];
+                      final note = shown[index];
                       return Card(
                         color: Color.lerp(Theme.of(context).colorScheme.surface,
                           const Color(0xFFBE9468), index.isEven ? .075 : .035),
@@ -178,11 +198,13 @@ class _NotesPageState extends ConsumerState<NotesPage> {
                                 tooltip: '筆記選項',
                                 onSelected: (action) {
                                   if (action == 'edit') _edit(workspace, note: note);
+                                  if (action == 'category') _quickCategory(workspace, note);
                                   if (action == 'links') _links(workspace, note);
                                   if (action == 'delete') _delete(note);
                                 },
                                 itemBuilder: (_) => const [
                                   PopupMenuItem(value: 'edit', child: Text('編輯')),
+                                  PopupMenuItem(value: 'category', child: Text('變更分類')),
                                   PopupMenuItem(value: 'links', child: Text('雙向連結')),
                                   PopupMenuItem(value: 'delete', child: Text('刪除')),
                                 ],
@@ -207,7 +229,43 @@ class _NotesPageState extends ConsumerState<NotesPage> {
             ],
           ),
         ),
-      );
+      )),
+    ]);
+  }
+
+  Widget _categoryMenu(_Workspace workspace, {BuildContext? closeOnTap}) {
+    final categories = workspace.notes.map((note) => note.category)
+        .whereType<String>().toSet().toList()..sort();
+    void choose(String? category) {
+      setState(() => _categoryFilter = category);
+      if (closeOnTap != null) Navigator.of(closeOnTap).pop();
+    }
+    return ListView(children: [
+      const ListTile(title: Text('筆記分類')),
+      ListTile(
+        key: const ValueKey('note-category-all'),
+        leading: const Icon(Icons.all_inbox_outlined),
+        title: const Text('全部筆記'),
+        selected: _categoryFilter == null,
+        onTap: () => choose(null),
+      ),
+      ListTile(
+        key: const ValueKey('note-category-uncategorized'),
+        leading: const Icon(Icons.folder_off_outlined),
+        title: const Text('未分類'),
+        selected: _categoryFilter == '',
+        onTap: () => choose(''),
+      ),
+      for (final category in categories)
+        ListTile(
+          key: ValueKey('note-category-$category'),
+          leading: const Icon(Icons.folder_outlined),
+          title: Text(category),
+          selected: _categoryFilter == category,
+          onTap: () => choose(category),
+        ),
+    ]);
+  }
 
   void _applySearch() => setState(() => _query = _search.text.trim());
 
@@ -252,6 +310,67 @@ class _NotesPageState extends ConsumerState<NotesPage> {
           : '筆記已儲存，但標籤更新失敗：$tagError');
     } catch (error) {
       _message('操作失敗：$error');
+    }
+  }
+
+
+  Future<void> _quickCategory(_Workspace workspace, _Note note) async {
+    final categories = workspace.notes.map((item) => item.category)
+        .whereType<String>().toSet().toList()..sort();
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (dialog) => SimpleDialog(
+        title: Text('變更分類 · ${note.displayTitle}'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialog, ''),
+            child: const Text('未分類'),
+          ),
+          for (final category in categories)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialog, category),
+              child: Text(category),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialog, '__new_category__'),
+            child: const Text('＋ 新增分類'),
+          ),
+        ],
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    var category = chosen;
+    if (category == '__new_category__') {
+      final input = TextEditingController();
+      final custom = await showDialog<String>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: const Text('新增分類'),
+          content: TextField(
+            key: const ValueKey('note-new-category-field'),
+            controller: input,
+            maxLength: 80,
+            decoration: const InputDecoration(hintText: '分類名稱'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialog),
+                child: const Text('取消')),
+            FilledButton(onPressed: () => Navigator.pop(dialog, input.text.trim()),
+                child: const Text('確定')),
+          ],
+        ),
+      );
+      input.dispose();
+      if (custom == null || !mounted) return;
+      category = custom;
+    }
+    try {
+      await ref.read(noteApiProvider).updateNote(note.id,
+          {'category': category.isEmpty ? null : category});
+      _reload();
+      if (mounted) _message('分類已更新');
+    } catch (error) {
+      _message('更新分類失敗：$error');
     }
   }
 

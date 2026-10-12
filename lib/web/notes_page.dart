@@ -811,7 +811,7 @@ class _ErrorState extends StatelessWidget {
 }
 
 String suggestedNoteTitle(String body) {
-  final cleaned = body.replaceAll(RegExp(r'(?m)^\s{0,3}(?:#{1,6}|[-*>])\s*'), '')
+  final cleaned = body.replaceAll(RegExp(r'^\s{0,3}(?:#{1,6}|[-*>])\s*', multiLine: true), '')
       .replaceAll(RegExp(r'[*_~\[\]]'), '')
       .replaceAll(String.fromCharCode(96), '').trim()
       .replaceAll(RegExp(r'\s+'), ' ');

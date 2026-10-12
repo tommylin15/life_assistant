@@ -3,6 +3,7 @@ import os
 import hashlib
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
+import httpx
 from scripts.import_curated_from_sheet import parse_rows, validate_record, SheetClient, run_import, SHEET_ID
 from app.services.curated_handoff import HEADERS
 
@@ -86,7 +87,9 @@ class ReceiptTests(unittest.IsolatedAsyncioTestCase):
         other = record(event_key="other:show")
         acked = dict(original, handoff_status="ACKED", life_import_result="CREATED", life_ack_at_tpe="2026-10-10T09:00:00+08:00")
         client.read = AsyncMock(side_effect=[sheet(other, original), sheet(other, acked)])
-        self.assertTrue(await client.receipt(original, "CREATED"))
+        with patch("scripts.import_curated_from_sheet.datetime") as clock:
+            clock.now.return_value.isoformat.return_value = "2026-10-10T09:00:00+08:00"
+            self.assertTrue(await client.receipt(original, "CREATED"))
         ranges = client.request.call_args.kwargs["json"]["data"]
         self.assertEqual(ranges[0]["range"], "'交接資料'!Z3")
         self.assertEqual(ranges[1]["range"], "'交接資料'!AB3:AD3")
@@ -97,7 +100,7 @@ class ReceiptTests(unittest.IsolatedAsyncioTestCase):
         newer.update(handoff_status="ACKED", life_import_result="CREATED")
         client = AsyncMock()
         client.read.return_value = sheet(newer)
-        client.receipt.return_value = True
+        client.receipts.return_value = [True]
         sessions = MagicMock()
         sessions.return_value.__aenter__.return_value = AsyncMock()
         with patch.dict(os.environ, {"LIFE_CURATED_SHEET_ID": SHEET_ID, "LIFE_CURATED_IMPORT_APPLY": "1"}), patch(
@@ -105,7 +108,7 @@ class ReceiptTests(unittest.IsolatedAsyncioTestCase):
             result = await run_import(client, sessions)
         upsert.assert_awaited_once()
         self.assertEqual(result["updated"], 1)
-        client.receipt.assert_awaited_once_with(newer, "UPDATED")
+        client.receipts.assert_awaited_once_with([(newer, "UPDATED", "")])
 
     async def test_error_receipt_leaves_success_result_empty(self):
         original = record(handoff_status="ACKED", life_import_result="CREATED", life_ack_at_tpe="2026-10-10T09:00:00+08:00")
@@ -129,7 +132,7 @@ class ReceiptTests(unittest.IsolatedAsyncioTestCase):
             result = await run_import(client, sessions)
         upsert.assert_awaited_once()
         self.assertIsNone(upsert.await_args.args[1].verified_at_tpe)
-        client.receipt.assert_awaited_once_with(value, "CREATED")
+        client.receipts.assert_awaited_once_with([(value, "CREATED", "")])
         self.assertEqual(result["created"], 1)
         self.assertEqual(result["invalid"], 0)
         self.assertEqual(result["status"], "PASS")
@@ -146,4 +149,104 @@ class ReceiptTests(unittest.IsolatedAsyncioTestCase):
             result = await run_import(client, sessions)
         self.assertEqual(result["unchanged"], 1)
         self.assertEqual(result["status"], "PASS")
-        client.receipt.assert_awaited_once_with(value, "UNCHANGED")
+        client.receipts.assert_awaited_once_with([(value, "UNCHANGED", "")])
+
+
+    async def test_bulk_receipts_only_two_reads_and_one_batch_write(self):
+        first = record()
+        second = record(event_key="official:two:2026", title="第二個活動")
+        fixed_now = "2026-10-12T17:30:00+08:00"
+        first_ack = dict(first, handoff_status="ACKED",
+                         life_ack_at_tpe=fixed_now, life_import_result="CREATED")
+        second_error = dict(second, handoff_status="ERROR", life_error="invalid_handoff_record")
+        client = SheetClient()
+        client.read = AsyncMock(side_effect=[sheet(first, second), sheet(first_ack, second_error)])
+        client.request = AsyncMock()
+        with patch("scripts.import_curated_from_sheet.datetime") as clock:
+            clock.now.return_value.isoformat.return_value = fixed_now
+            outcomes = await client.receipts([
+                (first, "CREATED", ""), (second, "INVALID", "invalid_handoff_record")
+            ])
+        self.assertEqual(outcomes, [True, True])
+        self.assertEqual(client.read.await_count, 2)
+        client.request.assert_awaited_once()
+        data = client.request.await_args.kwargs["json"]["data"]
+        self.assertEqual(len(data), 4)
+        self.assertEqual(data[0]["range"], "'交接資料'!Z2")
+        self.assertEqual(data[2]["range"], "'交接資料'!Z3")
+
+    async def test_batch_skips_changed_version_and_keeps_correct_ack(self):
+        updated = record(title="活動已由探索端改動")
+        stale = record()
+        already_acked = record(event_key="official:acked:2026", title="已回執",
+                               handoff_status="ACKED",
+                               life_ack_at_tpe="2026-10-10T09:00:00+08:00",
+                               life_import_result="CREATED")
+        client = SheetClient()
+        client.read = AsyncMock(return_value=sheet(updated, already_acked))
+        client.request = AsyncMock()
+        self.assertEqual(
+            await client.receipts([(stale, "CREATED", ""), (already_acked, "UNCHANGED", "")]),
+            [False, True],
+        )
+        client.request.assert_not_awaited()
+        client.read.assert_awaited_once()
+
+    async def test_many_invalid_rows_have_one_bulk_receipt_call(self):
+        records = [record(event_key=f"official:bad:{i}", title="有效活動",
+                          importance_star="2") for i in range(30)]
+        records.append(record(event_key="official:good", title="有效活動"))
+        client = AsyncMock()
+        client.read.return_value = sheet(*records)
+        client.receipts.return_value = [True] * len(records)
+        sessions = MagicMock()
+        sessions.return_value.__aenter__.return_value = AsyncMock()
+        with patch.dict(os.environ, {"LIFE_CURATED_SHEET_ID": SHEET_ID,
+                                      "LIFE_CURATED_IMPORT_APPLY": "1"}), patch(
+                "scripts.import_curated_from_sheet.upsert_handoff",
+                AsyncMock(return_value="CREATED")) as upsert:
+            result = await run_import(client, sessions)
+        self.assertEqual(result["invalid"], 30)
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(result["status"], "PARTIAL")
+        upsert.assert_awaited_once()
+        client.receipts.assert_awaited_once()
+        pending = client.receipts.await_args.args[0]
+        self.assertEqual(len(pending), 31)
+        self.assertEqual(pending[0][2], "invalid_handoff_record")
+        self.assertEqual(pending[-1][1], "CREATED")
+
+    async def test_sheets_429_retry_succeeds_without_exposing_content(self):
+        hits = []
+        def handler(request):
+            hits.append(request)
+            if len(hits) <= 2:
+                return httpx.Response(429, headers={"Retry-After": "1"},
+                                      json={"error": {"message": "private source data"}})
+            return httpx.Response(200, json={"values": [["ok"]]})
+        transport_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client = SheetClient()
+        with patch.object(client, "_access_token", AsyncMock(return_value="fake-token")), patch(
+                "scripts.import_curated_from_sheet.httpx.AsyncClient",
+                return_value=transport_client), patch(
+                "scripts.import_curated_from_sheet.asyncio.sleep", new_callable=AsyncMock) as sleeping:
+            response = await client.request("GET", "values%2Ftest")
+        self.assertEqual(response, {"values": [["ok"]]})
+        self.assertEqual(len(hits), 3)
+        self.assertEqual(sleeping.await_count, 2)
+
+    async def test_sheets_429_exhaustion_is_visible_and_fails_closed(self):
+        hits = []
+        def handler(request):
+            hits.append(request)
+            return httpx.Response(429, json={"error": {"message": "private source data"}})
+        transport_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client = SheetClient()
+        with patch.object(client, "_access_token", AsyncMock(return_value="fake-token")), patch(
+                "scripts.import_curated_from_sheet.httpx.AsyncClient",
+                return_value=transport_client), patch(
+                "scripts.import_curated_from_sheet.asyncio.sleep", new_callable=AsyncMock) as sleeping:
+            with self.assertRaisesRegex(RuntimeError, "sheets_http_429"):
+                await client.request("POST", "values:batchUpdate", json={"data": []})
+        self.assertEqual(len(hits), 6)
+        self.assertEqual(sleeping.await_count, 5)

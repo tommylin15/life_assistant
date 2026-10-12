@@ -30,15 +30,23 @@ class NotesContractTests(unittest.TestCase):
 
 
 class NotesSchemaBehaviorTests(unittest.TestCase):
-    def test_create_requires_title_and_body_but_allows_empty_strings(self):
+    def test_create_defaults_title_and_category(self):
         self.assertEqual(
-            schemas.NoteCreate(title="", body="").model_dump(),
-            {"title": "", "body": "", "project_id": None},
+            schemas.NoteCreate(body="旅行記錄").model_dump(),
+            {"title": "", "body": "旅行記錄", "project_id": None, "category": None},
         )
-        with self.assertRaises(ValidationError):
-            schemas.NoteCreate(body="x")
+        self.assertEqual(schemas.NoteCreate(body="x", category="  工作 ").category, "工作")
+        self.assertIsNone(schemas.NoteUpdate(category=" ").category)
         with self.assertRaises(ValidationError):
             schemas.NoteCreate(title="x")
+        with self.assertRaises(ValidationError):
+            schemas.NoteCreate(body="ok", category="a" * 81)
+
+    def test_automatic_title_uses_first_sentence_or_ten_chars(self):
+        from app.api.notes import automatic_title
+        self.assertEqual(automatic_title("# 東京旅行。下一段"), "東京旅行")
+        self.assertEqual(automatic_title("這是一段很長很長很長很長很長很長很長很長很長很長的文字"), "這是一段很長很長很長很長")
+        self.assertEqual(automatic_title(""), "未命名筆記")
 
     def test_update_rejects_empty_patch_and_null_title_or_body(self):
         with self.assertRaises(ValidationError):
@@ -56,11 +64,13 @@ class NotesSchemaBehaviorTests(unittest.TestCase):
             title=None,
             body=None,
             project_id=None,
+            category=None,
             created_at=now,
             updated_at=now,
         )
         self.assertIsNone(out.title)
         self.assertIsNone(out.body)
+        self.assertIsNone(out.category)
 
     def test_note_tags_trim_dedupe_case_insensitively_and_reject_empty(self):
         payload = schemas.NoteTagsReplace(

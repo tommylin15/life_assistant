@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,6 +21,15 @@ from app.models.schemas import (
 from app.services.execution_log import fail_execution, finish_execution, start_execution
 
 router = APIRouter(prefix="/notes", tags=["notes"])
+
+
+def automatic_title(body: str | None) -> str:
+    """Prefer a short first sentence; fall back to the first ten characters."""
+    content = re.sub(r"(?m)^\s{0,3}(?:#{1,6}|[-*>])\s*", "", body or "")
+    content = re.sub(r"[`*_~\[\]]", "", content).strip()
+    content = re.sub(r"\s+", " ", content)
+    sentence = re.split(r"[。！？.!?\n]", content, maxsplit=1)[0].strip()
+    return (sentence if len(sentence) <= 30 else sentence[:10]) or "未命名筆記"
 
 _SEARCH_VECTOR = literal_column(
     "to_tsvector('simple'::regconfig, "
@@ -81,7 +91,9 @@ async def create_note(
         entity_type="note",
         summary="Create note",
     )
-    note = Note(id=str(uuid.uuid4()), **body.model_dump())
+    payload = body.model_dump()
+    payload["title"] = payload["title"].strip() or automatic_title(payload["body"])
+    note = Note(id=str(uuid.uuid4()), **payload)
     try:
         db.add(note)
         await db.commit()
@@ -131,7 +143,14 @@ async def update_note(
         summary="Update note",
     )
     try:
-        for field, value in body.model_dump(exclude_unset=True).items():
+        updates = body.model_dump(exclude_unset=True)
+        if "title" in updates:
+            updates["title"] = updates["title"].strip() or automatic_title(
+                updates.get("body", note.body)
+            )
+        elif "body" in updates and not (note.title or "").strip():
+            updates["title"] = automatic_title(updates["body"])
+        for field, value in updates.items():
             setattr(note, field, value)
         await db.commit()
         await db.refresh(note)

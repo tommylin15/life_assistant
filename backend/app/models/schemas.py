@@ -107,15 +107,27 @@ class ProjectOut(BaseModel):
 
 
 class NoteCreate(BaseModel):
-    title: str
+    title: str = ""
     body: str
     project_id: str | None = None
+    category: str | None = Field(default=None, max_length=80)
+
+    @field_validator("category")
+    @classmethod
+    def normalize_category(cls, value: str | None) -> str | None:
+        return value.strip() or None if value is not None else None
 
 
 class NoteUpdate(BaseModel):
     title: str | None = None
     body: str | None = None
     project_id: str | None = None
+    category: str | None = Field(default=None, max_length=80)
+
+    @field_validator("category")
+    @classmethod
+    def normalize_category(cls, value: str | None) -> str | None:
+        return value.strip() or None if value is not None else None
 
     @model_validator(mode="after")
     def require_change(self):
@@ -133,6 +145,7 @@ class NoteOut(BaseModel):
     title: str | None
     body: str | None
     project_id: str | None
+    category: str | None = None
     created_at: datetime
     updated_at: datetime
 

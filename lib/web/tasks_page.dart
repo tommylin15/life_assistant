@@ -9,10 +9,19 @@ import 'browser_navigation.dart';
 
 final _taskWorkspaceProvider = FutureProvider<_TaskWorkspace>((ref) async {
   final api = ref.read(taskApiProvider);
-  final results = await Future.wait([api.getTasks(), api.getProjects()]);
+  // Legacy projects are not tenant-scoped yet. A staging tester can still
+  // work with their own tasks when /projects correctly returns 403.
+  final tasks = await api.getTasks();
+  List<Map<String, dynamic>>? projects;
+  try {
+    projects = await api.getProjects();
+  } catch (_) {
+    projects = null; // Unavailable is not the same as an empty project list.
+  }
   return _TaskWorkspace(
-    tasks: results[0].map(_TaskView.fromJson).toList(),
-    projects: results[1].map(_ProjectView.fromJson).toList(),
+    tasks: tasks.map(_TaskView.fromJson).toList(),
+    projects: projects?.map(_ProjectView.fromJson).toList() ?? [],
+    projectsUnavailable: projects == null,
   );
 });
 
@@ -86,6 +95,13 @@ class _TasksPageState extends ConsumerState<TasksPage> {
                       label: const Text('新增待辦'))
                   : null)),
             ),
+            if (workspace.projectsUnavailable)
+              const SliverPadding(
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
+                sliver: SliverToBoxAdapter(child: Text(
+                  '專案資料目前無法取得；待辦仍可使用，暫時不能選擇專案。',
+                )),
+              ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 7, 16, 4),
               sliver: SliverToBoxAdapter(
@@ -702,6 +718,14 @@ class _TaskEditorDialogState extends State<_TaskEditorDialog> {
                 decoration: const InputDecoration(labelText: '專案'),
                 items: [
                   const DropdownMenuItem(value: '', child: Text('無專案')),
+                  // Preserve existing tasks when their linked project cannot
+                  // be read; never silently turn a missing project into null.
+                  if (_projectId.isNotEmpty &&
+                      !widget.projects.any((project) => project.id == _projectId))
+                    DropdownMenuItem(
+                      value: _projectId,
+                      child: const Text('既有專案（目前無法取得）'),
+                    ),
                   for (final project in widget.projects)
                     DropdownMenuItem(
                       value: project.id,
@@ -1140,10 +1164,15 @@ class _TaskEmptyState extends StatelessWidget {
 }
 
 class _TaskWorkspace {
-  const _TaskWorkspace({required this.tasks, required this.projects});
+  const _TaskWorkspace({
+    required this.tasks,
+    required this.projects,
+    required this.projectsUnavailable,
+  });
 
   final List<_TaskView> tasks;
   final List<_ProjectView> projects;
+  final bool projectsUnavailable;
 
   String? projectName(String? id) {
     if (id == null) {

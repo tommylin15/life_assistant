@@ -69,6 +69,10 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
                 "id:staging:google-token",
                 x_forwarded_host=auth.STAGING_HOST, x_forwarded_proto="https")
             self.assertEqual((await auth.current_user(proxy))["sub"], "tester-sub")
+            comma_proto = request("life-assistant-api-xyz-uc.a.run.app",
+                "id:staging:google-token",
+                x_forwarded_host=auth.STAGING_HOST, x_forwarded_proto="http,https")
+            self.assertEqual((await auth.current_user(comma_proto))["sub"], "tester-sub")
             spoof = request("attacker-xyz.a.run.app", "id:staging:google-token",
                             x_forwarded_host=auth.STAGING_HOST, x_forwarded_proto="https")
             with self.assertRaises(HTTPException):

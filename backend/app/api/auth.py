@@ -37,10 +37,12 @@ def _fixed_staging_origin(request: Request) -> bool:
     if host == STAGING_HOST:
         return True
     forwarded = request.headers.get("x-forwarded-host", "").strip().lower()
+    # Some trusted proxy chains produce comma-separated forwarded protocols.
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").lower().split(",")[-1].strip()
     return (
         host.endswith(".run.app")
         and (host.startswith("life-assistant-api-") or host.startswith("life-assistant-api."))
-        and request.headers.get("x-forwarded-proto", "").lower() == "https"
+        and forwarded_proto == "https"
         and forwarded in (STAGING_HOST, f"https://{STAGING_HOST}")
     )
 

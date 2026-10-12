@@ -46,6 +46,7 @@ class ProjectIndexMetadataTests(unittest.TestCase):
             {
                 "ix_projects_status": ("status",),
                 "ix_projects_name": ("name",),
+                "ix_projects_user_sub": ("user_sub",),
             },
             indexes,
         )

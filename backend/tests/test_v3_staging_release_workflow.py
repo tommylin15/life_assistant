@@ -24,7 +24,7 @@ class FixedStagingWorkflowTests(unittest.TestCase):
     def test_migration_and_readback_precede_live_and_production_traffic(self):
         r = self.release
         order = [
-            "Apply additive 0016 schema before production cutover",
+            "Apply additive 0017 schema before production cutover",
             "Read-only fixed staging preview and rollback baseline preflight",
             "Rollback-only curated pool migration and personal UI runtime acceptance",
             "Promote exact Preview to independent fixed staging live",

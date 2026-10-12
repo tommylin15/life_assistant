@@ -13,24 +13,33 @@ final _todayDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
     throw StateError('Authentication required');
   }
   final api = ref.read(apiClientProvider);
+  // Read permissions before network awaits so the home dashboard cannot
+  // request another account's legacy, not-yet-tenant-scoped resources.
+  final prefs = ref.watch(uiPreferencesProvider).asData?.value;
+  final chosen = (prefs?['home_cards'] as List?)?.cast<String>() ??
+      const ['tasks', 'calendar', 'attention', 'habits', 'events', 'projects'];
+  final flags = ref.watch(effectiveFeaturesProvider).asData?.value;
   final now = DateTime.now();
   final tomorrow = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
   final tasks = await api.getTasks();
-  final projects = await api.getProjects();
+  List<Map<String, dynamic>>? projects;
+  if (chosen.contains('projects') && flags?['projects'] == true) {
+    try {
+      projects = await api.getProjects();
+    } catch (_) {
+      projects = null; // Unavailable, not an empty project collection.
+    }
+  }
   Map<String, dynamic>? calendar;
   try {
     calendar = await api.getCalendarEvents(timeMin: now, timeMax: tomorrow, limit: 3);
   } catch (_) {
     calendar = null; // Disconnected is not an empty calendar.
   }
-  final prefs = ref.watch(uiPreferencesProvider).asData?.value;
-  final chosen = (prefs?['home_cards'] as List?)?.cast<String>() ??
-      const ['tasks', 'calendar', 'attention', 'habits', 'events', 'projects'];
-  final flags = ref.watch(effectiveFeaturesProvider).asData?.value;
-  final showExplore = (chosen.contains('events') && (flags?['events'] ?? true)) ||
-      (chosen.contains('explore') && (flags?['explore'] ?? true));
+  final showExplore = (chosen.contains('events') && flags?['events'] == true) ||
+      (chosen.contains('explore') && flags?['explore'] == true);
   final showOpportunities = chosen.contains('opportunities') &&
-      (flags?['opportunities'] ?? true);
+      flags?['opportunities'] == true;
   Map<String, dynamic>? explore;
   Map<String, dynamic>? opportunities;
   if (showExplore) {
@@ -50,8 +59,10 @@ final _todayDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
     }
   }
   List<Map<String, dynamic>>? habits;
-  try { habits = await ref.read(habitApiProvider).getHabits(); }
-  catch (_) { habits = null; }
+  if (chosen.contains('habits') && flags?['habits'] == true) {
+    try { habits = await ref.read(habitApiProvider).getHabits(); }
+    catch (_) { habits = null; }
+  }
   return {'tasks': tasks, 'projects': projects, 'calendar': calendar,
           'events': explore, 'opportunities': opportunities, 'habits': habits};
 });
@@ -98,7 +109,7 @@ class TodayPage extends ConsumerWidget {
 
   Widget _card(BuildContext context, WidgetRef ref, String key, Map<String, dynamic> data) {
     final tasks = (data['tasks'] as List).cast<Map<String, dynamic>>();
-    final projects = (data['projects'] as List).cast<Map<String, dynamic>>();
+    final projects = (data['projects'] as List?)?.cast<Map<String, dynamic>>();
     final filtered = tasks.where((t) {
       if (t['status'] == 'completed' || t['status'] == 'cancelled') return false;
       final due = DateTime.tryParse(t['due_at']?.toString() ?? '')?.toLocal();
@@ -148,9 +159,10 @@ class TodayPage extends ConsumerWidget {
               : opportunities.map((e) => e['title']?.toString() ?? '未命名機會').join(' · '),
           '/more/opportunities');
       case 'projects':
-        return _tile(context, '進行中專案', projects.where(
-          (p) => p['status'] == 'active',
-        ).take(3).map((p) => p['name']).join(' · '), '/projects');
+        return _tile(context, '進行中專案', projects == null
+            ? '專案資料目前無法取得'
+            : projects.where((p) => p['status'] == 'active')
+                .take(3).map((p) => p['name']).join(' · '), '/projects');
       case 'attention':
         final now = DateTime.now();
         final overdue = tasks.where((task) {

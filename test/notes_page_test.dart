@@ -200,6 +200,47 @@ void main() {
     expect(find.text('行程筆記'), findsOneWidget);
   });
 
+
+  testWidgets('generates a title and keeps new notes uncategorized', (tester) async {
+    final api = _FakeNoteApi();
+    await _pumpNotesPage(tester, api);
+    await tester.tap(find.text('新增筆記').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('note-body-field')),
+      '東京旅行。下一個景點 https://example.com/travel',
+    );
+    await tester.tap(find.byKey(const ValueKey('note-save-button')));
+    await tester.pumpAndSettle();
+    expect(api.notes.single['title'], '東京旅行');
+    expect(api.notes.single['category'], isNull);
+    expect(find.text('東京旅行'), findsOneWidget);
+    expect(find.textContaining('https://example.com/travel'), findsWidgets);
+  });
+
+  testWidgets('filters categories and can reassign a note without editing text',
+      (tester) async {
+    final api = _FakeNoteApi(notes: [
+      {..._note(id: 'n1', title: '工作筆記', body: 'email'), 'category': '工作'},
+      _note(id: 'n2', title: '日常筆記', body: '日常'),
+    ]);
+    await _pumpNotesPage(tester, api);
+    expect(find.byKey(const ValueKey('note-category-uncategorized')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('note-category-uncategorized')));
+    await tester.pumpAndSettle();
+    expect(find.text('日常筆記'), findsOneWidget);
+    expect(find.text('工作筆記'), findsNothing);
+
+    await tester.tap(find.byTooltip('筆記選項').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('變更分類'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('工作').last);
+    await tester.pumpAndSettle();
+    expect(api.notes.last['category'], '工作');
+    expect(find.text('此分類目前沒有符合的筆記'), findsOneWidget);
+  });
+
   testWidgets('surfaces partial success when note saves but tags fail', (tester) async {
     final api = _FakeNoteApi(failTagReplace: true);
     await _pumpNotesPage(tester, api);

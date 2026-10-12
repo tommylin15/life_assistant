@@ -50,7 +50,8 @@ class HandoffItem(BaseModel):
     verified_benefit_ntd: Decimal | None = Field(None, ge=0, le=10000000, decimal_places=2)
     eligibility_limit: str | None = Field(None, max_length=1200)
     evidence_summary: str = Field(min_length=1, max_length=1200)
-    verified_at_tpe: datetime
+    # Unknown verification time is intentionally absent, never inferred from discovery/import time.
+    verified_at_tpe: datetime | None = None
     handoff_updated_at_tpe: datetime
 
     @field_validator("start_at_tpe", "end_at_tpe", "registration_open_at_tpe", "registration_deadline_at_tpe", mode="before")

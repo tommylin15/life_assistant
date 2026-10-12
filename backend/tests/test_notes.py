@@ -90,7 +90,7 @@ class NotesRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
         result.scalars.return_value.all.return_value = []
         db.execute.return_value = result
 
-        await list_notes(q="家庭旅行", _user={"sub": "u"}, db=db)
+        await list_notes(q="家庭旅行", user={"sub": "u"}, db=db)
 
         statement = db.execute.await_args.args[0]
         sql = str(
@@ -113,7 +113,7 @@ class NotesRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
         result.scalars.return_value.all.return_value = []
         db.execute.return_value = result
 
-        await list_notes(q="   ", _user={"sub": "u"}, db=db)
+        await list_notes(q="   ", user={"sub": "u"}, db=db)
 
         statement = db.execute.await_args.args[0]
         sql = str(statement.compile(dialect=postgresql.dialect()))

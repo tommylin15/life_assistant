@@ -29,8 +29,9 @@ from scripts.reconcile_projects_status_default import (
 )
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-PREVIOUS_RELEASE_REVISION = "20261010_0016"
+PREVIOUS_RELEASE_REVISION = "20261012_0017"
 LEGACY_DIRECT_RELEASE_REVISIONS = {
+    "20261010_0016",
     "20261010_0015",
     "20261009_0014",
     "20260927_0005",
@@ -42,7 +43,7 @@ LEGACY_DIRECT_RELEASE_REVISIONS = {
     "20261009_0012",
     "20261009_0013",
 }
-RELEASE_TARGET_REVISION = "20261012_0017"
+RELEASE_TARGET_REVISION = "20261012_0018"
 EXIT_RELEASE_REVISION = 60
 EXIT_RELEASE_ALEMBIC = 61
 EXIT_RELEASE_MISSING_TABLES = 62
@@ -97,6 +98,7 @@ RELEASE_REQUIRED_TABLES = {
     "life_ai_policy",
 }
 RELEASE_REQUIRED_TASK_COLUMNS = {"source_type", "source_ref", "completed_at", "deleted_at", "user_sub"}
+RELEASE_REQUIRED_OWNERSHIP_TABLES = ("notes", "projects", "habits", "shopping_lists")
 
 NOTE_LINKS_FK_DIAGNOSTIC_EXIT_CODES = {
     "both_missing": 1,
@@ -239,6 +241,16 @@ async def _verify_release_revision() -> None:
                     )
                 ).scalars().all()
             )
+            for table in RELEASE_REQUIRED_OWNERSHIP_TABLES:
+                columns = set((await conn.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema='public' AND table_name=:table"
+                ), {"table": table})).scalars().all())
+                if "user_sub" not in columns:
+                    raise ReleaseRevisionError(
+                        f"release {table} missing ownership user_sub",
+                        reason="missing_task_columns",
+                    )
             missing_columns = RELEASE_REQUIRED_TASK_COLUMNS - task_columns
             if missing_columns:
                 raise ReleaseRevisionError(

@@ -71,6 +71,7 @@ async def gmail_message_to_project(
         )[:500]
         project = Project(
             id=str(uuid.uuid4()),
+            user_sub=user["sub"],
             name=name,
             summary=summary,
             status=body.status,

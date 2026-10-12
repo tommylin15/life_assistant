@@ -8,6 +8,7 @@ from app.api.auth import current_user
 from app.db.session import get_db
 from app.models.habit import Habit, HabitCompletion
 from app.models.schemas import HabitCompletionOut, HabitCreate, HabitOut, HabitUpdate
+from app.services.ownership import get_owned, visible_clause
 from app.services.execution_log import fail_execution, finish_execution, start_execution
 
 router = APIRouter(prefix="/habits", tags=["habits"])
@@ -15,11 +16,11 @@ router = APIRouter(prefix="/habits", tags=["habits"])
 
 @router.get("", response_model=list[HabitOut])
 async def list_habits(
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Habit).where(Habit.is_active.is_(True)).order_by(Habit.created_at.desc())
+        select(Habit).where(Habit.is_active.is_(True), visible_clause(Habit, user)).order_by(Habit.created_at.desc())
     )
     return result.scalars().all()
 
@@ -38,7 +39,7 @@ async def create_habit(
         entity_type="habit",
         summary="Create habit",
     )
-    habit = Habit(id=str(uuid.uuid4()), **body.model_dump())
+    habit = Habit(id=str(uuid.uuid4()), user_sub=user["sub"], **body.model_dump())
     try:
         db.add(habit)
         await db.commit()
@@ -59,12 +60,10 @@ async def create_habit(
 @router.get("/{habit_id}", response_model=HabitOut)
 async def get_habit(
     habit_id: str,
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    habit = await db.get(Habit, habit_id)
-    if not habit:
-        raise HTTPException(404, "Habit not found")
+    habit = await get_owned(db, Habit, habit_id, user, "Habit")
     return habit
 
 
@@ -75,9 +74,7 @@ async def update_habit(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    habit = await db.get(Habit, habit_id)
-    if not habit:
-        raise HTTPException(404, "Habit not found")
+    habit = await get_owned(db, Habit, habit_id, user, "Habit")
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -110,9 +107,7 @@ async def complete_habit(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    habit = await db.get(Habit, habit_id)
-    if not habit:
-        raise HTTPException(404, "Habit not found")
+    habit = await get_owned(db, Habit, habit_id, user, "Habit")
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -142,12 +137,10 @@ async def complete_habit(
 @router.get("/{habit_id}/completions", response_model=list[HabitCompletionOut])
 async def list_habit_completions(
     habit_id: str,
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    habit = await db.get(Habit, habit_id)
-    if not habit:
-        raise HTTPException(404, "Habit not found")
+    habit = await get_owned(db, Habit, habit_id, user, "Habit")
     result = await db.execute(
         select(HabitCompletion)
         .where(HabitCompletion.habit_id == habit_id)

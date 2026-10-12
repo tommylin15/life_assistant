@@ -20,6 +20,7 @@ class Project(Base):
         default=lambda: str(uuid.uuid4()),
     )
     name: Mapped[str] = mapped_column(String(500), nullable=False)
+    user_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     summary: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(

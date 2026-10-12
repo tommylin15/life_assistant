@@ -191,9 +191,8 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
     async def test_staging_tester_denied_unisolated_private_apis(self):
         with patch("app.api.auth._verify_id_token",
                    new=AsyncMock(return_value=self.tester)):
-            for uri in ("/api/v1/notes", "/api/v1/projects",
-                        "/api/v1/habits", "/api/v1/shopping-lists",
-                        "/api/v1/drive/documents", "/api/v1/admin/feature-rollouts"):
+            for uri in ("/api/v1/drive/documents", "/api/v1/admin/feature-rollouts",
+                        "/api/v1/templates", "/api/v1/drive/documents/some-id"):
                 req = request(auth.STAGING_HOST, "id:staging:google-token")
                 req.scope["path"] = uri
                 with self.subTest(uri=uri):
@@ -207,7 +206,10 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
             for uri in ("/api/v1/ui/features", "/api/v1/me/ui-preferences",
                         "/api/v1/tasks", "/api/v1/tasks/example-id",
                         "/api/v1/integrations/google/status",
-                        "/api/v1/integrations/google/calendar"):
+                        "/api/v1/integrations/google/calendar",
+                        "/api/v1/notes", "/api/v1/notes/owned-id", "/api/v1/projects",
+                        "/api/v1/projects/owned-id", "/api/v1/habits",
+                        "/api/v1/shopping-lists", "/api/v1/shopping-items/item-id"):
                 req = request(auth.STAGING_HOST, "id:staging:google-token")
                 req.scope["path"] = uri
                 self.assertEqual((await auth.current_user(req))["sub"], "tester-sub")
@@ -241,9 +243,9 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
             await create_task(
                 TaskCreate(title="Demo", project_id="owner-project"),
                 user=self.tester,
-                db=object(),
+                db=SimpleNamespace(get=AsyncMock(return_value=None)),
             )
-        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(ctx.exception.status_code, 404)
 
     async def test_google_token_validity_and_account_policy_are_separate(self):
         from app.services import google_identity

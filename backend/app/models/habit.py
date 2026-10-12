@@ -14,6 +14,7 @@ class Habit(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
+    user_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     recurrence_rule: Mapped[str] = mapped_column(Text, nullable=False)
     reminder_time: Mapped[str | None] = mapped_column(String(16), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())

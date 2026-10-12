@@ -15,6 +15,7 @@ from app.models.schemas import (
     ShoppingListOut,
 )
 from app.models.shopping import ShoppingItem, ShoppingList
+from app.services.ownership import get_owned, require_project, visible_clause
 from app.services.execution_log import fail_execution, finish_execution, start_execution
 
 router = APIRouter(tags=["shopping"])
@@ -36,11 +37,11 @@ def _shopping_list_out(
 
 @router.get("/shopping-lists", response_model=list[ShoppingListOut])
 async def list_shopping_lists(
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     list_result = await db.execute(
-        select(ShoppingList).order_by(ShoppingList.created_at.desc())
+        select(ShoppingList).where(visible_clause(ShoppingList, user)).order_by(ShoppingList.created_at.desc())
     )
     shopping_lists = list_result.scalars().all()
     if not shopping_lists:
@@ -68,6 +69,7 @@ async def create_shopping_list(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await require_project(db, body.project_id, user)
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -76,7 +78,7 @@ async def create_shopping_list(
         entity_type="shopping_list",
         summary="Create shopping list",
     )
-    shopping_list = ShoppingList(id=str(uuid.uuid4()), **body.model_dump())
+    shopping_list = ShoppingList(id=str(uuid.uuid4()), user_sub=user["sub"], **body.model_dump())
     try:
         db.add(shopping_list)
         await db.commit()
@@ -97,12 +99,10 @@ async def create_shopping_list(
 @router.get("/shopping-lists/{list_id}", response_model=ShoppingListOut)
 async def get_shopping_list(
     list_id: str,
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    shopping_list = await db.get(ShoppingList, list_id)
-    if not shopping_list:
-        raise HTTPException(404, "Shopping list not found")
+    shopping_list = await get_owned(db, ShoppingList, list_id, user, "Shopping list")
     item_result = await db.execute(
         select(ShoppingItem)
         .where(ShoppingItem.list_id == list_id)
@@ -122,9 +122,7 @@ async def create_shopping_item(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    shopping_list = await db.get(ShoppingList, list_id)
-    if not shopping_list:
-        raise HTTPException(404, "Shopping list not found")
+    shopping_list = await get_owned(db, ShoppingList, list_id, user, "Shopping list")
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -161,6 +159,7 @@ async def update_shopping_item(
     item = await db.get(ShoppingItem, item_id)
     if not item:
         raise HTTPException(404, "Shopping item not found")
+    await get_owned(db, ShoppingList, item.list_id, user, "Shopping list")
     execution = await start_execution(
         db,
         user_sub=user["sub"],

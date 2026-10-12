@@ -143,7 +143,7 @@ class ShoppingRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
         )
         db = AsyncMock()
         db.add = MagicMock()
-        db.get.side_effect = [shopping_list, item]
+        db.get.side_effect = [shopping_list, item, shopping_list]
 
         async def refresh(obj):
             if isinstance(obj, ShoppingItem):
@@ -172,7 +172,7 @@ class ShoppingRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(item.category)
         self.assertEqual(item.list_id, "l1")
 
-    async def test_create_list_preserves_project_id_without_lookup(self):
+    async def test_create_list_rejects_missing_cross_account_project(self):
         from app.api.shopping import create_shopping_list
 
         db = AsyncMock()
@@ -183,15 +183,13 @@ class ShoppingRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
             obj.created_at = datetime.now(timezone.utc)
 
         db.refresh.side_effect = refresh
-        with patch("app.api.shopping.start_execution", new=AsyncMock(return_value=object())), patch(
-            "app.api.shopping.finish_execution", new=AsyncMock()
-        ), patch("app.api.shopping.fail_execution", new=AsyncMock()):
-            result = await create_shopping_list(body, {"sub": "u"}, db)
-
-        self.assertEqual(result.project_id, "project-missing-ok")
-        db.get.assert_not_called()
-        added = db.add.call_args.args[0]
-        self.assertEqual(added.project_id, "project-missing-ok")
+        db.get.return_value = None
+        with patch("app.api.shopping.start_execution", new=AsyncMock()) as audit:
+            with self.assertRaises(HTTPException) as ctx:
+                await create_shopping_list(body, {"sub": "u"}, db)
+        self.assertEqual(ctx.exception.status_code, 404)
+        audit.assert_not_awaited()
+        db.add.assert_not_called()
 
     def test_router_exposes_only_approved_mutations(self):
         from app.api.shopping import router

@@ -17,6 +17,8 @@ from app.models.schemas import (
     TaskUpdate,
 )
 from app.models.task import Task, TaskStatus
+from app.models.project import Project
+from app.services.ownership import get_owned
 from app.services.execution_log import fail_execution, finish_execution, start_execution
 from app.services.idempotency import (
     ACTION_ID_HEADER,
@@ -68,8 +70,8 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
     action_id: str | None = Header(default=None, alias=ACTION_ID_HEADER),
 ):
-    if is_staging_tester(user) and body.project_id is not None:
-        raise HTTPException(403, "Project links are unavailable for staging test account")
+    if body.project_id is not None:
+        await get_owned(db, Project, body.project_id, user, "Project")
     reservation = await reserve_execution(
         db,
         user_sub=user["sub"],
@@ -262,8 +264,8 @@ async def update_task(
     db: AsyncSession = Depends(get_db),
 ):
     task = await _require_task(db, task_id, user)
-    if is_staging_tester(user) and body.project_id is not None:
-        raise HTTPException(403, "Project links are unavailable for staging test account")
+    if body.project_id is not None:
+        await get_owned(db, Project, body.project_id, user, "Project")
     execution = await start_execution(
         db,
         user_sub=user["sub"],

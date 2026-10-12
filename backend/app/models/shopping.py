@@ -9,6 +9,7 @@ from app.db.session import Base
 
 class ShoppingList(Base):
     __tablename__ = "shopping_lists"
+    user_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())

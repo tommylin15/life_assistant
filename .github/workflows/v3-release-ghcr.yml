@@ -204,18 +204,18 @@ jobs:
           echo "migration_job_image=PASS no_migration_executed image=$IMAGE_REF" \
             >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Apply additive 0017 schema before production cutover
+      - name: Apply additive 0018 schema before staging or production cutover
         if: ${{ inputs.promote || inputs.publish_staging }}
         shell: bash
         run: |
           set -euo pipefail
-          # Migrations 0011 through 0017 are additive; guarded runner checks actual head.
+          # Migrations 0011 through 0018 are additive; guarded runner checks actual head.
           .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-db-migrate \
             gcloud run jobs execute life-assistant-db-migrate \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --args=-m,scripts.apply_cloud_domain_parity_release \
             --task-timeout 10m --wait --quiet
-          echo "curated_schema_migration=PASS alembic=20261012_0017" >> "$GITHUB_STEP_SUMMARY"
+          echo "curated_schema_migration=PASS alembic=20261012_0018" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run real database/auth acceptance using release digest
         run: |
@@ -367,7 +367,7 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --args=-m,scripts.run_curated_pool_runtime_acceptance \
             --task-timeout 10m --wait --quiet
-          echo "curated_db_readback=PASS schema=20261012_0017 rollback_only=true" >> "$GITHUB_STEP_SUMMARY"
+          echo "curated_db_readback=PASS schema=20261012_0018 rollback_only=true" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pre-promotion Drive AI consent runtime acceptance
         if: ${{ inputs.promote }}

@@ -121,7 +121,10 @@ async def effective_features(db: AsyncSession, user: dict) -> list[dict]:
         permitted = status not in ("hidden", "maintenance") and (
             audience == "all" or is_owner(user)
         ) and (status != "beta" or is_owner(user))
-        if is_staging_tester(user) and key not in {"today", "tasks", "calendar", "integrations"}:
+        if is_staging_tester(user) and key not in {
+        "today", "tasks", "calendar", "integrations",
+        "projects", "notes", "habits", "shopping", "opportunities", "explore",
+    }:
             permitted = False  # Other legacy data has no verified per-user ownership.
         result.append({"key": key, "path": path, "title": title, "available": permitted,
                        "status": status, "audience": audience})

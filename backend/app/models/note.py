@@ -14,6 +14,7 @@ class Note(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
     project_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     category: Mapped[str | None] = mapped_column(String(80), nullable=True)

@@ -12,6 +12,7 @@ from app.models.project import Project
 from app.models.schemas import ProjectCreate, ProjectOut, ProjectUpdate
 from app.models.shopping import ShoppingList
 from app.models.task import Task
+from app.services.ownership import get_owned, visible_clause
 from app.services.execution_log import fail_execution, finish_execution, start_execution
 from app.services.idempotency import (
     ACTION_ID_HEADER,
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 @router.get("", response_model=list[ProjectOut])
 async def list_projects(_user: dict = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).order_by(Project.created_at.desc()))
+    result = await db.execute(select(Project).where(visible_clause(Project, _user)).order_by(Project.created_at.desc()))
     return result.scalars().all()
 
 
@@ -49,7 +50,7 @@ async def create_project(
     if reservation.is_replay:
         return await replay_entity(db, reservation, Project)
 
-    project = Project(id=str(uuid.uuid4()), **body.model_dump())
+    project = Project(id=str(uuid.uuid4()), user_sub=user["sub"], **body.model_dump())
     db.add(project)
     await commit_reserved_execution(
         db,
@@ -65,18 +66,14 @@ async def create_project(
 
 
 @router.get("/{project_id}", response_model=ProjectOut)
-async def get_project(project_id: str, _user: dict = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(404, "Project not found")
+async def get_project(project_id: str, user: dict = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    project = await get_owned(db, Project, project_id, user, "Project")
     return project
 
 
 @router.patch("/{project_id}", response_model=ProjectOut)
 async def update_project(project_id: str, body: ProjectUpdate, user: dict = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(404, "Project not found")
+    project = await get_owned(db, Project, project_id, user, "Project")
     execution = await start_execution(db, user_sub=user["sub"], action_type="project.update", provider="internal", entity_type="project", entity_id=project_id, summary="Update project")
     try:
         for field, value in body.model_dump(exclude_unset=True).items():
@@ -92,9 +89,7 @@ async def update_project(project_id: str, body: ProjectUpdate, user: dict = Depe
 
 @router.delete("/{project_id}", status_code=204)
 async def delete_project(project_id: str, user: dict = Depends(current_user), db: AsyncSession = Depends(get_db)):
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(404, "Project not found")
+    project = await get_owned(db, Project, project_id, user, "Project")
 
     linked_task_result = await db.execute(
         select(Task.id).where(Task.project_id == project_id, Task.deleted_at.is_(None)).limit(1)

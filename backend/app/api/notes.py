@@ -18,6 +18,7 @@ from app.models.schemas import (
     NoteTagsReplace,
     NoteUpdate,
 )
+from app.services.ownership import get_owned, require_project, visible_clause
 from app.services.execution_log import fail_execution, finish_execution, start_execution
 
 router = APIRouter(prefix="/notes", tags=["notes"])
@@ -54,11 +55,11 @@ def _note_link_clause(note_id: str, target_id: str):
 @router.get("", response_model=list[NoteOut])
 async def list_notes(
     q: str | None = Query(default=None, max_length=500),
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     query = (q or "").strip()
-    statement = select(Note)
+    statement = select(Note).where(visible_clause(Note, user))
     if query:
         ts_query = func.plainto_tsquery(_SEARCH_CONFIG, query)
         rank = func.ts_rank_cd(_SEARCH_VECTOR, ts_query)
@@ -83,6 +84,7 @@ async def create_note(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await require_project(db, body.project_id, user)
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -93,7 +95,7 @@ async def create_note(
     )
     payload = body.model_dump()
     payload["title"] = payload["title"].strip() or automatic_title(payload["body"])
-    note = Note(id=str(uuid.uuid4()), **payload)
+    note = Note(id=str(uuid.uuid4()), user_sub=user["sub"], **payload)
     try:
         db.add(note)
         await db.commit()
@@ -114,12 +116,10 @@ async def create_note(
 @router.get("/{note_id}", response_model=NoteOut)
 async def get_note(
     note_id: str,
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    note = await db.get(Note, note_id)
-    if not note:
-        raise HTTPException(404, "Note not found")
+    note = await get_owned(db, Note, note_id, user, "Note")
     return note
 
 
@@ -130,9 +130,7 @@ async def update_note(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    note = await db.get(Note, note_id)
-    if not note:
-        raise HTTPException(404, "Note not found")
+    note = await get_owned(db, Note, note_id, user, "Note")
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -150,6 +148,8 @@ async def update_note(
             )
         elif "body" in updates and not (note.title or "").strip():
             updates["title"] = automatic_title(updates["body"])
+        if "project_id" in updates:
+            await require_project(db, updates["project_id"], user)
         for field, value in updates.items():
             setattr(note, field, value)
         await db.commit()
@@ -172,9 +172,7 @@ async def delete_note(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    note = await db.get(Note, note_id)
-    if not note:
-        raise HTTPException(404, "Note not found")
+    note = await get_owned(db, Note, note_id, user, "Note")
     execution = await start_execution(
         db,
         user_sub=user["sub"],
@@ -218,12 +216,10 @@ async def delete_note(
 @router.get("/{note_id}/tags", response_model=NoteTagsOut)
 async def list_note_tags(
     note_id: str,
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    note = await db.get(Note, note_id)
-    if not note:
-        raise HTTPException(404, "Note not found")
+    note = await get_owned(db, Note, note_id, user, "Note")
 
     result = await db.execute(
         select(Tag.name)
@@ -244,9 +240,7 @@ async def replace_note_tags(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    note = await db.get(Note, note_id)
-    if not note:
-        raise HTTPException(404, "Note not found")
+    note = await get_owned(db, Note, note_id, user, "Note")
 
     execution = await start_execution(
         db,
@@ -291,12 +285,10 @@ async def replace_note_tags(
 @router.get("/{note_id}/links", response_model=list[NoteOut])
 async def list_note_links(
     note_id: str,
-    _user: dict = Depends(current_user),
+    user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    note = await db.get(Note, note_id)
-    if not note:
-        raise HTTPException(404, "Note not found")
+    note = await get_owned(db, Note, note_id, user, "Note")
     result = await db.execute(
         select(NoteLink).where(
             or_(
@@ -314,7 +306,7 @@ async def list_note_links(
     if not linked_ids:
         return []
     notes = await db.execute(
-        select(Note).where(Note.id.in_(linked_ids)).order_by(Note.updated_at.desc())
+        select(Note).where(Note.id.in_(linked_ids), visible_clause(Note, user)).order_by(Note.updated_at.desc())
     )
     return notes.scalars().all()
 
@@ -330,12 +322,8 @@ async def create_note_link(
     if note_id == target_id:
         raise HTTPException(422, "A note cannot link to itself")
 
-    source = await db.get(Note, note_id)
-    if not source:
-        raise HTTPException(404, "Note not found")
-    target = await db.get(Note, target_id)
-    if not target:
-        raise HTTPException(404, "Target note not found")
+    source = await get_owned(db, Note, note_id, user, "Note")
+    target = await get_owned(db, Note, target_id, user, "Target note")
 
     existing_result = await db.execute(
         select(NoteLink).where(_note_link_clause(note_id, target_id)).limit(1)
@@ -374,12 +362,8 @@ async def delete_note_link(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    source = await db.get(Note, note_id)
-    if not source:
-        raise HTTPException(404, "Note not found")
-    target = await db.get(Note, target_note_id)
-    if not target:
-        raise HTTPException(404, "Target note not found")
+    source = await get_owned(db, Note, note_id, user, "Note")
+    target = await get_owned(db, Note, target_note_id, user, "Target note")
 
     existing_result = await db.execute(
         select(NoteLink).where(_note_link_clause(note_id, target_note_id)).limit(1)

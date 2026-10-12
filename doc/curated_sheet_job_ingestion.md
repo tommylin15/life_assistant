@@ -1,6 +1,6 @@
 # 台灣活動｜獨立 Drive 交接資料 → Life 每日匯入契約
 
-**2026-10-12 現行契約：`verified_at_tpe` 一律選填，未知必須留空；不得以發現時間、批次時間、匯入時間冒充核證。** `handoff_updated_at_tpe` 仍是必要版本時點。2026-10-12 GAS read-only preflight 與 Job 啟動請求 PASS；當次 Cloud Run Execution 容器 Exit 1，實際入庫與回執 E2E 尚未通過。GitHub 匯入原始碼採選填契約並須由新 SHA 的 CI／部署及真實 DB/Sheet 讀回各自驗證。 探索規則本身以 Drive「台灣活動探索」正式 01～05 文件為準；這份文件僅規定 Life 如何消費交接資料。不要因文件寫好就宣稱 Life 已上線。
+**2026-10-12 現行契約：`verified_at_tpe` 一律選填，未知必須留空；不得以發現時間、批次時間、匯入時間冒充核證。每日 GAS 接收排程最新設定為 07:30（Asia/Taipei，使用者已確認；Apps Script 時間觸發器與定時執行證據仍 NOT VERIFIED）。** `handoff_updated_at_tpe` 仍是必要版本時點。2026-10-12 GAS read-only preflight 與 Job 啟動請求 PASS；當次 Cloud Run Execution 容器 Exit 1，實際入庫與回執 E2E 尚未通過。GitHub 匯入原始碼採選填契約並須由新 SHA 的 CI／部署及真實 DB/Sheet 讀回各自驗證。 探索規則本身以 Drive「台灣活動探索」正式 01～05 文件為準；這份文件僅規定 Life 如何消費交接資料。不要因文件寫好就宣稱 Life 已上線。
 
 ## 唯一交接來源與責任邊界
 
@@ -40,7 +40,7 @@
 ## 授權與實作落差
 
 - 只授權指定交接 Sheet 給 Life Job 專用 service account；不能公開分享，不建立長效 SA JSON key。既有 Job 設計的 **Viewer＋`spreadsheets.readonly` 只能讀、不能回寫 ACK/ERROR**；新實作需最小必要的單表 Editor／Sheets write scope、校驗 Google 身分並防止其他文件被讀寫。憑證、Token 不進 Sheet／Log。
-- **2026-10-11 排程責任移轉**：原 `.github/workflows/curated-handoff-daily.yml` 已移除每日 09:30 `schedule`，僅保留受 `LIFE_CURATED_HANDOFF_ENABLED=true` 控制的手動 `workflow_dispatch` 備援；此 workflow 僅確認正式 API 的唯一 100% Ready Revision、不可變 GHCR digest、既有 `life-assistant-free-events` Job 映像及固定 Sheet／command／apply 設定一致後，才允許人工觸發，**不再更新 Job 映像、環境變數或 command**。正式 V3 `.github/workflows/v3-release-ghcr.yml` 在 `promote=true`、正式健康／資料庫／OAuth、回滾演練及 Revision 保留步驟全部 PASS 後，由同一 deployer WIF 對現有 Job 做 image/command/args/固定 Sheet 和 apply 設定更新並 readback；不建立 Job、不執行匯入、不在 staging-only 發布更新。GAS 09:30 接收觸發需另行驗證最小 IAM、真實 DB／Sheet ACK 及開關才啟用；**移除 GitHub cron 不等於 GAS 已上線，目前定時接收暫停，禁止同時啟用雙入口**。
+- **2026-10-11 排程責任移轉**：原 `.github/workflows/curated-handoff-daily.yml` 已移除舊每日 09:30 `schedule`（歷史設定；目前正式目標改為 GAS 07:30），僅保留受 `LIFE_CURATED_HANDOFF_ENABLED=true` 控制的手動 `workflow_dispatch` 備援；此 workflow 僅確認正式 API 的唯一 100% Ready Revision、不可變 GHCR digest、既有 `life-assistant-free-events` Job 映像及固定 Sheet／command／apply 設定一致後，才允許人工觸發，**不再更新 Job 映像、環境變數或 command**。正式 V3 `.github/workflows/v3-release-ghcr.yml` 在 `promote=true`、正式健康／資料庫／OAuth、回滾演練及 Revision 保留步驟全部 PASS 後，由同一 deployer WIF 對現有 Job 做 image/command/args/固定 Sheet 和 apply 設定更新並 readback；不建立 Job、不執行匯入、不在 staging-only 發布更新。**GAS 接收排程以每日 07:30（Asia/Taipei）為最新使用者設定**；GAS 專案時間觸發器是否建立並實際按此時間執行，尚未取得 Apps Script runtime 證據（NOT VERIFIED）。另須驗證最小 IAM、真實 PostgreSQL readback、Sheet ACK、開關及重跑冪等，才可宣稱整條 E2E PASS；**移除 GitHub cron 不代表 GAS 定時接收已被驗證，也不可同時啟用雙入口**。
 - GitHub 現有 importer 若仍讀舊 `精選活動`／`pool狀態=selected`、僅 Sheets readonly 或使用 URL identity，應標 **IMPLEMENTATION GAP**。需求須經現況程式盤點、tests、CI、staging、PG、Flutter、Drive ACK 實際驗收；文件更新不等於 Job 已改造、授權、排程或部署。
 
 **2026-10-12 接續**：使用者的 GAS 讀 Job 與正式 live GHCR digest preflight 回報 `READY`，`jobs.run` 回報 `ACCEPTED_NOT_COMPLETED`；Execution `life-assistant-free-events-zc4xr` 最終 `CONDITION_FAILED`（Exit 1）。交接表仍有待處理 READY/ERROR；本次容器失敗的完整 Python traceback 尚未取得，不可推定只有核證時間造成。詳見 [CURRENT_STATE](CURRENT_STATE.md)。實際 Job 終態、PostgreSQL 及 Sheet ACK 仍須在修正版本部署後驗收。

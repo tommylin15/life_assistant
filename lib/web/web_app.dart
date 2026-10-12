@@ -7,6 +7,7 @@ import 'acceptance_center_page.dart';
 import 'calendar_page.dart';
 import 'app_shell.dart';
 import 'auth_state.dart';
+import 'browser_navigation.dart';
 import 'drive_page.dart';
 import 'habits_page.dart';
 import 'login_page.dart';
@@ -86,7 +87,32 @@ class AuthGuard extends ConsumerWidget {
     return auth.when(
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (_, __) => const LoginPage(),
+      error: (_, __) => Scaffold(
+        body: Center(child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.error_outline, size: 36),
+              const SizedBox(height: 12),
+              const Text('無法確認登入狀態'),
+              const SizedBox(height: 8),
+              const Text('登入後無法取得帳號資料，可能是帳號權限或登入狀態驗證失敗。',
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () => ref.read(authProvider.notifier).refresh(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('重新驗證'),
+              ),
+              TextButton(
+                onPressed: () => navigateBrowser('/login'),
+                child: const Text('返回登入／切換帳號'),
+              ),
+            ]),
+          ),
+        )),
+      ),
       data: (user) => user == null ? const LoginPage() : child,
     );
   }

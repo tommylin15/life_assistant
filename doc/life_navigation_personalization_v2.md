@@ -78,3 +78,8 @@
 **資料隔離安全閘門**：現有 `notes`／`projects`／`habits`／`shopping_lists` 尚無 `user_sub` 欄位，不能讓第二帳號讀寫這些共享資料。一般 Staging 測試者暫僅允許已檢核為使用者範圍的待辦、Google Calendar/Gmail、個人化設定和授權連結；其他私有功能後端直接 403、前端 feature rollout 標示不可用。待辦舊 `user_sub IS NULL` 僅原 Owner 可見，第二帳號不得引用舊 Project。要開放全部功能，必須另行完成多使用者資料表 ownership migration、關聯與 API 端到端驗證。此限制不能包裝為全功能多人驗收 PASS。
 
 - Gmail 轉待辦也必須設定 `Task.user_sub`，不能建立 `NULL` 擁有者再被 Owner 當成舊資料看到；Staging 測試者的 Gmail 任務與手動任務均按 Google `sub` 隔離。
+
+
+## 2026-10-12｜一般 Staging 帳號登入後回登入頁（修復）
+
+觀察：Google OAuth callback 完成後，固定 staging 一般帳號仍返回登入頁。根因候選為 Firebase Hosting Cloud Run rewrite 不保證保留 `X-Forwarded-Host`，而 `/auth/me` 只接受固定 Host／Forwarded Host，判錯成 403；原 AuthNotifier 把 403 當無 Session 並不提示錯誤。修正：對已經由驗證 staging OAuth state 核發的獨立 host-only `id:staging:` Cookie，僅在已知 Cloud Run API hostname、HTTPS proxy、沒有明確其他 Hosting Host 且瀏覽器同源 `Referer`／`Origin` 時接受固定 Staging；仍拒絕 production web.app、其他 Cloud Run、跨站來源及自行僞造單獨 staging 前綴。保留 Owner 權限及第二帳號未隔離 API 的 403 防線。前端 403／驗證異常不再靜默顯示一般登入畫面，提供重新驗證與切換帳號入口。這是協助瀏覽器同源識別而非新增登入授權，需真人 staging OAuth round-trip 驗收後才能標 DONE。

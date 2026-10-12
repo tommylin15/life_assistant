@@ -79,6 +79,45 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(HTTPException):
                 await auth.current_user(spoof)
 
+    async def test_browser_staging_session_without_forwarded_host(self):
+        """Firebase Hosting may omit X-Forwarded-Host after OAuth callback."""
+        with patch("app.api.auth._verify_id_token",
+                   new=AsyncMock(return_value=self.tester)):
+            proxy = request("life-assistant-api-xyz-uc.a.run.app",
+                "id:staging:google-token",
+                x_forwarded_proto="https",
+                referer="https://" + auth.STAGING_HOST + "/today",
+                sec_fetch_site="same-origin")
+            self.assertEqual((await auth.current_user(proxy))["sub"], "tester-sub")
+
+            for extra in (
+                {"referer": "https://gen-lang-client-0593591102.web.app/today"},
+                {"referer": "https://evil.example/today"},
+                {"referer": "http://" + auth.STAGING_HOST + "/today"},
+                {"referer": "https://" + auth.STAGING_HOST + ".evil.example/"},
+                {"referer": "https://" + auth.STAGING_HOST + "/",
+                 "sec_fetch_site": "cross-site"},
+                {"referer": "https://" + auth.STAGING_HOST + "/",
+                 "x_forwarded_host": "gen-lang-client-0593591102.web.app"},
+                {},
+            ):
+                with self.subTest(extra=extra):
+                    req = request("life-assistant-api-xyz-uc.a.run.app",
+                        "id:staging:google-token", x_forwarded_proto="https", **extra)
+                    with self.assertRaises(HTTPException) as blocked:
+                        await auth.current_user(req)
+                    self.assertEqual(blocked.exception.status_code, 403)
+
+    async def test_staging_session_invalid_for_external_cloud_run_and_prod_host(self):
+        with patch("app.api.auth._verify_id_token",
+                   new=AsyncMock(return_value=self.tester)):
+            for host in ("attacker-xyz-uc.a.run.app",
+                         "gen-lang-client-0593591102.web.app"):
+                req = request(host, "id:staging:google-token",
+                    referer="https://" + auth.STAGING_HOST + "/")
+                with self.assertRaises(HTTPException):
+                    await auth.current_user(req)
+
     async def test_verified_staging_callback_accepts_tester_not_admin(self):
         state = "z" * 32
         req = request(auth.STAGING_HOST, "oauth:staging:" + state)

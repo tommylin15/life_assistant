@@ -4,7 +4,7 @@ import os
 import re
 import secrets
 import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -32,19 +32,41 @@ _STAGING_TESTER_EMAIL_DIGESTS = frozenset({
 
 
 def _fixed_staging_origin(request: Request) -> bool:
-    """Trust only the known fixed Hosting origin, not a forged staging cookie."""
+    """Recognize the fixed staging browser behind Firebase's Cloud Run rewrite.
+
+    Firebase does not guarantee X-Forwarded-Host on every rewritten request.
+    Once the *verified* staging OAuth callback has issued a host-only
+    id:staging session cookie, same-origin browser requests also carry the
+    referring Hosting origin. The fallback is limited to the known API service
+    and must not override an explicit production forwarded host. The staged
+    cookie is only issued following verified OAuth state; production web.app
+    cannot read or send a cookie scoped to the separate staging web.app.
+    """
     host = request.headers.get("host", "").split(":", 1)[0].lower()
     if host == STAGING_HOST:
         return True
-    forwarded = request.headers.get("x-forwarded-host", "").strip().lower()
-    # Some trusted proxy chains produce comma-separated forwarded protocols.
+    if not (host.endswith(".run.app") and
+            (host.startswith("life-assistant-api-") or
+             host.startswith("life-assistant-api."))):
+        return False
     forwarded_proto = request.headers.get("x-forwarded-proto", "").lower().split(",")[-1].strip()
-    return (
-        host.endswith(".run.app")
-        and (host.startswith("life-assistant-api-") or host.startswith("life-assistant-api."))
-        and forwarded_proto == "https"
-        and forwarded in (STAGING_HOST, f"https://{STAGING_HOST}")
-    )
+    if forwarded_proto and forwarded_proto != "https":
+        return False
+    forwarded = request.headers.get("x-forwarded-host", "").strip().lower()
+    if forwarded in (STAGING_HOST, f"https://{STAGING_HOST}"):
+        return True
+    # An explicit different Hosting origin is authoritative over Referer.
+    if forwarded and (".web.app" in forwarded or ".firebaseapp.com" in forwarded):
+        return False
+    fetch_site = request.headers.get("sec-fetch-site", "").strip().lower()
+    if fetch_site not in ("", "same-origin", "same-site"):
+        return False
+    browser_origin = request.headers.get("origin") or request.headers.get("referer", "")
+    try:
+        parsed = urlsplit(browser_origin)
+        return parsed.scheme == "https" and parsed.netloc.lower() == STAGING_HOST
+    except ValueError:
+        return False
 
 
 def is_staging_tester(user: dict) -> bool:

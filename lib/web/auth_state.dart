@@ -28,9 +28,12 @@ class AuthNotifier extends Notifier<AsyncValue<Map<String, String>?>> {
   Future<void> _init() async {
     try {
       final response = await _client.get(_authUri('/auth/me'));
-      if (response.statusCode == 401 || response.statusCode == 403) {
+      if (response.statusCode == 401) {
         state = const AsyncValue.data(null);
         return;
+      }
+      if (response.statusCode == 403) {
+        throw StateError('登入驗證遭拒絕（403），請確認測試網址與帳號權限。');
       }
       if (response.statusCode >= 400) {
         throw Exception('Auth ${response.statusCode}: ${response.body}');

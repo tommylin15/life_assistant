@@ -29,7 +29,7 @@ def automatic_title(body: str | None) -> str:
     content = re.sub(r"[`*_~\[\]]", "", content).strip()
     content = re.sub(r"\s+", " ", content)
     sentence = re.split(r"[。！？.!?\n]", content, maxsplit=1)[0].strip()
-    return (sentence if len(sentence) <= 30 else sentence[:10]) or "未命名筆記"
+    return (sentence if len(sentence) <= 20 else sentence[:10]) or "未命名筆記"
 
 _SEARCH_VECTOR = literal_column(
     "to_tsvector('simple'::regconfig, "

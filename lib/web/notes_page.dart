@@ -817,7 +817,7 @@ String suggestedNoteTitle(String body) {
       .replaceAll(RegExp(r'\s+'), ' ');
   final sentence = cleaned.split(RegExp(r'[。！？.!?]')).first.trim();
   if (sentence.isEmpty) return '未命名筆記';
-  return sentence.runes.length <= 30 ? sentence :
+  return sentence.runes.length <= 20 ? sentence :
       String.fromCharCodes(sentence.runes.take(10));
 }
 

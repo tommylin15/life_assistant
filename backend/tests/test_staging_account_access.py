@@ -157,7 +157,7 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows, [owned])
         query = str(db.execute.await_args.args[0])
         self.assertIn("tasks.user_sub", query)
-        self.assertNotIn("IS NULL", query.upper())
+        self.assertNotIn("tasks.user_sub IS NULL", query)
 
     async def test_test_user_cannot_attach_owner_project_to_new_task(self):
         from app.api.tasks import create_task

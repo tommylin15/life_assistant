@@ -1,4 +1,12 @@
-# life_assistant — Current State (2026-10-10)
+# life_assistant — Current State (2026-10-12)
+
+## 2026-10-12｜`verified_at_tpe` 選填與 GAS 接收真實驗收（最新）
+
+- **契約**：Drive 原生交接 Sheet「交接規格」已明定 `verified_at_tpe` 選填；來源未知時保持空白，Life 模型應轉成 `None`／JSON `null`，不得取代為批次／發現時間。提供核證時間時仍需 +08:00、不得冒填。此修正維持 event_key/content_hash、post-commit Sheet ACK 與其他資料驗證。
+- **2026-10-12 GAS 實測**：`previewLifeHandoffPrerequisites()` 回 `READY`；Job/live image canonical digest 一致（`sha256:19ed58af30bfd752c133a09bfb489cfeda4e75f3026fc06d94a1fe9a384884a8`），`runLifeHandoffDaily()` 回 `ACCEPTED_NOT_COMPLETED`，Operation `6c041ac8-847e-4885-9fd9-e745156622be`。當日 Cloud Run Execution `life-assistant-free-events-zc4xr` 執行完成卻 `CONDITION_FAILED`、1 task failed、Exit 1；GAS 不是失敗原因，Python 真正錯誤須以 Cloud Logging 判定，不能直接歸因於缺值。
+- **Sheet 快照**：本次檢視共有 54 筆，其中 28 ACKED、20 ERROR、6 READY；20 ERROR 均為 `invalid_handoff_record`，且 `verified_at_tpe` 為空。此關聯不保證其餘所有欄位有效，也不證明新部署後已全部入庫。
+- **交付關卡**：GitHub source/schema/test 修正不等於已部署。須確認此修正 commit 的 CI、正式 V3 release 與 Job digest 更新，取得新 Execution 與真實 PostgreSQL/Sheet ACK readback。已有同日 GAS ledger，不要盲目再次呼叫 Job；每日 09:30 trigger 尚未驗收，不可標 DONE。
+
 
 ## 2026-10-11｜交接批次 CI/CD 映像責任移轉（待實際部署驗證）
 

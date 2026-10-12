@@ -192,7 +192,9 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.api.auth._verify_id_token",
                    new=AsyncMock(return_value=self.tester)):
             for uri in ("/api/v1/drive/documents", "/api/v1/admin/feature-rollouts",
-                        "/api/v1/templates", "/api/v1/drive/documents/some-id"):
+                        "/api/v1/templates", "/api/v1/drive/documents/some-id",
+                        "/api/v1/curated/status", "/api/v1/curated:connector",
+                        "/api/v1/free-events/curated:batch"):
                 req = request(auth.STAGING_HOST, "id:staging:google-token")
                 req.scope["path"] = uri
                 with self.subTest(uri=uri):
@@ -209,7 +211,10 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
                         "/api/v1/integrations/google/calendar",
                         "/api/v1/notes", "/api/v1/notes/owned-id", "/api/v1/projects",
                         "/api/v1/projects/owned-id", "/api/v1/habits",
-                        "/api/v1/shopping-lists", "/api/v1/shopping-items/item-id"):
+                        "/api/v1/shopping-lists", "/api/v1/shopping-items/item-id",
+                        "/api/v1/curated", "/api/v1/curated/filters",
+                        "/api/v1/free-events/curated/actions",
+                        "/api/v1/free-events/curated/fixture-id/actions/save"):
                 req = request(auth.STAGING_HOST, "id:staging:google-token")
                 req.scope["path"] = uri
                 self.assertEqual((await auth.current_user(req))["sub"], "tester-sub")

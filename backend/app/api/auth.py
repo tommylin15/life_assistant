@@ -124,11 +124,14 @@ def _enforce_staging_tester_route(request: Request, user: dict) -> None:
         "/api/v1/integrations/google/capabilities",
         "/api/v1/notes", "/api/v1/projects", "/api/v1/habits",
         "/api/v1/shopping-lists",
+        "/api/v1/curated", "/api/v1/curated/filters",
+        "/api/v1/free-events/curated/actions",
     }
     safe_prefixes = (
         "/api/v1/tasks/",
         "/api/v1/notes/", "/api/v1/projects/", "/api/v1/habits/",
         "/api/v1/shopping-lists/", "/api/v1/shopping-items/",
+        "/api/v1/free-events/curated/",
         "/api/v1/integrations/google/calendar",
         "/api/v1/integrations/google/gmail",
     )

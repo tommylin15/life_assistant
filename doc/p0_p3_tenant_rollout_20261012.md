@@ -16,7 +16,7 @@ private notes/projects/habits/shopping, curated activity flow, UI/release.
 - Staging's approved tester can reach the four owner-scoped resources.
   Google Drive links, templates and admin remain blocked until separately
   audited. Private production access policy is unchanged.
-- Existing curated UX V3, activity DB query and personal actions remain.
+- Audited curated listing/filters and account-owned personal actions now pass the\n  staging tester route gate, but each remains subject to feature rollout and\n  activity_access; ingestion, status and connector remain blocked.\n- Existing curated UX V3, activity DB query and personal actions remain.
   Curated event release/visibility follows the separate admin rollout policy;
   exposing common curated data in staging is not equivalent to approval.
 - Existing consistent feature header cards, notes category tabs and home cards

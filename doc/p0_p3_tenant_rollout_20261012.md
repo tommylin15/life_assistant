@@ -33,3 +33,9 @@ private notes/projects/habits/shopping, curated activity flow, UI/release.
    Calendar/Task source links separately verified; failure remains PARTIAL.
 6. Production: only explicit V3 workflow_dispatch promotion and live gates.
    CI or source changes alone do not constitute DONE.
+
+## 2026-10-13 Staging tester curated route correction
+- Registered public signed-in endpoints are `/api/v1/free-events/curated`, `/api/v1/free-events/curated/filters` and `/api/v1/free-events/curated/actions`, **not** `/api/v1/curated`. The previous staging allowlist incorrectly accepted non-existent shortened paths; authenticated secondary testers were rejected before query execution.
+- Stage tester route permissions now match FastAPI route registration and constrain per-item writes to existing V3 save/task/calendar_info actions. Owner-only status, connector, batch import, admin and historical follow/reminder actions remain denied.
+- Admin feature-rollout policy is still enforced independently: ordinary users need enabled/all for opportunities/explore. No production account access or beta default is broadened.
+- Flutter shows distinct signed-in 401, not-enabled 403, and other fetch failures. CI+Staging readback, and authenticated user E2E remain separately verified.

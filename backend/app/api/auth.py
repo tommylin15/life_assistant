@@ -107,11 +107,10 @@ def _enforce_account_access(user: dict, *, staging: bool) -> None:
 
 
 def _enforce_staging_tester_route(request: Request, user: dict) -> None:
-    """Fail closed until non-tenant-scoped legacy resources have owner columns.
+    """Allow audited tenant-scoped paths; deny Owner/admin and import routes.
 
-    Prior schema predates multi-user isolation for notes, habits, projects and
-    shopping. Explicit safe routes may be tested; unaudited endpoints must
-    not expose existing Owner rows to the secondary account.
+    The allowlist uses *registered FastAPI paths*, not the shortened Flutter
+    client URI. The curated router mounts under /free-events/curated.
     """
     if not is_staging_tester(user):
         return
@@ -124,18 +123,27 @@ def _enforce_staging_tester_route(request: Request, user: dict) -> None:
         "/api/v1/integrations/google/capabilities",
         "/api/v1/notes", "/api/v1/projects", "/api/v1/habits",
         "/api/v1/shopping-lists",
-        "/api/v1/curated", "/api/v1/curated/filters",
+        "/api/v1/free-events/curated",
+        "/api/v1/free-events/curated/filters",
         "/api/v1/free-events/curated/actions",
     }
     safe_prefixes = (
         "/api/v1/tasks/",
         "/api/v1/notes/", "/api/v1/projects/", "/api/v1/habits/",
         "/api/v1/shopping-lists/", "/api/v1/shopping-items/",
-        "/api/v1/free-events/curated/",
         "/api/v1/integrations/google/calendar",
         "/api/v1/integrations/google/gmail",
     )
-    if (path in safe_exact or path == "/api/v1/tasks"
+    action_prefix = "/api/v1/free-events/curated/"
+    action_parts = path[len(action_prefix):].split("/") if path.startswith(action_prefix) else []
+    personal_action = (
+        len(action_parts) == 3
+        and len(action_parts[0]) == 64
+        and all(char in "0123456789abcdef" for char in action_parts[0])
+        and action_parts[1] == "actions"
+        and action_parts[2] in ("save", "task", "calendar_info")
+    )
+    if (path in safe_exact or path == "/api/v1/tasks" or personal_action
             or any(path.startswith(prefix) for prefix in safe_prefixes)):
         return
     raise _http_error(403, "Feature is unavailable for staging test account")

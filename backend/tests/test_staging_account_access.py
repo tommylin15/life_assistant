@@ -193,8 +193,10 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
                    new=AsyncMock(return_value=self.tester)):
             for uri in ("/api/v1/drive/documents", "/api/v1/admin/feature-rollouts",
                         "/api/v1/templates", "/api/v1/drive/documents/some-id",
-                        "/api/v1/curated/status", "/api/v1/curated:connector",
-                        "/api/v1/free-events/curated:batch"):
+                        "/api/v1/free-events/curated/status",
+                        "/api/v1/free-events/curated:connector",
+                        "/api/v1/free-events/curated:batch",
+                        "/api/v1/free-events/curated/" + "a" * 64 + "/actions/follow"):
                 req = request(auth.STAGING_HOST, "id:staging:google-token")
                 req.scope["path"] = uri
                 with self.subTest(uri=uri):
@@ -212,12 +214,26 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
                         "/api/v1/notes", "/api/v1/notes/owned-id", "/api/v1/projects",
                         "/api/v1/projects/owned-id", "/api/v1/habits",
                         "/api/v1/shopping-lists", "/api/v1/shopping-items/item-id",
-                        "/api/v1/curated", "/api/v1/curated/filters",
+                        "/api/v1/free-events/curated",
+                        "/api/v1/free-events/curated/filters",
                         "/api/v1/free-events/curated/actions",
-                        "/api/v1/free-events/curated/fixture-id/actions/save"):
+                        "/api/v1/free-events/curated/" + "a" * 64 + "/actions/save",
+                        "/api/v1/free-events/curated/" + "a" * 64 + "/actions/task",
+                        "/api/v1/free-events/curated/" + "a" * 64 + "/actions/calendar_info"):
                 req = request(auth.STAGING_HOST, "id:staging:google-token")
                 req.scope["path"] = uri
                 self.assertEqual((await auth.current_user(req))["sub"], "tester-sub")
+
+    def test_allowed_activity_urls_are_real_registered_fastapi_routes(self):
+        from app.main import app
+        paths = {route.path for route in app.routes}
+        for path in (
+            "/api/v1/free-events/curated",
+            "/api/v1/free-events/curated/filters",
+            "/api/v1/free-events/curated/actions",
+            "/api/v1/free-events/curated/{activity_id}/actions/{kind}",
+        ):
+            self.assertIn(path, paths)
 
     async def test_secondary_user_cannot_read_null_owner_tasks(self):
         from app.api.tasks import _require_task, list_tasks

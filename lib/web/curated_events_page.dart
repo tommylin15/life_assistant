@@ -114,12 +114,20 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
           return const Padding(padding: EdgeInsets.all(24),
             child: Center(child: CircularProgressIndicator()));
         },
-        error: (_, __) => Padding(padding: const EdgeInsets.all(12),
-          child: Row(children: [
-            const Expanded(child: Text('活動載入失敗，請檢查連線後重試。')),
-            TextButton(onPressed: () => ref.invalidate(curatedListProvider(key)),
-              child: const Text('重試')),
-          ])),
+        error: (error, __) {
+          final detail = error.toString();
+          final message = detail.contains('API 403')
+              ? '此帳號尚未開放活動功能，請檢查管理員的功能設定。'
+              : detail.contains('API 401')
+                  ? '登入已失效，請重新登入。'
+                  : '活動載入失敗，請檢查連線後重試。';
+          return Padding(padding: const EdgeInsets.all(12),
+            child: Row(children: [
+              Expanded(child: Text(message)),
+              TextButton(onPressed: () => ref.invalidate(curatedListProvider(key)),
+                child: const Text('重試')),
+            ]));
+        },
         data: (data) {
           if (last) {
             hasMore = data['has_more'] == true;

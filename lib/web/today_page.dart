@@ -158,11 +158,17 @@ class TodayPage extends ConsumerWidget {
           final due = DateTime.tryParse(task['due_at']?.toString() ?? '')?.toLocal();
           return due != null && due.isBefore(DateTime(now.year, now.month, now.day));
         }).length;
-        if (overdue == 0) return const SizedBox.shrink();
-        return _tile(context, '需要關注', '有 $overdue 筆實際逾期的待辦', '/tasks');
+        return _tile(context, '需要關注', overdue == 0
+            ? '目前沒有逾期待辦'
+            : '有 $overdue 筆實際逾期的待辦', '/tasks');
       case 'habits':
         final habits = data['habits'] as List<Map<String, dynamic>>?;
-        if (habits == null || habits.isEmpty) return const SizedBox.shrink();
+        if (habits == null) {
+          return _tile(context, '今日習慣', '習慣資料目前無法取得', '/more/habits');
+        }
+        if (habits.isEmpty) {
+          return _tile(context, '今日習慣', '尚未建立習慣', '/more/habits');
+        }
         return Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const ListTile(title: Text('今日習慣')),
@@ -195,7 +201,7 @@ class TodayPage extends ConsumerWidget {
       case 'shopping':
         return _tile(context, '購物', '查看購物清單', '/more/shopping');
       case 'drive':
-        return _tile(context, 'Drive AI', '需個人 Google 授權及 AI 同意', '/more/drive');
+        return _tile(context, 'Google Drive', '查看個人已授權的雲端文件', '/more/drive');
       default: return const SizedBox.shrink();
     }
   }

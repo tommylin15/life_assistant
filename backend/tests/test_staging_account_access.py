@@ -3,6 +3,7 @@ import hashlib
 import os
 import unittest
 from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
 
 from fastapi import HTTPException, Response
 from starlette.requests import Request
@@ -131,3 +132,36 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
                 req = request(auth.STAGING_HOST, "id:staging:google-token")
                 req.scope["path"] = uri
                 self.assertEqual((await auth.current_user(req))["sub"], "tester-sub")
+
+    async def test_secondary_user_cannot_read_null_owner_tasks(self):
+        from app.api.tasks import _require_task, list_tasks
+        from app.models.task import Task
+        from unittest.mock import MagicMock
+        legacy = SimpleNamespace(user_sub=None, deleted_at=None)
+        db = SimpleNamespace(get=AsyncMock(return_value=legacy))
+        with self.assertRaises(HTTPException) as denied:
+            await _require_task(db, "old-owner-id", self.tester)
+        self.assertEqual(denied.exception.status_code, 404)
+        owned = SimpleNamespace(user_sub="tester-sub", deleted_at=None)
+        db.get = AsyncMock(return_value=owned)
+        self.assertIs(await _require_task(db, "test-task", self.tester), owned)
+
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [owned]
+        db.execute = AsyncMock(return_value=result)
+        rows = await list_tasks(user=self.tester, db=db)
+        self.assertEqual(rows, [owned])
+        query = str(db.execute.await_args.args[0])
+        self.assertIn("tasks.user_sub", query)
+        self.assertNotIn("IS NULL", query.upper())
+
+    async def test_test_user_cannot_attach_owner_project_to_new_task(self):
+        from app.api.tasks import create_task
+        from app.models.schemas import TaskCreate
+        with self.assertRaises(HTTPException) as ctx:
+            await create_task(
+                TaskCreate(title="Demo", project_id="owner-project"),
+                user=self.tester,
+                db=object(),
+            )
+        self.assertEqual(ctx.exception.status_code, 403)

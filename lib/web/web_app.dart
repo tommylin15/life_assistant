@@ -8,11 +8,8 @@ import 'calendar_page.dart';
 import 'app_shell.dart';
 import 'auth_state.dart';
 import 'drive_page.dart';
-import 'drive_settings_page.dart';
-import 'integrations_page.dart';
 import 'habits_page.dart';
 import 'login_page.dart';
-import 'more_page.dart';
 import 'notes_page.dart';
 import 'projects_page.dart';
 import 'shopping_page.dart';
@@ -56,7 +53,7 @@ final _router = GoRouter(
         ),
         GoRoute(
           path: '/more/drive/settings',
-          builder: (_, __) => const FeatureAccess(feature: 'drive', child: DriveSettingsPage()),
+          redirect: (_, __) => '/more/drive',
         ),
         GoRoute(
           path: '/more/drive',
@@ -66,14 +63,12 @@ final _router = GoRouter(
         GoRoute(path: '/more/curated', redirect: (_, __) => '/more/explore'),
         GoRoute(path: '/more/opportunities', builder: (_, __) => const FeatureAccess(feature: 'opportunities', child: CuratedEventsPage(entry: 'opportunities'))),
         GoRoute(path: '/more/explore', builder: (_, __) => const FeatureAccess(feature: 'explore', child: CuratedEventsPage(entry: 'explore'))),
-        GoRoute(path: '/more/personalize', builder: (_, __) => const PersonalizePage()),
+        GoRoute(path: '/more/personalize', builder: (_, state) =>
+            PersonalizePage(initialTab: state.uri.queryParameters['tab'] ?? 'home')),
+        GoRoute(path: '/integrations', redirect: (_, __) => '/more/personalize?tab=google'),
         GoRoute(path: '/more/admin', builder: (_, __) => const AdminAccess(child: AdminCenterPage())),
-        GoRoute(path: '/more', builder: (_, __) => const MorePage()),
+        GoRoute(path: '/more', redirect: (_, __) => '/more/personalize'),
       ],
-    ),
-    GoRoute(
-      path: '/integrations',
-      builder: (_, __) => const AuthGuard(child: FeatureAccess(feature: 'integrations', child: IntegrationsPage())),
     ),
     GoRoute(
       path: '/acceptance',

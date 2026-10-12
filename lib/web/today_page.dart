@@ -39,16 +39,13 @@ class TodayPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final prefs = ref.watch(uiPreferencesProvider).asData?.value;
+    final visualStyle = ref.watch(lifeAppearanceProvider).style;
     final cards = (prefs?['home_cards'] as List?)?.cast<String>() ??
         ['tasks', 'calendar', 'attention', 'habits', 'events', 'projects'];
     final flags = ref.watch(effectiveFeaturesProvider).asData?.value;
     final data = ref.watch(_todayDataProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('今天'), actions: [
-        IconButton(
-          tooltip: '自訂首頁', icon: const Icon(Icons.tune),
-          onPressed: () => context.go('/more/personalize'),
-        ),
         IconButton(
           tooltip: '重新整理', icon: const Icon(Icons.refresh),
           onPressed: () => ref.invalidate(_todayDataProvider),
@@ -62,17 +59,27 @@ class TodayPage extends ConsumerWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1060),
             child: ListView(padding: const EdgeInsets.all(16), children: [
-              Container(
+              AnimatedContainer(
+                duration: MediaQuery.of(context).disableAnimations
+                    ? Duration.zero : const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
                   gradient: LinearGradient(colors: [
-                    Theme.of(context).colorScheme.primary.withValues(alpha: .12),
+                    (visualStyle == LifeVisualStyle.pinkBubble ||
+                     visualStyle == LifeVisualStyle.animated)
+                      ? Theme.of(context).colorScheme.secondary.withValues(alpha: .25)
+                      : Theme.of(context).colorScheme.primary.withValues(alpha: .12),
                     Theme.of(context).colorScheme.surface,
                   ]),
                 ),
                 child: Row(children: [
-                  Icon(Icons.wb_sunny_outlined, size: 32,
+                  Icon(visualStyle == LifeVisualStyle.animated
+                      ? Icons.auto_awesome_rounded
+                      : visualStyle == LifeVisualStyle.pinkBubble
+                          ? Icons.bubble_chart_outlined : Icons.wb_sunny_outlined,
+                    size: 32,
                     color: Theme.of(context).colorScheme.primary),
                   const SizedBox(width: 14),
                   Expanded(child: Column(

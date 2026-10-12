@@ -218,11 +218,6 @@ class _DrivePageState extends ConsumerState<DrivePage> {
                   )
                 : const Icon(Icons.add_to_drive),
           ),
-          IconButton(
-            tooltip: '智能整理設定',
-            onPressed: () => context.go('/more/drive/settings'),
-            icon: const Icon(Icons.tune),
-          ),
         ],
       ),
       body: _buildBody(context),
@@ -254,11 +249,6 @@ class _DrivePageState extends ConsumerState<DrivePage> {
             AppSectionCard(
               title: '智能整理',
               subtitle: '檢視標籤與相關筆記建議；AI 失敗不會回滾 Drive 或專案關聯。',
-              action: TextButton.icon(
-                onPressed: () => context.go('/more/drive/settings'),
-                icon: const Icon(Icons.settings_outlined),
-                label: const Text('智能整理設定'),
-              ),
               child: const Text(
                 '所有建議都沿用 provider-agnostic contract；相關筆記只有在你接受後才建立正式關聯。',
               ),
@@ -278,11 +268,6 @@ class _DrivePageState extends ConsumerState<DrivePage> {
                       spacing: AppSpacing.sm,
                       runSpacing: AppSpacing.sm,
                       children: [
-                        FilledButton.tonalIcon(
-                          onPressed: () => context.go('/more/drive/settings'),
-                          icon: const Icon(Icons.privacy_tip_outlined),
-                          label: const Text('檢查同意設定'),
-                        ),
                         TextButton.icon(
                           onPressed: () => context.go('/more/notes'),
                           icon: const Icon(Icons.description_outlined),

@@ -45,7 +45,7 @@ class NotesSchemaBehaviorTests(unittest.TestCase):
     def test_automatic_title_uses_first_sentence_or_ten_chars(self):
         from app.api.notes import automatic_title
         self.assertEqual(automatic_title("# 東京旅行。下一段"), "東京旅行")
-        self.assertEqual(automatic_title("這是一段很長很長很長很長很長很長很長很長很長很長的文字"), "這是一段很長很長很長很長")
+        self.assertEqual(automatic_title("這是一段很長很長很長很長很長很長很長很長很長很長的文字"), "這是一段很長很長很長")
         self.assertEqual(automatic_title(""), "未命名筆記")
 
     def test_update_rejects_empty_patch_and_null_title_or_body(self):

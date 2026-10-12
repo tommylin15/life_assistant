@@ -3,6 +3,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'browser_navigation.dart';
 import 'note_api.dart';
 import 'note_drive_relations.dart';
 import 'visual_system.dart';
@@ -166,6 +167,7 @@ class _NotesPageState extends ConsumerState<NotesPage> {
                                 [
                                   if (note.body.trim().isNotEmpty) _plain(note.body),
                                   if (workspace.projectName(note.projectId) case final name?) name,
+                                  note.category ?? '未分類',
                                   if (note.updatedAt case final updated?)
                                     '更新 ${DateFormat('M/d HH:mm').format(updated.toLocal())}',
                                 ].join('\n'),
@@ -186,6 +188,15 @@ class _NotesPageState extends ConsumerState<NotesPage> {
                                 ],
                               ),
                             ),
+                            for (final link in noteUrls(note.body).take(2))
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  icon: const Icon(Icons.open_in_new, size: 16),
+                                  label: Text(link, overflow: TextOverflow.ellipsis),
+                                  onPressed: () => ref.read(browserNavigationProvider).openExternal(link),
+                                ),
+                              ),
                             NoteDriveRelations(noteId: note.id),
                           ],
                         ),
@@ -310,6 +321,7 @@ class _EditorDialogState extends State<_EditorDialog> {
   late final TextEditingController _title;
   late final TextEditingController _body;
   late final TextEditingController _tags;
+  late final TextEditingController _category;
   String? _projectId;
   bool _preview = false;
 
@@ -319,6 +331,7 @@ class _EditorDialogState extends State<_EditorDialog> {
     _title = TextEditingController(text: widget.note?.title ?? '');
     _body = TextEditingController(text: widget.note?.body ?? '');
     _tags = TextEditingController(text: widget.initialTags.join(', '));
+    _category = TextEditingController(text: widget.note?.category ?? '');
     _projectId = widget.note?.projectId;
   }
 
@@ -327,6 +340,7 @@ class _EditorDialogState extends State<_EditorDialog> {
     _title.dispose();
     _body.dispose();
     _tags.dispose();
+    _category.dispose();
     super.dispose();
   }
 
@@ -365,6 +379,12 @@ class _EditorDialogState extends State<_EditorDialog> {
                       key: const ValueKey('note-markdown-preview'),
                       child: MarkdownBody(
                         data: _body.text.isEmpty ? '_目前沒有內容_' : _body.text,
+                        onTapLink: (text, href, title) {
+                          final uri = href == null ? null : Uri.tryParse(href);
+                          if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http') && uri.host.isNotEmpty) {
+                            openExternalBrowser(href!);
+                          }
+                        },
                       ),
                     )
                   : Form(
@@ -375,11 +395,7 @@ class _EditorDialogState extends State<_EditorDialog> {
                             TextFormField(
                               key: const ValueKey('note-title-field'),
                               controller: _title,
-                              decoration: const InputDecoration(labelText: '標題'),
-                              validator: (value) =>
-                                  value == null || value.trim().isEmpty
-                                      ? '請輸入標題'
-                                      : null,
+                              decoration: const InputDecoration(labelText: '標題（可留白，自動產生）'),
                             ),
                             const SizedBox(height: 12),
                             DropdownButtonFormField<String>(
@@ -399,6 +415,14 @@ class _EditorDialogState extends State<_EditorDialog> {
                               ],
                               onChanged: (value) => _projectId =
                                   value == null || value.isEmpty ? null : value,
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              key: const ValueKey('note-category-field'),
+                              controller: _category,
+                              maxLength: 80,
+                              decoration: const InputDecoration(
+                                labelText: '分類', hintText: '未分類／輸入名稱建立新分類'),
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
@@ -445,10 +469,6 @@ class _EditorDialogState extends State<_EditorDialog> {
 
   void _save() {
     if (!_preview && !(_form.currentState?.validate() ?? false)) return;
-    if (_title.text.trim().isEmpty) {
-      setState(() => _preview = false);
-      return;
-    }
     final tags = <String>[];
     final seen = <String>{};
     for (final raw in _tags.text.split(',')) {
@@ -459,9 +479,11 @@ class _EditorDialogState extends State<_EditorDialog> {
       context,
       _EditorResult(
         body: {
-          'title': _title.text.trim(),
+          'title': _title.text.trim().isEmpty
+              ? suggestedNoteTitle(_body.text) : _title.text.trim(),
           'body': _body.text,
           'project_id': _projectId,
+          'category': _category.text.trim().isEmpty ? null : _category.text.trim(),
         },
         tags: tags,
       ),
@@ -608,6 +630,7 @@ class _Note {
     required this.title,
     required this.body,
     required this.projectId,
+    required this.category,
     required this.updatedAt,
   });
   factory _Note.fromJson(Map<String, dynamic> json) => _Note(
@@ -615,15 +638,17 @@ class _Note {
         title: json['title']?.toString(),
         body: json['body']?.toString() ?? '',
         projectId: json['project_id']?.toString(),
+        category: json['category']?.toString(),
         updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? ''),
       );
   final String id;
   final String? title;
   final String body;
   final String? projectId;
+  final String? category;
   final DateTime? updatedAt;
   String get displayTitle =>
-      (title?.trim().isNotEmpty ?? false) ? title!.trim() : '未命名筆記';
+      (title?.trim().isNotEmpty ?? false) ? title!.trim() : suggestedNoteTitle(body);
 }
 
 class _Project {
@@ -665,3 +690,22 @@ class _ErrorState extends StatelessWidget {
         ),
       );
 }
+
+String suggestedNoteTitle(String body) {
+  final cleaned = body.replaceAll(RegExp(r'(?m)^\s{0,3}(?:#{1,6}|[-*>])\s*'), '')
+      .replaceAll(RegExp(r'[*_~\[\]]'), '')
+      .replaceAll(String.fromCharCode(96), '').trim()
+      .replaceAll(RegExp(r'\s+'), ' ');
+  final sentence = cleaned.split(RegExp(r'[。！？.!?]')).first.trim();
+  if (sentence.isEmpty) return '未命名筆記';
+  return sentence.runes.length <= 30 ? sentence :
+      String.fromCharCodes(sentence.runes.take(10));
+}
+
+Iterable<String> noteUrls(String body) =>
+    RegExp(r'https?://[^\s<>\]\)]+', caseSensitive: false)
+        .allMatches(body)
+        .map((match) => match.group(0)!
+            .replaceFirst(RegExp(r'[.,;:!?。！，；：]+$'), ''))
+        .where((link) => Uri.tryParse(link)?.host.isNotEmpty == true)
+        .toSet();

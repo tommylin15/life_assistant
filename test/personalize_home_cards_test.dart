@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:life_assistant/web/personalize_page.dart';
+import 'package:life_assistant/web/auth_state.dart';
 import 'package:life_assistant/web/platform_api.dart';
 
 class _FakePreferencesApi extends PlatformApi {
@@ -14,6 +15,13 @@ class _FakePreferencesApi extends PlatformApi {
   }
 }
 
+class _FakeAuth extends AuthNotifier {
+  @override
+  AsyncValue<Map<String, String>?> build() => const AsyncValue.data({
+    'email': 'owner@example.test', 'name': 'Owner',
+  });
+}
+
 void main() {
   testWidgets('home personalization includes opportunities and explore and saves their order',
       (tester) async {
@@ -23,6 +31,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final api = _FakePreferencesApi();
     await tester.pumpWidget(ProviderScope(overrides: [
+      authProvider.overrideWith(_FakeAuth.new),
       platformApiProvider.overrideWithValue(api),
       uiPreferencesProvider.overrideWith((ref) async => {
         'revision': 0, 'nav_mode': 'auto',

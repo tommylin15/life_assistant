@@ -47,7 +47,7 @@ void main() {
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
     expect(find.text('日常生活'), findsOneWidget);
-    expect(find.text('活動與機會'), findsOneWidget);
+    expect(find.byKey(const ValueKey('nav-group-knowledge')), findsOneWidget);
     expect(find.text('Google 整合'), findsNothing);
     expect(find.text('更多'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('nav-group-daily')));

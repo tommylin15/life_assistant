@@ -345,7 +345,8 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
                 if (_tab == 'home') _homeTab(),
                 if (_tab == 'navigation') _navigationTab(flags),
                 if (_tab == 'appearance') _appearanceTab(),
-                if (_tab == 'google') const GoogleConnectionsPanel(),
+                if (_tab == 'google') const FeatureAccess(
+                    feature: 'integrations', child: GoogleConnectionsPanel()),
                 if (_tab == 'home' || _tab == 'navigation') ...[
                   const SizedBox(height: 22),
                   if (_message != null) Text(_message!),

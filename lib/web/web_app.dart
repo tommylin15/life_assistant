@@ -66,13 +66,10 @@ final _router = GoRouter(
         GoRoute(path: '/more/personalize', builder: (_, state) =>
             PersonalizePage(initialTab: state.uri.queryParameters['tab'] ?? 'home')),
         GoRoute(path: '/integrations', redirect: (_, __) => '/more/personalize?tab=google'),
+        GoRoute(path: '/acceptance', builder: (_, __) => const AdminAccess(child: AcceptanceCenterPage())),
         GoRoute(path: '/more/admin', builder: (_, __) => const AdminAccess(child: AdminCenterPage())),
         GoRoute(path: '/more', redirect: (_, __) => '/more/personalize'),
       ],
-    ),
-    GoRoute(
-      path: '/acceptance',
-      builder: (_, __) => const AuthGuard(child: AdminAccess(child: AcceptanceCenterPage())),
     ),
     GoRoute(path: '/login', builder: (_, __) => const LoginPage()),
   ],

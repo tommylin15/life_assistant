@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/browser_client.dart';
+import 'package:http/http.dart' as http;
+
+import 'api_http_client.dart';
 
 const _configuredAuthBase =
     String.fromEnvironment('AUTH_BASE_URL', defaultValue: '');
@@ -14,7 +16,8 @@ Uri _authUri(String path) {
 }
 
 class AuthNotifier extends Notifier<AsyncValue<Map<String, String>?>> {
-  final BrowserClient _client = BrowserClient()..withCredentials = true;
+  // Browser uses credentialed BrowserClient; Flutter VM tests use http.Client.
+  final http.Client _client = createApiHttpClient();
 
   @override
   AsyncValue<Map<String, String>?> build() {

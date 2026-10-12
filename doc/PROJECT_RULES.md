@@ -157,6 +157,10 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 
 V2 Cloud Build 全文已歸檔：[archive/ci_cd_v2_policy.md](archive/ci_cd_v2_policy.md)。**新建/更新/部署只使用 CI/CD V3**，當次驗收需實際 runtime evidence。
 
+## 2026-10-12｜交接核證時點的正式相容規則
+
+- **`verified_at_tpe` 一律選填**，未知時來源 Sheet 留空，Life importer 接收為 `None`／JSON `null`，不可偽填核證時刻、發現／批次／匯入時間；若來源提供核證時點，仍驗證帶 +08:00 的 ISO 8601 datetime。`handoff_updated_at_tpe` 是必要版本時點，兩欄不得混用。此規則優先於任何早期「全部已核證才能 READY／verified_at_tpe 必填」要求；保留來源可追溯性、可識別活動／有據日期、event_key/content_hash 去重、DB commit 後版本一致 ACK 及必要錯誤追蹤。發現 runtime 不相容應修 Life，不得要求探索端假填欄位。
+
 ## 2026-10-10 現行文件與產品決策
 
 - **最新交接優先順序：以實際「交接資料／交接規格」為主，回頭調整 Life DB 與 UI，不要求探索表或正式探索文件迎合 Life。** 來源 SHA256 版本由探索端提供；Life 驗證格式、業務 payload、資料庫穩定鍵與同版本內容一致性。回執採 Sheet 的 CREATED／UPDATED／UNCHANGED 裸值；ACKED 也須由 Life 核對 DB，不能用 Sheet 狀態抑制新版。

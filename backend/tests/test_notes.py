@@ -137,8 +137,8 @@ class NotesRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
     async def test_duplicate_reverse_link_is_idempotent_without_insert(self):
         from app.api.notes import create_note_link
 
-        source = Note(id="a", title="A", body="")
-        target = Note(id="b", title="B", body="")
+        source = Note(id="a", title="A", body="", user_sub="u")
+        target = Note(id="b", title="B", body="", user_sub="u")
         db = AsyncMock()
         db.get.side_effect = [source, target]
         result = MagicMock()
@@ -158,8 +158,8 @@ class NotesRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
     async def test_unlink_deletes_bidirectional_link(self):
         from app.api.notes import delete_note_link
 
-        source = Note(id="a", title="A", body="")
-        target = Note(id="b", title="B", body="")
+        source = Note(id="a", title="A", body="", user_sub="u")
+        target = Note(id="b", title="B", body="", user_sub="u")
         db = AsyncMock()
         db.get.side_effect = [source, target]
         existing = MagicMock()
@@ -195,7 +195,7 @@ class NotesRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(source_ctx.exception.status_code, 404)
 
         db = AsyncMock()
-        db.get.side_effect = [Note(id="a", title="A", body=""), None]
+        db.get.side_effect = [Note(id="a", title="A", body="", user_sub="u"), None]
         with self.assertRaises(HTTPException) as target_ctx:
             await create_note_link(
                 "a",
@@ -208,7 +208,7 @@ class NotesRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
     async def test_delete_note_cleans_links_tags_and_drive_relations_before_delete(self):
         from app.api.notes import delete_note
 
-        note = Note(id="a", title="A", body="")
+        note = Note(id="a", title="A", body="", user_sub="u")
         db = AsyncMock()
         db.get.return_value = note
         with (
@@ -224,7 +224,7 @@ class NotesRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
     async def test_replace_tags_reuses_existing_tag_and_creates_missing_tag(self):
         from app.api.notes import replace_note_tags
 
-        note = Note(id="a", title="A", body="")
+        note = Note(id="a", title="A", body="", user_sub="u")
         existing_tag = MagicMock()
         existing_tag.id = "existing"
         db = AsyncMock()

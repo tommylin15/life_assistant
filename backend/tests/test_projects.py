@@ -50,7 +50,7 @@ class ProjectDeleteGuardTests(unittest.IsolatedAsyncioTestCase):
 
     @staticmethod
     def _project():
-        return Project(id="project-1", name="Guarded project")
+        return Project(id="project-1", name="Guarded project", user_sub="u")
 
     async def test_delete_rejects_linked_task_before_starting_execution(self):
         from app.api.projects import delete_project

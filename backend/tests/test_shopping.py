@@ -90,7 +90,7 @@ class ShoppingRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
     async def test_list_response_nests_items_sorted_by_sort_order(self):
         from app.api.shopping import list_shopping_lists
 
-        shopping_list = ShoppingList(id="l1", name="Groceries", project_id=None)
+        shopping_list = ShoppingList(id="l1", name="Groceries", project_id=None, user_sub="u")
         shopping_list.created_at = datetime.now(timezone.utc)
         item_late = ShoppingItem(
             id="i2", list_id="l1", name="Bananas", category=None, is_done=False, sort_order=2
@@ -137,7 +137,7 @@ class ShoppingRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
     async def test_create_item_and_toggle_use_expected_audit_actions(self):
         from app.api.shopping import create_shopping_item, update_shopping_item
 
-        shopping_list = ShoppingList(id="l1", name="Groceries", project_id=None)
+        shopping_list = ShoppingList(id="l1", name="Groceries", project_id=None, user_sub="u")
         item = ShoppingItem(
             id="i1", list_id="l1", name="Milk", category=None, is_done=False, sort_order=0
         )

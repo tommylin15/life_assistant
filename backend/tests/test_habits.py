@@ -88,7 +88,7 @@ class HabitsRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_complete_appends_distinct_rows_without_mutating_prior_completion(self):
         from app.api.habits import complete_habit
-        habit = Habit(id='h1', title='Walk', recurrence_rule='daily')
+        habit = Habit(id='h1', title='Walk', recurrence_rule='daily', user_sub='u')
         db = AsyncMock()
         db.add = MagicMock()
         db.get.return_value = habit
@@ -117,7 +117,7 @@ class HabitsRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_history_orders_completed_at_descending(self):
         from app.api.habits import list_habit_completions
-        habit = Habit(id='h1', title='Walk', recurrence_rule='daily')
+        habit = Habit(id='h1', title='Walk', recurrence_rule='daily', user_sub='u')
         db = AsyncMock()
         db.get.return_value = habit
         result = MagicMock()

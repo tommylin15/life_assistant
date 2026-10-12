@@ -49,11 +49,12 @@ class AuthNotifier extends Notifier<AsyncValue<Map<String, String>?>> {
   }
 
   Future<void> logout() async {
-    try {
-      await _client.post(_authUri('/auth/logout'));
-    } finally {
-      state = const AsyncValue.data(null);
+    // Keep the authenticated state if the server fails to clear its cookie.
+    final response = await _client.post(_authUri('/auth/logout'));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('Logout failed (' + response.statusCode.toString() + ')');
     }
+    state = const AsyncValue.data(null);
   }
 }
 

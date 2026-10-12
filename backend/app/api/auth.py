@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import re
@@ -23,6 +24,37 @@ GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 STAGING_HOST = "life-assistant-v3-stage-tl15.web.app"
 STAGING_REDIRECT_URI = f"https://{STAGING_HOST}/auth/callback"
+
+# Approved staging tester, fingerprinted to avoid publishing the email address.
+_STAGING_TESTER_EMAIL_DIGESTS = frozenset({
+    "4bf1494cf0fb01b437c3b8cdb5b510e6ea5fd7558fb10a08ac290f6b11826d08",
+})
+
+
+def _fixed_staging_origin(request: Request) -> bool:
+    """Trust only the known fixed Hosting origin, not a forged staging cookie."""
+    host = request.headers.get("host", "").split(":", 1)[0].lower()
+    if host == STAGING_HOST:
+        return True
+    forwarded = request.headers.get("x-forwarded-host", "").strip().lower()
+    return (
+        host.endswith(".run.app")
+        and (host.startswith("life-assistant-api-") or host.startswith("life-assistant-api."))
+        and request.headers.get("x-forwarded-proto", "").lower() == "https"
+        and forwarded in (STAGING_HOST, f"https://{STAGING_HOST}")
+    )
+
+
+def _enforce_account_access(user: dict, *, staging: bool) -> None:
+    """Grant signed-in access, never Owner authorization, to one stage tester."""
+    owner = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().casefold()
+    email = str(user.get("email", "")).strip().casefold()
+    if not owner or email == owner:  # Preserve existing local-development behavior.
+        return
+    if staging and hashlib.sha256(email.encode("utf-8")).hexdigest() in _STAGING_TESTER_EMAIL_DIGESTS:
+        return
+    raise _http_error(403, "Account is not allowed")
+
 
 
 def oauth_redirect_for_request(request: Request) -> str:
@@ -121,7 +153,11 @@ async def current_user(request: Request) -> dict:
     token = session.removeprefix("id:")
     if token.startswith("staging:"):
         token = token.removeprefix("staging:")
-    return await _verify_id_token(token)
+    user = await _verify_id_token(token)
+    _enforce_account_access(user, staging=(
+        session.startswith('id:staging:') and _fixed_staging_origin(request)
+    ))
+    return user
 
 
 @router.get("/login")
@@ -146,6 +182,7 @@ async def _login(request: Request, *, force_staging: bool):
         "redirect_uri": STAGING_REDIRECT_URI if force_staging else oauth_redirect_for_request(request),
         "response_type": "code",
         "scope": SCOPES,
+        "prompt": "select_account",  # Account switching, no implicit reuse.
         "state": state,
     }
     response = RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}")
@@ -210,6 +247,7 @@ async def callback(
 
         callback_uri = STAGING_REDIRECT_URI if is_staging else oauth_redirect_for_request(request)
         id_token, user = await _complete_login(code, callback_uri)
+        _enforce_account_access(user, staging=is_staging)
         await _audit_staging_e2e(db, request, user, "staging_google_callback")
         max_age = max(1, min(3600, int(user["exp"]) - int(time.time())))
         frontend_url = frontend_for_request(request) + "/"

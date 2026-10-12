@@ -66,3 +66,11 @@
 「個人化 → 首頁」提供全部 11 個支援項目的顯示勾選與排序：今日待辦、下一個行程、需要關注、今日習慣、精選活動、限時機會、活動探索、進行中專案、筆記、購物清單、Google Drive。`opportunities` 與 `explore` 同時列入 Flutter 選項與後端 `HOME_KEYS` 白名單，回寫及再讀取不得丟失；既有 `events` 繼續相容。首頁「限時機會」使用 `entry=opportunities`、活動探索使用 `entry=explore`，資料無法取得時明示，不虛構公告、日期或活動筆數；只在相關卡片被選用且有權限時才額外向後端讀取。新增卡片預設不強迫勾選，原個人排序與既有預設保持不變。
 
 勾選即表示希望該首頁入口可見：即使今日沒有逾期待辦或習慣清單為空，也要顯示真實的無資料狀態，不得把使用者勾選的卡片悄悄隱藏；Google Drive 卡片不以 Google OAuth 自動代表已同意 AI 文件分析。
+
+
+## 2026-10-12｜Staging 一般使用者與帳號切換
+
+- Google ID token 驗證與使用者入站權限拆開：正式站依現有 `ALLOWED_GOOGLE_EMAIL` 限制，固定 Staging 只另外允許一個核准的非 Owner 測試帳號；公開原始碼僅保存其正規化 email 的 SHA-256 指紋，不公開明文。
+- 額外登入權限只適用 `oauth:staging:` 狀態驗證後的登入與固定 Staging 網域中 `id:staging:` Session；從正式網址夾帶 staging cookie 不得繞過限制。Owner/Admin 仍須比對 `ALLOWED_GOOGLE_EMAIL`，測試者不可使用管理中心或 Owner 功能，使用者資料由 Google `sub` 隔離。
+- 個人化頁面上方固定顯示登入帳號及「登出／切換帳號」，即使個人化偏好載入失敗也可登出；`POST /auth/logout` 成功後重載登入畫面、清除舊帳號前端狀態，失敗則回報且不聲稱已登出。Google 登入顯示選擇帳號。
+- 真人 Staging 第二帳號實際登入與資料隔離必須獨立驗收；原自動 OAuth redirects/state/cookie 與 production 發布門檻全部保留。

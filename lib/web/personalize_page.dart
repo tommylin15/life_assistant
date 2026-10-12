@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'auth_state.dart';
+import 'browser_navigation.dart';
 import 'integrations_page.dart';
 import 'navigation_catalog.dart';
 import 'platform_api.dart';
@@ -34,6 +36,7 @@ class PersonalizePage extends ConsumerStatefulWidget {
 class _PersonalizePageState extends ConsumerState<PersonalizePage> {
   Map<String, dynamic>? _draft;
   bool _saving = false;
+  bool _loggingOut = false;
   String? _message;
   late String _tab;
   final Set<String> _openGroups = {'daily', 'knowledge', 'activities'};
@@ -320,8 +323,29 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
   Widget build(BuildContext context) {
     final prefs = ref.watch(uiPreferencesProvider);
     final flags = ref.watch(effectiveFeaturesProvider).asData?.value;
+    final signedIn = ref.watch(authProvider).asData?.value;
     return Scaffold(
-      body: prefs.when(
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: Center(child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: Card(child: ListTile(
+              key: const ValueKey('personalize-account'),
+              leading: const Icon(Icons.account_circle_outlined),
+              title: const Text('目前登入帳號'),
+              subtitle: Text(signedIn?['email'] ?? '無法取得帳號資料',
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: OutlinedButton.icon(
+                key: const ValueKey('personalize-logout'),
+                onPressed: _loggingOut ? null : _logout,
+                icon: const Icon(Icons.logout),
+                label: Text(_loggingOut ? '登出中…' : '登出／切換帳號'),
+              ),
+            )),
+          )),
+        ),
+        Expanded(child: prefs.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => const Center(child: Text('無法取得介面偏好')),
         data: (value) {
@@ -375,8 +399,26 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
             ),
           );
         },
-      ),
+      )),
     );
+  }
+
+  Future<void> _logout() async {
+    if (_loggingOut) return;
+    setState(() => _loggingOut = true);
+    try {
+      await ref.read(authProvider.notifier).logout();
+      ref.invalidate(uiPreferencesProvider);
+      ref.invalidate(effectiveFeaturesProvider);
+      ref.invalidate(googleStatusProvider);
+      // A full reload clears all remaining previous-user Riverpod caches.
+      navigateBrowser('/login');
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('登出失敗，請稍後再試；帳號保持登入。')));
+    } finally {
+      if (mounted) setState(() => _loggingOut = false);
+    }
   }
 
   Future<void> _save() async {

@@ -1,4 +1,3 @@
-import os
 import time
 
 import httpx
@@ -46,10 +45,8 @@ async def verify_google_id_token(id_token: str) -> dict:
     if not email:
         raise _http_error(401, "Token does not contain an email")
 
-    allowed_email = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().lower()
-    if allowed_email and email != allowed_email:
-        raise _http_error(403, "Account is not allowed")
-
+    # Identity validation is separate from request-specific authorization.
+    # The auth routes enforce owner and fixed-staging tester access.
     return {
         "sub": str(claims.get("sub", "")),
         "email": email,

@@ -44,3 +44,5 @@ private notes/projects/habits/shopping, curated activity flow, UI/release.
 - User reports real staging account activity list loads successfully for fixed staging release SHA `fc9c94d216a7985b88eb6ffe494457102afea59b`; classified **PASS for authenticated page load only**. Bookmark/task/calendar action E2E remains NOT VERIFIED.
 - Security review: tenant visibility for NULL legacy rows now fails closed if `ALLOWED_GOOGLE_EMAIL` is empty/missing rather than interpreting every user as Owner. Explicitly owned records continue to be accessible only to matching Google sub. Added isolated unit coverage for empty, whitespace and missing owner config.
 - This does not promote the production Hosting site or weaken rollout gates; current staging verification and production promotion are independent.
+
+- Follow-up ownership audit: NULL legacy tasks use the same explicit Owner-only decision as notes/projects/habits/shopping. Being a non-staging account is **not** proof of legacy ownership; absent `ALLOWED_GOOGLE_EMAIL` denies legacy Task read/list for every account. Private Task rows with an explicit matching sub remain accessible.

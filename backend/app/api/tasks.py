@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import current_user, is_staging_tester
+from app.api.auth import current_user
 from app.db.session import get_db
 from app.models.migration_support import ChecklistItem
 from app.models.schemas import (
@@ -18,7 +18,7 @@ from app.models.schemas import (
 )
 from app.models.task import Task, TaskStatus
 from app.models.project import Project
-from app.services.ownership import get_owned
+from app.services.ownership import get_owned, legacy_owner
 from app.services.execution_log import fail_execution, finish_execution, start_execution
 from app.services.idempotency import (
     ACTION_ID_HEADER,
@@ -32,7 +32,10 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 async def _require_task(db: AsyncSession, task_id: str, user: dict) -> Task:
     task = await db.get(Task, task_id)
-    if not task or task.deleted_at is not None or (task.user_sub != user["sub"] and (task.user_sub is not None or is_staging_tester(user))):
+    if not task or task.deleted_at is not None or (
+        task.user_sub != user["sub"]
+        and not (task.user_sub is None and legacy_owner(user))
+    ):
         raise HTTPException(404, "Task not found")
     return task
 
@@ -54,7 +57,7 @@ async def list_tasks(
     db: AsyncSession = Depends(get_db),
 ):
     owner_filter = (Task.user_sub == user["sub"])
-    if not is_staging_tester(user):
+    if legacy_owner(user):
         owner_filter = or_(Task.user_sub.is_(None), owner_filter)
     result = await db.execute(
         select(Task).where(Task.deleted_at.is_(None), owner_filter)

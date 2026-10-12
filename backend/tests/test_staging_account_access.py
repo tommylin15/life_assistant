@@ -264,6 +264,24 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("tasks.user_sub", query)
         self.assertNotIn("tasks.user_sub IS NULL", query)
 
+    async def test_null_legacy_tasks_require_configured_owner_not_just_non_tester(self):
+        from app.api.tasks import _require_task, list_tasks
+        from unittest.mock import MagicMock
+        legacy = SimpleNamespace(user_sub=None, deleted_at=None)
+        user = {"sub": "another-sub", "email": "another@example.test"}
+        db = SimpleNamespace(get=AsyncMock(return_value=legacy))
+        with patch.dict(os.environ, {"ALLOWED_GOOGLE_EMAIL": ""}):
+            with self.assertRaises(HTTPException) as blocked:
+                await _require_task(db, "legacy", user)
+            self.assertEqual(blocked.exception.status_code, 404)
+            db.execute = AsyncMock(return_value=MagicMock())
+            await list_tasks(user=user, db=db)
+            self.assertNotIn("tasks.user_sub IS NULL", str(db.execute.await_args.args[0]))
+        owner = {"sub": "owner-sub", "email": "owner@example.test"}
+        self.assertIs(await _require_task(db, "legacy", owner), legacy)
+        await list_tasks(user=owner, db=db)
+        self.assertIn("tasks.user_sub IS NULL", str(db.execute.await_args.args[0]))
+
     async def test_test_user_cannot_attach_owner_project_to_new_task(self):
         from app.api.tasks import create_task
         from app.models.schemas import TaskCreate

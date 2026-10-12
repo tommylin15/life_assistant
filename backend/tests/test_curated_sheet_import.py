@@ -124,7 +124,7 @@ class ReceiptTests(unittest.IsolatedAsyncioTestCase):
         value = record(verified_at_tpe="", evidence_summary="待核；活動日期有來源")
         client = AsyncMock()
         client.read.return_value = sheet(value)
-        client.receipt.return_value = True
+        client.receipts.return_value = [True]
         sessions = MagicMock()
         sessions.return_value.__aenter__.return_value = AsyncMock()
         with patch.dict(os.environ, {"LIFE_CURATED_SHEET_ID": SHEET_ID, "LIFE_CURATED_IMPORT_APPLY": "1"}), patch(
@@ -141,7 +141,7 @@ class ReceiptTests(unittest.IsolatedAsyncioTestCase):
         value = record()
         client = AsyncMock()
         client.read.return_value = sheet(value)
-        client.receipt.return_value = True
+        client.receipts.return_value = [True]
         sessions = MagicMock()
         sessions.return_value.__aenter__.return_value = AsyncMock()
         with patch.dict(os.environ, {"LIFE_CURATED_SHEET_ID": SHEET_ID, "LIFE_CURATED_IMPORT_APPLY": "1"}), patch(

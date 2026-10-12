@@ -10,6 +10,7 @@ class _FakeTaskApi implements TaskApi {
     List<Map<String, dynamic>>? tasks,
     List<Map<String, dynamic>>? projects,
     List<Map<String, dynamic>>? checklist,
+    this.projectAccessDenied = false,
   })  : tasks = tasks ?? [],
         projects = projects ?? [],
         checklist = checklist ?? [];
@@ -17,6 +18,7 @@ class _FakeTaskApi implements TaskApi {
   final List<Map<String, dynamic>> tasks;
   final List<Map<String, dynamic>> projects;
   final List<Map<String, dynamic>> checklist;
+  final bool projectAccessDenied;
   final List<String> completedTaskIds = [];
   final List<String> deletedTaskIds = [];
   final List<Map<String, dynamic>> updatedTaskBodies = [];
@@ -77,7 +79,10 @@ class _FakeTaskApi implements TaskApi {
       checklist;
 
   @override
-  Future<List<Map<String, dynamic>>> getProjects() async => projects;
+  Future<List<Map<String, dynamic>>> getProjects() async {
+    if (projectAccessDenied) throw StateError('API 403');
+    return projects;
+  }
 
   @override
   Future<List<Map<String, dynamic>>> getTasks() async => tasks;
@@ -150,6 +155,18 @@ Finder _dropdownAt(int index) =>
     find.byType(DropdownButtonFormField<String>).at(index);
 
 void main() {
+  testWidgets('secondary staging account can use tasks while projects are denied',
+      (tester) async {
+    final api = _FakeTaskApi(
+      projectAccessDenied: true,
+      tasks: [_task(id: 'tester-task', title: '一般帳號待辦')],
+    );
+    await _pumpTasksPage(tester, api);
+    expect(find.text('一般帳號待辦'), findsOneWidget);
+    expect(find.text('專案資料目前無法取得；待辦仍可使用，暫時不能選擇專案。'),
+        findsOneWidget);
+  });
+
   testWidgets('renders task metadata and filters completed tasks', (tester) async {
     final api = _FakeTaskApi(
       projects: [

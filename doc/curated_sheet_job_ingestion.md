@@ -1,6 +1,6 @@
 # 台灣活動｜獨立 Drive 交接資料 → Life 每日匯入契約
 
-**2026-10-10：匯入程式與 additive 0016 migration 已在工作樹實作；本機 PostgreSQL 併發去重／更版測試 PASS，真實 Sheet／GCP Job／ACK E2E 尚 NOT VERIFIED。** 探索規則本身以 Drive「台灣活動探索」正式 01～05 文件為準；這份文件僅規定 Life 如何消費交接資料。不要因文件寫好就宣稱 Life 已上線。
+**2026-10-12 現行契約：`verified_at_tpe` 一律選填，未知必須留空；不得以發現時間、批次時間、匯入時間冒充核證。** `handoff_updated_at_tpe` 仍是必要版本時點。2026-10-12 GAS read-only preflight 與 Job 啟動請求 PASS；當次 Cloud Run Execution 容器 Exit 1，實際入庫與回執 E2E 尚未通過。GitHub 匯入原始碼採選填契約並須由新 SHA 的 CI／部署及真實 DB/Sheet 讀回各自驗證。 探索規則本身以 Drive「台灣活動探索」正式 01～05 文件為準；這份文件僅規定 Life 如何消費交接資料。不要因文件寫好就宣稱 Life 已上線。
 
 ## 唯一交接來源與責任邊界
 
@@ -24,9 +24,9 @@
 
 - `event_key` 是穩定活動／優惠鍵、`parent_event_key` 是主題父鍵，`record_type` 區分 main／offer／session；`content_hash` 用規格化**業務欄位**計 SHA256，須排除交接狀態／回執／掃描批次，不因重跑而改變。這些鍵都不能由列號、run_id 或目前時間臨時產生。
 - **2026-10-10 使用者最新決策：交接表規格優先，Life DB/UI 配合，不回頭修改探索表或文件。** `content_hash` 是探索端提供的業務版本 SHA256；Life 驗證64位十六進位格式與全部業務欄位，不強迫探索端採用 Life 自訂的 JSON 序列化。PostgreSQL 同鍵同 hash 時必須再比對已保存的完整業務內容；同 hash 卻改內容拒收 ERROR，不能假稱 UNCHANGED。
-- 1／3／5 星是價值、不是可報名或有空位的證據；報名開放、截止、活動期間不能互相混用。未知費用／押金／福利不填零；未知時間留空，只有日期的來源不得補造午夜。所有可核定時點使用 ISO 8601 帶 +08:00。
+- 1／3／5 星是價值、不是可報名或有空位的證據；報名開放、截止、活動期間不能互相混用。未知費用／押金／福利不填零；未知時間留空，只有日期的來源不得補造午夜。`verified_at_tpe` **可空**：空白映射為 `None`／JSON `null`，不得補上 `handoff_updated_at_tpe` 或執行時間；若提供核證時點，必須是具 +08:00 的 ISO 8601 datetime。`handoff_updated_at_tpe` 是獨立且必填的交接版本時點。
 - **2026-10-10 更新：交接是「提前告知＋清楚標註待核」，不是所有條件完全核證才顯示。** 精選池已選入且具穩定鍵、具名活動、可回查官方／主辦授權／可靠來源，以及有據活動日或開報節點者，允許輸出 `READY`；不因 5★ 潛力待核、主辦索引頁暫不能直接開啟、即時名額未查、必要費用或退款細節未知而一律阻擋。1★／3★一般活動同樣可輸出，星等是價值而非證據等級。待核、時點衝突、資格限制、費用未知寫入 `evidence_summary`，Life UI 要保留並連回來源。**僅索引可見不能標示已開頁核證，也不能保證可報名或尚有名額。**
-- **最小排除條件：** 活動無法識別、無穩定 event_key、沒有任何可回查來源、已證實取消或確定過期者不交接；日期／開報資訊有矛盾，僅輸出有據且無衝突的欄位，其他留空並文字註記。未知費用／押金／福利、開報／截止、精確時分及核證時間均不得假填 0 或編造日期。Life importer 若將 `verified_at_tpe` 等未知欄位硬設為必填，屬 **IMPLEMENTATION GAP**，應調整 importer/schema，不能讓探索端假稱已核證。
+- **最小排除條件：** 活動無法識別、無穩定 event_key、沒有任何可回查來源、已證實取消或確定過期者不交接；日期／開報資訊有矛盾，僅輸出有據且無衝突的欄位，其他留空並文字註記。未知費用／押金／福利、開報／截止、精確時分及核證時間均不得假填 0 或編造日期。Life importer 接收 `verified_at_tpe` 空值是**正式契約與必要回歸測試**；若 runtime 仍因其空白拒收，應更新 Life 實際部署映像，不得讓探索端假稱已核證。
 - **獨立嚴格門檻保持：** event_key/content_hash 永久去重、資料版本一致性、DB commit 後 ACKED 仍要嚴格；內容核證門檻放寬不等於放寬資料完整性。
 
 ## 每日定期匯入與回執
@@ -43,4 +43,4 @@
 - **2026-10-11 排程責任移轉**：原 `.github/workflows/curated-handoff-daily.yml` 已移除每日 09:30 `schedule`，僅保留受 `LIFE_CURATED_HANDOFF_ENABLED=true` 控制的手動 `workflow_dispatch` 備援；此 workflow 僅確認正式 API 的唯一 100% Ready Revision、不可變 GHCR digest、既有 `life-assistant-free-events` Job 映像及固定 Sheet／command／apply 設定一致後，才允許人工觸發，**不再更新 Job 映像、環境變數或 command**。正式 V3 `.github/workflows/v3-release-ghcr.yml` 在 `promote=true`、正式健康／資料庫／OAuth、回滾演練及 Revision 保留步驟全部 PASS 後，由同一 deployer WIF 對現有 Job 做 image/command/args/固定 Sheet 和 apply 設定更新並 readback；不建立 Job、不執行匯入、不在 staging-only 發布更新。GAS 09:30 接收觸發需另行驗證最小 IAM、真實 DB／Sheet ACK 及開關才啟用；**移除 GitHub cron 不等於 GAS 已上線，目前定時接收暫停，禁止同時啟用雙入口**。
 - GitHub 現有 importer 若仍讀舊 `精選活動`／`pool狀態=selected`、僅 Sheets readonly 或使用 URL identity，應標 **IMPLEMENTATION GAP**。需求須經現況程式盤點、tests、CI、staging、PG、Flutter、Drive ACK 實際驗收；文件更新不等於 Job 已改造、授權、排程或部署。
 
-**2026-10-10 最新實況**：真實 Sheet已有3筆 READY，欄位／來源 payload 本機驗證 PASS；使用者明確授權的單表 Editor 分享及權限讀回 PASS。Life Job實際入庫／ACK、DB/UI E2E與排程尚待驗收；不把本機驗證當成上線。
+**2026-10-12 接續**：使用者的 GAS 讀 Job 與正式 live GHCR digest preflight 回報 `READY`，`jobs.run` 回報 `ACCEPTED_NOT_COMPLETED`；Execution `life-assistant-free-events-zc4xr` 最終 `CONDITION_FAILED`（Exit 1）。交接表仍有待處理 READY/ERROR；本次容器失敗的完整 Python traceback 尚未取得，不可推定只有核證時間造成。詳見 [CURRENT_STATE](CURRENT_STATE.md)。實際 Job 終態、PostgreSQL 及 Sheet ACK 仍須在修正版本部署後驗收。

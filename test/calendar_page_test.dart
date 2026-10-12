@@ -148,7 +148,7 @@ void main() {
 
   testWidgets('month view displays timed and all-day Google events', (tester) async {
     await _pump(tester, _FakeCalendarApi());
-    expect(find.text('我的 Google 行程'), findsOneWidget);
+    expect(find.text('日曆'), findsOneWidget);
     expect(find.text('會議'), findsOneWidget);
     expect(find.text('全天休假'), findsOneWidget);
     expect(find.text('地點：線上'), findsOneWidget);

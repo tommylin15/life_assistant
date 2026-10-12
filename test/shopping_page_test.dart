@@ -114,7 +114,7 @@ void main() {
     final api = _FakeShoppingApi();
     await _pump(tester, api);
 
-    expect(find.text('採買中的清單'), findsOneWidget);
+    expect(find.text('購物清單'), findsOneWidget);
     expect(find.text('生活用品'), findsOneWidget);
     expect(find.text('完成 0 / 1'), findsOneWidget);
     expect(find.text('牛奶'), findsOneWidget);

@@ -3,8 +3,9 @@
 ## 2026-10-12｜`verified_at_tpe` 選填、GAS 07:30 排程與接收真實驗收（最新）
 
 - **契約**：Drive 原生交接 Sheet「交接規格」已明定 `verified_at_tpe` 選填；來源未知時保持空白，Life 模型應轉成 `None`／JSON `null`，不得取代為批次／發現時間。提供核證時間時仍需 +08:00、不得冒填。此修正維持 event_key/content_hash、post-commit Sheet ACK 與其他資料驗證。
-- **2026-10-12 GAS 實測**：`previewLifeHandoffPrerequisites()` 回 `READY`；Job/live image canonical digest 一致（`sha256:19ed58af30bfd752c133a09bfb489cfeda4e75f3026fc06d94a1fe9a384884a8`），`runLifeHandoffDaily()` 回 `ACCEPTED_NOT_COMPLETED`，Operation `6c041ac8-847e-4885-9fd9-e745156622be`。當日 Cloud Run Execution `life-assistant-free-events-zc4xr` 執行完成卻 `CONDITION_FAILED`、1 task failed、Exit 1；GAS 不是失敗原因，Python 真正錯誤須以 Cloud Logging 判定，不能直接歸因於缺值。
+- **2026-10-12 GAS 實測與 root cause**：`previewLifeHandoffPrerequisites()` 回 `READY`；Job/live image canonical digest 一致（`sha256:19ed58af30bfd752c133a09bfb489cfeda4e75f3026fc06d94a1fe9a384884a8`），`runLifeHandoffDaily()` 回 `ACCEPTED_NOT_COMPLETED`，Operation `6c041ac8-847e-4885-9fd9-e745156622be`。Cloud Run Execution `life-assistant-free-events-zc4xr` Exit 1。使用者提供實際 stderr：先有 HandoffItem Pydantic 單欄驗證錯誤（截圖/片段未含失敗欄名，不能只推定 `verified_at_tpe`），舊 importer 在逐筆 `receipt()` 重新讀整表時又遭遇 `sheets_http_429`，未處理例外造成 Job 崩潰；GAS jobs.run 已接受不是容器失敗原因。
 - **Sheet 快照**：本次檢視共有 54 筆，其中 28 ACKED、20 ERROR、6 READY；20 ERROR 均為 `invalid_handoff_record`，且 `verified_at_tpe` 為空。此關聯不保證其餘所有欄位有效，也不證明新部署後已全部入庫。
+- **GitHub 修復（2026-10-12）**：`backend/scripts/import_curated_from_sheet.py` 已把 post-commit Sheet 回執改為固定 key/完整業務版本 fencing 的批次回寫（整批預讀＋bounded `values:batchUpdate`＋整批讀回），替代每列兩次整表讀取，429／暫時 5xx 採有界 Retry-After／exponential backoff；無法核對或仍限速則 FAIL/PARTIAL，不假稱 ACK。Pydantic 非敏感欄位路徑／錯誤類型會記於 Job logs，`verified_at_tpe` 未知繼續保持 null。回歸測試包含 bulk receipts、重試限速、重跑補 ACK、不同版本不誤 ACK；本輪 `7d00ef0` GitHub CI Backend 與 free-events-postgres jobs PASS，其他 CI job／完整 workflow 結論及正式映像／runtime/DB/Sheet 仍待各自驗證。
 - **交付關卡**：GitHub source/schema/test 修正不等於已部署。須確認此修正 commit 的 CI、正式 V3 release 與 Job digest 更新，取得新 Execution 與真實 PostgreSQL/Sheet ACK readback。已有同日 GAS ledger，不要盲目再次呼叫 Job；**GAS 每日 07:30（Asia/Taipei）是使用者最新確認的排程設定**，但 Apps Script 時間觸發器的存在／排程時刻／定時觸發紀錄仍 NOT VERIFIED，不可標 DONE。
 
 

@@ -45,15 +45,52 @@ def _fixed_staging_origin(request: Request) -> bool:
     )
 
 
+def is_staging_tester(user: dict) -> bool:
+    """Secondary user is never a privileged Owner."""
+    owner = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().casefold()
+    email = str(user.get("email", "")).strip().casefold()
+    return bool(owner and email and email != owner
+                and hashlib.sha256(email.encode("utf-8")).hexdigest()
+                in _STAGING_TESTER_EMAIL_DIGESTS)
+
+
 def _enforce_account_access(user: dict, *, staging: bool) -> None:
     """Grant signed-in access, never Owner authorization, to one stage tester."""
     owner = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().casefold()
     email = str(user.get("email", "")).strip().casefold()
     if not owner or email == owner:  # Preserve existing local-development behavior.
         return
-    if staging and hashlib.sha256(email.encode("utf-8")).hexdigest() in _STAGING_TESTER_EMAIL_DIGESTS:
+    if staging and is_staging_tester(user):
         return
     raise _http_error(403, "Account is not allowed")
+
+
+def _enforce_staging_tester_route(request: Request, user: dict) -> None:
+    """Fail closed until non-tenant-scoped legacy resources have owner columns.
+
+    Prior schema predates multi-user isolation for notes, habits, projects and
+    shopping. Explicit safe routes may be tested; unaudited endpoints must
+    not expose existing Owner rows to the secondary account.
+    """
+    if not is_staging_tester(user):
+        return
+    path = request.url.path.rstrip("/")
+    safe_exact = {
+        "/auth/me", "/auth/callback",
+        "/api/v1/ui/features", "/api/v1/me/ui-preferences",
+        "/api/v1/integrations/google/status",
+        "/api/v1/integrations/google/authorize",
+        "/api/v1/integrations/google/capabilities",
+    }
+    safe_prefixes = (
+        "/api/v1/tasks/",
+        "/api/v1/integrations/google/calendar",
+        "/api/v1/integrations/google/gmail",
+    )
+    if (path in safe_exact or path == "/api/v1/tasks"
+            or any(path.startswith(prefix) for prefix in safe_prefixes)):
+        return
+    raise _http_error(403, "Feature is unavailable for staging test account")
 
 
 
@@ -157,6 +194,7 @@ async def current_user(request: Request) -> dict:
     _enforce_account_access(user, staging=(
         session.startswith('id:staging:') and _fixed_staging_origin(request)
     ))
+    _enforce_staging_tester_route(request, user)
     return user
 
 

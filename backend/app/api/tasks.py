@@ -2,10 +2,10 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import current_user
+from app.api.auth import current_user, is_staging_tester
 from app.db.session import get_db
 from app.models.migration_support import ChecklistItem
 from app.models.schemas import (
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 async def _require_task(db: AsyncSession, task_id: str, user: dict) -> Task:
     task = await db.get(Task, task_id)
-    if not task or task.deleted_at is not None or (task.user_sub is not None and task.user_sub != user["sub"]):
+    if not task or task.deleted_at is not None or (task.user_sub != user["sub"] and (task.user_sub is not None or is_staging_tester(user))):
         raise HTTPException(404, "Task not found")
     return task
 
@@ -51,8 +51,12 @@ async def list_tasks(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    owner_filter = (Task.user_sub == user["sub"])
+    if not is_staging_tester(user):
+        owner_filter = or_(owner_filter, Task.user_sub.is_(None))
     result = await db.execute(
-        select(Task).where(Task.deleted_at.is_(None), (Task.user_sub.is_(None)) | (Task.user_sub == user["sub"])).order_by(Task.created_at.desc())
+        select(Task).where(Task.deleted_at.is_(None), owner_filter)
+        .order_by(Task.created_at.desc())
     )
     return result.scalars().all()
 
@@ -64,6 +68,8 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
     action_id: str | None = Header(default=None, alias=ACTION_ID_HEADER),
 ):
+    if is_staging_tester(user) and body.project_id is not None:
+        raise HTTPException(403, "Project links are unavailable for staging test account")
     reservation = await reserve_execution(
         db,
         user_sub=user["sub"],
@@ -80,7 +86,7 @@ async def create_task(
             raise HTTPException(409, "Previous idempotent Task result was deleted")
         return task
 
-    task = Task(id=str(uuid.uuid4()), **body.model_dump())
+    task = Task(id=str(uuid.uuid4()), user_sub=user["sub"], **body.model_dump())
     db.add(task)
     await commit_reserved_execution(
         db,
@@ -256,6 +262,8 @@ async def update_task(
     db: AsyncSession = Depends(get_db),
 ):
     task = await _require_task(db, task_id, user)
+    if is_staging_tester(user) and body.project_id is not None:
+        raise HTTPException(403, "Project links are unavailable for staging test account")
     execution = await start_execution(
         db,
         user_sub=user["sub"],

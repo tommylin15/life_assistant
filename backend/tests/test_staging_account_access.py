@@ -107,3 +107,27 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(auth.settings, "google_client_id", "client-id"):
             response = await auth.staging_login(request(auth.STAGING_HOST))
         self.assertIn("select_account", response.headers["location"])
+
+    async def test_staging_tester_denied_unisolated_private_apis(self):
+        with patch("app.api.auth._verify_id_token",
+                   new=AsyncMock(return_value=self.tester)):
+            for uri in ("/api/v1/notes", "/api/v1/projects",
+                        "/api/v1/habits", "/api/v1/shopping-lists",
+                        "/api/v1/drive/documents", "/api/v1/admin/feature-rollouts"):
+                req = request(auth.STAGING_HOST, "id:staging:google-token")
+                req.scope["path"] = uri
+                with self.subTest(uri=uri):
+                    with self.assertRaises(HTTPException) as denied:
+                        await auth.current_user(req)
+                    self.assertEqual(denied.exception.status_code, 403)
+
+    async def test_staging_tester_can_reach_safe_task_and_preference_routes(self):
+        with patch("app.api.auth._verify_id_token",
+                   new=AsyncMock(return_value=self.tester)):
+            for uri in ("/api/v1/ui/features", "/api/v1/me/ui-preferences",
+                        "/api/v1/tasks", "/api/v1/tasks/example-id",
+                        "/api/v1/integrations/google/status",
+                        "/api/v1/integrations/google/calendar"):
+                req = request(auth.STAGING_HOST, "id:staging:google-token")
+                req.scope["path"] = uri
+                self.assertEqual((await auth.current_user(req))["sub"], "tester-sub")

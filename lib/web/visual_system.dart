@@ -8,18 +8,22 @@ import '../app/theme/app_theme.dart';
 import 'session_identity.dart';
 import 'appearance_storage.dart';
 
-enum LifeVisualStyle { warm, fresh, focus }
+enum LifeVisualStyle { warm, fresh, focus, animated, pinkBubble }
 
 extension LifeVisualStyleLabel on LifeVisualStyle {
   String get label => switch (this) {
     LifeVisualStyle.warm => '暖心日常',
     LifeVisualStyle.fresh => '清新活力',
     LifeVisualStyle.focus => '知性專注',
+    LifeVisualStyle.animated => '動畫風格',
+    LifeVisualStyle.pinkBubble => '粉紅泡泡',
   };
   String get description => switch (this) {
     LifeVisualStyle.warm => '溫暖、舒適、有秩序',
     LifeVisualStyle.fresh => '明亮、愉快、喜歡探索',
     LifeVisualStyle.focus => '清晰、可靠、專心做事',
+    LifeVisualStyle.animated => '鮮明色塊、趣味圖形、輕量動態，無動漫人物',
+    LifeVisualStyle.pinkBubble => '柔和粉彩、圓潤泡泡與甜美卡片',
   };
 }
 
@@ -103,28 +107,38 @@ abstract class LifeVisualTheme {
       LifeVisualStyle.warm => dark ? const Color(0xFF181A18) : const Color(0xFFF7F3EA),
       LifeVisualStyle.fresh => dark ? const Color(0xFF142326) : const Color(0xFFF1FAFC),
       LifeVisualStyle.focus => dark ? const Color(0xFF161C25) : const Color(0xFFF3F5F8),
+      LifeVisualStyle.animated => dark ? const Color(0xFF14223B) : const Color(0xFFEAF7FF),
+      LifeVisualStyle.pinkBubble => dark ? const Color(0xFF2D1A2A) : const Color(0xFFFFF0F8),
     };
     final paper = switch (style) {
       LifeVisualStyle.warm => dark ? const Color(0xFF252824) : const Color(0xFFFFFCF6),
       LifeVisualStyle.fresh => dark ? const Color(0xFF1D3032) : Colors.white,
       LifeVisualStyle.focus => dark ? const Color(0xFF242D39) : Colors.white,
+      LifeVisualStyle.animated => dark ? const Color(0xFF213653) : Colors.white,
+      LifeVisualStyle.pinkBubble => dark ? const Color(0xFF402838) : const Color(0xFFFFFBFE),
     };
     final ink = dark ? const Color(0xFFF3F4F1) : const Color(0xFF263449);
     final primary = switch (style) {
       LifeVisualStyle.warm => dark ? const Color(0xFFA4B49C) : const Color(0xFF71896B),
       LifeVisualStyle.fresh => dark ? const Color(0xFF6CE1D0) : const Color(0xFF168D85),
       LifeVisualStyle.focus => dark ? const Color(0xFF98B6D7) : const Color(0xFF405F87),
+      LifeVisualStyle.animated => dark ? const Color(0xFF91BAFF) : const Color(0xFF3263CC),
+      LifeVisualStyle.pinkBubble => dark ? const Color(0xFFFFACD1) : const Color(0xFFAD3E78),
     };
     final secondary = switch (style) {
       LifeVisualStyle.warm => const Color(0xFFD99A67),
       LifeVisualStyle.fresh => const Color(0xFFFF806C),
       LifeVisualStyle.focus => const Color(0xFF7B92A8),
+      LifeVisualStyle.animated => const Color(0xFFE9A423),
+      LifeVisualStyle.pinkBubble => const Color(0xFFD47FB5),
     };
     final soft = Color.lerp(primary, paper, dark ? 0.83 : 0.86)!;
     final radius = switch (style) {
       LifeVisualStyle.warm => 16.0,
       LifeVisualStyle.fresh => 22.0,
       LifeVisualStyle.focus => 10.0,
+      LifeVisualStyle.animated => 24.0,
+      LifeVisualStyle.pinkBubble => 28.0,
     };
     final scheme = base.colorScheme.copyWith(
       primary: primary,
@@ -256,10 +270,17 @@ class LifeFeatureHeader extends ConsumerWidget {
       tint,
       dark ? .17 : style == LifeVisualStyle.fresh ? .14 : .09,
     )!;
-    final roundness = style == LifeVisualStyle.focus ? 12.0 : 20.0;
+    final roundness = style == LifeVisualStyle.focus ? 12.0 :
+        style == LifeVisualStyle.pinkBubble ? 30.0 :
+        style == LifeVisualStyle.animated ? 26.0 : 20.0;
     return Container(
       decoration: BoxDecoration(
-        color: background,
+        gradient: style == LifeVisualStyle.animated || style == LifeVisualStyle.pinkBubble
+            ? LinearGradient(colors: [background,
+                Color.lerp(background, Theme.of(context).colorScheme.secondary,
+                    dark ? .13 : .17)!]) : null,
+        color: style == LifeVisualStyle.animated || style == LifeVisualStyle.pinkBubble
+            ? null : background,
         borderRadius: BorderRadius.circular(roundness),
         border: Border.all(color: tint.withOpacity(.20)),
       ),
@@ -284,6 +305,13 @@ class LifeFeatureHeader extends ConsumerWidget {
             Text(feature.description, style: Theme.of(context).textTheme.bodySmall),
           ],
         )),
+        if (style == LifeVisualStyle.animated || style == LifeVisualStyle.pinkBubble)
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: Icon(style == LifeVisualStyle.animated
+                ? Icons.auto_awesome_rounded : Icons.bubble_chart_outlined,
+                size: 28, color: tint.withOpacity(.65)),
+          ),
       ]),
     );
   }

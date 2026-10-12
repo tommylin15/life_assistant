@@ -48,6 +48,16 @@ class HandoffContractTests(unittest.TestCase):
         self.assertEqual(item.curated().fee_kind, "unknown")
         self.assertNotIn("T", item.model_dump(mode="json")["start_at_tpe"])
 
+    def test_unknown_verification_time_is_optional_and_not_fabricated(self):
+        row = record(verified_at_tpe="", evidence_summary="來源索引待核；未取得核證時間")
+        item = validate_record(row)
+        self.assertIsNone(item.verified_at_tpe)
+        self.assertIsNone(item.model_dump(mode="json")["verified_at_tpe"])
+        self.assertIn("待核", item.evidence_summary)
+        # A supplied verification timestamp must still be genuinely Taipei offset-aware.
+        with self.assertRaisesRegex(ValueError, "handoff_time_requires_taipei_offset"):
+            validate_record(record(verified_at_tpe="2026-10-12T10:00:00Z"))
+
     def test_reject_unsafe_links_times_and_missing_parent(self):
         for updates in ({"official_url": "http://example.org/event"},
                         {"registration_open_at_tpe": "2026-10-12T10:00:00"},
@@ -106,6 +116,23 @@ class ReceiptTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await client.receipt(original, "INVALID", "invalid_handoff_record"))
         data = client.request.call_args.kwargs["json"]["data"][1]["values"]
         self.assertEqual(data, [["", "", "invalid_handoff_record"]])
+
+    async def test_blank_verification_time_reaches_db_and_success_receipt(self):
+        value = record(verified_at_tpe="", evidence_summary="待核；活動日期有來源")
+        client = AsyncMock()
+        client.read.return_value = sheet(value)
+        client.receipt.return_value = True
+        sessions = MagicMock()
+        sessions.return_value.__aenter__.return_value = AsyncMock()
+        with patch.dict(os.environ, {"LIFE_CURATED_SHEET_ID": SHEET_ID, "LIFE_CURATED_IMPORT_APPLY": "1"}), patch(
+                "scripts.import_curated_from_sheet.upsert_handoff", AsyncMock(return_value="CREATED")) as upsert:
+            result = await run_import(client, sessions)
+        upsert.assert_awaited_once()
+        self.assertIsNone(upsert.await_args.args[1].verified_at_tpe)
+        client.receipt.assert_awaited_once_with(value, "CREATED")
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(result["invalid"], 0)
+        self.assertEqual(result["status"], "PASS")
 
     async def test_committed_replay_repairs_failed_ack(self):
         value = record()

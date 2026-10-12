@@ -44,7 +44,8 @@ class ActivityActionTests(unittest.IsolatedAsyncioTestCase):
         db.execute.return_value = result
         await list_tasks({"sub":"other"}, db)
         sql = str(db.execute.call_args.args[0])
-        self.assertIn("tasks.user_sub IS NULL OR tasks.user_sub =", sql)
+        self.assertIn("tasks.user_sub =", sql)
+        self.assertNotIn("tasks.user_sub IS NULL", sql)
 
     async def test_task_retry_does_not_create_another_task(self):
         db = AsyncMock()

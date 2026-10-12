@@ -37,8 +37,8 @@ class ChecklistSchemaTests(unittest.TestCase):
 
 
 class ChecklistRouterTests(unittest.IsolatedAsyncioTestCase):
-    def _task(self, task_id: str = "task-1") -> Task:
-        task = Task(id=task_id, title="Task")
+    def _task(self, task_id: str = "task-1", user_sub: str = "u") -> Task:
+        task = Task(id=task_id, title="Task", user_sub=user_sub)
         task.deleted_at = None
         return task
 
@@ -91,7 +91,7 @@ class ChecklistRouterTests(unittest.IsolatedAsyncioTestCase):
 
         db = AsyncMock()
         db.add = MagicMock()
-        db.get.return_value = self._task()
+        db.get.return_value = self._task(user_sub="user-1")
         reservation = SimpleNamespace(is_replay=False)
         reserve = AsyncMock(return_value=reservation)
         commit = AsyncMock()
@@ -124,7 +124,7 @@ class ChecklistRouterTests(unittest.IsolatedAsyncioTestCase):
 
         db = AsyncMock()
         db.add = MagicMock()
-        db.get.return_value = self._task()
+        db.get.return_value = self._task(user_sub="user-1")
         max_result = MagicMock()
         max_result.scalar_one.return_value = 5
         db.execute.return_value = max_result

@@ -1,5 +1,6 @@
 import os
-from unittest import TestCase
+from unittest import TestCase, IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
 from app.api.google_integrations import (
@@ -202,3 +203,20 @@ class GoogleIntegrationContractTests(TestCase):
         body = GmailToProjectCreate()
         self.assertEqual(body.status, "active")
         self.assertIsNone(body.name)
+
+
+class GoogleTaskAccountIsolationTests(IsolatedAsyncioTestCase):
+    async def test_gmail_to_task_belongs_to_verified_account(self):
+        from app.api.google_integrations import gmail_message_to_task
+        db = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        with patch("app.api.google_integrations.start_execution", new_callable=AsyncMock), \
+             patch("app.api.google_integrations.finish_execution", new_callable=AsyncMock), \
+             patch("app.api.google_integrations._get_gmail_metadata",
+                   new=AsyncMock(return_value={"id": "gmail-1", "subject": "Personal email"})):
+            await gmail_message_to_task(
+                "gmail-1", GmailToTaskCreate(),
+                user={"sub": "stage-user-sub", "email": "test@example.test"}, db=db)
+        created = db.add.call_args.args[0]
+        self.assertEqual(created.user_sub, "stage-user-sub")

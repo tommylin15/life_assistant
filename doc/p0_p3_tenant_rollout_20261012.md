@@ -39,3 +39,8 @@ private notes/projects/habits/shopping, curated activity flow, UI/release.
 - Stage tester route permissions now match FastAPI route registration and constrain per-item writes to existing V3 save/task/calendar_info actions. Owner-only status, connector, batch import, admin and historical follow/reminder actions remain denied.
 - Admin feature-rollout policy is still enforced independently: ordinary users need enabled/all for opportunities/explore. No production account access or beta default is broadened.
 - Flutter shows distinct signed-in 401, not-enabled 403, and other fetch failures. CI+Staging readback, and authenticated user E2E remain separately verified.
+
+## 2026-10-13｜一般帳號活動載入與遺留資料安全檢查
+- User reports real staging account activity list loads successfully for fixed staging release SHA `fc9c94d216a7985b88eb6ffe494457102afea59b`; classified **PASS for authenticated page load only**. Bookmark/task/calendar action E2E remains NOT VERIFIED.
+- Security review: tenant visibility for NULL legacy rows now fails closed if `ALLOWED_GOOGLE_EMAIL` is empty/missing rather than interpreting every user as Owner. Explicitly owned records continue to be accessible only to matching Google sub. Added isolated unit coverage for empty, whitespace and missing owner config.
+- This does not promote the production Hosting site or weaken rollout gates; current staging verification and production promotion are independent.

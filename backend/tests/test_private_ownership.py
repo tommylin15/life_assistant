@@ -31,6 +31,25 @@ class TenantOwnershipTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("IS NULL", str(visible_clause(model, self.owner)))
             self.assertNotIn("IS NULL", str(visible_clause(model, self.alice)))
 
+    def test_missing_owner_configuration_never_exposes_legacy_rows(self):
+        # Regression: an empty/missing ALLOWED_GOOGLE_EMAIL must not make
+        # unowned pre-migration records readable by every signed-in account.
+        for env in ({"ALLOWED_GOOGLE_EMAIL": ""}, {"ALLOWED_GOOGLE_EMAIL": "   "}):
+            with patch.dict(os.environ, env):
+                for model in (Project, Note, Habit, ShoppingList):
+                    legacy = SimpleNamespace(user_sub=None)
+                    self.assertFalse(can_access(legacy, self.alice))
+                    self.assertFalse(can_access(legacy, self.owner))
+                    self.assertNotIn("IS NULL", str(visible_clause(model, self.alice)))
+                    self.assertNotIn("IS NULL", str(visible_clause(model, self.owner)))
+                    own_record = SimpleNamespace(user_sub=self.alice["sub"])
+                    self.assertTrue(can_access(own_record, self.alice))
+        with patch.dict(os.environ, {}, clear=True):
+            legacy = SimpleNamespace(user_sub=None)
+            for model in (Project, Note, Habit, ShoppingList):
+                self.assertFalse(can_access(legacy, self.owner))
+                self.assertNotIn("IS NULL", str(visible_clause(model, self.owner)))
+
     def test_tenants_cannot_see_each_others_rows(self):
         for model in (Project, Note, Habit, ShoppingList):
             alice_row = SimpleNamespace(user_sub=self.alice["sub"])

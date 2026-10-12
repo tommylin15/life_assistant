@@ -6,7 +6,9 @@ from sqlalchemy import or_
 
 def legacy_owner(user: dict) -> bool:
     configured = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().casefold()
-    return not configured or str(user.get("email", "")).strip().casefold() == configured
+    # Fail closed when Owner identity is not configured: legacy NULL rows
+    # must never become globally readable, including in misconfigured stages.
+    return bool(configured) and str(user.get("email", "")).strip().casefold() == configured
 
 
 def visible_clause(model, user: dict):

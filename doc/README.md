@@ -11,6 +11,7 @@
 | 現況與驗收 | [CURRENT_STATE](CURRENT_STATE.md) · [acceptance](acceptance.md) · [P0/P1 consolidated matrix](P0_P1_CONSOLIDATED_ACCEPTANCE_2026-10-10.md) |
 | 待辦及排序 | [todo](todo.md) · [phase1 delivery order](phase1_delivery_order.md)；[progress](progress.md) 僅提供入口 |
 | CI/CD V3 發布 | [ci_cd_ghcr_release_policy](ci_cd_ghcr_release_policy.md) · [deployment_runbook](deployment_runbook.md) · [release_checklist](release_checklist.md) |
+| **現行導覽與個人化（2026-10-12）** | **[導覽、個人化與五風格唯一核准規格](life_navigation_personalization_v2.md)**；取代舊 More 導覽及三風格限制 |
 | 通用產品及 UI | [spec](spec.md) · [ui](ui.md) · [design_system](design_system.md) · [future_product_enhancements](future_product_enhancements.md) |
 | 架構、schema、安全 | [architecture](architecture.md) · [data_model](data_model.md) · [project_structure](project_structure.md) · [migration_spec](migration_spec.md) · [security](security.md) · [permissions](permissions.md) |
 

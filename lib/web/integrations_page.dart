@@ -1,327 +1,97 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import 'api_client.dart';
 import 'browser_navigation.dart';
 
-final _googleStatusProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+final googleStatusProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   return ref.read(apiClientProvider).getGoogleIntegrationStatus();
 });
 
-final _googleCapabilitiesProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  return ref.read(apiClientProvider).getGoogleCapabilities();
-});
+/// Business users can authorize their own Google services from Personalize.
+/// Developer Tool/Action diagnostics are not exposed on this user panel.
+class GoogleConnectionsPanel extends ConsumerWidget {
+  const GoogleConnectionsPanel({super.key});
 
-class IntegrationsPage extends ConsumerStatefulWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(googleStatusProvider);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Google 服務連結', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 6),
+      Text('由目前登入的使用者授權自己的 Google 帳號；授權服務帳號須與 Life 登入帳號一致。',
+        style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: 14),
+      status.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, __) => Card(child: ListTile(
+          title: const Text('連線狀態暫時無法讀取'),
+          trailing: IconButton(
+            tooltip: '重新載入 Google 連線狀態',
+            onPressed: () => ref.invalidate(googleStatusProvider),
+            icon: const Icon(Icons.refresh),
+          ),
+        )),
+        data: (data) {
+          final services = (data['granted_services'] as List? ?? const []).cast<String>();
+          final email = data['email']?.toString() ?? '';
+          final serviceDetails = <(String, String, IconData)>[
+            ('calendar', 'Google Calendar', Icons.calendar_month_outlined),
+            ('gmail', 'Gmail', Icons.email_outlined),
+            ('drive', 'Google Drive', Icons.cloud_outlined),
+          ];
+          return Card(child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(children: [
+              if (email.isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.account_circle_outlined),
+                  title: Text(email),
+                  subtitle: const Text('目前 Google 服務授權帳號'),
+                ),
+              for (final service in serviceDetails)
+                ListTile(
+                  key: ValueKey('google-service-' + service.$1),
+                  leading: Icon(service.$3),
+                  title: Text(service.$2),
+                  subtitle: Text(services.contains(service.$1)
+                      ? '已授權（不代表 API 即時可用）' : '尚未授權'),
+                  trailing: OutlinedButton(
+                    onPressed: () => navigateBrowser(
+                      ref.read(apiClientProvider).googleAuthorizationUrl(service.$1),
+                    ),
+                    child: Text(services.contains(service.$1) ? '重新授權' : '授權'),
+                  ),
+                ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('更新連線狀態'),
+                  onPressed: () => ref.invalidate(googleStatusProvider),
+                ),
+              ),
+            ]),
+          ));
+        },
+      ),
+      const SizedBox(height: 10),
+      Text('Google Drive 的授權不等於同意將文件交給 AI 分析；Drive AI 個人同意設定目前暫不開放。',
+        style: Theme.of(context).textTheme.bodySmall),
+    ]);
+  }
+}
+
+/// Old /integrations deep links remain a supported alias in the router.
+class IntegrationsPage extends StatelessWidget {
   const IntegrationsPage({super.key});
 
   @override
-  ConsumerState<IntegrationsPage> createState() => _IntegrationsPageState();
-}
-
-class _IntegrationsPageState extends ConsumerState<IntegrationsPage> {
-  bool _verifyingReadConnections = false;
-  bool _ensuringDriveBridge = false;
-  Map<String, String>? _verificationResults;
-  String? _driveBridgeResult;
-
-  Future<void> _verifyReadConnections() async {
-    setState(() {
-      _verifyingReadConnections = true;
-      _verificationResults = null;
-    });
-
-    final client = ref.read(apiClientProvider);
-    final results = <String, String>{};
-
-    try {
-      final gmail = await client.getGmailMetadata(limit: 1);
-      results['Gmail'] = 'PASS（API 可讀，returned: ${gmail['returned'] ?? 0}）';
-    } catch (_) {
-      results['Gmail'] = 'FAIL（請重新授權或檢查 Gmail API）';
-    }
-
-    try {
-      final now = DateTime.now().toUtc();
-      final calendar = await client.getCalendarEvents(
-        timeMin: now,
-        timeMax: now.add(const Duration(days: 7)),
-        limit: 1,
-      );
-      results['Calendar'] =
-          'PASS（API 可讀，returned: ${calendar['returned'] ?? 0}）';
-    } catch (_) {
-      results['Calendar'] = 'FAIL（請重新授權或檢查 Calendar API）';
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _verifyingReadConnections = false;
-      _verificationResults = results;
-    });
-  }
-
-  Future<void> _ensureDriveBridge() async {
-    setState(() {
-      _ensuringDriveBridge = true;
-      _driveBridgeResult = null;
-    });
-
-    try {
-      final result = await ref.read(apiClientProvider).ensureDriveBridge();
-      final bridge = result['bridge'];
-      final bridgeName = bridge is Map ? bridge['name'] : null;
-      if (!mounted) return;
-      setState(() {
-        _driveBridgeResult =
-            'PASS（${bridgeName ?? 'ChatGPT_Bridge'} 已建立或確認可用）';
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _driveBridgeResult = 'FAIL（請重新授權 Drive 或檢查 Drive API）';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _ensuringDriveBridge = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final status = ref.watch(_googleStatusProvider);
-    final capabilities = ref.watch(_googleCapabilitiesProvider);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Google 整合'),
-        leading: IconButton(
-          tooltip: '返回待辦',
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/'),
-        ),
-        actions: [
-          IconButton(
-            tooltip: '重新整理',
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              ref.invalidate(_googleStatusProvider);
-              ref.invalidate(_googleCapabilitiesProvider);
-            },
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          status.when(
-            loading: () => const Card(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            ),
-            error: (error, _) => Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('Google 整合狀態讀取失敗：$error'),
-              ),
-            ),
-            data: (data) => _GoogleConnectionCard(
-              data: data,
-              onAuthorize: (service) => navigateBrowser(
-                ref.read(apiClientProvider).googleAuthorizationUrl(service),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text('API 驗收', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '授權完成後請做這兩項驗收；Gmail、Calendar、Drive 三項都顯示 PASS，才算 Google 整合完成。',
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '先驗證 Gmail 與 Calendar 唯讀 API；Drive 只有在你明確按下按鈕時，才會建立或確認 life_assistant/ChatGPT_Bridge。',
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: _verifyingReadConnections
-                        ? null
-                        : _verifyReadConnections,
-                    icon: _verifyingReadConnections
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.fact_check),
-                    label: Text(
-                      _verifyingReadConnections
-                          ? '驗證中…'
-                          : '驗證 Gmail / Calendar',
-                    ),
-                  ),
-                  if (_verificationResults != null) ...[
-                    const SizedBox(height: 12),
-                    for (final entry in _verificationResults!.entries)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text('${entry.key}: ${entry.value}'),
-                      ),
-                  ],
-                  const Divider(height: 24),
-                  FilledButton.tonalIcon(
-                    onPressed:
-                        _ensuringDriveBridge ? null : _ensureDriveBridge,
-                    icon: _ensuringDriveBridge
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.create_new_folder),
-                    label: Text(
-                      _ensuringDriveBridge
-                          ? '建立 / 確認中…'
-                          : '建立 / 確認 Drive Bridge',
-                    ),
-                  ),
-                  if (_driveBridgeResult != null) ...[
-                    const SizedBox(height: 12),
-                    Text('Drive: $_driveBridgeResult'),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text('目前 Tool / Action', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          capabilities.when(
-            loading: () => const LinearProgressIndicator(),
-            error: (error, _) => Text('能力清單讀取失敗：$error'),
-            data: (items) => Card(
-              child: Column(
-                children: items
-                    .map(
-                      (item) => ListTile(
-                        leading: Icon(
-                          item['risk'] == 'read' ? Icons.visibility : Icons.edit,
-                        ),
-                        title: Text(item['name'] as String),
-                        subtitle: Text(
-                          'risk: ${item['risk']} · confirmation: ${item['confirmation']}',
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GoogleConnectionCard extends StatelessWidget {
-  const _GoogleConnectionCard({required this.data, required this.onAuthorize});
-
-  final Map<String, dynamic> data;
-  final ValueChanged<String> onAuthorize;
-
-  @override
-  Widget build(BuildContext context) {
-    final granted = (data['granted_services'] as List? ?? const []).cast<String>();
-    final connected = data['connected'] == true;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(connected ? Icons.cloud_done : Icons.cloud_off),
-                const SizedBox(width: 8),
-                Text(
-                  connected ? 'Google 已連線' : 'Google 尚未授權服務',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ],
-            ),
-            if (data['email'] != null) ...[
-              const SizedBox(height: 8),
-              Text(data['email'] as String),
-            ],
-            const SizedBox(height: 12),
-            Text(
-              granted.isEmpty
-                  ? '目前沒有 Gmail / Calendar / Drive scope'
-                  : '已授權：${granted.join('、')}',
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _AuthorizeButton(
-                  service: 'gmail',
-                  label: granted.contains('gmail') ? '重新授權 Gmail' : '授權 Gmail',
-                  onPressed: onAuthorize,
-                ),
-                _AuthorizeButton(
-                  service: 'calendar',
-                  label: granted.contains('calendar')
-                      ? '重新授權 Calendar'
-                      : '授權 Calendar',
-                  onPressed: onAuthorize,
-                ),
-                _AuthorizeButton(
-                  service: 'drive',
-                  label: granted.contains('drive') ? '重新授權 Drive' : '授權 Drive',
-                  onPressed: onAuthorize,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              '第一批只開 Gmail 唯讀、Calendar event 與 Drive app-file 權限；不包含寄信、全 Drive 或刪除工具。',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AuthorizeButton extends StatelessWidget {
-  const _AuthorizeButton({
-    required this.service,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final String service;
-  final String label;
-  final ValueChanged<String> onPressed;
-
-  @override
-  Widget build(BuildContext context) => FilledButton.tonal(
-        onPressed: () => onPressed(service),
-        child: Text(label),
-      );
+  Widget build(BuildContext context) => const Scaffold(
+    appBar: null,
+    body: SafeArea(child: SingleChildScrollView(
+      padding: EdgeInsets.all(16),
+      child: GoogleConnectionsPanel(),
+    )),
+  );
 }

@@ -32,20 +32,6 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage> {
     final wide = MediaQuery.sizeOf(context).width >= 720;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('專案'),
-        actions: [
-          if (wide)
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: FilledButton.icon(
-                onPressed: data == null ? null : () => _openEditor(),
-                icon: const Icon(Icons.create_new_folder_outlined),
-                label: const Text('新增專案'),
-              ),
-            ),
-        ],
-      ),
       body: workspace.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => _ProjectErrorState(
@@ -78,9 +64,16 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage> {
         constraints: const BoxConstraints(maxWidth: 1040),
         child: CustomScrollView(
           slivers: [
-            const SliverPadding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-              sliver: SliverToBoxAdapter(child: LifeFeatureHeader(feature: LifeVisualFeature.projects)),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              sliver: SliverToBoxAdapter(child: LifeFeatureHeader(
+                feature: LifeVisualFeature.projects,
+                trailing: MediaQuery.sizeOf(context).width >= 720
+                  ? FilledButton.icon(
+                      onPressed: _openEditor,
+                      icon: const Icon(Icons.create_new_folder_outlined),
+                      label: const Text('新增專案'))
+                  : null)),
             ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),

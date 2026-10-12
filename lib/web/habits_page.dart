@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../app/design_system/app_components.dart';
 import '../app/theme/app_tokens.dart';
 import 'habit_api.dart';
+import 'visual_system.dart';
 
 final _habitsProvider = FutureProvider<_HabitWorkspace>((ref) async {
   final api = ref.read(habitApiProvider);
@@ -41,20 +42,6 @@ class _HabitsPageState extends ConsumerState<HabitsPage> {
     final wide = MediaQuery.sizeOf(context).width >= AppBreakpoints.pageActions;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('習慣'),
-        actions: [
-          if (wide)
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.lg),
-              child: FilledButton.icon(
-                onPressed: workspace == null ? null : () => _edit(),
-                icon: const Icon(Icons.add),
-                label: const Text('新增習慣'),
-              ),
-            ),
-        ],
-      ),
       body: value.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => AppStatePanel(
@@ -81,7 +68,12 @@ class _HabitsPageState extends ConsumerState<HabitsPage> {
 
   Widget _content(_HabitWorkspace workspace) {
     if (workspace.habits.isEmpty) {
-      return AppStatePanel(
+      return Column(children: [
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: LifeFeatureHeader(feature: LifeVisualFeature.habits),
+        ),
+        Expanded(child: AppStatePanel(
         title: '還沒有習慣',
         message: '建立週期與提醒，完成後留下紀錄。',
         icon: const Icon(Icons.repeat_rounded),
@@ -90,7 +82,8 @@ class _HabitsPageState extends ConsumerState<HabitsPage> {
           icon: const Icon(Icons.add),
           label: const Text('新增習慣'),
         ),
-      );
+      )),
+      ]);
     }
 
     return RefreshIndicator(
@@ -105,16 +98,15 @@ class _HabitsPageState extends ConsumerState<HabitsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  '維持中的習慣',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                LifeFeatureHeader(
+                  feature: LifeVisualFeature.habits,
+                  trailing: MediaQuery.sizeOf(context).width >= AppBreakpoints.pageActions
+                    ? FilledButton.icon(
+                        onPressed: () => _edit(),
+                        icon: const Icon(Icons.add),
+                        label: const Text('新增習慣')) : null,
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '記錄週期、提醒與每次完成時間。',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: AppSpacing.md),
                 for (final habit in workspace.habits) ...[
                   _HabitCard(
                     habit: habit,

@@ -7,6 +7,7 @@ import 'drive_api.dart';
 import 'drive_note_actions.dart';
 import 'google_drive_picker.dart';
 import 'note_api.dart';
+import 'visual_system.dart';
 
 class DrivePage extends ConsumerStatefulWidget {
   const DrivePage({super.key});
@@ -204,22 +205,6 @@ class _DrivePageState extends ConsumerState<DrivePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Google Drive 智能整理'),
-        actions: [
-          IconButton(
-            key: const ValueKey('add-drive-files'),
-            tooltip: '加入 Drive 檔案',
-            onPressed: _addingDocuments ? null : _addDriveFiles,
-            icon: _addingDocuments
-                ? const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.add_to_drive),
-          ),
-        ],
-      ),
       body: _buildBody(context),
     );
   }
@@ -246,13 +231,19 @@ class _DrivePageState extends ConsumerState<DrivePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AppSectionCard(
-              title: '智能整理',
-              subtitle: '檢視標籤與相關筆記建議；AI 失敗不會回滾 Drive 或專案關聯。',
-              child: const Text(
-                '所有建議都沿用 provider-agnostic contract；相關筆記只有在你接受後才建立正式關聯。',
+            LifeFeatureHeader(
+              feature: LifeVisualFeature.drive,
+              trailing: IconButton(
+                key: const ValueKey('add-drive-files'),
+                tooltip: '加入 Drive 檔案',
+                onPressed: _addingDocuments ? null : _addDriveFiles,
+                icon: _addingDocuments
+                  ? const SizedBox.square(dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.add_to_drive),
               ),
             ),
+            const SizedBox(height: AppSpacing.md),
             if (_settings['allow_document_content'] == false) ...[
               const SizedBox(height: AppSpacing.lg),
               AppSectionCard(

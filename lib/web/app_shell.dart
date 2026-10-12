@@ -143,6 +143,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: 48,
         title: const Text('Life Assistant'),
         leading: desktop
             ? IconButton(

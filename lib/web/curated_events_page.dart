@@ -174,12 +174,17 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(opportunity ? '限時機會' : '活動探索'),
-        actions: [IconButton(tooltip: '重新整理', onPressed: _refreshPages,
-          icon: const Icon(Icons.refresh))]),
       body: Center(child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1160),
-        child: ListView(padding: const EdgeInsets.all(16), children: [
+        child: RefreshIndicator(
+          onRefresh: () async {
+            _refreshPages();
+            ref.invalidate(curatedOptionsProvider);
+            await ref.read(curatedListProvider(_query(0)).future);
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16), children: [
           LifeFeatureHeader(feature: opportunity
             ? LifeVisualFeature.opportunities : LifeVisualFeature.explore),
           const SizedBox(height: 12),
@@ -286,7 +291,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
               onPressed: () => setState(() => offsets.add(nextOffset!)),
               icon: const Icon(Icons.expand_more),
               label: const Text('再看 10 筆'))),
-        ]),
+        ])),
       )),
     );
   }

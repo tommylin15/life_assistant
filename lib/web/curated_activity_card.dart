@@ -243,7 +243,7 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
         for (final child in widget.items)
           ExpansionTile(
             key: ValueKey('activity-detail-${child['identity_key']}'),
-            initiallyExpanded: widget.items.length == 1,
+            initiallyExpanded: false,
             title: Text(widget.items.length == 1 ? '詳情與個人操作' :
               (child['title']?.toString() ?? '相關場次')),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),

@@ -32,8 +32,11 @@ void main() {
     second.dispose();
   });
 
-  testWidgets('all six feature identities use real Flutter widgets', (tester) async {
+  testWidgets('all feature identities share one compact header size', (tester) async {
+    double? standardHeight;
     for (final feature in LifeVisualFeature.values) {
+      tester.view.physicalSize = const Size(375, 812);
+      tester.view.devicePixelRatio = 1;
       await tester.pumpWidget(ProviderScope(
         child: MaterialApp(
           theme: LifeVisualTheme.build(LifeVisualStyle.focus, Brightness.light),
@@ -45,6 +48,12 @@ void main() {
       expect(find.text(feature.title), findsOneWidget);
       expect(find.text(feature.description), findsOneWidget);
       expect(find.byIcon(feature.icon), findsOneWidget);
+      final height = tester.getSize(find.byType(LifeFeatureHeader)).height;
+      standardHeight ??= height;
+      expect(height, standardHeight, reason: '${feature.name} differs from other feature headers');
+      expect(height, lessThanOrEqualTo(80));
     }
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
   });
 }

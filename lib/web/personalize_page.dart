@@ -318,7 +318,6 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
     final prefs = ref.watch(uiPreferencesProvider);
     final flags = ref.watch(effectiveFeaturesProvider).asData?.value;
     return Scaffold(
-      appBar: AppBar(title: const Text('個人化')),
       body: prefs.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => const Center(child: Text('無法取得介面偏好')),
@@ -328,6 +327,8 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 900),
               child: ListView(padding: const EdgeInsets.all(16), children: [
+                const LifeFeatureHeader(feature: LifeVisualFeature.personalize),
+                const SizedBox(height: 12),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: SegmentedButton<String>(

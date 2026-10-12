@@ -161,6 +161,39 @@ void main() {
     expect(find.textContaining('1 筆'), findsOneWidget);
   });
 
+  testWidgets('category tabs scroll horizontally and filter notes without sidebar', (tester) async {
+    final api = _FakeNoteApi(notes: [
+      {..._note(id: 'n1', title: '京都旅行', body: '旅行紀錄'), 'category': '旅遊'},
+      {..._note(id: 'n2', title: '團隊會議', body: '會議紀錄'), 'category': '工作'},
+      _note(id: 'n3', title: '未分類隨記', body: '靈感'),
+      {..._note(id: 'n4', title: '運動紀錄', body: '運動'), 'category': '健康'},
+      {..._note(id: 'n5', title: '書單紀錄', body: '閱讀'), 'category': '閱讀'},
+      {..._note(id: 'n6', title: '生活整理', body: '整理'), 'category': '生活'},
+    ]);
+    await _pumpNotesPage(tester, api, size: const Size(375, 812));
+
+    expect(find.byKey(const ValueKey('note-category-strip')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-category-all')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-category-uncategorized')), findsOneWidget);
+    expect(find.byKey(const ValueKey('note-categories-open')), findsNothing);
+    expect(find.text('團隊會議'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('note-category-uncategorized')));
+    await tester.pumpAndSettle();
+    expect(find.text('未分類隨記'), findsOneWidget);
+    expect(find.text('團隊會議'), findsNothing);
+
+    // The category row scrolls; categories do not wrap to a second line.
+    await tester.drag(find.byKey(const ValueKey('note-category-strip')),
+        const Offset(-300, 0));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('note-category-旅遊')));
+    await tester.tap(find.byKey(const ValueKey('note-category-旅遊')));
+    await tester.pumpAndSettle();
+    expect(find.text('京都旅行'), findsOneWidget);
+    expect(find.text('未分類隨記'), findsNothing);
+  });
+
   testWidgets('creates markdown note and normalizes tags', (tester) async {
     final api = _FakeNoteApi(
       projects: [

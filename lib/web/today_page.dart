@@ -39,64 +39,34 @@ class TodayPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final prefs = ref.watch(uiPreferencesProvider).asData?.value;
-    final visualStyle = ref.watch(lifeAppearanceProvider).style;
     final cards = (prefs?['home_cards'] as List?)?.cast<String>() ??
         ['tasks', 'calendar', 'attention', 'habits', 'events', 'projects'];
     final flags = ref.watch(effectiveFeaturesProvider).asData?.value;
     final data = ref.watch(_todayDataProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('今天'), actions: [
-        IconButton(
-          tooltip: '重新整理', icon: const Icon(Icons.refresh),
-          onPressed: () => ref.invalidate(_todayDataProvider),
-        ),
-      ]),
       body: data.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => const Center(child: Text('首頁資料暫時無法讀取')),
+        error: (_, __) => Center(child: TextButton.icon(
+          onPressed: () => ref.invalidate(_todayDataProvider),
+          icon: const Icon(Icons.refresh),
+          label: const Text('首頁資料暫時無法讀取，點此重試'))),
         data: (snapshot) => Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1060),
-            child: ListView(padding: const EdgeInsets.all(16), children: [
-              AnimatedContainer(
-                duration: MediaQuery.of(context).disableAnimations
-                    ? Duration.zero : const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: LinearGradient(colors: [
-                    (visualStyle == LifeVisualStyle.pinkBubble ||
-                     visualStyle == LifeVisualStyle.animated)
-                      ? Theme.of(context).colorScheme.secondary.withValues(alpha: .25)
-                      : Theme.of(context).colorScheme.primary.withValues(alpha: .12),
-                    Theme.of(context).colorScheme.surface,
-                  ]),
-                ),
-                child: Row(children: [
-                  Icon(visualStyle == LifeVisualStyle.animated
-                      ? Icons.auto_awesome_rounded
-                      : visualStyle == LifeVisualStyle.pinkBubble
-                          ? Icons.bubble_chart_outlined : Icons.wb_sunny_outlined,
-                    size: 32,
-                    color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 14),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('今日重點', style: Theme.of(context).textTheme.headlineMedium),
-                      const SizedBox(height: 4),
-                      Text('生活的每一步，都能在這裡找到。',
-                        style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  )),
-                ]),
-              ),
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(_todayDataProvider);
+                await ref.read(_todayDataProvider.future);
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16), children: [
+              const LifeFeatureHeader(feature: LifeVisualFeature.today),
               const SizedBox(height: 12),
               for (final key in cards)
                 if (flags?[key] ?? true) _card(context, ref, key, snapshot),
-            ]),
+            ])),
           ),
         ),
       ),

@@ -110,6 +110,9 @@ void main() {
     // Both the compact date chip and detail text intentionally include the
     // same deadline; verify each exact label instead of ambiguous contains.
     expect(find.text('截止：2001-01-07'), findsOneWidget);
+    expect(find.text('報名截止：2001-01-07'), findsNothing);
+    await tester.tap(find.text('詳情與個人操作'));
+    await tester.pumpAndSettle();
     expect(find.text('報名截止：2001-01-07'), findsOneWidget);
     expect(find.text('已結束／截止'), findsOneWidget);
   });
@@ -130,6 +133,11 @@ void main() {
     )))));
     await tester.pumpAndSettle();
     expect(api.calls, isEmpty);
+    expect(find.text('詳情與個人操作'), findsOneWidget);
+    expect(find.text('前往網址'), findsNothing);
+    await tester.tap(find.text('詳情與個人操作'));
+    await tester.pumpAndSettle();
+    expect(find.text('前往網址'), findsOneWidget);
     expect(find.text('測試活動'), findsWidgets);
     expect(find.textContaining('★'), findsNothing);
     await tester.tap(find.byTooltip('收藏'));

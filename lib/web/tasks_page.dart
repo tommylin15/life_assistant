@@ -43,20 +43,6 @@ class _TasksPageState extends ConsumerState<TasksPage> {
     final wide = MediaQuery.sizeOf(context).width >= 720;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('待辦'),
-        actions: [
-          if (wide)
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: FilledButton.icon(
-                onPressed: data == null ? null : () => _openEditor(data),
-                icon: const Icon(Icons.add),
-                label: const Text('新增待辦'),
-              ),
-            ),
-        ],
-      ),
       body: workspace.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => _TaskErrorState(
@@ -89,12 +75,19 @@ class _TasksPageState extends ConsumerState<TasksPage> {
         constraints: const BoxConstraints(maxWidth: 1040),
         child: CustomScrollView(
           slivers: [
-            const SliverPadding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-              sliver: SliverToBoxAdapter(child: LifeFeatureHeader(feature: LifeVisualFeature.tasks)),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              sliver: SliverToBoxAdapter(child: LifeFeatureHeader(
+                feature: LifeVisualFeature.tasks,
+                trailing: MediaQuery.sizeOf(context).width >= 720
+                  ? FilledButton.icon(
+                      onPressed: () => _openEditor(workspace),
+                      icon: const Icon(Icons.add),
+                      label: const Text('新增待辦'))
+                  : null)),
             ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 7, 16, 4),
               sliver: SliverToBoxAdapter(
                 child: _TaskOverview(
                   activeCount: active,
@@ -358,66 +351,49 @@ class _TasksPageState extends ConsumerState<TasksPage> {
   }
 }
 
+/// Reference-only counts; avoid a large decorative statistics card.
 class _TaskOverview extends StatelessWidget {
   const _TaskOverview({
-    required this.activeCount,
-    required this.todayCount,
-    required this.overdueCount,
+    required this.activeCount, required this.todayCount, required this.overdueCount,
   });
-
   final int activeCount;
   final int todayCount;
   final int overdueCount;
 
   @override
-  Widget build(BuildContext context) {
-    final errorColor = overdueCount > 0 ? Theme.of(context).colorScheme.error : null;
-    return Card(
-      color: Theme.of(context).colorScheme.primary.withValues(alpha: .06),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 20,
-          runSpacing: 12,
-          children: [
-            _OverviewMetric(label: '進行中', value: activeCount),
-            _OverviewMetric(label: '今天', value: todayCount),
-            _OverviewMetric(label: '逾期', value: overdueCount, color: errorColor),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8, runSpacing: 8, children: [
+      _OverviewMetric(label: '進行中', value: activeCount),
+      _OverviewMetric(label: '今天', value: todayCount),
+      _OverviewMetric(
+        label: '逾期', value: overdueCount,
+        color: overdueCount > 0 ? Theme.of(context).colorScheme.error : null),
+    ],
+  );
 }
 
 class _OverviewMetric extends StatelessWidget {
-  const _OverviewMetric({
-    required this.label,
-    required this.value,
-    this.color,
-  });
-
+  const _OverviewMetric({required this.label, required this.value, this.color});
   final String label;
   final int value;
   final Color? color;
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 110,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$value',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: color),
-          ),
-          const SizedBox(height: 2),
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.primary.withValues(alpha: .06),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(label, style: Theme.of(context).textTheme.labelSmall),
+        const SizedBox(width: 6),
+        Text('$value', style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700, color: color)),
+      ]),
+    ),
+  );
 }
 
 class _TaskCard extends StatelessWidget {

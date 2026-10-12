@@ -43,32 +43,6 @@ class _NotesPageState extends ConsumerState<NotesPage> {
     final workspace = value.asData?.value;
     final wide = MediaQuery.sizeOf(context).width >= 720;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('筆記'),
-        actions: [
-          IconButton(
-            key: const ValueKey('note-categories-open'),
-            tooltip: '筆記分類',
-            icon: const Icon(Icons.folder_open_outlined),
-            onPressed: workspace == null ? null : () => showModalBottomSheet<void>(
-              context: context,
-              builder: (sheet) => SafeArea(
-                child: SizedBox(height: 400,
-                  child: _categoryMenu(workspace, closeOnTap: sheet)),
-              ),
-            ),
-          ),
-          if (wide)
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: FilledButton.icon(
-                onPressed: workspace == null ? null : () => _edit(workspace),
-                icon: const Icon(Icons.note_add_outlined),
-                label: const Text('新增筆記'),
-              ),
-            ),
-        ],
-      ),
       body: value.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => _ErrorState(error: error, onRetry: _reload),
@@ -87,36 +61,25 @@ class _NotesPageState extends ConsumerState<NotesPage> {
   Widget _content(_Workspace workspace) {
     final shown = workspace.notes.where((note) => _categoryFilter == null ||
         (note.category ?? '') == _categoryFilter).toList();
-    return Row(children: [
-      if (MediaQuery.sizeOf(context).width >= 900)
-        SizedBox(width: 192, child: _categoryMenu(workspace)),
-      Expanded(child: Align(
+    return Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1040),
           child: CustomScrollView(
             slivers: [
-              const SliverPadding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-                sliver: SliverToBoxAdapter(child: LifeFeatureHeader(feature: LifeVisualFeature.notes)),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                sliver: SliverToBoxAdapter(child: LifeFeatureHeader(
+                    feature: LifeVisualFeature.notes,
+                    trailing: MediaQuery.sizeOf(context).width >= 720
+                      ? FilledButton.icon(
+                          onPressed: () => _edit(workspace),
+                          icon: const Icon(Icons.note_add_outlined),
+                          label: const Text('新增筆記')) : null)),
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                sliver: SliverToBoxAdapter(child: Card(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: .07),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(children: [
-                      const Icon(Icons.lightbulb_outline, size: 28),
-                      const SizedBox(width: 12),
-                      const Expanded(child: Text('想到什麼，就先記下來。')),
-                      OutlinedButton.icon(
-                        onPressed: () => _edit(workspace),
-                        icon: const Icon(Icons.edit_note),
-                        label: const Text('隨手寫')),
-                    ]),
-                  ),
-                )),
+                padding: const EdgeInsets.fromLTRB(16, 9, 16, 2),
+                sliver: SliverToBoxAdapter(child: _categoryTabs(workspace)),
               ),
               SliverPadding(
                 padding: const EdgeInsets.all(16),
@@ -229,42 +192,38 @@ class _NotesPageState extends ConsumerState<NotesPage> {
             ],
           ),
         ),
-      )),
-    ]);
+      );
   }
 
-  Widget _categoryMenu(_Workspace workspace, {BuildContext? closeOnTap}) {
-    final categories = workspace.notes.map((note) => note.category)
-        .whereType<String>().toSet().toList()..sort();
-    void choose(String? category) {
-      setState(() => _categoryFilter = category);
-      if (closeOnTap != null) Navigator.of(closeOnTap).pop();
-    }
-    return ListView(children: [
-      const ListTile(title: Text('筆記分類')),
-      ListTile(
-        key: const ValueKey('note-category-all'),
-        leading: const Icon(Icons.all_inbox_outlined),
-        title: const Text('全部筆記'),
-        selected: _categoryFilter == null,
-        onTap: () => choose(null),
+  Widget _categoryTabs(_Workspace workspace) {
+    final categories = workspace.notes.map((note) => note.category?.trim())
+        .whereType<String>().where((name) => name.isNotEmpty)
+        .toSet().toList()..sort();
+    Widget tab(String label, String? value, Key key) => ChoiceChip(
+      key: key,
+      label: Text(label, style: Theme.of(context).textTheme.labelSmall),
+      selected: _categoryFilter == value,
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      onSelected: (_) => setState(() => _categoryFilter = value),
+    );
+    return SizedBox(
+      height: 43,
+      child: SingleChildScrollView(
+        key: const ValueKey('note-category-strip'),
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 1),
+        child: Row(children: [
+          tab('全部', null, const ValueKey('note-category-all')),
+          const SizedBox(width: 6),
+          tab('未分類', '', const ValueKey('note-category-uncategorized')),
+          for (final category in categories) ...[
+            const SizedBox(width: 6),
+            tab(category, category, ValueKey('note-category-$category')),
+          ],
+        ]),
       ),
-      ListTile(
-        key: const ValueKey('note-category-uncategorized'),
-        leading: const Icon(Icons.folder_off_outlined),
-        title: const Text('未分類'),
-        selected: _categoryFilter == '',
-        onTap: () => choose(''),
-      ),
-      for (final category in categories)
-        ListTile(
-          key: ValueKey('note-category-$category'),
-          leading: const Icon(Icons.folder_outlined),
-          title: Text(category),
-          selected: _categoryFilter == category,
-          onTap: () => choose(category),
-        ),
-    ]);
+    );
   }
 
   void _applySearch() => setState(() => _query = _search.text.trim());

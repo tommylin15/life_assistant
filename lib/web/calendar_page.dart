@@ -205,25 +205,6 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     final wide = MediaQuery.sizeOf(context).width >= AppBreakpoints.pageActions;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('日曆'),
-        actions: [
-          IconButton(
-            tooltip: '重新整理行程',
-            onPressed: _busy ? null : _reload,
-            icon: const Icon(Icons.refresh),
-          ),
-          if (wide && workspace?.connected == true)
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.lg),
-              child: FilledButton.icon(
-                onPressed: _busy ? null : () => _edit(),
-                icon: const Icon(Icons.add),
-                label: const Text('新增行程'),
-              ),
-            ),
-        ],
-      ),
       floatingActionButton: !wide && workspace?.connected == true
           ? FloatingActionButton(
               tooltip: '新增行程',
@@ -277,13 +258,14 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const LifeFeatureHeader(feature: LifeVisualFeature.calendar),
+                LifeFeatureHeader(feature: LifeVisualFeature.calendar,
+                  trailing: MediaQuery.sizeOf(context).width >= AppBreakpoints.pageActions
+                    ? FilledButton.icon(
+                        onPressed: _busy ? null : () => _edit(),
+                        icon: const Icon(Icons.add),
+                        label: const Text('新增行程')) : null),
                 const SizedBox(height: AppSpacing.lg),
-                Text('我的 Google 行程',
-                    style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: AppSpacing.xs),
-                const Text('依月份瀏覽行程；選擇日期可查看當天事件。'),
-                const SizedBox(height: AppSpacing.lg),
+
                 Wrap(
                   spacing: AppSpacing.sm,
                   runSpacing: AppSpacing.sm,
@@ -305,6 +287,11 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                       onPressed: _chooseDay,
                       icon: const Icon(Icons.event_outlined),
                       label: Text('選擇日期 ' + _dayText(_selectedDay)),
+                    ),
+                    IconButton(
+                      tooltip: '重新讀取目前月份的 Google 行程',
+                      onPressed: _busy ? null : _reload,
+                      icon: const Icon(Icons.sync_outlined),
                     ),
                     TextButton(
                       onPressed: () {

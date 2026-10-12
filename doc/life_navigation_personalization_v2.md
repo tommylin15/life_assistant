@@ -42,3 +42,20 @@
 ## 實作與驗收
 
 涉及 `lib/web/app_shell.dart`、`personalize_page.dart`、`today_page.dart`、`web_app.dart`、`integrations_page.dart`、`visual_system.dart`、必要的 UI/Widget tests；Backend 憑證及 Google OAuth 不因改 UI 而重新發明。先測 Flutter analyze／test／web build，再 GitHub 4 jobs CI，自動 V3 staging-only，核對固定 staging SHA、API rewrite 和 Google 自動化驗收。**只有程式提交不能標 DONE；未驗證的層維持 NOT VERIFIED。**
+
+
+## 2026-10-12｜主頁標題、刷新與資訊密度修正
+
+- AppShell 只提供單一全域導覽工具列；主功能頁不再各自疊一層純文字 AppBar。每頁以首頁「今日重點」或各功能 LifeFeatureHeader／習慣、購物清單的內容標題作為唯一主標題。表單、子頁、編輯對話可保留其獨立頁名與返回操作。
+- 首頁「今日重點」是輕量小型標題列，不應以大面積純裝飾卡擠壓實際內容；待辦「進行中／今天／逾期」統計改為上方緊湊指標，數據仍依真實 API。
+- 列表刷新並非後端上游資料抓取：首頁 invalidate 會重取當下待辦／日曆／專案／活動摘要；活動會重取當頁查詢與篩選候選；日曆只重取當月 Google 行程。首頁、活動以 pull-to-refresh 為主，日曆保留有明確功能提示的本月重新讀取按鈕；載入錯誤保留可見重試。習慣／購物仍有 pull-to-refresh。不得聲稱按刷新會觸發所有上游同步排程。
+- 限時機會／活動探索：單場次與多場次詳情暨個人操作預設全部收起，使用者自願點開；卡片上的時間／地區／收藏摘要保持可見，原網址、待辦、日曆標記在展開後可用。
+- 不增加 UI 強制的人工作業或 OAuth 門檻。Flutter test、CI、Staging SHA、正式部署分層獨立驗收，未取得證據均為 NOT VERIFIED。
+
+
+## 2026-10-12｜一致的功能標題卡和筆記分類列
+
+- 所有業務主頁（首頁、待辦、日曆、專案、筆記、習慣、購物、限時機會、活動探索、Google Drive）及個人化，都採用同一個 `LifeFeatureHeader`。統一 icon、字級、內距、最低卡片高度與主題；為防小型行動裝置溢位，副標題單行截斷。首頁也不用獨立的巨幅標題卡。正式內容頁不能再額外重複純文字標題。
+- 新增操作移入標題卡尾端（手機仍可 FAB）；錯誤和空資料畫面保留有用的功能入口，不以無資料冒充系統正常。
+- 筆記分類使用 Header 下方的一列**小字、可水平觸控滑動**分類 Tab，包含「全部」「未分類」與已有分類，立即篩選，手機和桌機都不另開側邊分類或分類底部彈窗；編輯頁／卡片快速修改分類仍保留。
+- 此次改版須對照 GitHub 最新 source，Flutter Widget tests、CI、staging、production readback 各自判定 PASS／FAIL／NOT VERIFIED。

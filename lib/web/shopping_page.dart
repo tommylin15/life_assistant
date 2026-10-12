@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/design_system/app_components.dart';
 import '../app/theme/app_tokens.dart';
 import 'shopping_api.dart';
+import 'visual_system.dart';
 
 final _shoppingListsProvider = FutureProvider<List<_ShoppingListView>>((ref) async {
   final api = ref.read(shoppingApiProvider);
@@ -29,20 +30,6 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
     final wide = MediaQuery.sizeOf(context).width >= AppBreakpoints.pageActions;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('購物清單'),
-        actions: [
-          if (wide)
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.lg),
-              child: FilledButton.icon(
-                onPressed: lists == null ? null : _createList,
-                icon: const Icon(Icons.add),
-                label: const Text('新增清單'),
-              ),
-            ),
-        ],
-      ),
       body: value.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => AppStatePanel(
@@ -69,7 +56,12 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
 
   Widget _content(List<_ShoppingListView> lists) {
     if (lists.isEmpty) {
-      return AppStatePanel(
+      return Column(children: [
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: LifeFeatureHeader(feature: LifeVisualFeature.shopping),
+        ),
+        Expanded(child: AppStatePanel(
         title: '還沒有購物清單',
         message: '建立清單、加入分類品項，採買時直接勾選完成。',
         icon: const Icon(Icons.shopping_cart_outlined),
@@ -78,7 +70,8 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
           icon: const Icon(Icons.add),
           label: const Text('新增清單'),
         ),
-      );
+      )),
+      ]);
     }
 
     return RefreshIndicator(
@@ -93,16 +86,15 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  '採買中的清單',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                LifeFeatureHeader(
+                  feature: LifeVisualFeature.shopping,
+                  trailing: MediaQuery.sizeOf(context).width >= AppBreakpoints.pageActions
+                    ? FilledButton.icon(
+                        onPressed: _createList,
+                        icon: const Icon(Icons.add),
+                        label: const Text('新增清單')) : null,
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '依清單與分類整理品項，完成後勾選即可保留狀態。',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: AppSpacing.md),
                 for (final list in lists) ...[
                   _ShoppingListCard(
                     list: list,

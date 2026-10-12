@@ -213,7 +213,7 @@ abstract class LifeVisualTheme {
   }
 }
 
-enum LifeVisualFeature { tasks, explore, opportunities, calendar, projects, notes }
+enum LifeVisualFeature { today, tasks, explore, opportunities, calendar, projects, notes, habits, shopping, drive, personalize }
 
 extension LifeVisualFeatureInfo on LifeVisualFeature {
   String get title => switch (this) {
@@ -223,6 +223,11 @@ extension LifeVisualFeatureInfo on LifeVisualFeature {
     LifeVisualFeature.calendar => '日曆',
     LifeVisualFeature.projects => '專案',
     LifeVisualFeature.notes => '筆記',
+    LifeVisualFeature.today => '今日重點',
+    LifeVisualFeature.habits => '習慣',
+    LifeVisualFeature.shopping => '購物清單',
+    LifeVisualFeature.drive => 'Google Drive 智能整理',
+    LifeVisualFeature.personalize => '個人化',
   };
 
   String get description => switch (this) {
@@ -232,6 +237,11 @@ extension LifeVisualFeatureInfo on LifeVisualFeature {
     LifeVisualFeature.calendar => '每一天，都有自己的節奏。',
     LifeVisualFeature.projects => '有計畫地前進，讓想法逐步實現。',
     LifeVisualFeature.notes => '隨手記下生活中的靈感。',
+    LifeVisualFeature.today => '掌握今天的重要事項。',
+    LifeVisualFeature.habits => '記錄生活習慣與完成進度。',
+    LifeVisualFeature.shopping => '依清單整理每次採買。',
+    LifeVisualFeature.drive => '管理已授權的雲端文件。',
+    LifeVisualFeature.personalize => '調整首頁、導覽、外觀與個人服務。',
   };
 
   IconData get icon => switch (this) {
@@ -241,6 +251,11 @@ extension LifeVisualFeatureInfo on LifeVisualFeature {
     LifeVisualFeature.calendar => Icons.calendar_month_rounded,
     LifeVisualFeature.projects => Icons.folder_copy_outlined,
     LifeVisualFeature.notes => Icons.edit_note_rounded,
+    LifeVisualFeature.today => Icons.auto_awesome_outlined,
+    LifeVisualFeature.habits => Icons.repeat_rounded,
+    LifeVisualFeature.shopping => Icons.shopping_cart_outlined,
+    LifeVisualFeature.drive => Icons.cloud_outlined,
+    LifeVisualFeature.personalize => Icons.tune_rounded,
   };
 
   Color get color => switch (this) {
@@ -250,13 +265,20 @@ extension LifeVisualFeatureInfo on LifeVisualFeature {
     LifeVisualFeature.calendar => const Color(0xFF927BB0),
     LifeVisualFeature.projects => const Color(0xFF6586B2),
     LifeVisualFeature.notes => const Color(0xFFBE9468),
+    LifeVisualFeature.today => const Color(0xFFC47BA8),
+    LifeVisualFeature.habits => const Color(0xFF6A9A81),
+    LifeVisualFeature.shopping => const Color(0xFFD39A53),
+    LifeVisualFeature.drive => const Color(0xFF678FB2),
+    LifeVisualFeature.personalize => const Color(0xFF8C83BF),
   };
 }
 
 /// Lightweight native header. Does not invent photos, deadlines, counts or states.
 class LifeFeatureHeader extends ConsumerWidget {
-  const LifeFeatureHeader({super.key, required this.feature});
+  const LifeFeatureHeader({super.key, required this.feature, this.trailing});
   final LifeVisualFeature feature;
+  /// Place the page's primary action in its only visual heading, not a second AppBar.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -274,6 +296,7 @@ class LifeFeatureHeader extends ConsumerWidget {
         style == LifeVisualStyle.pinkBubble ? 30.0 :
         style == LifeVisualStyle.animated ? 26.0 : 20.0;
     return Container(
+      constraints: const BoxConstraints(minHeight: 66),
       decoration: BoxDecoration(
         gradient: style == LifeVisualStyle.animated || style == LifeVisualStyle.pinkBubble
             ? LinearGradient(colors: [background,
@@ -284,28 +307,31 @@ class LifeFeatureHeader extends ConsumerWidget {
         borderRadius: BorderRadius.circular(roundness),
         border: Border.all(color: tint.withOpacity(.20)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       child: Row(children: [
         Container(
-          width: 48, height: 48,
+          width: 42, height: 42,
           decoration: BoxDecoration(
             color: tint.withOpacity(dark ? .23 : .15),
             borderRadius: BorderRadius.circular(style == LifeVisualStyle.focus ? 10 : 16),
           ),
           child: Icon(feature.icon, color: dark ? Color.lerp(tint, Colors.white, .35) : tint, size: 27),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 12),
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(feature.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            )),
+            Text(feature.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700)),
             const SizedBox(height: 3),
-            Text(feature.description, style: Theme.of(context).textTheme.bodySmall),
+            Text(feature.description, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall),
           ],
         )),
-        if (style == LifeVisualStyle.animated || style == LifeVisualStyle.pinkBubble)
+        if (trailing != null)
+          Padding(padding: const EdgeInsets.only(left: 8), child: trailing!)
+        else if (style == LifeVisualStyle.animated || style == LifeVisualStyle.pinkBubble)
           Padding(
             padding: const EdgeInsets.only(left: 6),
             child: Icon(style == LifeVisualStyle.animated

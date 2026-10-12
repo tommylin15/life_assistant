@@ -225,8 +225,15 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await auth.current_user(req))["sub"], "tester-sub")
 
     def test_allowed_activity_urls_are_real_registered_fastapi_routes(self):
-        from app.main import app
-        paths = {route.path for route in app.routes}
+        from app.api.curated import router as curated_router
+        from app.api.curated_actions import router as actions_router
+        # Source routers are not mutated by other app-mounting test fixtures.
+        paths = {
+            "/api/v1" + route.path
+            for router in (curated_router, actions_router)
+            for route in router.routes
+            if hasattr(route, "path")
+        }
         for path in (
             "/api/v1/free-events/curated",
             "/api/v1/free-events/curated/filters",

@@ -13,6 +13,9 @@ from app.services.curated_handoff import HEADERS, BUSINESS_FIELDS, HandoffItem, 
 SHEET_ID = "1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4"
 TAB = "交接資料"
 MAX_SHEET_ROWS = 1000
+RECEIPT_BATCH_ROWS = 100
+SHEETS_RETRYABLE = {429, 500, 502, 503, 504}
+SHEETS_MAX_ATTEMPTS = 6
 # shortcut: reject over 1000 outbox rows; add paged reads if 30-day cleanup exceeds this bound.
 
 
@@ -51,21 +54,39 @@ def acknowledged(record):
 
 
 class SheetClient:
-    async def request(self, method, suffix, **kwargs):
+    async def _access_token(self):
         import google.auth
         from google.auth.transport.requests import Request
+
         def token():
             credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/spreadsheets"])
             credentials.refresh(Request())
             return credentials.token
-        access = await asyncio.to_thread(token)
+
+        return await asyncio.to_thread(token)
+
+    async def request(self, method, suffix, **kwargs):
+        # Sheets has a per-minute quota. Batches reduce normal usage; bounded
+        # backoff handles competing writers or temporary service throttling.
+        access = await self._access_token()
         async with httpx.AsyncClient(timeout=25) as client:
-            response = await client.request(method,
-                f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/{suffix}",
-                headers={"Authorization": f"Bearer {access}"}, **kwargs)
-        if response.status_code >= 400:
-            raise RuntimeError(f"sheets_http_{response.status_code}")
-        return response.json()
+            for attempt in range(SHEETS_MAX_ATTEMPTS):
+                response = await client.request(
+                    method, f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/{suffix}",
+                    headers={"Authorization": f"Bearer {access}"}, **kwargs,
+                )
+                if response.status_code in SHEETS_RETRYABLE and attempt < SHEETS_MAX_ATTEMPTS - 1:
+                    retry_after = response.headers.get("Retry-After", "")
+                    try:
+                        delay = min(60.0, max(1.0, float(retry_after)))
+                    except ValueError:
+                        delay = min(60.0, 2.0 * (2 ** attempt))
+                    await asyncio.sleep(delay)
+                    continue
+                if response.status_code >= 400:
+                    # Do not include response text: it can contain Sheet data.
+                    raise RuntimeError(f"sheets_http_{response.status_code}")
+                return response.json()
 
     async def read(self):
         result = await self.request("GET", "values/" + quote(f"'{TAB}'!A1:AD1002", safe=""),
@@ -73,27 +94,71 @@ class SheetClient:
         return result.get("values", [])
 
     async def receipt(self, snapshot, result, error=""):
-        # Re-read by stable key, never stale row position. Do not ACK a changed
-        # payload even if upstream accidentally retained its old content_hash.
+        # Compatibility helper for callers needing a single receipt.
+        return (await self.receipts([(snapshot, result, error)]))[0]
+
+    async def receipts(self, pending):
+        if not pending:
+            return []
+        # One preflight read resolves current row numbers and fences business
+        # versions. DB commits have already happened in run_import().
         values = await self.read()
         records = parse_rows(values)
-        matches = [r for r in records if r["event_key"] == snapshot["event_key"]]
-        if len(matches) != 1 or any(matches[0][k] != snapshot[k] for k in BUSINESS_FIELDS + ("content_hash", "handoff_updated_at_tpe")):
-            return False
-        if not error and result == "UNCHANGED" and acknowledged(matches[0]):
-            return True
-        row_number = next(i for i, row in enumerate(values[1:], 2) if row and str(row[0]).strip() == snapshot["event_key"])
+        by_key = {row["event_key"]: (index, row)
+                  for index, row in enumerate(records)}
+        # The physical row number must come from the original Sheet, which can
+        # include blank rows; the normalized records list is not a row index.
+        row_numbers = {str(row[0]).strip(): i for i, row in enumerate(values[1:], 2)
+                       if row and str(row[0]).strip()}
+        outcomes = [False] * len(pending)
+        writes = []
+        expected = {}
+        compare_fields = BUSINESS_FIELDS + ("content_hash", "handoff_updated_at_tpe")
         now = datetime.now(timezone(timedelta(hours=8))).isoformat()
-        await self.request("POST", "values:batchUpdate", json={"valueInputOption": "RAW", "data": [
-            {"range": f"'{TAB}'!Z{row_number}", "values": [["ERROR" if error else "ACKED"]]},
-            {"range": f"'{TAB}'!AB{row_number}:AD{row_number}", "values": [["" if error else now, "" if error else result, error]]},
-        ]})
-        readback = parse_rows(await self.read())
-        current = next((r for r in readback if r["event_key"] == snapshot["event_key"]), None)
-        return bool(current and all(current[k] == snapshot[k] for k in BUSINESS_FIELDS + ("content_hash",))
-                    and current["life_import_result"] == ("" if error else result)
-                    and current["handoff_status"] == ("ERROR" if error else "ACKED"))
+        for i, (snapshot, result, error) in enumerate(pending):
+            current_entry = by_key.get(snapshot["event_key"])
+            if current_entry is None:
+                continue
+            current = current_entry[1]
+            if any(current[k] != snapshot[k] for k in compare_fields):
+                continue
+            if not error and result == "UNCHANGED" and acknowledged(current):
+                outcomes[i] = True
+                continue
+            number = row_numbers[snapshot["event_key"]]
+            status = "ERROR" if error else "ACKED"
+            ack_at = "" if error else now
+            import_result = "" if error else result
+            writes.append((i, [
+                {"range": f"'{TAB}'!Z{number}", "values": [[status]]},
+                {"range": f"'{TAB}'!AB{number}:AD{number}",
+                 "values": [[ack_at, import_result, error]]},
+            ]))
+            expected[i] = (status, ack_at, import_result, error)
 
+        # Send many independent cell ranges in bounded requests instead of
+        # the previous 1 write + 2 full-Sheet reads for EACH record.
+        for start in range(0, len(writes), RECEIPT_BATCH_ROWS):
+            batch = writes[start:start + RECEIPT_BATCH_ROWS]
+            await self.request("POST", "values:batchUpdate",
+                               json={"valueInputOption": "RAW",
+                                     "data": [r for _, ranges in batch for r in ranges]})
+
+        if not writes:
+            return outcomes
+        # One readback verifies the exact version and receipt after the writes.
+        verified = {r["event_key"]: r for r in parse_rows(await self.read())}
+        for i, (snapshot, _, _) in enumerate(pending):
+            if i not in expected:
+                continue
+            row = verified.get(snapshot["event_key"])
+            status, ack_at, import_result, error = expected[i]
+            outcomes[i] = bool(row and all(row[k] == snapshot[k] for k in compare_fields)
+                               and row["handoff_status"] == status
+                               and row["life_ack_at_tpe"] == ack_at
+                               and row["life_import_result"] == import_result
+                               and row["life_error"] == error)
+        return outcomes
 
 async def run_import(sheet=None, sessions=SessionLocal):
     if os.environ.get("LIFE_CURATED_SHEET_ID", "") != SHEET_ID:
@@ -103,15 +168,21 @@ async def run_import(sheet=None, sessions=SessionLocal):
     applying = os.environ.get("LIFE_CURATED_IMPORT_APPLY") == "1"
     result = {"run_id": uuid.uuid4().hex, "mode": "apply" if applying else "dry_run",
               "created": 0, "updated": 0, "unchanged": 0, "invalid": 0, "ack_failed": 0}
+    pending_receipts = []
     for record in rows:
         # A bare Sheet receipt cannot prove which version is in PostgreSQL.
         # Recheck ACKED rows too; never skip a new version because of an old ACK.
         try:
             item = validate_record(record)
-        except (ValueError, ValidationError):
+        except (ValueError, ValidationError) as exc:
             result["invalid"] += 1
-            if applying and not await sheet.receipt(record, "INVALID", "invalid_handoff_record"):
-                result["ack_failed"] += 1
+            # Log only failed field paths/types, never source field values.
+            fields = (",".join(".".join(map(str, e["loc"])) + ":" + e["type"]
+                               for e in exc.errors()) if isinstance(exc, ValidationError)
+                      else "content_hash")
+            print(f"life_handoff_invalid event_key={record['event_key'][:100]} fields={fields}")
+            if applying:
+                pending_receipts.append((record, "INVALID", "invalid_handoff_record"))
             continue
         if not applying:
             continue
@@ -120,12 +191,15 @@ async def run_import(sheet=None, sessions=SessionLocal):
                 status = await upsert_handoff(db, item, record["content_hash"])
         except Exception:
             result["invalid"] += 1
-            if not await sheet.receipt(record, "FAILED", "database_import_failed"):
-                result["ack_failed"] += 1
+            pending_receipts.append((record, "FAILED", "database_import_failed"))
             continue
         result[status.lower()] += 1
-        if not await sheet.receipt(record, status):
-            result["ack_failed"] += 1
+        pending_receipts.append((record, status, ""))
+    if applying and pending_receipts:
+        outcomes = await sheet.receipts(pending_receipts)
+        if len(outcomes) != len(pending_receipts):
+            raise RuntimeError("handoff_receipt_outcome_count_mismatch")
+        result["ack_failed"] = sum(not success for success in outcomes)
     result["status"] = "PARTIAL" if result["invalid"] or result["ack_failed"] else "PASS"
     return result
 

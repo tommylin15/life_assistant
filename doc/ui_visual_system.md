@@ -1,4 +1,6 @@
-# Life Assistant — 可實作的三風格 UI 系統（2026-10-11）
+# Life Assistant — 視覺系統（2026-10-11 歷史基準；最新五風格規格見下方）
+
+> **2026-10-12 規格更新**：最新產品決策已是五風格（新增「動畫」、「粉紅泡泡」）；**不要加入日系動漫角色、未提供的背景或插畫**。導覽與個人化的唯一現行規格為 [life_navigation_personalization_v2.md](life_navigation_personalization_v2.md)。本文件舊三風格實作與驗收敘述是當時快照，不應被誤認為最新版數量或發布狀態。
 
 本文件是「六功能 × 三風格」概念海報轉成 **Flutter Web 可維護實作**的規則；**海報不代表已完成的 runtime 畫面**。功能狀態仍以 GitHub main、CI、staging、production 各自的證據為準。
 

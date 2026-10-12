@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:life_assistant/web/visual_system.dart';
 
 void main() {
-  testWidgets('all six functional headers render at phone and desktop widths in three styles',
+  testWidgets('all six functional headers render at phone and desktop widths in five styles',
       (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);

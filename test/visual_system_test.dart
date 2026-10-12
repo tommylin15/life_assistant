@@ -4,12 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:life_assistant/web/visual_system.dart';
 
 void main() {
-  test('three visual styles are distinct in both brightness modes', () {
+  test('five visual styles are distinct in both brightness modes', () {
     for (final brightness in Brightness.values) {
       final palettes = LifeVisualStyle.values
           .map((style) => LifeVisualTheme.build(style, brightness).colorScheme.primary)
           .toSet();
-      expect(palettes.length, 3);
+      expect(palettes.length, 5);
       for (final style in LifeVisualStyle.values) {
         final theme = LifeVisualTheme.build(style, brightness);
         expect(theme.brightness, brightness);

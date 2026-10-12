@@ -29,3 +29,10 @@ Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL。Life
 - 筆記分類使用獨立 nullable `notes.category` 與無破壞性 Alembic `20261012_0017`，既有未指定分類視作「未分類」，不混用現有專案或標籤。寬螢幕分類顯示於筆記左欄；窄螢幕由分類按鈕開啟；編輯或筆記選單均可重分類。
 - 筆記卡片辨識 https/http URL 並供外開，Markdown 預覽中的外部連結亦可點擊。限定安全 URL scheme；不自動抓取目標網頁。
 - 這是**已提交 source** 的產品約定，不能推定新版已部署或資料庫已升級；CI、固定 staging、正式流量、實際 PostgreSQL readback 依各次 SHA 分別標 PASS／FAIL／NOT VERIFIED。
+
+
+## 2026-10-12｜最新導覽／五風格決策
+
+本節取代上節中「左側仍含首頁／更多」的舊描述；完整規格唯一入口：[導覽與個人化 V2](life_navigation_personalization_v2.md)。新版左側僅三種用途群組，首頁只留底部四快捷第一格，個人化固定側欄底部；Google 授權在個人化「服務連結」，Drive 智能整理仍是業務功能入口。「自訂首頁」按鈕、More 重複列表、手動導覽模式選項取消。兩款新增風格：動畫風格（不用日系動漫人物或外部插畫）與粉紅泡泡，合計五款；Drive AI 個人同意設定暫不開放，不代表自動同意文件 AI 分析。舊路由及 `more_order` 個人偏好保留相容。
+
+新 SHA 應分別通過 Flutter、CI、固定 staging 和 runtime readback，未完成不得自稱 DONE。

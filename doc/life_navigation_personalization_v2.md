@@ -76,3 +76,5 @@
 - 真人 Staging 第二帳號實際登入與資料隔離必須獨立驗收；原自動 OAuth redirects/state/cookie 與 production 發布門檻全部保留。
 
 **資料隔離安全閘門**：現有 `notes`／`projects`／`habits`／`shopping_lists` 尚無 `user_sub` 欄位，不能讓第二帳號讀寫這些共享資料。一般 Staging 測試者暫僅允許已檢核為使用者範圍的待辦、Google Calendar/Gmail、個人化設定和授權連結；其他私有功能後端直接 403、前端 feature rollout 標示不可用。待辦舊 `user_sub IS NULL` 僅原 Owner 可見，第二帳號不得引用舊 Project。要開放全部功能，必須另行完成多使用者資料表 ownership migration、關聯與 API 端到端驗證。此限制不能包裝為全功能多人驗收 PASS。
+
+- Gmail 轉待辦也必須設定 `Task.user_sub`，不能建立 `NULL` 擁有者再被 Owner 當成舊資料看到；Staging 測試者的 Gmail 任務與手動任務均按 Google `sub` 隔離。

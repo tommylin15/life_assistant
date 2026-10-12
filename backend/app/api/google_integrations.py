@@ -379,6 +379,7 @@ async def gmail_message_to_task(
         )[:500]
         task = Task(
             id=str(uuid.uuid4()),
+            user_sub=user["sub"],
             title=title,
             note=note,
             priority=body.priority,

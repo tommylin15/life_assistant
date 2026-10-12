@@ -23,14 +23,37 @@ final _todayDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   } catch (_) {
     calendar = null; // Disconnected is not an empty calendar.
   }
-  Map<String, dynamic>? curated;
-  try { curated = await ref.read(platformApiProvider).get('/free-events/curated'); }
-  catch (_) { curated = null; }
+  final prefs = ref.watch(uiPreferencesProvider).asData?.value;
+  final chosen = (prefs?['home_cards'] as List?)?.cast<String>() ??
+      const ['tasks', 'calendar', 'attention', 'habits', 'events', 'projects'];
+  final flags = ref.watch(effectiveFeaturesProvider).asData?.value;
+  final showExplore = (chosen.contains('events') && (flags?['events'] ?? true)) ||
+      (chosen.contains('explore') && (flags?['explore'] ?? true));
+  final showOpportunities = chosen.contains('opportunities') &&
+      (flags?['opportunities'] ?? true);
+  Map<String, dynamic>? explore;
+  Map<String, dynamic>? opportunities;
+  if (showExplore) {
+    try {
+      explore = await ref.read(platformApiProvider)
+          .get('/free-events/curated?entry=explore&limit=3&offset=0');
+    } catch (_) {
+      explore = null;
+    }
+  }
+  if (showOpportunities) {
+    try {
+      opportunities = await ref.read(platformApiProvider)
+          .get('/free-events/curated?entry=opportunities&limit=3&offset=0');
+    } catch (_) {
+      opportunities = null;
+    }
+  }
   List<Map<String, dynamic>>? habits;
   try { habits = await ref.read(habitApiProvider).getHabits(); }
   catch (_) { habits = null; }
   return {'tasks': tasks, 'projects': projects, 'calendar': calendar,
-          'events': curated, 'habits': habits};
+          'events': explore, 'opportunities': opportunities, 'habits': habits};
 });
 
 class TodayPage extends ConsumerWidget {
@@ -84,6 +107,7 @@ class TodayPage extends ConsumerWidget {
       return due.isBefore(DateTime(end.year, end.month, end.day + 1));
     }).take(5).toList();
     final events = (data['events']?['items'] as List?)?.take(3).toList();
+    final opportunities = (data['opportunities']?['items'] as List?)?.take(3).toList();
     switch (key) {
       case 'tasks':
         return _tile(context, '待辦（今天及逾期）', filtered.isEmpty
@@ -103,9 +127,26 @@ class TodayPage extends ConsumerWidget {
         return _tile(context, '下一個行程', cal == null
             ? '未取得行事曆；請檢查 Google 連線或授權' : summary, '/calendar');
       case 'events':
-        if (data['events'] == null) return const SizedBox.shrink();
-        return _tile(context, '精選活動', events == null || events.isEmpty
-            ? '尚無精選活動' : events.map((e) => e['title']).join(' · '), '/more/curated');
+        return _tile(context, '精選活動', data['events'] == null
+            ? '活動資料目前無法取得'
+            : events == null || events.isEmpty
+              ? '尚無精選活動'
+              : events.map((e) => e['title']?.toString() ?? '未命名活動').join(' · '),
+          '/more/explore');
+      case 'explore':
+        return _tile(context, '活動探索', data['events'] == null
+            ? '活動資料目前無法取得'
+            : events == null || events.isEmpty
+              ? '目前沒有符合的活動'
+              : events.map((e) => e['title']?.toString() ?? '未命名活動').join(' · '),
+          '/more/explore');
+      case 'opportunities':
+        return _tile(context, '限時機會', data['opportunities'] == null
+            ? '限時機會資料目前無法取得'
+            : opportunities == null || opportunities.isEmpty
+              ? '目前沒有已收錄的限時機會'
+              : opportunities.map((e) => e['title']?.toString() ?? '未命名機會').join(' · '),
+          '/more/opportunities');
       case 'projects':
         return _tile(context, '進行中專案', projects.where(
           (p) => p['status'] == 'active',
@@ -165,6 +206,9 @@ class TodayPage extends ConsumerWidget {
       '/calendar' => LifeVisualFeature.calendar,
       '/projects' => LifeVisualFeature.projects,
       '/more/notes' => LifeVisualFeature.notes,
+      '/more/habits' => LifeVisualFeature.habits,
+      '/more/shopping' => LifeVisualFeature.shopping,
+      '/more/drive' => LifeVisualFeature.drive,
       '/more/curated' || '/more/explore' => LifeVisualFeature.explore,
       '/more/opportunities' => LifeVisualFeature.opportunities,
       _ => null,

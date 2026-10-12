@@ -40,7 +40,7 @@ FEATURES = {
 DEFAULT_PINNED = ["tasks", "calendar", "projects"]
 DEFAULT_MORE = ["notes", "habits", "events", "opportunities", "explore", "shopping", "drive", "integrations"]
 DEFAULT_HOME = ["tasks", "calendar", "attention", "habits", "events", "projects"]
-HOME_KEYS = set(DEFAULT_HOME) | {"notes", "shopping", "drive"}
+HOME_KEYS = set(DEFAULT_HOME) | {"notes", "shopping", "drive", "opportunities", "explore"}
 AI_PROVIDERS = ["gemini", "gemini_lite", "groq", "openrouter", "openai", "codex"]
 
 def _default_rollout(key: str) -> tuple[str, str]:

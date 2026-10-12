@@ -12,6 +12,8 @@ const _homeLabels = <String, String>{
   'attention': '需要關注',
   'habits': '今日習慣',
   'events': '精選活動',
+  'opportunities': '限時機會',
+  'explore': '活動探索',
   'projects': '進行中專案',
   'notes': '筆記',
   'shopping': '購物清單',
@@ -108,16 +110,17 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
     ]),
   );
 
-  Widget _homeTab() {
+  Widget _homeTab(Map<String, bool>? flags) {
     final chosen = (_draft!['home_cards'] as List).cast<String>().toList();
     final listed = [...chosen, ..._homeLabels.keys.where((k) => !chosen.contains(k))];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _heading('首頁卡片', '在同一份清單中決定顯示及順序。未勾選的卡片不會出現在首頁。'),
+      _heading('首頁卡片', '列出所有首頁支援的功能；勾選顯示，並調整排序。未開放的功能不可勾選。'),
       Card(child: Column(children: [
         for (final key in listed)
           CheckboxListTile(
             key: ValueKey('home-card-' + key),
-            title: Text(_homeLabels[key] ?? key),
+            title: Text((_homeLabels[key] ?? key) +
+                ((flags?[key] == false) ? '（未開放）' : '')),
             value: chosen.contains(key),
             controlAffinity: ListTileControlAffinity.leading,
             secondary: chosen.contains(key)
@@ -144,7 +147,7 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
                     icon: const Icon(Icons.keyboard_arrow_down),
                   ),
                 ]) : null,
-            onChanged: (enabled) => setState(() {
+            onChanged: flags?[key] == false ? null : (enabled) => setState(() {
               if (enabled == true && !chosen.contains(key)) chosen.add(key);
               if (enabled == false) chosen.remove(key);
               _draft!['home_cards'] = chosen;
@@ -343,7 +346,7 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
                   ),
                 ),
                 const SizedBox(height: 22),
-                if (_tab == 'home') _homeTab(),
+                if (_tab == 'home') _homeTab(flags),
                 if (_tab == 'navigation') _navigationTab(flags),
                 if (_tab == 'appearance') _appearanceTab(),
                 if (_tab == 'google') const FeatureAccess(

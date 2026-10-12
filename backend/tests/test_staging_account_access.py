@@ -19,7 +19,7 @@ def request(host, cookie="", **extra):
         headers.append((b"cookie", ("__session=" + cookie).encode()))
     headers += [(key.replace("_", "-").encode(), value.encode())
                 for key, value in extra.items()]
-    return Request({"type": "http", "headers": headers})
+    return Request({"type": "http", "path": "/auth/me", "headers": headers})
 
 
 class StagingAccountTests(unittest.IsolatedAsyncioTestCase):

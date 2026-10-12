@@ -231,8 +231,12 @@ class OwnerIdentityTests(unittest.IsolatedAsyncioTestCase):
              patch.dict('os.environ', {'ALLOWED_GOOGLE_EMAIL': 'owner@example.invalid'}), \
              patch.object(google_identity.httpx, 'AsyncClient', side_effect=lambda **kw:
                           client_type(transport=httpx.MockTransport(lambda req: httpx.Response(200, json=claims)), **kw)):
+            # Token validity alone is not an Owner login. Request-level auth
+            # must apply the allowlist after verifying these Google claims.
+            verified = await google_identity.verify_google_id_token('test-non-secret')
+            from app.api.auth import _enforce_account_access
             with self.assertRaises(HTTPException) as error:
-                await google_identity.verify_google_id_token('test-non-secret')
+                _enforce_account_access(verified, staging=False)
             self.assertEqual(error.exception.status_code, 403)
 
 

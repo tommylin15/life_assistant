@@ -53,7 +53,7 @@ async def list_tasks(
 ):
     owner_filter = (Task.user_sub == user["sub"])
     if not is_staging_tester(user):
-        owner_filter = or_(owner_filter, Task.user_sub.is_(None))
+        owner_filter = or_(Task.user_sub.is_(None), owner_filter)
     result = await db.execute(
         select(Task).where(Task.deleted_at.is_(None), owner_filter)
         .order_by(Task.created_at.desc())

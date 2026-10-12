@@ -118,6 +118,41 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(HTTPException):
                     await auth.current_user(req)
 
+    async def test_firebase_pin_tag_host_accepts_real_staging_cookie(self):
+        # The exact Cloud Run candidate hostname was observed in GitHub
+        # Staging release #38240040197. Firebase may omit Forwarded-Host,
+        # Referer and Origin when rewriting /auth/me.
+        tagged = "v3-664a32cfc9---life-assistant-api-2oo7qbkd5q-uc.a.run.app"
+        with patch("app.api.auth._verify_id_token",
+                   new=AsyncMock(return_value=self.tester)):
+            authorized = request(tagged, "id:staging:signed-google-token",
+                                 x_forwarded_proto="https")
+            self.assertEqual((await auth.current_user(authorized))["sub"], "tester-sub")
+            forwarded = request(tagged, "id:staging:signed-google-token",
+                                x_forwarded_proto="https",
+                                x_forwarded_host=auth.STAGING_HOST)
+            self.assertEqual((await auth.current_user(forwarded))["sub"], "tester-sub")
+
+            forbidden = (
+                request("life-assistant-api-2oo7qbkd5q-uc.a.run.app",
+                        "id:staging:signed-google-token", x_forwarded_proto="https"),
+                request("v3-untrusted---life-assistant-api-2oo7qbkd5q-uc.a.run.app",
+                        "id:staging:signed-google-token", x_forwarded_proto="https"),
+                request(tagged, "id:staging:signed-google-token",
+                        x_forwarded_proto="http"),
+                request(tagged, "id:staging:signed-google-token",
+                        x_forwarded_proto="https",
+                        x_forwarded_host="gen-lang-client-0593591102.web.app"),
+                request(tagged, "id:signed-google-token",
+                        x_forwarded_proto="https"),
+            )
+            for item in forbidden:
+                with self.subTest(host=item.headers["host"],
+                                  forwarded=item.headers.get("x-forwarded-host")):
+                    with self.assertRaises(HTTPException) as denied:
+                        await auth.current_user(item)
+                    self.assertEqual(denied.exception.status_code, 403)
+
     async def test_verified_staging_callback_accepts_tester_not_admin(self):
         state = "z" * 32
         req = request(auth.STAGING_HOST, "oauth:staging:" + state)

@@ -83,3 +83,8 @@
 ## 2026-10-12｜一般 Staging 帳號登入後回登入頁（修復）
 
 觀察：Google OAuth callback 完成後，固定 staging 一般帳號仍返回登入頁。根因候選為 Firebase Hosting Cloud Run rewrite 不保證保留 `X-Forwarded-Host`，而 `/auth/me` 只接受固定 Host／Forwarded Host，判錯成 403；原 AuthNotifier 把 403 當無 Session 並不提示錯誤。修正：對已經由驗證 staging OAuth state 核發的獨立 host-only `id:staging:` Cookie，僅在已知 Cloud Run API hostname、HTTPS proxy、沒有明確其他 Hosting Host 且瀏覽器同源 `Referer`／`Origin` 時接受固定 Staging；仍拒絕 production web.app、其他 Cloud Run、跨站來源及自行僞造單獨 staging 前綴。保留 Owner 權限及第二帳號未隔離 API 的 403 防線。前端 403／驗證異常不再靜默顯示一般登入畫面，提供重新驗證與切換帳號入口。這是協助瀏覽器同源識別而非新增登入授權，需真人 staging OAuth round-trip 驗收後才能標 DONE。
+
+
+## 2026-10-12｜Staging 登入回跳（Firebase pinTag）修復
+
+固定 Staging 在 GitHub V3 Release `#38240040197` 的真實 Hosting rewrite 使用 `run.pinTag=true`，其 Cloud Run 候選 Host 為 `v3-664a32cfc9---life-assistant-api-...a.run.app`。過往 `_fixed_staging_origin` 對候選 Host 的檢查只接受未加 `v3-<SHA>` tag 的 `life-assistant-api-...`，導致第二帳號 OAuth callback 之後 `/auth/me` 被 403 擋住，Flutter 回登入頁。現在以受限的 `v3-[0-9a-f]{10}---life-assistant-api-...a.run.app` 來辨識固定 Staging 的 pinned revision；在 Firebase 省略 `X-Forwarded-Host`、Referer、Origin 時也可核對，明確的 production forwarded host、未加 tag 的一般 Cloud Run 主機與非 staging Session 仍拒絕。CI 中測試正確候選 Host 與負向繞過；真人第二帳號登入仍需重試確認，不把單元測試當真實登入驗收。

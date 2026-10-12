@@ -32,32 +32,49 @@ _STAGING_TESTER_EMAIL_DIGESTS = frozenset({
 
 
 def _fixed_staging_origin(request: Request) -> bool:
-    """Recognize the fixed staging browser behind Firebase's Cloud Run rewrite.
+    """Distinguish the approved Staging Hosting rewrite from production.
 
-    Firebase does not guarantee X-Forwarded-Host on every rewritten request.
-    Once the *verified* staging OAuth callback has issued a host-only
-    id:staging session cookie, same-origin browser requests also carry the
-    referring Hosting origin. The fallback is limited to the known API service
-    and must not override an explicit production forwarded host. The staged
-    cookie is only issued following verified OAuth state; production web.app
-    cannot read or send a cookie scoped to the separate staging web.app.
+    Staging Firebase Hosting uses run.pinTag=true. Its verified Cloud Run Host
+    is v3-<release SHA 10>---life-assistant-api-*.a.run.app, not the ordinary
+    life-assistant-api-*.run.app service host. The tag routes to a 0%-traffic
+    staging candidate revision; production Hosting routes to the untagged host.
+    Firebase may omit the original X-Forwarded-Host.
     """
     host = request.headers.get("host", "").split(":", 1)[0].lower()
     if host == STAGING_HOST:
         return True
-    if not (host.endswith(".run.app") and
-            (host.startswith("life-assistant-api-") or
-             host.startswith("life-assistant-api."))):
+
+    tagged_candidate = re.fullmatch(
+        r"v3-[0-9a-f]{10}---life-assistant-api-[a-z0-9-]+\.a\.run\.app",
+        host,
+    ) is not None
+    ordinary_service = (
+        host.endswith(".run.app")
+        and (host.startswith("life-assistant-api-")
+             or host.startswith("life-assistant-api."))
+    )
+    if not tagged_candidate and not ordinary_service:
         return False
-    forwarded_proto = request.headers.get("x-forwarded-proto", "").lower().split(",")[-1].strip()
-    if forwarded_proto and forwarded_proto != "https":
+
+    proto = request.headers.get("x-forwarded-proto", "").lower().split(",")[-1].strip()
+    if proto and proto != "https":
         return False
+
     forwarded = request.headers.get("x-forwarded-host", "").strip().lower()
-    if forwarded in (STAGING_HOST, f"https://{STAGING_HOST}"):
+    allowed_forwarded = (STAGING_HOST, f"https://{STAGING_HOST}")
+    if forwarded in allowed_forwarded:
         return True
-    # An explicit different Hosting origin is authoritative over Referer.
     if forwarded and (".web.app" in forwarded or ".firebaseapp.com" in forwarded):
         return False
+
+    if tagged_candidate:
+        # Tag + named service identify the Staging-pinned revision even when
+        # Firebase does not send a Referer/Origin (or forwarded Host).
+        # A staging session cookie is still mandatory in current_user().
+        return not forwarded
+
+    # Backward compatibility for Firebase versions that proxy using the
+    # ordinary service Host. Never let an explicit production origin through.
     fetch_site = request.headers.get("sec-fetch-site", "").strip().lower()
     if fetch_site not in ("", "same-origin", "same-site"):
         return False

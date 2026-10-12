@@ -1,5 +1,6 @@
 """Fixed staging tester access without weakening production or Owner policies."""
 import hashlib
+import httpx
 import os
 import unittest
 from unittest.mock import AsyncMock, patch
@@ -169,3 +170,21 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
                 db=object(),
             )
         self.assertEqual(ctx.exception.status_code, 403)
+
+    async def test_google_token_validity_and_account_policy_are_separate(self):
+        from app.services import google_identity
+        token_info = {
+            "aud": "test-google-client", "iss": "accounts.google.com",
+            "email_verified": "true", "exp": 9999999999,
+            "sub": "tester-sub", "email": "tester@example.test",
+            "name": "Tester",
+        }
+        with patch.object(google_identity.settings, "google_client_id", "test-google-client"), \
+             patch("app.services.google_identity.httpx.AsyncClient") as client:
+            client.return_value.__aenter__.return_value.get = AsyncMock(
+                return_value=httpx.Response(200, json=token_info))
+            verified = await google_identity.verify_google_id_token("signed-id-token")
+        self.assertEqual(verified["sub"], "tester-sub")
+        with self.assertRaises(HTTPException):
+            auth._enforce_account_access(verified, staging=False)
+        auth._enforce_account_access(verified, staging=True)

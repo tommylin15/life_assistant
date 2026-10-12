@@ -21,3 +21,11 @@ Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL。Life
 ## Implementation ≠ release
 
 現有 GitHub main 已有 curated API/資料模型、兩入口 source、帳號隔離 action 與 Task/Google Calendar 的基本來源寫入；但 UX V3 的查詢、收藏、連結可點、刪除重複入口與實際 runtime **NOT VERIFIED**。源碼、CI、staging 與 production E2E 各自判定，不以本文件宣稱完成。
+
+## 導覽與筆記 UX（2026-10-12，main source；實際部署另驗）
+
+- App 全寬度均保留固定 4 格底部捷徑：首頁固定，另外 3 格按個人 pin 順序選擇；獨立左側全部功能列表透過抽屜選單開啟，桌面亦可固定 Rail，兩者與底部捷徑同時存在，不再互斥。左側功能排序沿用個人 `more_order`，不足部分保留現有可用功能；版面設定與 pin 持續保存在原有帳號偏好。
+- 筆記未輸入標題可儲存，後端與 Flutter 顯示以第一句（合理長度）或前 10 字產生標題；無內容以「未命名筆記」代替。標題若明確輸入則優先採用。
+- 筆記分類使用獨立 nullable `notes.category` 與無破壞性 Alembic `20261012_0017`，既有未指定分類視作「未分類」，不混用現有專案或標籤。寬螢幕分類顯示於筆記左欄；窄螢幕由分類按鈕開啟；編輯或筆記選單均可重分類。
+- 筆記卡片辨識 https/http URL 並供外開，Markdown 預覽中的外部連結亦可點擊。限定安全 URL scheme；不自動抓取目標網頁。
+- 這是**已提交 source** 的產品約定，不能推定新版已部署或資料庫已升級；CI、固定 staging、正式流量、實際 PostgreSQL readback 依各次 SHA 分別標 PASS／FAIL／NOT VERIFIED。

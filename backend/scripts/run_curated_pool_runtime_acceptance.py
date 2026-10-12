@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db.session import SessionLocal
 from app.models.curated import CuratedActivity, UserUIPreference
+from scripts.apply_cloud_domain_parity_release import RELEASE_TARGET_REVISION
 
 
 async def main() -> None:
@@ -24,7 +25,7 @@ async def main() -> None:
         async with SessionLocal() as db:
             try:
                 revision = await db.scalar(text("SELECT version_num FROM alembic_version"))
-                if revision != "20261010_0016":
+                if revision != RELEASE_TARGET_REVISION:
                     raise RuntimeError("curated_schema_revision_mismatch")
 
                 initial = await db.scalar(select(func.count()).select_from(CuratedActivity))
@@ -81,9 +82,9 @@ async def main() -> None:
         async with SessionLocal() as db:
             assert await db.get(CuratedActivity, activity_key) is None, "synthetic_curated_row_leaked"
             assert await db.get(UserUIPreference, account_key) is None, "synthetic_user_ui_row_leaked"
-        print("curated_runtime_0016=PASS rollback_only=true identity_upsert=PASS preferences=PASS")
+        print(f"curated_runtime=PASS alembic={RELEASE_TARGET_REVISION} rollback_only=true identity_upsert=PASS preferences=PASS")
     except Exception:
-        print("curated_runtime_0016=FAIL (no synthetic transaction committed)")
+        print("curated_runtime=FAIL (no synthetic transaction committed)")
         raise
 
 

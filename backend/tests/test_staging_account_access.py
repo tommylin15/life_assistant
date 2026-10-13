@@ -168,14 +168,16 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException):
             owner_only(self.tester)
 
-    async def test_normal_production_callback_rejects_tester(self):
+    async def test_normal_production_callback_accepts_general_user_not_admin(self):
         state = "y" * 32
         req = request("gen-lang-client-0593591102.web.app", "oauth:" + state)
         with patch("app.api.auth._complete_login",
                    new=AsyncMock(return_value=("signed-id-token", self.tester))):
-            with self.assertRaises(HTTPException) as blocked:
-                await auth.callback("google-code", state, req, object())
-        self.assertEqual(blocked.exception.status_code, 403)
+            response = await auth.callback("google-code", state, req, object())
+        self.assertIn("id:signed-id-token", response.headers["set-cookie"])
+        self.assertNotIn("id:staging:", response.headers["set-cookie"])
+        with self.assertRaises(HTTPException):
+            owner_only(self.tester)
 
     async def test_logout_deletes_auth_cookie(self):
         response = Response()

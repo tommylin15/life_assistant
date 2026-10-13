@@ -219,7 +219,7 @@ class CloudBuildV2Tests(unittest.TestCase):
 
 
 class OwnerIdentityTests(unittest.IsolatedAsyncioTestCase):
-    async def test_valid_google_identity_of_another_owner_is_denied(self):
+    async def test_valid_google_identity_is_general_user_not_owner(self):
         import httpx
         from fastapi import HTTPException
         from app.services import google_identity
@@ -231,12 +231,19 @@ class OwnerIdentityTests(unittest.IsolatedAsyncioTestCase):
              patch.dict('os.environ', {'ALLOWED_GOOGLE_EMAIL': 'owner@example.invalid'}), \
              patch.object(google_identity.httpx, 'AsyncClient', side_effect=lambda **kw:
                           client_type(transport=httpx.MockTransport(lambda req: httpx.Response(200, json=claims)), **kw)):
-            # Token validity alone is not an Owner login. Request-level auth
-            # must apply the allowlist after verifying these Google claims.
+            # A verified Google identity is allowed to sign in, but it does
+            # not gain Owner privilege or bypass the general-user route gate.
             verified = await google_identity.verify_google_id_token('test-non-secret')
-            from app.api.auth import _enforce_account_access
+            from app.api.auth import _enforce_account_access, _enforce_general_user_route
+            from app.api.ui_policies import owner_only
+            from starlette.requests import Request
+            _enforce_account_access(verified, staging=False)
             with self.assertRaises(HTTPException) as error:
-                _enforce_account_access(verified, staging=False)
+                owner_only(verified)
+            self.assertEqual(error.exception.status_code, 403)
+            req = Request({"type": "http", "path": "/api/v1/templates", "headers": []})
+            with self.assertRaises(HTTPException) as error:
+                _enforce_general_user_route(req, verified)
             self.assertEqual(error.exception.status_code, 403)
 
 

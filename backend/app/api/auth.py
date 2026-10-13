@@ -251,6 +251,10 @@ async def current_user(request: Request) -> dict:
         token = token.removeprefix("staging:")
     user = await _verify_id_token(token)
     fixed_stage = _fixed_staging_origin(request)
+    # A staging session cannot be replayed at the production hostname or a
+    # spoofed/untagged Cloud Run host, even with a valid Google ID token.
+    if session.startswith("id:staging:") and not fixed_stage:
+        raise _http_error(403, "Invalid staging session origin")
     # A generic production cookie must not be accepted as a staging login for
     # non-Owners. Staging's login flow issues the id:staging: provenance prefix.
     if fixed_stage and not session.startswith("id:staging:"):

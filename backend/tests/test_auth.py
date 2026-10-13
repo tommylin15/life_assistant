@@ -97,7 +97,8 @@ class AuthApiTests(IsolatedAsyncioTestCase):
         self.assertIn("id:staging:jwt-token", response.headers["set-cookie"])
         with patch("app.api.auth._verify_id_token",
                    new=AsyncMock(return_value=user)) as verify:
-            session_request = Request({"type": "http", "headers": [
+            session_request = Request({"type": "http", "path": "/auth/me", "headers": [
+                (b"host", auth.STAGING_HOST.encode()),
                 (b"cookie", b"__session=id:staging:jwt-token"),
             ]})
             logged_in = await auth.current_user(session_request)
@@ -237,6 +238,7 @@ class AuthApiTests(IsolatedAsyncioTestCase):
     async def test_current_user_accepts_verified_cookie(self):
         request = Request({
             "type": "http",
+            "path": "/auth/me",
             "headers": [(b"cookie", b"__session=id:test-token")],
         })
         claims = {

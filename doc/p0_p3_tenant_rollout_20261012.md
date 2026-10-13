@@ -82,3 +82,9 @@ robot acting as a human. Staging fixed URL:
 
 **Overall for the requested P0–P3 release scope: PARTIAL** until all
 applicable formal production gates and cross-account runtime evidence pass.
+
+## 2026-10-13｜正式版一般 Google 帳號准入決策與安全門檻
+- Owner 核准正式版加入一般帳號使用。Google `tokeninfo` 必須提供經驗證的 email、非空 `sub`、audience、issuer 與有效 exp。Login 不再把其他 Google email 一律拒絕；`Owner` 及管理員授權仍依 `ALLOWED_GOOGLE_EMAIL` 明確比對。
+- **General-user API default deny:** `current_user` 在 staging 和 production 一律對非 Owner 套用已盤點路由白名單；僅准個人待辦/筆記/專案/習慣/購物/設定/Google Gmail、Calendar 整合，以及帶後台 rollout 開關的活動共用查詢和個人 action。舊 templates、Drive 文件與匯入、後台、curator 管理和未盤點路由仍 403；`ui/features` 對非 Owner 同步隱藏未審核模組。正式版登入不等於後台授權。
+- 一般帳號不能讀 legacy NULL Owner 資料；私人資料存取仍用 `sub` 分流，Owner 的舊資料只允許明確 Owner 身分。此變更不授權清除資料或不經 V3 Gates 切換 production。
+- 此項是**production access policy change**，必須先有新版單元測試／完整 CI／固定 Staging readback，再以現有 `v3-release-ghcr.yml` 的人工 `workflow_dispatch promote=true, publish_staging=true` 跑 production 真實驗收；不得改造自動 staging 入口去偷渡 production promotion。

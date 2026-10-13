@@ -14,7 +14,7 @@ from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import current_user, is_staging_tester
+from app.api.auth import current_user
 from app.db.session import get_db
 from app.errors import current_request_id
 from app.models.curated import FeatureRollout, UserUIPreference, LifeAIPolicy
@@ -121,11 +121,13 @@ async def effective_features(db: AsyncSession, user: dict) -> list[dict]:
         permitted = status not in ("hidden", "maintenance") and (
             audience == "all" or is_owner(user)
         ) and (status != "beta" or is_owner(user))
-        if is_staging_tester(user) and key not in {
-        "today", "tasks", "calendar", "integrations",
-        "projects", "notes", "habits", "shopping", "opportunities", "explore",
-    }:
-            permitted = False  # Other legacy data has no verified per-user ownership.
+        if not is_owner(user) and key not in {
+            "today", "tasks", "calendar", "integrations",
+            "projects", "notes", "habits", "shopping", "opportunities", "explore",
+        }:
+            # Private Drive and other unaudited legacy features stay hidden
+            # from all non-Owner accounts, including on production.
+            permitted = False
         result.append({"key": key, "path": path, "title": title, "available": permitted,
                        "status": status, "audience": audience})
     return result

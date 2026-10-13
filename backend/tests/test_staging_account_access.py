@@ -35,19 +35,20 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
         self.test_digest.start()
         self.addCleanup(self.test_digest.stop)
 
-    def test_owner_and_fixed_staging_tester_have_different_privileges(self):
+    def test_owner_and_general_accounts_are_distinct_privileges(self):
         auth._enforce_account_access(
-            {"email": "owner@example.test"}, staging=False)
+            {"sub": "owner-sub", "email": "owner@example.test"}, staging=False)
         auth._enforce_account_access(self.tester, staging=True)
-        with self.assertRaises(HTTPException) as ctx:
-            auth._enforce_account_access(self.tester, staging=False)
-        self.assertEqual(ctx.exception.status_code, 403)
+        auth._enforce_account_access(self.tester, staging=False)
+        auth._enforce_account_access(
+            {"sub": "new-sub", "email": "new@example.test"}, staging=False)
         with self.assertRaises(HTTPException) as admin:
             owner_only(self.tester)
         self.assertEqual(admin.exception.status_code, 403)
-        with self.assertRaises(HTTPException):
-            auth._enforce_account_access(
-                {"email": "unauthorized@example.test"}, staging=True)
+        for invalid in ({"email": "some@example.test"}, {"sub": "sub-1"}, {}):
+            with self.assertRaises(HTTPException) as ctx:
+                auth._enforce_account_access(invalid, staging=False)
+            self.assertEqual(ctx.exception.status_code, 401)
 
     async def test_staging_cookie_is_not_enough_on_production_origin(self):
         with patch("app.api.auth._verify_id_token",
@@ -60,8 +61,9 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
                 await auth.current_user(prod)
             self.assertEqual(blocked.exception.status_code, 403)
             normal_cookie = request(auth.STAGING_HOST, "id:google-token")
-            with self.assertRaises(HTTPException):
+            with self.assertRaises(HTTPException) as missing_provenance:
                 await auth.current_user(normal_cookie)
+            self.assertEqual(missing_provenance.exception.status_code, 403)
 
     async def test_fixed_proxy_origin_but_not_spoofed_cloud_run(self):
         with patch("app.api.auth._verify_id_token",
@@ -293,6 +295,40 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(ctx.exception.status_code, 404)
 
+    async def test_production_general_account_can_use_audited_routes_not_admin(self):
+        user = {"sub": "new-prod-sub", "email": "new-prod@example.test"}
+        prod_host = "gen-lang-client-0593591102.web.app"
+        with patch("app.api.auth._verify_id_token", new=AsyncMock(return_value=user)):
+            for path in (
+                "/auth/me", "/api/v1/ui/features", "/api/v1/me/ui-preferences",
+                "/api/v1/tasks", "/api/v1/projects", "/api/v1/notes",
+                "/api/v1/habits", "/api/v1/shopping-lists",
+                "/api/v1/free-events/curated",
+                "/api/v1/free-events/curated/filters",
+                "/api/v1/free-events/curated/actions", "/api/v1/activity",
+                "/api/v1/integrations/google/status",
+                "/api/v1/free-events/curated/" + "a" * 64 + "/actions/save",
+            ):
+                req = request(prod_host, "id:verified-google-token")
+                req.scope["path"] = path
+                self.assertEqual((await auth.current_user(req))["sub"], "new-prod-sub", path)
+            for path in (
+                "/api/v1/admin/feature-rollouts",
+                "/api/v1/drive/documents",
+                "/api/v1/templates",
+                "/api/v1/free-events/curated/status",
+                "/api/v1/free-events/curated:batch",
+                "/api/v1/free-events/curated:connector",
+                "/api/v1/free-events/curated/" + "a" * 64 + "/actions/follow",
+            ):
+                req = request(prod_host, "id:verified-google-token")
+                req.scope["path"] = path
+                with self.assertRaises(HTTPException) as denied:
+                    await auth.current_user(req)
+                self.assertEqual(denied.exception.status_code, 403, path)
+        with self.assertRaises(HTTPException):
+            owner_only(user)
+
     async def test_google_token_validity_and_account_policy_are_separate(self):
         from app.services import google_identity
         token_info = {
@@ -307,6 +343,7 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
                 return_value=httpx.Response(200, json=token_info))
             verified = await google_identity.verify_google_id_token("signed-id-token")
         self.assertEqual(verified["sub"], "tester-sub")
-        with self.assertRaises(HTTPException):
-            auth._enforce_account_access(verified, staging=False)
+        auth._enforce_account_access(verified, staging=False)
         auth._enforce_account_access(verified, staging=True)
+        with self.assertRaises(HTTPException):
+            owner_only(verified)

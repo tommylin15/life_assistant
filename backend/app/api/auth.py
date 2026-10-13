@@ -96,23 +96,25 @@ def is_staging_tester(user: dict) -> bool:
 
 
 def _enforce_account_access(user: dict, *, staging: bool) -> None:
-    """Grant signed-in access, never Owner authorization, to one stage tester."""
-    owner = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().casefold()
-    email = str(user.get("email", "")).strip().casefold()
-    if not owner or email == owner:  # Preserve existing local-development behavior.
-        return
-    if staging and is_staging_tester(user):
-        return
-    raise _http_error(403, "Account is not allowed")
+    """Allow verified Google identities on either site; role is not login access.
 
-
-def _enforce_staging_tester_route(request: Request, user: dict) -> None:
-    """Allow audited tenant-scoped paths; deny Owner/admin and import routes.
-
-    The allowlist uses *registered FastAPI paths*, not the shortened Flutter
-    client URI. The curated router mounts under /free-events/curated.
+    A user must have a stable Google subject and verified email before any
+    per-user resources are read or written. Owner privilege stays independent.
     """
-    if not is_staging_tester(user):
+    if not str(user.get("sub", "")).strip() or not str(user.get("email", "")).strip():
+        raise _http_error(401, "Verified Google identity required")
+
+
+def _enforce_general_user_route(request: Request, user: dict) -> None:
+    """Fail-closed per-route access for non-Owner accounts on BOTH sites.
+
+    The allowlist names audited personal endpoints and signed-in shared curated
+    reads. Admin, unscoped templates, Drive internals, import/status and
+    connector endpoints remain unavailable to public users, regardless of the
+    feature-rollout state. Route permissions do not replace per-user DB guards.
+    """
+    owner = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().casefold()
+    if owner and str(user.get("email", "")).strip().casefold() == owner:
         return
     path = request.url.path.rstrip("/")
     safe_exact = {
@@ -126,6 +128,7 @@ def _enforce_staging_tester_route(request: Request, user: dict) -> None:
         "/api/v1/free-events/curated",
         "/api/v1/free-events/curated/filters",
         "/api/v1/free-events/curated/actions",
+        "/api/v1/activity",
     }
     safe_prefixes = (
         "/api/v1/tasks/",
@@ -146,7 +149,7 @@ def _enforce_staging_tester_route(request: Request, user: dict) -> None:
     if (path in safe_exact or path == "/api/v1/tasks" or personal_action
             or any(path.startswith(prefix) for prefix in safe_prefixes)):
         return
-    raise _http_error(403, "Feature is unavailable for staging test account")
+    raise _http_error(403, "Feature is unavailable for general account")
 
 
 
@@ -247,10 +250,17 @@ async def current_user(request: Request) -> dict:
     if token.startswith("staging:"):
         token = token.removeprefix("staging:")
     user = await _verify_id_token(token)
+    fixed_stage = _fixed_staging_origin(request)
+    # A generic production cookie must not be accepted as a staging login for
+    # non-Owners. Staging's login flow issues the id:staging: provenance prefix.
+    if fixed_stage and not session.startswith("id:staging:"):
+        owner = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().casefold()
+        if not (owner and str(user.get("email", "")).strip().casefold() == owner):
+            raise _http_error(403, "Staging login required")
     _enforce_account_access(user, staging=(
-        session.startswith('id:staging:') and _fixed_staging_origin(request)
+        session.startswith("id:staging:") and fixed_stage
     ))
-    _enforce_staging_tester_route(request, user)
+    _enforce_general_user_route(request, user)
     return user
 
 
@@ -279,10 +289,13 @@ async def _login(request: Request, *, force_staging: bool):
         "prompt": "select_account",  # Account switching, no implicit reuse.
         "state": state,
     }
+    # The ordinary /auth/login link on the fixed staging hostname must also
+    # result in an id:staging: session; otherwise general users loop on /me.
+    stage_login = params["redirect_uri"] == STAGING_REDIRECT_URI
     response = RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}")
     response.set_cookie(
         SESSION_COOKIE,
-        f"oauth:staging:{state}" if force_staging else f"oauth:{state}",
+        f"oauth:staging:{state}" if stage_login else f"oauth:{state}",
         max_age=600,
         httponly=True,
         secure=True,

@@ -42,13 +42,15 @@ async def verify_google_id_token(id_token: str) -> dict:
         raise _http_error(401, "Session expired")
 
     email = str(claims.get("email", "")).strip().lower()
+    sub = str(claims.get("sub", "")).strip()
     if not email:
         raise _http_error(401, "Token does not contain an email")
+    if not sub:
+        raise _http_error(401, "Token does not contain a stable subject")
 
-    # Identity validation is separate from request-specific authorization.
-    # The auth routes enforce owner and fixed-staging tester access.
+    # Identity validation and route/Owner authorization remain independent.
     return {
-        "sub": str(claims.get("sub", "")),
+        "sub": sub,
         "email": email,
         "name": str(claims.get("name") or email),
         "exp": expires_at,

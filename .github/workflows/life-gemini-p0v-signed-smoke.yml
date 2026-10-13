@@ -35,7 +35,8 @@ jobs:
       REGION: us-central1
       LIFE_SERVICE: life-assistant-api
       GATEWAY_SERVICE: omniagent-agent-gateway
-      JOB: life-assistant-postdeploy-acceptance
+      # V3 pins CORE on staging-only release; POSTDEPLOY is pinned only before production promotion.
+      JOB: life-assistant-core-acceptance
       EXPECTED_SA: omniagent-codex-life-client@gen-lang-client-0593591102.iam.gserviceaccount.com
       SOURCE_SHA: ${{ inputs.source_sha || '20e709a9d151691390f449cea4e5a8be839ef503' }}
       SOURCE_RUN: ${{ inputs.source_run || '38363418508' }}
@@ -57,7 +58,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "push" ]]; then
             # Run once against the last verified V3 candidate; a later workflow
             # edit cannot silently replay that old run.
-            if [[ "$(git rev-parse HEAD^)" != "af3a1a45f8fafcb7d85d8e0f8220b8019f653d76" || "$SOURCE_SHA" != "20e709a9d151691390f449cea4e5a8be839ef503" ]]; then
+            if [[ "$(git rev-parse HEAD^)" != "09e237e8733648f4e7937d058135a52e9c7ba3a7" || "$SOURCE_SHA" != "20e709a9d151691390f449cea4e5a8be839ef503" ]]; then
               echo "gemini_smoke=SKIP bootstrap_source_mismatch" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi

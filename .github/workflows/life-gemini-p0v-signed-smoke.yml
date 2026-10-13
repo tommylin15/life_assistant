@@ -57,7 +57,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "push" ]]; then
             # Run once against the last verified V3 candidate; a later workflow
             # edit cannot silently replay that old run.
-            if [[ "$(git rev-parse HEAD^)" != "9ce41eb2cd296375e5b914776cdffb675aa22222" || "$SOURCE_SHA" != "20e709a9d151691390f449cea4e5a8be839ef503" ]]; then
+            if [[ "$(git rev-parse HEAD^)" != "af3a1a45f8fafcb7d85d8e0f8220b8019f653d76" || "$SOURCE_SHA" != "20e709a9d151691390f449cea4e5a8be839ef503" ]]; then
               echo "gemini_smoke=SKIP bootstrap_source_mismatch" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
@@ -134,6 +134,8 @@ jobs:
           image=((rev.get("spec") or {}).get("containers") or [{}])[0].get("image","")
           job_image=(job_spec.get("containers") or [{}])[0].get("image","")
           canonical=lambda item:item.removeprefix("cache.us-docker.pkg.dev/")
+          print("life_api_image_ref="+str(canonical(image)))
+          print("life_acceptance_job_image_ref="+str(canonical(job_image)))
           if canonical(image)!=canonical(job_image) or not re.fullmatch(r"ghcr[.]io/tommylin15/life_assistant-backend@sha256:[a-f0-9]{64}",canonical(image)):
               raise SystemExit("NOT VERIFIED: source and consumer Job image not the same immutable GHCR digest")
           tags=[t for t in (gw.get("status") or {}).get("traffic") or []

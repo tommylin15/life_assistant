@@ -16,7 +16,10 @@ private notes/projects/habits/shopping, curated activity flow, UI/release.
 - Staging's approved tester can reach the four owner-scoped resources.
   Google Drive links, templates and admin remain blocked until separately
   audited. Private production access policy is unchanged.
-- Audited curated listing/filters and account-owned personal actions now pass the\n  staging tester route gate, but each remains subject to feature rollout and\n  activity_access; ingestion, status and connector remain blocked.\n- Existing curated UX V3, activity DB query and personal actions remain.
+- Audited curated listing/filters and account-owned personal actions now pass the
+  staging tester route gate, but each remains subject to feature rollout and
+  activity_access; ingestion, status and connector remain blocked.
+- Existing curated UX V3, activity DB query and personal actions remain.
   Curated event release/visibility follows the separate admin rollout policy;
   exposing common curated data in staging is not equivalent to approval.
 - Existing consistent feature header cards, notes category tabs and home cards
@@ -46,3 +49,36 @@ private notes/projects/habits/shopping, curated activity flow, UI/release.
 - This does not promote the production Hosting site or weaken rollout gates; current staging verification and production promotion are independent.
 
 - Follow-up ownership audit: NULL legacy tasks use the same explicit Owner-only decision as notes/projects/habits/shopping. Being a non-staging account is **not** proof of legacy ownership; absent `ALLOWED_GOOGLE_EMAIL` denies legacy Task read/list for every account. Private Task rows with an explicit matching sub remain accessible.
+
+## 2026-10-13｜活動三項核心操作 Staging 使用者實測回報
+
+**Evidence type:** user-reported authenticated interactive E2E, **not** a GitHub
+robot acting as a human. Staging fixed URL:
+`https://life-assistant-v3-stage-tl15.web.app/`.
+
+| 驗收項目 | 使用者回報 | 範圍／判定 |
+| --- | --- | --- |
+| 一般帳號活動列表載入 | 可正常載入 | **PASS** (staging user observation) |
+| 收藏活動 → 已收藏速查／回讀 | 正確 | **PASS** (staging user observation) |
+| 活動 → 建立待辦 → 待辦頁與活動網址 | 正確 | **PASS** (staging user observation) |
+| 活動 → 日曆日期標記 → 日曆回讀 | 正確 | **PASS** (staging user observation) |
+| Owner／第二使用者／第三使用者的實際私人資料隔離 | 沒有此三方實測回報 | **NOT VERIFIED** (已有自動測試，不等於真人多帳號隔離) |
+| 正式站／正式 Backend 流量切換與 runtime 驗收 | 尚未進行本次 promotion | **NOT VERIFIED** |
+| Sheet 接收排程 → Cloud Run Job → DB → Sheet ACK/ERROR 完整端到端 | 不屬於三項活動 UI 操作確認 | **NOT VERIFIED** |
+
+**Latest source/runtime evidence before this user report:**
+- `main` SHA `d58edf22a717f4578e9d9ac0c332574aa735897f`.
+- [Four-job CI #38324692319](https://github.com/tommylin15/life_assistant/actions/runs/38324692319): **PASS**.
+- [Automatic staging Release #38324917778](https://github.com/tommylin15/life_assistant/actions/runs/38324917778): **PASS**; logged `staging_live=PASS`, exact SHA above,
+  Hosting version `sites/life-assistant-v3-stage-tl15/versions/df95e3d6166f15a7`,
+  `staging_live_readback=PASS` for SHA and pinned API/auth rewrites,
+  `staging_google_redirect=PASS`; `traffic_unchanged=true`;
+  `owner_login_e2e=NOT_VERIFIED` is the separate manual Owner gate removed
+  from release blocking by the 2026-10-12 policy. This record does not claim
+  browser release-SHA readback was obtained from the user.
+- This acceptance covers the three curated **user-facing operations**, not
+  proof that every P0–P3 function, data feed, production multiuser policy or
+  Google provider failure branch has passed.
+
+**Overall for the requested P0–P3 release scope: PARTIAL** until all
+applicable formal production gates and cross-account runtime evidence pass.

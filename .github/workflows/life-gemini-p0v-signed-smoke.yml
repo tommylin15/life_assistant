@@ -57,7 +57,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "push" ]]; then
             # Run once against the last verified V3 candidate; a later workflow
             # edit cannot silently replay that old run.
-            if [[ "$(git rev-parse HEAD^)" != "$SOURCE_SHA" || "$SOURCE_SHA" != "20e709a9d151691390f449cea4e5a8be839ef503" ]]; then
+            if [[ "$(git rev-parse HEAD^)" != "6aaf9df66842cad95fc2b38d650e81b8a82b7772" || "$SOURCE_SHA" != "20e709a9d151691390f449cea4e5a8be839ef503" ]]; then
               echo "gemini_smoke=SKIP bootstrap_source_mismatch" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
@@ -115,8 +115,16 @@ jobs:
           life,gw,job,rev=(read(name) for name in ("life-before.json","gateway-before.json","job.json","life-revision.json"))
           life_sa=(((life.get("spec") or {}).get("template") or {}).get("spec") or {}).get("serviceAccountName")
           job_spec=(((job.get("spec") or {}).get("template") or {}).get("template") or {}).get("spec") or {}
-          if life_sa!=expected or job_spec.get("serviceAccountName")!=expected:
-              raise SystemExit("NOT VERIFIED: consumer API and Job identity not equal dedicated SA")
+          job_sa=job_spec.get("serviceAccountName")
+          print("life_api_runtime_sa="+str(life_sa))
+          print("life_postdeploy_job_sa="+str(job_sa))
+          print("life_dedicated_caller_sa="+expected)
+          if life_sa!=expected:
+              print("life_api_identity=NOT_VERIFIED dedicated SA mismatch")
+          if job_sa!=expected:
+              print("life_job_identity=NOT_VERIFIED dedicated SA mismatch")
+          if life_sa!=expected or job_sa!=expected:
+              raise SystemExit("NOT VERIFIED: verified identity mismatch; no model call attempted")
           image=((rev.get("spec") or {}).get("containers") or [{}])[0].get("image","")
           job_image=(job_spec.get("containers") or [{}])[0].get("image","")
           canonical=lambda item:item.removeprefix("cache.us-docker.pkg.dev/")

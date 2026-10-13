@@ -158,6 +158,26 @@ class CloudBuildV2Tests(unittest.TestCase):
                 self.assertNotIn('gh workflow run v3-release-ghcr.yml', source)
                 self.assertNotIn('--raw-field promote=true', source)
                 self.assertNotIn('gcloud run services update-traffic', source)
+            elif workflow.name == 'life-gemini-p0v-signed-smoke.yml':
+                # Approved 2026-10-13 P0-V: only after V3 staging-only SUCCESS,
+                # exact main SHA and four CI gates. This workflow may execute
+                # ONE existing Job for a real text smoke, not deploy/mutate.
+                self.assertIn('workflow_run:', source)
+                self.assertIn('workflows: ["V3 Release - GHCR to Cloud Run"]', source)
+                self.assertIn("workflow_run.conclusion == 'success'", source)
+                self.assertIn("workflow_run.event == 'workflow_dispatch'", source)
+                self.assertIn('test "$(git rev-parse HEAD)" = "$SOURCE_SHA"', source)
+                self.assertIn("Require explicit promotion selection", source)
+                self.assertIn('.conclusion=="skipped"', source)
+                self.assertIn('unique | length==4', source)
+                self.assertIn('gcloud run jobs execute "$JOB"', source)
+                for forbidden in (
+                    'gcloud run deploy ', 'gcloud run services update',
+                    'gcloud run jobs update', 'add-iam-policy-binding',
+                    'allUsers', '--raw-field promote=true',
+                    'firebase deploy', 'update-traffic',
+                ):
+                    self.assertNotIn(forbidden, source)
             else:
                 self.assertIn('workflow_dispatch:', source)
                 self.assertNotIn('workflow_run:', source)

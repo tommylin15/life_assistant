@@ -407,7 +407,9 @@ async function runAcceptance(context) {
   await waitNamed(page, '首頁');
   await waitNamed(page, '待辦');
   await waitNamed(page, '日曆');
-  await waitNamed(page, '更多');
+  // V3 mobile bottom bar has Home plus three pinned destinations;
+  // legacy "更多" was removed (additional features live in the drawer).
+  await waitNamed(page, '更多', false);
   await named(page, '新增專案');
   record('compact_runtime');
 

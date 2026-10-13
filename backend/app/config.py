@@ -380,6 +380,9 @@ class Settings(BaseSettings):
     )
     # Empty is intentional: contract requires entitlement proof for explicit models.
     codex_shared_model: str = ""
+    # Isolated Gemini P0-V text-only route; never implies Drive AI authorization.
+    gemini_gateway_text_enabled: bool = False
+    gemini_gateway_url: str = "https://omniagent-agent-gateway-2oo7qbkd5q-uc.a.run.app"
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env", env_file_encoding="utf-8")
 

@@ -1,0 +1,139 @@
+# Does not modify any Cloud Run service/Job image/env, routing, IAM or Hosting.
+name: Life Gemini P0-V Signed Candidate Smoke
+on:
+  workflow_run:
+    workflows: ["V3 Release - GHCR to Cloud Run"]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: life-assistant-v3-production-release
+  cancel-in-progress: false
+jobs:
+  signed-smoke:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'workflow_dispatch' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: dev-test
+    env:
+      PROJECT: gen-lang-client-0593591102
+      REGION: us-central1
+      LIFE_SERVICE: life-assistant-api
+      GATEWAY_SERVICE: omniagent-agent-gateway
+      JOB: life-assistant-postdeploy-acceptance
+      EXPECTED_SA: omniagent-codex-life-client@gen-lang-client-0593591102.iam.gserviceaccount.com
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      SOURCE_RUN: ${{ github.event.workflow_run.id }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - name: Exact SHA and successful staging-only release source
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "run=false" >> "$GITHUB_OUTPUT"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)" = "$SOURCE_SHA"
+          if ! git diff --name-only HEAD^ HEAD | grep -Eq '^backend/(app/(api/gemini_text[.]py|services/shared_gemini_gateway[.]py)|tests/test_shared_gemini_gateway[.]py)$'; then
+            echo "gemini_smoke=SKIP unrelated_SHA" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs?per_page=100" \
+            > "$RUNNER_TEMP/source-jobs.json"
+          jq -e '
+            [.jobs[] | select(.name=="release") | .steps[] |
+             select(.name=="Promote exact Preview to independent fixed staging live and verify pinned routes"
+                    or .name=="Require explicit promotion selection"
+                    or .name=="Reconfirm source SHA and live traffic, then promote") |
+             {name,conclusion}] |
+             length==3 and
+             any(.[]; .name=="Promote exact Preview to independent fixed staging live and verify pinned routes" and .conclusion=="success") and
+             any(.[]; .name=="Require explicit promotion selection" and .conclusion=="success") and
+             any(.[]; .name=="Reconfirm source SHA and live traffic, then promote" and .conclusion=="skipped")
+          ' "$RUNNER_TEMP/source-jobs.json" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA/check-runs?per_page=100" |
+            jq -e '[.check_runs[] | select(.name=="flutter" or .name=="backend" or
+                     .name=="deployment-scripts" or .name=="free-events-postgres") |
+                     select(.conclusion=="success") | .name] | unique | length==4' >/dev/null
+          echo "run=true" >> "$GITHUB_OUTPUT"
+          echo "source_staging_only=PASS sha=$SOURCE_SHA run=$SOURCE_RUN" >> "$GITHUB_STEP_SUMMARY"
+      - uses: google-github-actions/auth@v2
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          project_id: ${{ env.PROJECT }}
+      - uses: google-github-actions/setup-gcloud@v2
+        if: ${{ steps.gate.outputs.run == 'true' }}
+      - name: Read-only identity, pinned image and zero traffic Gateway pilot
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$LIFE_SERVICE" --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/life-before.json"
+          gcloud run services describe "$GATEWAY_SERVICE" --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/gateway-before.json"
+          gcloud run jobs describe "$JOB" --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/job.json"
+          rev="$(jq -r '.status.latestReadyRevisionName' "$RUNNER_TEMP/life-before.json")"
+          gcloud run revisions describe "$rev" --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/life-revision.json"
+          python3 - "$RUNNER_TEMP" "$EXPECTED_SA" <<'PY'
+          import json,sys,re,pathlib
+          root=pathlib.Path(sys.argv[1])
+          expected=sys.argv[2]
+          read=lambda filename: json.loads((root/filename).read_text())
+          life,gw,job,rev=(read(name) for name in ("life-before.json","gateway-before.json","job.json","life-revision.json"))
+          life_sa=(((life.get("spec") or {}).get("template") or {}).get("spec") or {}).get("serviceAccountName")
+          job_spec=(((job.get("spec") or {}).get("template") or {}).get("template") or {}).get("spec") or {}
+          if life_sa!=expected or job_spec.get("serviceAccountName")!=expected:
+              raise SystemExit("NOT VERIFIED: consumer API and Job identity not equal dedicated SA")
+          image=((rev.get("spec") or {}).get("containers") or [{}])[0].get("image","")
+          job_image=(job_spec.get("containers") or [{}])[0].get("image","")
+          canonical=lambda item:item.removeprefix("cache.us-docker.pkg.dev/")
+          if canonical(image)!=canonical(job_image) or not re.fullmatch(r"ghcr[.]io/tommylin15/life_assistant-backend@sha256:[a-f0-9]{64}",canonical(image)):
+              raise SystemExit("NOT VERIFIED: source and consumer Job image not the same immutable GHCR digest")
+          tags=[t for t in (gw.get("status") or {}).get("traffic") or []
+                if t.get("tag")=="gemini-p0v-b03e5f55" and t.get("percent",0)==0]
+          if len(tags)!=1 or not re.fullmatch(r"https://gemini-p0v-b03e5f55---omniagent-agent-gateway-[a-z0-9-]+[.]a[.]run[.]app",tags[0].get("url","")):
+              raise SystemExit("NOT VERIFIED: approved zero-traffic Gateway pilot not found")
+          (root/"gateway-url").write_text(tags[0]["url"])
+          print("life_runtime_identity=PASS immutable_image=PASS gateway_pilot_zero_traffic=PASS")
+          PY
+      - name: One real Life runtime signed Gemini Flash-Lite call
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(cat "$RUNNER_TEMP/gateway-url")"
+          gcloud run jobs execute "$JOB" --project "$PROJECT" --region "$REGION" \
+            --args="-m,scripts.run_shared_gemini_gateway_acceptance,$url" \
+            --task-timeout=4m --wait --quiet
+          echo "life_runtime_to_gateway_to_gemini=PASS (synthetic text; authenticated user API NOT VERIFIED)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Compare untouched production serving traffic
+        if: ${{ always() && steps.gate.outputs.run == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$LIFE_SERVICE" --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/life-after.json"
+          gcloud run services describe "$GATEWAY_SERVICE" --project "$PROJECT" --region "$REGION" --format=json > "$RUNNER_TEMP/gateway-after.json"
+          python3 - "$RUNNER_TEMP" <<'PY'
+          import json,sys,pathlib
+          root=pathlib.Path(sys.argv[1])
+          def serving(name):
+              service=json.loads((root/name).read_text())
+              return sorted((t.get("revisionName"),t.get("percent")) for t in
+                            (service.get("status") or {}).get("traffic") or [] if t.get("percent",0)>0)
+          if serving("life-before.json")!=serving("life-after.json") or serving("gateway-before.json")!=serving("gateway-after.json"):
+              raise SystemExit("FAIL: formal production traffic unexpectedly changed")
+          print("production_traffic_unchanged=PASS")
+          PY

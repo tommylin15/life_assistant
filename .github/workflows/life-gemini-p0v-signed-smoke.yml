@@ -57,7 +57,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "push" ]]; then
             # Run once against the last verified V3 candidate; a later workflow
             # edit cannot silently replay that old run.
-            if [[ "$(git rev-parse HEAD^)" != "6aaf9df66842cad95fc2b38d650e81b8a82b7772" || "$SOURCE_SHA" != "20e709a9d151691390f449cea4e5a8be839ef503" ]]; then
+            if [[ "$(git rev-parse HEAD^)" != "9ce41eb2cd296375e5b914776cdffb675aa22222" || "$SOURCE_SHA" != "20e709a9d151691390f449cea4e5a8be839ef503" ]]; then
               echo "gemini_smoke=SKIP bootstrap_source_mismatch" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
@@ -114,7 +114,13 @@ jobs:
           read=lambda filename: json.loads((root/filename).read_text())
           life,gw,job,rev=(read(name) for name in ("life-before.json","gateway-before.json","job.json","life-revision.json"))
           life_sa=(((life.get("spec") or {}).get("template") or {}).get("spec") or {}).get("serviceAccountName")
-          job_spec=(((job.get("spec") or {}).get("template") or {}).get("template") or {}).get("spec") or {}
+          # Cloud Run Jobs v1: spec.template.spec.template.spec (TaskSpec).
+          # The older lookup skipped the ExecutionTemplate's "spec" and
+          # falsely reported None despite a configured runtime SA.
+          execution_spec=(((job.get("spec") or {}).get("template") or {}).get("spec") or {})
+          job_spec=((execution_spec.get("template") or {}).get("spec") or {})
+          if not job_spec:
+              job_spec=((job.get("template") or {}).get("template") or {})
           job_sa=job_spec.get("serviceAccountName")
           print("life_api_runtime_sa="+str(life_sa))
           print("life_postdeploy_job_sa="+str(job_sa))

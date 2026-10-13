@@ -162,15 +162,18 @@ class CloudBuildV2Tests(unittest.TestCase):
                 # Approved 2026-10-13 P0-V: only after V3 staging-only SUCCESS,
                 # exact main SHA and four CI gates. This workflow may execute
                 # ONE existing Job for a real text smoke, not deploy/mutate.
-                self.assertIn('workflow_run:', source)
-                self.assertIn('workflows: ["V3 Release - GHCR to Cloud Run"]', source)
-                self.assertIn("workflow_run.conclusion == 'success'", source)
-                self.assertIn("workflow_run.event == 'workflow_dispatch'", source)
-                self.assertIn('test "$(git rev-parse HEAD)" = "$SOURCE_SHA"', source)
+                self.assertIn('workflow_dispatch:', source)
+                self.assertIn('push:', source)
+                self.assertNotIn('workflow_run:', source)
+                self.assertIn('bootstrap_source_mismatch', source)
+                self.assertIn('current_sha" = "$SOURCE_SHA"', source)
+                self.assertIn('.event=="workflow_dispatch" and .conclusion=="success"', source)
                 self.assertIn("Require explicit promotion selection", source)
                 self.assertIn('.conclusion=="skipped"', source)
                 self.assertIn('unique | length==4', source)
                 self.assertIn('gcloud run jobs execute "$JOB"', source)
+                self.assertIn('SOURCE_RUN', source)
+                self.assertIn('SOURCE_SHA', source)
                 for forbidden in (
                     'gcloud run deploy ', 'gcloud run services update',
                     'gcloud run jobs update', 'add-iam-policy-binding',

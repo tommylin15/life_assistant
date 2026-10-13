@@ -1,10 +1,22 @@
 # Does not modify any Cloud Run service/Job image/env, routing, IAM or Hosting.
 name: Life Gemini P0-V Signed Candidate Smoke
 on:
-  workflow_run:
-    workflows: ["V3 Release - GHCR to Cloud Run"]
-    types: [completed]
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Verified staging-only V3 release commit SHA"
+        required: true
+        type: string
+      source_run:
+        description: "Verified staging-only V3 release workflow run ID"
+        required: true
+        type: string
+  # One-time self-start for the already-verified 20e709a9 staging release.
+  # Later pushes cannot pass the exact parent-SHA gate. Subsequent releases
+  # explicitly dispatch this workflow from their own successful V3 run.
+  push:
     branches: [main]
+    paths: [.github/workflows/life-gemini-p0v-signed-smoke.yml]
 permissions:
   contents: read
   actions: read
@@ -14,11 +26,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   signed-smoke:
-    if: >-
-      ${{ github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.event == 'workflow_dispatch' &&
-          github.event.workflow_run.head_branch == 'main' &&
-          github.event.workflow_run.head_repository.full_name == github.repository }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: dev-test
@@ -29,13 +37,13 @@ jobs:
       GATEWAY_SERVICE: omniagent-agent-gateway
       JOB: life-assistant-postdeploy-acceptance
       EXPECTED_SA: omniagent-codex-life-client@gen-lang-client-0593591102.iam.gserviceaccount.com
-      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
-      SOURCE_RUN: ${{ github.event.workflow_run.id }}
+      SOURCE_SHA: ${{ inputs.source_sha || '20e709a9d151691390f449cea4e5a8be839ef503' }}
+      SOURCE_RUN: ${{ inputs.source_run || '38363418508' }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 2
       - name: Exact SHA and successful staging-only release source
         id: gate
@@ -44,12 +52,24 @@ jobs:
           set -euo pipefail
           echo "run=false" >> "$GITHUB_OUTPUT"
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)" = "$SOURCE_SHA"
-          if ! git diff --name-only HEAD^ HEAD | grep -Eq '^(backend/(app/(api/gemini_text[.]py|services/shared_gemini_gateway[.]py)|tests/test_shared_gemini_gateway[.]py|scripts/run_shared_gemini_gateway_acceptance[.]py)|[.]github/workflows/life-gemini-p0v-signed-smoke[.]yml)$'; then
-            echo "gemini_smoke=SKIP unrelated_SHA" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+          current_sha="$(git rev-parse HEAD)"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)" = "$current_sha"
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Run once against the last verified V3 candidate; a later workflow
+            # edit cannot silently replay that old run.
+            if [[ "$(git rev-parse HEAD^)" != "$SOURCE_SHA" || "$SOURCE_SHA" != "20e709a9d151691390f449cea4e5a8be839ef503" ]]; then
+              echo "gemini_smoke=SKIP bootstrap_source_mismatch" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          else
+            test "$current_sha" = "$SOURCE_SHA"
           fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" |
+            jq -e --arg sha "$SOURCE_SHA" '
+              .name=="V3 Release - GHCR to Cloud Run" and
+              .head_sha==$sha and .head_branch=="main" and
+              .event=="workflow_dispatch" and .conclusion=="success"
+            ' >/dev/null
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs?per_page=100" \
             > "$RUNNER_TEMP/source-jobs.json"
           jq -e '

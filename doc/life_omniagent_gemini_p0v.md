@@ -19,3 +19,19 @@
 ## Operational safety
 
 Never publish the Gateway Gemini pilot's tagged revision as normal production routing without Gateway-owned approval; its formal serving revision may still have the route disabled. Do not rewrite the existing V3 release policy, staging Hosting pins, production traffic or OAuth validation. A full end-to-end pass requires a real Life backend-origin signed request and an authenticated Life app/API reply—not a CI-generated IAMCredentials token.
+
+## 2026-10-13 signed smoke dispatch repair
+
+The initial `workflow_run` after an automatically dispatched V3 release did not produce a
+Signed Smoke run. The staging release itself was dispatched by GitHub Actions'
+`GITHUB_TOKEN`; chaining on its completion is not a dependable bootstrap.
+The source of truth is now an **explicit** `workflow_dispatch` from a successful,
+non-promoting V3 staging release. The independent smoke checks that V3 source
+run is successful and tied to current main/CI, then inspects dedicated runtime
+identity, immutable Life image, private 0%-traffic Gateway pilot, and real
+Gemini result. One tightly bounded `push` bootstrap can exercise the
+already-successful staging release `38363418508` for SHA `20e709a9d151691390f449cea4e5a8be839ef503`;
+it must be the immediate parent of the change to run. Later pushes cannot
+replay that bootstrap, and neither trigger changes production traffic.
+**A dispatched workflow is not evidence of a passing signed smoke.**
+

@@ -19,6 +19,7 @@ permissions:
   checks: read
   id-token: write
   packages: write
+  actions: write  # Dispatch narrow post-staging smoke using GITHUB_TOKEN; never production.
 
 concurrency:
   group: life-assistant-v3-production-release
@@ -566,3 +567,13 @@ jobs:
             >> "$GITHUB_STEP_SUMMARY"
           echo "Legacy Cloud Build and GCS/AR deletion are separately gated; NOT VERIFIED until readback." \
             >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dispatch isolated Gemini signed smoke after staging-only SUCCESS
+        if: ${{ success() && inputs.publish_staging && !inputs.promote }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_SHA"
+          gh workflow run life-gemini-p0v-signed-smoke.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f source_sha="$RELEASE_SHA" -f source_run="$GITHUB_RUN_ID"
+          echo "life_gemini_signed_smoke=DISPATCHED run=$GITHUB_RUN_ID sha=$RELEASE_SHA (independent gate; not automatically PASS)" >> "$GITHUB_STEP_SUMMARY"

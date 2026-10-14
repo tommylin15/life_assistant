@@ -205,9 +205,6 @@ async def create_shopping_item(
     return item
 
 
-@router.patch("/shopping-items/{item_id}", response_model=ShoppingItemOut)    return item
-
-
 @router.post(
     "/shopping-lists/{list_id}/items/batch",
     response_model=list[ShoppingItemOut],

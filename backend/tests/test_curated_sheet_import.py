@@ -208,13 +208,50 @@ class ReceiptTests(unittest.IsolatedAsyncioTestCase):
             result = await run_import(client, sessions)
         self.assertEqual(result["invalid"], 30)
         self.assertEqual(result["created"], 1)
-        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["data_status"], "PARTIAL")
+        self.assertEqual(result["import_failed"], 0)
         upsert.assert_awaited_once()
         client.receipts.assert_awaited_once()
         pending = client.receipts.await_args.args[0]
         self.assertEqual(len(pending), 31)
         self.assertEqual(pending[0][2], "invalid_handoff_record")
         self.assertEqual(pending[-1][1], "CREATED")
+
+
+    async def test_database_failure_is_technical_fail_not_invalid_source(self):
+        good = record()
+        client = AsyncMock()
+        client.read.return_value = sheet(good)
+        client.receipts.return_value = [True]
+        sessions = MagicMock()
+        sessions.return_value.__aenter__.return_value = AsyncMock()
+        with patch.dict(os.environ, {"LIFE_CURATED_SHEET_ID": SHEET_ID,
+                                      "LIFE_CURATED_IMPORT_APPLY": "1"}), patch(
+                "scripts.import_curated_from_sheet.upsert_handoff",
+                AsyncMock(side_effect=RuntimeError("db unavailable"))):
+            result = await run_import(client, sessions)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(result["data_status"], "PASS")
+        self.assertEqual(result["invalid"], 0)
+        self.assertEqual(result["import_failed"], 1)
+        client.receipts.assert_awaited_once_with([(good, "FAILED", "database_import_failed")])
+
+    async def test_receipt_readback_mismatch_fails_technical_job(self):
+        value = record()
+        client = AsyncMock()
+        client.read.return_value = sheet(value)
+        client.receipts.return_value = [False]
+        sessions = MagicMock()
+        sessions.return_value.__aenter__.return_value = AsyncMock()
+        with patch.dict(os.environ, {"LIFE_CURATED_SHEET_ID": SHEET_ID,
+                                      "LIFE_CURATED_IMPORT_APPLY": "1"}), patch(
+                "scripts.import_curated_from_sheet.upsert_handoff",
+                AsyncMock(return_value="CREATED")):
+            result = await run_import(client, sessions)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(result["ack_failed"], 1)
+        self.assertEqual(result["data_status"], "PASS")
 
     async def test_sheets_429_retry_succeeds_without_exposing_content(self):
         hits = []

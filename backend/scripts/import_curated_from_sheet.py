@@ -167,7 +167,7 @@ async def run_import(sheet=None, sessions=SessionLocal):
     rows = parse_rows(await sheet.read())
     applying = os.environ.get("LIFE_CURATED_IMPORT_APPLY") == "1"
     result = {"run_id": uuid.uuid4().hex, "mode": "apply" if applying else "dry_run",
-              "created": 0, "updated": 0, "unchanged": 0, "invalid": 0, "ack_failed": 0}
+              "created": 0, "updated": 0, "unchanged": 0, "invalid": 0, "import_failed": 0, "ack_failed": 0}
     pending_receipts = []
     for record in rows:
         # A bare Sheet receipt cannot prove which version is in PostgreSQL.
@@ -190,7 +190,8 @@ async def run_import(sheet=None, sessions=SessionLocal):
             async with sessions() as db:
                 status = await upsert_handoff(db, item, record["content_hash"])
         except Exception:
-            result["invalid"] += 1
+            # A database/import failure is an infrastructure fault, not source data quality.
+            result["import_failed"] += 1
             pending_receipts.append((record, "FAILED", "database_import_failed"))
             continue
         result[status.lower()] += 1
@@ -200,7 +201,10 @@ async def run_import(sheet=None, sessions=SessionLocal):
         if len(outcomes) != len(pending_receipts):
             raise RuntimeError("handoff_receipt_outcome_count_mismatch")
         result["ack_failed"] = sum(not success for success in outcomes)
-    result["status"] = "PARTIAL" if result["invalid"] or result["ack_failed"] else "PASS"
+    # Source-schema errors are row-level findings handled by the exploration batch.
+    # Only failed DB operations or unverified receipts fail this technical Job.
+    result["data_status"] = "PARTIAL" if result["invalid"] else "PASS"
+    result["status"] = "FAIL" if result["import_failed"] or result["ack_failed"] else "PASS"
     return result
 
 
@@ -209,7 +213,7 @@ async def main():
         result = await run_import()
         print("life_handoff_import " + " ".join(f"{k}={v}" for k, v in result.items()))
         if result["status"] != "PASS":
-            raise RuntimeError("handoff_import_partial")
+            raise RuntimeError("handoff_import_system_failure")
     finally:
         await engine.dispose()
 

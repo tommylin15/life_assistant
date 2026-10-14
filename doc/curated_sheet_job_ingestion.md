@@ -34,8 +34,15 @@
 1. Life 以固定 ID 讀 `交接資料`，先比對表頭／欄位契約，處理 `READY`、可重試 `ERROR` 及全部 `ACKED`。ACKED 每輪仍核對 DB；只有已驗證同版本、同業務內容的成功回執才不重寫。表內 `event_key` 不可重複，異常失敗關閉並記錄，不能讀取錯表仍宣稱成功。
 2. **去重持久化必須在 Life PostgreSQL**：以 `source=chatgpt_drive_handoff`＋`event_key` 建立永久唯一對應，並保存最後成功 `content_hash`。同鍵同 hash → `UNCHANGED`；同鍵新 hash → `UPDATED`；新鍵 → `CREATED`。**現有 backend 的 `identity_key` 是 canonical URL＋occurrence_key 的 SHA256，不等於 Drive 的 `event_key`；原始網址一換可能多建一筆**。正式介接前先檢查 schema，採最小 additive mapping/migration 和兼容性測試，不得假定去重已完成。
 3. DB transaction **commit 成功後**，Life 才形成回執隊列；批次重新讀取 Sheet，依穩定鍵定位、核對全部業務欄位、hash 及 handoff 更新時點，再以有界 `values:batchUpdate` 批次回寫並一次讀回核對（不能再逐列重讀全表造成 API 429）。遇到 429/暫時 5xx 有界退避重試，最終失敗維持未驗收狀態；依實際 Sheet 規格，`life_import_result` 是裸字串 CREATED／UPDATED／UNCHANGED，失敗留空並寫 life_error，不增加 JSON 回執要求。Life 每輪連 ACKED 也核對 PostgreSQL，以資料庫版本與內容作可靠收據；已正確 ACK 的版本不重設成功時間。Sheets 不提供原子條件寫入，不能宣稱完全排除跨寫入方移列競態；寫後不符報 PARTIAL，下輪再核對／修復，不能憑 Sheet status 跳過新版。
-4. 匯入失敗保留列並寫 `ERROR`／脫敏 `life_error`；若 DB 已 commit 但回 Sheet 失敗，下輪相同鍵與 hash 由資料庫冪等處理（UNCHANGED）並補 ACK。允許部分成功但整體報 PARTIAL／FAIL；每輪留可稽核 run id、imported/unchanged/invalid 計數與真實 DB、Drive readback。
+4. 匯入失敗保留列並寫 `ERROR`／脫敏 `life_error`；若 DB 已 commit 但回 Sheet 失敗，下輪相同鍵與 hash 由資料庫冪等處理（UNCHANGED）並補 ACK。單筆來源欄位驗證失敗時，在該列記 ERROR／invalid_handoff_record，其他列繼續處理，並計入 data_status=PARTIAL；只要 Job 的 Sheet 讀寫、DB 操作及回執核對均正常，Job status=PASS／容器成功結束。DB 寫入失敗、無法核對或回寫回執、Sheet API 失敗、結構性表頭／重複鍵異常等技術與完整性問題仍讓 Job FAIL。每輪保留 run id、created/updated/unchanged/invalid/import_failed/ack_failed、Job status 與 data_status；不可拿 Job PASS 假稱全部活動合格。
 5. **探索端滾動 30 天清理**：沿用交接規格，只清 ACKED 且可信 life_ack_at_tpe 超過30天、精選池仍保存活動的列；清前再確認目前 key/hash。READY、ERROR、無可靠回執或新版不得清除。Life 不修改探索端清理流程；永久去重依靠 PostgreSQL，不依靠交接表歷史。
+
+## 2026-10-14｜雙層完成判定（使用者最新核准）
+
+- **Cloud Run Job 成功**：完成固定 Sheet 讀取、逐列資料驗證、有效列 PostgreSQL commit、所有必要 ACK/ERROR 回執及讀回版本核對，程式正常結束即可記 `status=PASS`、Exit 0；個別活動 `invalid_handoff_record` 不得單獨使 Cloud Run Job Exit 1。
+- **探索端資料品質**：欄位枚舉不合、offer 自指父鍵、缺值或來源證據問題等，保留該列 `ERROR` 和不含敏感內容的錯誤資訊，由每日 AI 探索批次修補正式精選池及同版本交接欄位、重算 business `content_hash`、更新 `handoff_updated_at_tpe` 後再設 READY。若 `invalid>0` 則 `data_status=PARTIAL`；此狀態是探索工作未完，不代表 Cloud Run 技術失敗。
+- **仍須 Fail Closed**：固定來源表頭／event_key 唯一性異常、Sheets API 或回執讀寫失敗、PostgreSQL 寫入失敗、版本一致性回執不能證明等屬 `status=FAIL` 並使 Job Exit 非零，不得藉「資料品質放寬」掩蓋真正技術錯誤。
+- 2026-10-14 執行案例：52 ACKED、2 ERROR 只證明部分逐列資料成功及兩列來源錯誤；當時舊版 Job 因 `handoff_import_partial` Exit 1，**歷史 Execution FAIL 不得追改 PASS**。新版本需經 CI、正式 digest pin／Job、真實執行及 Sheet/PG 讀回，才能宣稱新的技術成功。
 
 ## 授權與實作落差
 

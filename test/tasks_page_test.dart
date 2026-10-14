@@ -315,6 +315,41 @@ void main() {
     expect(find.text('帶護照'), findsNothing);
   });
 
+  testWidgets('deleting within nested navigation does not pop the tasks page',
+      (tester) async {
+    final api = _FakeTaskApi(
+      tasks: [
+        _task(id: 't1', title: '可刪除待辦'),
+        _task(id: 't2', title: '保留待辦'),
+      ],
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [taskApiProvider.overrideWithValue(api)],
+      child: MaterialApp(
+        theme: AppTheme.light,
+        home: Navigator(onGenerateRoute: (_) => MaterialPageRoute<void>(
+          builder: (_) => const TasksPage(),
+        )),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('待辦選項').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('刪除'));
+    await tester.pumpAndSettle();
+    expect(find.text('刪除待辦？'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '刪除'));
+    await tester.pumpAndSettle();
+
+    expect(api.deletedTaskIds, ['t1']);
+    expect(find.byType(TasksPage), findsOneWidget);
+    expect(find.text('保留待辦'), findsOneWidget);
+    expect(find.text('可刪除待辦'), findsNothing);
+    expect(find.text('待辦已刪除'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('completes restores and deletes a task with confirmation',
       (tester) async {
     final api = _FakeTaskApi(tasks: [_task(id: 't1', title: '完成驗收待辦')]);

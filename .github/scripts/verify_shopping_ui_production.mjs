@@ -37,6 +37,9 @@ function initialState() {
     creates: [],
     itemCreates: [],
     updates: [],
+    listUpdates: [],
+    listDeletes: [],
+    itemDeletes: [],
     nextList: 2,
     nextItem: 2,
   };
@@ -74,7 +77,43 @@ async function mockApi(page, state) {
       return json(route, 201, list);
     }
 
-    let match = path.match(/^\/api\/v1\/shopping-lists\/([^/]+)\/items$/);
+    let match = path.match(/^\/api\/v1\/shopping-lists\/([^/]+)$/);
+    if (match && (method === 'PATCH' || method === 'DELETE')) {
+      const id = decodeURIComponent(match[1]);
+      const list = state.lists.find((entry) => entry.id === id);
+      if (!list) return json(route, 404, { detail: 'not found' });
+      if (method === 'PATCH') {
+        const body = bodyOf(request);
+        state.listUpdates.push({ id, body });
+        Object.assign(list, body);
+        return json(route, 200, list);
+      }
+      state.listDeletes.push(id);
+      state.lists = state.lists.filter((entry) => entry.id !== id);
+      return route.fulfill({ status: 204, body: '' });
+    }
+
+    match = path.match(/^\/api\/v1\/shopping-lists\/([^/]+)\/items\/batch$/);
+    if (match && method === 'POST') {
+      const listId = decodeURIComponent(match[1]);
+      const created = [];
+      for (const body of bodyOf(request).items) {
+        const item = {
+          id: `item-browser-${state.nextItem++}`,
+          list_id: listId,
+          name: body.name,
+          category: body.category ?? null,
+          is_done: false,
+          sort_order: created.length,
+        };
+        state.itemCreates.push({ listId, body });
+        state.lists.find((entry) => entry.id === listId).items.push(item);
+        created.push(item);
+      }
+      return json(route, 201, created);
+    }
+
+    match = path.match(/^\/api\/v1\/shopping-lists\/([^/]+)\/items$/);
     if (match && method === 'POST') {
       const listId = decodeURIComponent(match[1]);
       const body = bodyOf(request);
@@ -92,13 +131,18 @@ async function mockApi(page, state) {
     }
 
     match = path.match(/^\/api\/v1\/shopping-items\/([^/]+)$/);
-    if (match && method === 'PATCH') {
+    if (match && (method === 'PATCH' || method === 'DELETE')) {
       const itemId = decodeURIComponent(match[1]);
       const body = bodyOf(request);
-      state.updates.push({ itemId, body });
       for (const list of state.lists) {
         const item = list.items.find((entry) => entry.id === itemId);
         if (item) {
+          if (method === 'DELETE') {
+            state.itemDeletes.push(itemId);
+            list.items = list.items.filter((entry) => entry.id !== itemId);
+            return route.fulfill({ status: 204, body: '' });
+          }
+          state.updates.push({ itemId, body });
           Object.assign(item, body);
           return json(route, 200, item);
         }
@@ -214,7 +258,7 @@ async function desktop(context) {
   pass('create_list');
 
   await (await named(page, '新增品項：旅行採買')).click();
-  await replaceText(await textbox(page, /^品項名稱$/), '充電線', 'item name');
+  await replaceText(await textbox(page, /品項名稱（每行一項）/), '充電線', 'item name');
   await replaceText(await textbox(page, /分類（選填）/), '3C', 'item category');
   await (await named(page, '儲存')).click();
 
@@ -238,6 +282,45 @@ async function desktop(context) {
   );
   await named(page, /完成 1 \/ 1/);
   pass('toggle_item');
+
+  await (await named(page, '新增品項：旅行採買')).click();
+  await replaceText(await textbox(page, /品項名稱（每行一項）/),
+    '耳機\n轉接頭', 'batch names');
+  await (await named(page, '儲存')).click();
+  await waitObserved(
+    () => state.itemCreates.filter((entry) =>
+      entry.body.name === '耳機' || entry.body.name === '轉接頭').length === 2,
+    'shopping items batch create',
+  );
+  pass('batch_create');
+
+  await (await named(page, '品項操作：充電線')).click();
+  await (await named(page, '修改品項')).click();
+  await replaceText(await textbox(page, /^品項名稱$/), '快充線', 'item edit');
+  await (await named(page, '儲存')).click();
+  await waitObserved(() => state.updates.some((entry) =>
+    entry.body.name === '快充線'), 'shopping item edit');
+  pass('edit_item');
+
+  await (await named(page, '品項操作：快充線')).click();
+  await (await named(page, '刪除品項')).click();
+  await (await named(page, '確認刪除')).click();
+  await waitObserved(() => state.itemDeletes.length === 1, 'shopping item delete');
+  pass('delete_item');
+
+  await (await named(page, '清單操作：旅行採買')).click();
+  await (await named(page, '修改清單')).click();
+  await replaceText(await textbox(page, /^清單名稱$/), '旅行清單', 'list edit');
+  await (await named(page, '儲存')).click();
+  await waitObserved(() => state.listUpdates.some((entry) =>
+    entry.body.name === '旅行清單'), 'shopping list edit');
+  pass('edit_list');
+
+  await (await named(page, '清單操作：旅行清單')).click();
+  await (await named(page, '刪除清單')).click();
+  await (await named(page, '確認刪除')).click();
+  await waitObserved(() => state.listDeletes.length === 1, 'shopping list delete');
+  pass('delete_list');
 
   await page.close();
 }

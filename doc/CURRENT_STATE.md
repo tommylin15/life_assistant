@@ -2,6 +2,12 @@
 
 > **本段優先於下方 10/12 以前的歷史快照。** 本次 01～07 工程批次尚待其新 SHA 的 CI、staging 和 runtime 實際結果，不以文件或 commit 判 DONE。
 
+## 2026-10-14｜新回報：購物 CRUD／批次輸入、待辦刪除白屏
+
+GitHub main 原實作只有購物清單建立、單項新增及勾選更新；未提供清單／品項的獨立編輯與刪除，也不能多行同批新增。待辦刪除確認在巢狀 Navigator 中使用頁面 `context` pop，有誤關頁面的風險；本次以對話框自己的 `dialogContext` 關閉。
+
+本次變更需在新 SHA 上取得 CI、Flutter、staging／runtime 與真實帳號 readback，未查證前均為 **NOT VERIFIED／PARTIAL**，不能推論正式站已更新。
+
 ## 2026-10-14 已取得的 Release 證據
 - 正式 main `7c42a01d58f4bc7df16fa44a63845d8baa58c794`：完整 CI 四 job [#38497669129](https://github.com/tommylin15/life_assistant/actions/runs/38497669129) PASS；正式後端 Release [#38502483297](https://github.com/tommylin15/life_assistant/actions/runs/38502483297) PASS（包含 PostgreSQL migration 0018、合成 tenant rollback-only readback、postdeploy、正式流量與 Job pin）；正式 Hosting [#38505066967](https://github.com/tommylin15/life_assistant/actions/runs/38505066967) PASS（release.txt、API 401、OAuth redirect、Task/Project browser acceptance）。
 - **不能混淆：** 活動 Job digest/contract readback **PASS 但 execution=NOT_RUN**；GAS 07:30 觸發器及定期實際終態 **NOT VERIFIED**。前一次交接快照為 52 ACKED／2 ERROR，這是來源行級狀態，不能證明後續新一輪 Job PASS。

@@ -14,3 +14,9 @@
 **同批測試策略：** 將程式、測試、部署診斷與文件在一個 main commit 交付；先由 push 觸發四工作 CI，再由既有流程走 staging-only，同時一次性受控 workflow 核對正式 live digest 並可手動等價執行既有匯入 Job；該工作流 **無 cron / 無 production promotion / 不動 IAM**。正式發布仍需獨立符合人工 workflow_dispatch 門檻。不可用 staging PASS 推定正式生產新 SHA PASS。
 
 **範圍排除：** 取消的人工作業 OAuth 驗收不恢復；自動 OAuth 安全檢查仍維持。Life 不重開活動 crawler、Queue、MCP 替代匯入、第二輪 AI，不把本次研究內容視為正式功能。
+
+## 2026-10-14｜購物 CRUD + 批次輸入／待辦刪除白屏（獨立使用者回報）
+
+- 購物：補清單修改／刪除、品項修改／刪除四項獨立操作；同一份清單支援一次輸入多行、至多 50 個品項，批次 API 用單一 DB transaction；保留既有勾選 API、使用者隔離與 audit。
+- 待辦：修正巢狀 Navigator 中刪除確認對話框錯誤 pop 頁面的風險，加入 widget regression。
+- 驗收狀態：implementation committed 前 **NOT VERIFIED**；待最新 main CI 四項、staging 以及實際使用者購物／待辦頁操作確認；不得以單元測試代替正式網頁驗收。

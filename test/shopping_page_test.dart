@@ -33,6 +33,9 @@ class _FakeShoppingApi implements ShoppingApi {
   final List<Map<String, dynamic>> createdLists = [];
   final List<Map<String, dynamic>> createdItems = [];
   final List<Map<String, dynamic>> updates = [];
+  final List<Map<String, dynamic>> listUpdates = [];
+  final List<String> deletedLists = [];
+  final List<String> deletedItems = [];
   var nextList = 2;
   var nextItem = 2;
 
@@ -59,6 +62,22 @@ class _FakeShoppingApi implements ShoppingApi {
   }
 
   @override
+  Future<Map<String, dynamic>> updateShoppingList(
+    String listId, Map<String, dynamic> body,
+  ) async {
+    listUpdates.add({'id': listId, ...body});
+    final list = lists.firstWhere((entry) => entry['id'] == listId);
+    list.addAll(body);
+    return list;
+  }
+
+  @override
+  Future<void> deleteShoppingList(String listId) async {
+    deletedLists.add(listId);
+    lists.removeWhere((entry) => entry['id'] == listId);
+  }
+
+  @override
   Future<Map<String, dynamic>> createShoppingItem(
     String listId,
     Map<String, dynamic> body,
@@ -78,6 +97,17 @@ class _FakeShoppingApi implements ShoppingApi {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> createShoppingItemsBatch(
+    String listId, Map<String, dynamic> body,
+  ) async {
+    final created = <Map<String, dynamic>>[];
+    for (final entry in (body['items'] as List<dynamic>)) {
+      created.add(await createShoppingItem(listId, entry as Map<String, dynamic>));
+    }
+    return created;
+  }
+
+  @override
   Future<Map<String, dynamic>> updateShoppingItem(
     String itemId,
     Map<String, dynamic> body,
@@ -92,6 +122,15 @@ class _FakeShoppingApi implements ShoppingApi {
       }
     }
     throw StateError('item not found');
+  }
+
+  @override
+  Future<void> deleteShoppingItem(String itemId) async {
+    deletedItems.add(itemId);
+    for (final list in lists) {
+      (list['items'] as List<Map<String, dynamic>>)
+          .removeWhere((item) => item['id'] == itemId);
+    }
   }
 }
 
@@ -166,6 +205,95 @@ void main() {
     expect(api.updates.single['item_id'], 'item-2');
     expect(api.updates.single['is_done'], isTrue);
     expect(find.text('完成 1 / 2'), findsOneWidget);
+  });
+
+  testWidgets('adds multiple items in one save', (tester) async {
+    final api = _FakeShoppingApi();
+    await _pump(tester, api);
+
+    await tester.tap(find.byKey(const ValueKey('shopping-add-item-list-1')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('shopping-item-name-field')),
+      '蘋果\n牛奶\n麵包',
+    );
+    await tester.tap(find.text('儲存'));
+    await tester.pumpAndSettle();
+
+    expect(api.createdItems.map((entry) => entry['name']),
+        ['蘋果', '牛奶', '麵包']);
+    expect(find.text('蘋果'), findsOneWidget);
+    expect(find.text('麵包'), findsOneWidget);
+    expect(find.text('完成 0 / 4'), findsOneWidget);
+  });
+
+  testWidgets('edits and deletes an item without deleting the list', (tester) async {
+    final api = _FakeShoppingApi();
+    await _pump(tester, api);
+
+    await tester.tap(find.byKey(const ValueKey('shopping-item-menu-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('修改品項'));
+    await tester.pumpAndSettle();
+    expect(find.text('修改品項 · 生活用品'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('shopping-item-name-field')), '低脂牛奶');
+    await tester.tap(find.text('儲存'));
+    await tester.pumpAndSettle();
+    expect(api.updates.last['name'], '低脂牛奶');
+    expect(find.text('低脂牛奶'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('shopping-item-menu-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('刪除品項'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(api.deletedItems, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('shopping-item-menu-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('刪除品項'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('確認刪除'));
+    await tester.pumpAndSettle();
+    expect(api.deletedItems, ['item-1']);
+    expect(find.text('生活用品'), findsOneWidget);
+    expect(find.text('低脂牛奶'), findsNothing);
+  });
+
+  testWidgets('edits list name and confirms cascade delete', (tester) async {
+    final api = _FakeShoppingApi();
+    await _pump(tester, api);
+
+    await tester.tap(find.byKey(const ValueKey('shopping-list-menu-list-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('修改清單'));
+    await tester.pumpAndSettle();
+    expect(find.text('修改購物清單'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('shopping-list-name-field')), '出遊清單',
+    );
+    await tester.tap(find.text('儲存'));
+    await tester.pumpAndSettle();
+    expect(api.listUpdates.single['name'], '出遊清單');
+
+    await tester.tap(find.byKey(const ValueKey('shopping-list-menu-list-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('刪除清單'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('將同時刪除這份清單中的 1 個品項'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(api.deletedLists, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('shopping-list-menu-list-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('刪除清單'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('確認刪除'));
+    await tester.pumpAndSettle();
+    expect(api.deletedLists, ['list-1']);
+    expect(find.text('還沒有購物清單'), findsOneWidget);
   });
 
   testWidgets('shows empty and error states', (tester) async {

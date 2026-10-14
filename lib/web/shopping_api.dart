@@ -17,7 +17,16 @@ Uri _shoppingApiUri(String path) {
 abstract class ShoppingApi {
   Future<List<Map<String, dynamic>>> getShoppingLists();
   Future<Map<String, dynamic>> createShoppingList(Map<String, dynamic> body);
+  Future<Map<String, dynamic>> updateShoppingList(
+    String listId,
+    Map<String, dynamic> body,
+  );
+  Future<void> deleteShoppingList(String listId);
   Future<Map<String, dynamic>> createShoppingItem(
+    String listId,
+    Map<String, dynamic> body,
+  );
+  Future<List<Map<String, dynamic>>> createShoppingItemsBatch(
     String listId,
     Map<String, dynamic> body,
   );
@@ -25,6 +34,7 @@ abstract class ShoppingApi {
     String itemId,
     Map<String, dynamic> body,
   );
+  Future<void> deleteShoppingItem(String itemId);
 }
 
 class HttpShoppingApi implements ShoppingApi {
@@ -57,6 +67,28 @@ class HttpShoppingApi implements ShoppingApi {
   }
 
   @override
+  Future<Map<String, dynamic>> updateShoppingList(
+    String listId,
+    Map<String, dynamic> body,
+  ) async {
+    final encoded = Uri.encodeComponent(listId);
+    final res = await _client.patch(
+      _shoppingApiUri('/shopping-lists/$encoded'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _check(res.statusCode, res.body);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  @override
+  Future<void> deleteShoppingList(String listId) async {
+    final encoded = Uri.encodeComponent(listId);
+    final res = await _client.delete(_shoppingApiUri('/shopping-lists/$encoded'));
+    _check(res.statusCode, res.body);
+  }
+
+  @override
   Future<Map<String, dynamic>> createShoppingItem(
     String listId,
     Map<String, dynamic> body,
@@ -72,6 +104,21 @@ class HttpShoppingApi implements ShoppingApi {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> createShoppingItemsBatch(
+    String listId,
+    Map<String, dynamic> body,
+  ) async {
+    final encoded = Uri.encodeComponent(listId);
+    final res = await _client.post(
+      _shoppingApiUri('/shopping-lists/$encoded/items/batch'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _check(res.statusCode, res.body);
+    return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
+  }
+
+  @override
   Future<Map<String, dynamic>> updateShoppingItem(
     String itemId,
     Map<String, dynamic> body,
@@ -84,6 +131,13 @@ class HttpShoppingApi implements ShoppingApi {
     );
     _check(res.statusCode, res.body);
     return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  @override
+  Future<void> deleteShoppingItem(String itemId) async {
+    final encoded = Uri.encodeComponent(itemId);
+    final res = await _client.delete(_shoppingApiUri('/shopping-items/$encoded'));
+    _check(res.statusCode, res.body);
   }
 }
 

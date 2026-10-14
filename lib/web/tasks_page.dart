@@ -320,12 +320,12 @@ class _TasksPageState extends ConsumerState<TasksPage> {
   Future<void> _deleteTask(_TaskView task) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('刪除待辦？'),
         content: Text('「${task.title}」及其 Checklist 將被刪除。'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('取消'),
           ),
           FilledButton(
@@ -333,7 +333,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
               backgroundColor: Theme.of(context).colorScheme.error,
               foregroundColor: Theme.of(context).colorScheme.onError,
             ),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('刪除'),
           ),
         ],

@@ -224,25 +224,70 @@ class HabitCompletionOut(BaseModel):
 
 
 class ShoppingListCreate(BaseModel):
-    name: str = Field(max_length=500)
+    name: str = Field(min_length=1, max_length=500)
     project_id: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def valid_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Shopping list name cannot be blank")
+        return value
+
+
+class ShoppingListUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=500)
+    project_id: str | None = None
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one shopping list field is required")
+        if "name" in self.model_fields_set:
+            if self.name is None or not self.name.strip():
+                raise ValueError("Shopping list name cannot be blank")
+            self.name = self.name.strip()
+        return self
 
 
 class ShoppingItemCreate(BaseModel):
-    name: str = Field(max_length=500)
+    name: str = Field(min_length=1, max_length=500)
     category: str | None = Field(default=None, max_length=255)
+
+    @field_validator("name")
+    @classmethod
+    def valid_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Shopping item name cannot be blank")
+        return value
+
+
+class ShoppingItemsBatchCreate(BaseModel):
+    items: list[ShoppingItemCreate] = Field(min_length=1, max_length=50)
+    model_config = {"extra": "forbid"}
 
 
 class ShoppingItemUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=500)
+    category: str | None = Field(default=None, max_length=255)
     is_done: bool | None = None
     model_config = {"extra": "forbid"}
 
     @model_validator(mode="after")
     def require_change(self):
         if not self.model_fields_set:
-            raise ValueError("is_done must be provided")
-        if self.is_done is None:
+            raise ValueError("At least one shopping item field is required")
+        if "is_done" in self.model_fields_set and self.is_done is None:
             raise ValueError("is_done cannot be null")
+        if "name" in self.model_fields_set:
+            if self.name is None or not self.name.strip():
+                raise ValueError("Shopping item name cannot be blank")
+            self.name = self.name.strip()
+        if "category" in self.model_fields_set and self.category is not None:
+            self.category = self.category.strip() or None
         return self
 
 

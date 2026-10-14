@@ -41,6 +41,13 @@ class RevisionRetentionTests(unittest.TestCase):
         self.assertNotIn("life-assistant-api-00002", result["delete"])
         self.assertEqual(len(result["retain"]), 11)
 
+    def test_old_tag_protection_is_auditable_not_silently_removed(self):
+        result = ret.plan(svc(tagged=2), self.rows, 10)
+        name = "life-assistant-api-00002"
+        self.assertIn(name, result["protected_over_target"])
+        self.assertIn("traffic_tag", result["protection_reasons"][name])
+        self.assertEqual(len(result["retain"]), 11)
+
     def test_explicit_rollback_baseline_is_preserved(self):
         result = ret.plan(svc(), self.rows, 10,
                           ["life-assistant-api-00001"])

@@ -1,10 +1,9 @@
-# Life — Progress (2026-10-10)
+# Life — Progress（2026-10-14）
 
-本檔只作**進度入口**，避免與現行證據和待辦平行維護兩份狀態表。
+本檔不重複編寫時效性驗收矩陣。請依以下單一入口：
+- **現況和 SHA／GitHub Actions 證據：** [CURRENT_STATE](CURRENT_STATE.md)。
+- **01～07 本批工程項目、驗收門檻：** [todo](todo.md)。
+- **活動資料固定交接契約：** [curated_sheet_job_ingestion](curated_sheet_job_ingestion.md)。
+- **正式發布政策：** [ci_cd_ghcr_release_policy](ci_cd_ghcr_release_policy.md)。
 
-- **最新 code/runtime 證據（Source of Truth）：** [CURRENT_STATE.md](CURRENT_STATE.md)。
-- **逐項 PASS/FAIL/NOT VERIFIED：** [P0/P1 consolidated acceptance](P0_P1_CONSOLIDATED_ACCEPTANCE_2026-10-10.md)。
-- **下一步：** [todo.md](todo.md) / [phase1_delivery_order.md](phase1_delivery_order.md)。
-- **新核准但尚未實作的產品規格：** [限時機會／活動探索](curated_activity_user_features.md)。
-
-截至產品規格核准，整體仍是 **PARTIAL**。先前的 code cleanup、舊 Queue 取消和已完成的特定 SHA CI 不代表最新 SHA 的 staging、production、真實 ChatGPT connector 或使用者兩入口已通過驗收。
+歷史綠燈不得自動繼承到新 SHA；每次回報 implementation、tests、CI、staging、production、runtime、integration 的 PASS / FAIL / NOT VERIFIED。未取得完整證據仍為 PARTIAL。

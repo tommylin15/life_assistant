@@ -1,0 +1,97 @@
+# One-shot 01-07 verification; no cron, no production promotion, no IAM change.
+name: Life 01-07 One-time Batch Acceptance
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: life-assistant-v3-production-release
+  cancel-in-progress: false
+jobs:
+  one-time:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      JOB: life-assistant-free-events
+      BATCH_PARENT: 7c42a01d58f4bc7df16fa44a63845d8baa58c794
+      BATCH_SUBJECT: "chore(life): consolidate 01-07 guarded acceptance"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - name: Exact one-time main parent and four CI jobs
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "run=false" >> "$GITHUB_OUTPUT"
+          if [[ "$(git rev-parse HEAD^)" != "$BATCH_PARENT" ||
+                "$(git log -1 --format=%s)" != "$BATCH_SUBJECT" ]]; then
+            echo "one_time_batch=SKIP guarded_commit_only" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)" = "$SOURCE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs?per_page=100" > "$RUNNER_TEMP/ci-jobs.json"
+          jq -e '[.jobs[] | select(.name=="backend" or .name=="flutter" or
+               .name=="deployment-scripts" or .name=="free-events-postgres") |
+               select(.conclusion=="success") | .name] | unique | length==4' "$RUNNER_TEMP/ci-jobs.json" >/dev/null
+          echo "run=true" >> "$GITHUB_OUTPUT"
+          echo "batch_exact_ci=PASS sha=$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - uses: google-github-actions/auth@v2
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+        if: ${{ steps.gate.outputs.run == 'true' }}
+      - name: Guard production live API and curated Job immutable digest
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe life-assistant-api --project "$GCP_PROJECT_ID"             --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/live-service.json"
+          LIVE="$(jq -er '[.status.traffic[] | select((.percent // 0)==100)] |
+            if length==1 then .[0].revisionName else error("no sole live revision") end' "$RUNNER_TEMP/live-service.json")"
+          echo "$LIVE" > "$RUNNER_TEMP/live-revision-name"
+          gcloud run revisions describe "$LIVE" --project "$GCP_PROJECT_ID"             --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/live-revision.json"
+          IMAGE="$(python3 -c 'import json,sys;sys.path.insert(0,".github/scripts");from v3_image_identity import canonical;print(canonical(json.load(open(sys.argv[1]))["spec"]["containers"][0]["image"]))' "$RUNNER_TEMP/live-revision.json")"
+          python3 .github/scripts/v3_curated_handoff_alignment.py --mode live             --json "$RUNNER_TEMP/live-service.json"             --revision-json "$RUNNER_TEMP/live-revision.json"             --expected-revision "$LIVE" --expected-image "$IMAGE"
+          gcloud run jobs describe "$JOB" --project "$GCP_PROJECT_ID"             --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/handoff-job.json"
+          python3 .github/scripts/v3_curated_handoff_alignment.py --mode job             --json "$RUNNER_TEMP/handoff-job.json" --expected-image "$IMAGE"
+          echo "batch_handoff_digest_preflight=PASS live=$LIVE" >> "$GITHUB_STEP_SUMMARY"
+      - name: Execute existing importer now (not GAS timer), with bounded diagnostics
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$JOB"             gcloud run jobs execute "$JOB" --project "$GCP_PROJECT_ID"             --region "$GCP_REGION" --task-timeout=10m --wait --quiet
+          echo "batch_handoff_execution=PASS row_quality=CHECK_JOB_SUMMARY gas_trigger=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
+      - name: Read-only retention report without untagging or deletion
+        if: ${{ always() && steps.gate.outputs.run == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f "$RUNNER_TEMP/live-revision-name" ]]; then
+            echo "batch_retention=NOT_VERIFIED no_live_baseline" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          LIVE="$(cat "$RUNNER_TEMP/live-revision-name")"
+          python3 .github/scripts/v3_revision_retention.py --project "$GCP_PROJECT_ID"             --region "$GCP_REGION" --service life-assistant-api             --expected-live-revision "$LIVE" --keep 10             > "$RUNNER_TEMP/retention.json"
+          jq -r '"batch_retention=DRY_RUN before=\(.before) target=\(.keep) blocked_protected=\(.protected_over_target | length) eligible=\(.delete | length)"' "$RUNNER_TEMP/retention.json" >> "$GITHUB_STEP_SUMMARY"
+          echo "production_mutation=NONE retention_apply=NOT_RUN" >> "$GITHUB_STEP_SUMMARY"

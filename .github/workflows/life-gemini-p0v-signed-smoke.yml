@@ -152,9 +152,19 @@ jobs:
         run: |
           set -euo pipefail
           url="$(cat "$RUNNER_TEMP/gateway-url")"
+          result=0
           gcloud run jobs execute "$JOB" --project "$PROJECT" --region "$REGION" \
             --args="-m,scripts.run_shared_gemini_gateway_acceptance,$url" \
-            --task-timeout=4m --wait --quiet
+            --task-timeout=4m --wait --quiet || result=$?
+          if (( result != 0 )); then
+            # Log ONLY the synthetic smoke's sanitized status code and task
+            # exit. Never expose prompt, response, bearer token or generic
+            # Cloud Run application logs in GitHub Actions.
+            GCP_PROJECT_ID="$PROJECT" GCP_REGION="$REGION" \
+              bash .github/scripts/v3_gemini_smoke_diagnostics.sh "$JOB"
+            echo "life_runtime_to_gateway_to_gemini=FAIL task_exit=$result" >> "$GITHUB_STEP_SUMMARY"
+            exit "$result"
+          fi
           echo "life_runtime_to_gateway_to_gemini=PASS (synthetic text; authenticated user API NOT VERIFIED)" >> "$GITHUB_STEP_SUMMARY"
       - name: Compare untouched production serving traffic
         if: ${{ always() && steps.gate.outputs.run == 'true' }}

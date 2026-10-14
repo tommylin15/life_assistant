@@ -1,34 +1,16 @@
-# Life — Active TODO（2026-10-11）
+# Life — Active TODO（2026-10-14；01～07 同批）
+本檔是唯一現行工程待辦入口；歷史狀態及執行證據見 [CURRENT_STATE](CURRENT_STATE.md)。**所有未通過的整合驗收維持 PARTIAL / NOT VERIFIED；不要因本次推送就標 DONE。**
 
-**唯一活動產品規格：** [UX V3｜活動使用者功能](curated_activity_user_features.md)。2026-10-11 已將 UX V3 與三風格視覺共用元件寫進 main，完整測試與 staging/readback 獨立驗收。新 source 為 **PARTIAL**，不得將新 CI 或部署標成已驗收；以下是仍須特別核對的關卡。
-
-## A. 活動 UX V3 與三風格 UI（2026-10-11 source 已進 main）
-
-| Priority | 工項 | 本次 source 狀態與待核對證據 |
+| 順序 | 範圍 | 已查證與剩餘門檻 |
 |---|---|---|
-| P0 | 兩入口＋舊精選路徑相容轉向、保留首頁 events 卡 | SOURCE IMPLEMENTED；Flutter／staging navigation NOT VERIFIED |
-| P0 | 星等從活動 UI 隱藏、取消星等預設排序 | SOURCE IMPLEMENTED；DB 保留舊欄位，API 相容參數忽略；需 SQL／畫面證據 |
-| P0 | 5 主群組首載、後續 10 群組、has_more 與穩定主子分組 | SOURCE IMPLEMENTED；offset 跨上游更新可能頁面漂移，真正 snapshot cursor 尚 PARTIAL |
-| P0 | 兩入口各六速查、中文搜尋、跨日與最新收錄 | SOURCE IMPLEMENTED；台北時區／取消與 unknown runtime E2E NOT VERIFIED |
-| P1 | 固定區域、縣市／行政區／類別／費用篩選 | SOURCE IMPLEMENTED；行政區以文字完整相等輸入，動態下拉選單未實作 |
-| P1 | 兩入口主活動收藏／已收藏、舊子場次收藏兼容 | SOURCE IMPLEMENTED；PostgreSQL 跨帳號／舊收藏／重新入庫 E2E NOT VERIFIED |
-| P1 | 活動建立原有 Task、確認是否設報名時間／網址可點 | SOURCE IMPLEMENTED；新增 Task/DB/readback 跨功能實測 NOT VERIFIED |
-| P1 | Google Calendar 全天 transparent 日期標記、Life 日曆開網址 | SOURCE IMPLEMENTED；真實 OAuth／Google & Life 雙向 readback NOT VERIFIED |
-| UI | 三種風格與亮暗切換、六功能視覺辨識／首頁／筆記卡片 | SOURCE IMPLEMENTED（基礎與局部卡片）；海報完整插畫和 18 視圖視覺驗收 PARTIAL |
-| Release | 合併的單次 CI／staging／驗收／發布 | 最新程式再啟動完整 CI；先前 #886 CI PASS 屬於舊 SHA，最新版本 staging/owner OAuth/runtime NOT VERIFIED |
+| 01 | 活動 GAS→Job→PostgreSQL→Sheet ACK/ERROR | 2026-10-14 正式 release #38502483297 將 importer Job pin 到 live digest；**該 Release 不執行匯入**。舊 Execution 52 ACKED / 2 ERROR；新版本需手動 Job Exit 0、Sheet/DB 版本 readback，GAS 07:30 trigger 另驗 |
+| 02 | Life→omniAgent Gateway→Gemini Flash-Lite | 10/13 Signed Smoke #38376914628 PASS；10/14 #38500240196 Job FAIL，原因尚未從該 Cloud Run Execution 安全讀回；再跑最新同版 signed smoke 並檢查 synthetic response；**登入使用者 API** 仍另驗 |
+| 03 | 正式一般帳號隔離 | 2026-10-14 V3 Release 的 `run_private_ownership_acceptance` 在真實 PostgreSQL rollback-only PASS；真人跨 Owner／第二／第三帳號互相讀寫仍 NOT VERIFIED |
+| 04 | 活動 V3 的多日、搜尋、5+10 分頁、收藏映射 | 已有 Flutter／API 主流程；持續補跨日速查、舊收藏和資料更新時 offset drift；PG 多人操作／Google Calendar 真實回讀須獨立驗 |
+| 05 | Life Drive AI 管理 | 原已有 Provider 控制、健康探針、用量筆數；本次顯示分 Provider 結果，**Token／成本及預算不可推估**，實際多 Provider 與 budget gate NOT VERIFIED |
+| 06 | Cloud Run revisions 留 10 個 | 2026-10-14 Release 清理結果仍 60、`PARTIAL_PROTECTED`；新增受保護原因唯讀診斷，不移除 tag、不強行刪除、不改正式流量 |
+| 07 | GitHub 文件與 Issue 收斂 | 按本檔及 CURRENT_STATE 更新，不重複舊 10/10 待辦；Issue #10 direct-API 描述已由現行 Sheet Job 契約取代，暫保留追溯 |
 
-## B. 必要整合測試／驗收
+**同批測試策略：** 將程式、測試、部署診斷與文件在一個 main commit 交付；先由 push 觸發四工作 CI，再由既有流程走 staging-only，同時一次性受控 workflow 核對正式 live digest 並可手動等價執行既有匯入 Job；該工作流 **無 cron / 無 production promotion / 不動 IAM**。正式發布仍需獨立符合人工 workflow_dispatch 門檻。不可用 staging PASS 推定正式生產新 SHA PASS。
 
-- PostgreSQL：parent／child 去重與收藏映射、中文搜尋、5+10 分頁、穩定排序、時區 Asia/Taipei、跨日活動、未知時間、失效收藏。
-- Task：從活動產生的 Task 在既有待辦列表看得到、可編輯完成／取消、能點活動 URL；不因重試或同活動兩入口重複建立；授權及不同帳號隔離，原始網址更新不靜默覆寫私人備註。
-- Calendar：只有有據活動日期才能建立 Google 全天資訊標記；exclusive end、transparent、不預設提醒；Life 與 Google 都可讀回，Life 日曆可點 URL；OAuth/失敗時不虛報成功，跨帳號、去重和取消處理有證據。
-- 回寫後分層回報 **implementation / tests / CI / staging deployment / runtime / integration = PASS / FAIL / NOT VERIFIED**，完整才可標 DONE。
-
-## C. 仍未完成的資料／發布工作（不因 UX 文件完成而關閉）
-
-- [交接契約](curated_sheet_job_ingestion.md)：真實 Drive「交接資料」READY → GCP Job 讀取 → PostgreSQL 穩定鍵／版本去重 → DB commit → Sheet ACKED/ERROR → owner/Flutter 讀回，與 30 天 ACK 清理；真實 Sheet scope、Job、runtime **NOT VERIFIED**。
-- CI/CD V3：每次 main SHA 的完整測試、GHCR digest、候選／固定 staging exact-SHA、Google owner OAuth、API/DB/Flutter 真實 readback 獨立驗收；既有固定 staging OAuth 曾對舊 SHA PASS，不可當成本 SHA 或 UX V3 PASS。[CURRENT_STATE](CURRENT_STATE.md)
-- Admin rollout／個人導覽與首頁卡片維持現有模式；Drive AI admin provider 補強仍 Deferred，不阻擋活動 UX。
-- **持續取消**：Life 端來源 crawler、舊 Excel source scanner、Queue／claim／lease、第二輪 AI、重啟舊來源 14 天驗收、為本期新增 AI 向量搜尋／GPS／推播／代搶票。舊 DB/migration/API 留相容，不做破壞性刪除。
-
-**2026-10-11 最新整合補強：** 已加入三風格 × 四寬度 × 六功能的基礎 Widget 測試、活動桌面雙欄、共享 action readback 與跨入口刷新、可編輯待辦標題安全驗證，以及取消／過期報名的歷史收藏呈現。完整真實畫面、連動 Google OAuth、staging SHA 均待新 SHA 驗收。不得把先前 staging #38 或任何舊 SHA 的結果當作本批 PASS。
+**範圍排除：** 取消的人工作業 OAuth 驗收不恢復；自動 OAuth 安全檢查仍維持。Life 不重開活動 crawler、Queue、MCP 替代匯入、第二輪 AI，不把本次研究內容視為正式功能。

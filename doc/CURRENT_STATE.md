@@ -1,3 +1,20 @@
+# life_assistant — Current State（2026-10-14）
+
+> **本段優先於下方 10/12 以前的歷史快照。** 本次 01～07 工程批次尚待其新 SHA 的 CI、staging 和 runtime 實際結果，不以文件或 commit 判 DONE。
+
+## 2026-10-14 已取得的 Release 證據
+- 正式 main `7c42a01d58f4bc7df16fa44a63845d8baa58c794`：完整 CI 四 job [#38497669129](https://github.com/tommylin15/life_assistant/actions/runs/38497669129) PASS；正式後端 Release [#38502483297](https://github.com/tommylin15/life_assistant/actions/runs/38502483297) PASS（包含 PostgreSQL migration 0018、合成 tenant rollback-only readback、postdeploy、正式流量與 Job pin）；正式 Hosting [#38505066967](https://github.com/tommylin15/life_assistant/actions/runs/38505066967) PASS（release.txt、API 401、OAuth redirect、Task/Project browser acceptance）。
+- **不能混淆：** 活動 Job digest/contract readback **PASS 但 execution=NOT_RUN**；GAS 07:30 觸發器及定期實際終態 **NOT VERIFIED**。前一次交接快照為 52 ACKED／2 ERROR，這是來源行級狀態，不能證明後續新一輪 Job PASS。
+- Life→Gateway→Gemini：10/13 Signed Smoke [#38376914628](https://github.com/tommylin15/life_assistant/actions/runs/38376914628) PASS（合成文字，非使用者 API）；10/14 [#38500240196](https://github.com/tommylin15/life_assistant/actions/runs/38500240196) FAIL，Cloud Run execution `life-assistant-core-acceptance-jfb25`，根因尚未被讀回，不能猜測為 Gateway 或 Gemini。
+- Revision 保護清理：正式 Release `PARTIAL_PROTECTED`，剩餘 60 個 Cloud Run revisions。依現行政策保護 tag／流量／回滾 revision，不強行刪到 10 個。
+- 一般帳號：之前 Staging 真人活動收藏／Task／日曆基本操作 PASS；本次 formal release rollback-only 多租戶合成資料庫測試 PASS；未取得三個真人帳號跨讀寫的完整矩陣。
+- Drive AI：現有控制與執行筆數有效；Token、費用及預算**未埋點，不得提供猜測值**。
+
+## 2026-10-14 同批 01～07 修正／驗收
+本次單一 main commit 的變更需由 GitHub 最新 Actions 獨立核對。活動匯入以一次性受控工作流驗證當前**已正式發布的 live digest**，僅會使用既有 Life Job 並執行冪等 Sheet/DB 匯入，不設定額外定期 cron；新版 Gemini Signed Smoke 失敗增加限縮資訊的診斷；活動快速查詢補有據跨日重疊；後台用量顯示只提供實際已儲存執行次數；Revision 僅報保護原因，不卸 tag。詳見 [todo](todo.md)。新 SHA 的 CI／staging／formal production／runtime 未跑完以前 **NOT VERIFIED**。
+
+---
+
 # life_assistant — Current State (2026-10-12)
 
 ## 2026-10-12｜`verified_at_tpe` 選填、GAS 07:30 排程與接收真實驗收（最新）

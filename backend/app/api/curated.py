@@ -259,10 +259,15 @@ def _activity_filters(statement, *, entry, quick, keyword, region, city, distric
             sunday = saturday + timedelta(days=1)
             statement = statement.where(start <= sunday,
                 or_(end >= saturday, and_(end.is_(None), start >= saturday)))
-        elif quick == "next_7":
-            statement = statement.where(start.between(today, today + timedelta(days=7)))
-        elif quick == "next_30":
-            statement = statement.where(start.between(today, today + timedelta(days=30)))
+        elif quick in ("next_7", "next_30"):
+            # A multi-day event that began earlier but overlaps the requested
+            # window must remain discoverable. Unknown end dates alone are not
+            # evidence that a past event continues through today.
+            horizon = today + timedelta(days=7 if quick == "next_7" else 30)
+            statement = statement.where(or_(
+                start.between(today, horizon),
+                and_(start < today, end >= today),
+            ))
         elif quick == "free":
             statement = statement.where(CuratedActivity.fee_kind == "free")
     return statement

@@ -88,6 +88,11 @@ async def generate_text(prompt: str, *, user_sub: str) -> dict[str, str]:
             raise GatewayTextError("gateway_busy", 503)
         if response.status_code in (401, 403):
             raise GatewayTextError("gateway_identity_rejected", 502)
+        if response.status_code in (503, 504):
+            # Preserve the distinction between an upstream availability
+            # failure and a permanent contract failure; do not retry a call
+            # whose upstream execution may already have started.
+            raise GatewayTextError("gateway_upstream_unavailable", 503)
         raise GatewayTextError("gateway_execution_failed", 502)
     try:
         payload = response.json()

@@ -115,6 +115,26 @@ class V3PipelineContractTests(unittest.TestCase):
             self.assertIn(requirement, source)
         self.assertNotIn("value(spec.template.spec.containers[0].image)", source)
 
+    def test_one_shot_batch_is_guarded_and_never_promotes_production(self):
+        source, data = load("life-01-07-one-time-acceptance.yml")
+        event = data.get("on", data.get(True))
+        self.assertEqual(event["workflow_run"]["workflows"], ["CI"])
+        self.assertNotIn("schedule", event)
+        for required in (
+            "7c42a01d58f4bc7df16fa44a63845d8baa58c794",
+            "chore(life): consolidate 01-07 guarded acceptance",
+            'git rev-parse HEAD^',
+            "gh api",
+            'length==4',
+            "v3_curated_handoff_alignment.py",
+            "run_cloud_run_job_with_diagnostics.sh",
+            "v3_revision_retention.py",
+        ):
+            self.assertIn(required, source)
+        for forbidden in ("--apply --live-passed", "update-traffic",
+                          "--raw-field promote=true", "schedule:", "gcloud run revisions delete"):
+            self.assertNotIn(forbidden, source)
+
     def test_one_time_bootstrap_cannot_trigger_on_every_push(self):
         source, data = load("v3-initial-bootstrap.yml")
         self.assertIn(".github/workflows/v3-initial-bootstrap.yml",

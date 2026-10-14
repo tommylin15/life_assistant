@@ -52,6 +52,22 @@ class CuratedV3UnitTest(unittest.TestCase):
         self.assertIn("ends_on", sql)
         self.assertIn("starts_on", sql)
 
+    def test_next_7_and_30_include_ongoing_cross_day_events(self):
+        for quick in ("next_7", "next_30"):
+            with self.subTest(quick=quick):
+                stmt = _activity_filters(
+                    select(CuratedActivity), entry="explore", quick=quick,
+                    keyword=None, region=None, city=None, district=None,
+                    category=None, fee_kind=None, starts_from=None,
+                    today=date(2026, 10, 14), saved_only=False, user_sub="owner",
+                )
+                sql = str(stmt.whereclause.compile(dialect=postgresql.dialect()))
+                self.assertIn("starts_on", sql)
+                self.assertIn("ends_on", sql)
+                self.assertIn(" BETWEEN ", sql)
+                self.assertIn(" AND ", sql)
+                self.assertIn(" OR ", sql)
+
     def test_default_opportunities_exclude_expired_deadlines_and_cancellations(self):
         base = dict(
             entry="opportunities", quick="latest", keyword=None, region=None,

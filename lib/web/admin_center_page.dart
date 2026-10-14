@@ -126,8 +126,17 @@ class _AiSettings extends ConsumerWidget {
           ref.watch(_adminUsage).when(
             loading: () => const LinearProgressIndicator(),
             error: (_, __) => const Text('無法讀取用量統計'),
-            data: (usage) => Text('已儲存執行結果筆數：${(usage['counts'] as List).fold<int>(
-              0, (n, row) => n + ((row['count'] as num).toInt()))}'),
+            data: (usage) {
+              final counts = (usage['counts'] as List);
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('已儲存執行結果筆數：${counts.fold<int>(
+                  0, (n, row) => n + ((row['count'] as num).toInt()))}'),
+                if (counts.isEmpty) const Text('尚無已儲存的 Provider 執行紀錄'),
+                for (final row in counts)
+                  Text('${row['provider']} · ${row['status']}：${row['count']} 筆'),
+                const Text('此處為執行筆數，不是 Token、帳單或預算餘額。'),
+              ]);
+            },
           ),
         ]);
       },

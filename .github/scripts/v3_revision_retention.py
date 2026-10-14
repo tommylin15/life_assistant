@@ -65,8 +65,28 @@ def plan(svc, revisions, keep, explicitly_protected=()):
         raise ValueError("Protected revision is absent from inventory")
     delete = [revision_name(r) for r in ordered[keep:]
               if revision_name(r) not in protected]
+    # Report WHY we cannot reach the ten-revision target; tagged Firebase
+    # Preview or staging pins are never silently detached to force cleanup.
+    reasons = {}
+    for name in protected:
+        tags = []
+        if name == ready:
+            tags.append("latest_ready")
+        if name == created:
+            tags.append("latest_created")
+        if name in explicitly_protected:
+            tags.append("explicit_rollback")
+        for rev, tag, percent in traffic_snapshot(svc):
+            if rev == name and tag:
+                tags.append("traffic_tag")
+            if rev == name and percent:
+                tags.append("serving_traffic")
+        reasons[name] = sorted(set(tags))
+    blocked = sorted(protected - retained)
     return {"ordered": [revision_name(r) for r in ordered],
             "protected": sorted(protected),
+            "protected_over_target": blocked,
+            "protection_reasons": {name: reasons[name] for name in blocked},
             "delete": delete,
             "retain": [revision_name(r) for r in ordered
                        if revision_name(r) not in set(delete)],

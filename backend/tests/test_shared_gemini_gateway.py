@@ -115,6 +115,8 @@ class GatewayTextClientTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_quota_and_upstream_failures_are_not_retried(self):
         for code, expected in ((429, "gateway_busy"), (502, "gateway_execution_failed"),
+                               (503, "gateway_upstream_unavailable"),
+                               (504, "gateway_upstream_unavailable"),
                                (401, "gateway_identity_rejected")):
             calls = []
             def error(request):

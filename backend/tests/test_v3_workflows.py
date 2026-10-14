@@ -121,7 +121,7 @@ class V3PipelineContractTests(unittest.TestCase):
         self.assertEqual(event["workflow_run"]["workflows"], ["CI"])
         self.assertNotIn("schedule", event)
         for required in (
-            "7c42a01d58f4bc7df16fa44a63845d8baa58c794",
+            "53c131ea32bd372cf7ec25268f977e26fb41f6e6",
             "chore(life): consolidate 01-07 guarded acceptance",
             'git rev-parse HEAD^',
             "gh api",

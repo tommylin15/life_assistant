@@ -22,7 +22,7 @@ jobs:
       GCP_PROJECT_ID: gen-lang-client-0593591102
       GCP_REGION: us-central1
       JOB: life-assistant-free-events
-      BATCH_PARENT: 7c42a01d58f4bc7df16fa44a63845d8baa58c794
+      BATCH_PARENT: 53c131ea32bd372cf7ec25268f977e26fb41f6e6
       BATCH_SUBJECT: "chore(life): consolidate 01-07 guarded acceptance"
     steps:
       - uses: actions/checkout@v4

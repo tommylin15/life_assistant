@@ -158,6 +158,25 @@ class CloudBuildV2Tests(unittest.TestCase):
                 self.assertNotIn('gh workflow run v3-release-ghcr.yml', source)
                 self.assertNotIn('--raw-field promote=true', source)
                 self.assertNotIn('gcloud run services update-traffic', source)
+            elif workflow.name == 'life-01-07-one-time-acceptance.yml':
+                # 2026-10-14 explicit user-authorized *single* importer
+                # acceptance. It cannot re-run on arbitrary CI success,
+                # promote production, change a Job, or remove rollback tags.
+                self.assertIn('workflow_run:', source)
+                self.assertIn('workflows: [CI]', source)
+                self.assertIn("workflow_run.event == 'push'", source)
+                self.assertIn("workflow_run.conclusion == 'success'", source)
+                self.assertIn('53c131ea32bd372cf7ec25268f977e26fb41f6e6', source)
+                self.assertIn('BATCH_SUBJECT:', source)
+                self.assertIn('git rev-parse HEAD^', source)
+                self.assertIn('unique | length==4', source)
+                self.assertIn('v3_curated_handoff_alignment.py', source)
+                self.assertIn('run_cloud_run_job_with_diagnostics.sh', source)
+                for forbidden in ('gcloud run services update-traffic',
+                                  'gcloud run jobs update', 'gcloud run revisions delete',
+                                  '--apply --live-passed', 'schedule:',
+                                  '--raw-field promote=true'):
+                    self.assertNotIn(forbidden, source)
             elif workflow.name == 'life-gemini-p0v-signed-smoke.yml':
                 # Approved 2026-10-13 P0-V: only after V3 staging-only SUCCESS,
                 # exact main SHA and four CI gates. This workflow may execute

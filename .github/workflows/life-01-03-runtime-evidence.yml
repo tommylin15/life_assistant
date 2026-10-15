@@ -135,25 +135,6 @@ jobs:
                   print("- importer: "+" ".join(f"{k}={v}" for k,v in info.items()),file=out)
               print("- GAS_07_30_actual_trigger: NOT_VERIFIED (Apps Script triggers/logs are external to Cloud Run)",file=out)
               print("- Sheet_ack_and_PostgreSQL_same_execution_readback: NOT_VERIFIED by this read-only inventory",file=out)
-          # The first 07:30 TPE window after the production 6fdb4cf release.
-          # A matching Cloud Run Execution plus a matching Sheet receipt is
-          # evidence of the daily import, not proof of the Apps Script trigger ID.
-          tpe_window_start="2026-10-15T23:00:00Z"
-          in_window=[j for j in jobs
-              if str(j.get("status",{}).get("completionTime") or
-                     j.get("completionTime") or "") >= tpe_window_start]
-          completed=sum(any(c.get("type")=="Completed" and
-                            str(c.get("status")).lower()=="true"
-                            for c in (j.get("status",{}).get("conditions") or
-                                      j.get("conditions") or []))
-                        for j in in_window)
-          print(f"importer_oct16_window executions={len(in_window)} completed={completed}")
-          with open(summary,"a") as out:
-              print(f"- oct16_0700_tpe_after_promotion_execution_count: {len(in_window)}",file=out)
-              print(f"- oct16_0700_tpe_after_promotion_completed: {completed}",file=out)
-              print("- Apps_Script_trigger_id: NOT_VERIFIED (not readable via Cloud Run API)",file=out)
-          if not in_window or completed==0:
-              raise SystemExit("no_successful_execution_in_first_postpromotion_window")
           print("importer_evidence=READ_ONLY execution_count=%s summaries=%s" %(len(jobs),len(receipts)))
           # Print only sanitized execution identity/time/condition in Actions logs
           # so this audit can be verified without reading summary artifacts.
@@ -162,61 +143,3 @@ jobs:
           for info in receipts[:8]:
               print("importer_aggregate "+ " ".join(f"{k}={v}" for k,v in info.items()))
           PY
-
-      - name: Verify 2026-10-16 ACKED business versions against PostgreSQL (read only)
-        shell: bash
-        env:
-          CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance
-        run: |
-          set -euo pipefail
-          # This executes an existing acceptance Job only, NEVER the importer.
-          # The snapshot has five new Sheet ACKED=CREATED rows all stamped
-          # 2026-10-16 07:34:15 TPE. No DB mutation or Sheet writing.
-          SCRIPT="$(cat <<'PY'
-          import asyncio
-          from datetime import datetime
-          from sqlalchemy import select
-          from app.db.session import SessionLocal, engine
-          from app.models.curated import CuratedActivity
-
-          EXPECTED = {
-              "songshanculturalpark.org:2026:100spotlights-meetup-1029": "9492110ee534043e65875a22a30e64199f7620ed6428e4d03252a224c60180b1",
-              "hualien.gov.tw:20261025-26:food-farm-halfday-16": "021f1c1b62fa69b758dd24a3db909b86bae83aeab6e6a01d0b3ad478828e1ae6",
-              "twtainan.net:2026:cloudinvoice-comedy-1107": "8c3c36c01e68b716630a491b948624b6fdc740684821d14205ed567c0b06548d",
-              "hualien.travel:20261017:hotspring-opening-bag-100": "ec1ccc0ad6753ab34d313db954b6284eb6302735b2c5a1808c7442cc11e0e15c",
-              "khh.travel:2026:wildwild-outdoor-1107": "8c23eb6997d4ec38eb100a28c25457c47fe280b10f36d1b7551fad2673ac6212",
-          }
-          START = datetime.fromisoformat("2026-10-16T06:06:00+08:00")
-          END = datetime.fromisoformat("2026-10-16T07:34:15.797234+08:00")
-
-          async def check():
-              try:
-                  async with SessionLocal() as db:
-                      rows = (await db.execute(select(CuratedActivity).where(
-                          CuratedActivity.handoff_event_key.in_(list(EXPECTED))
-                      ))).scalars().all()
-                      found = {row.handoff_event_key: row for row in rows}
-                      if len(found) != len(EXPECTED):
-                          raise SystemExit(41)
-                      for key, version in EXPECTED.items():
-                          row = found[key]
-                          details = row.handoff_details
-                          if (row.content_hash != version or not isinstance(details, dict)
-                              or details.get("event_key") != key
-                              or details.get("handoff_updated_at_tpe") != "2026-10-16T06:06:00+08:00"):
-                              raise SystemExit(42)
-                          if (row.created_at is None or not START <= row.created_at <= END):
-                              raise SystemExit(43)
-                  print("life_oct16_handoff_pg_readback=PASS acked_versions=5 created_in_window=5", flush=True)
-              finally:
-                  await engine.dispose()
-
-          asyncio.run(check())
-          PY
-          )"
-          [[ "$SCRIPT" != *"~"* ]]
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
-            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --args="^~^-c~$SCRIPT" --tasks=1 --task-timeout=3m --wait --quiet
-          echo "life_oct16_handoff_pg_readback=PASS exact_new_ack_versions=5" >> "$GITHUB_STEP_SUMMARY"

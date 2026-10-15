@@ -1,4 +1,11 @@
 # Life — Current state
+
+## 2026-10-15｜V3 #38715747623 失敗診斷與修正中
+- [V3 #38715747623](https://github.com/tommylin15/life_assistant/actions/runs/38715747623) SHA `296e50f` **FAIL**，失敗只在新加入的 `Read existing handoff DB versions and rollback-only Shopping CRUD`；Execution `life-assistant-core-acceptance-kdl4r` exit=1，先前既有 curated/ownership tests 正常。
+- WIF deployer 讀 Cloud Logging 回傳 `PERMISSION_DENIED`，沒有 Python traceback；不能判定實際 PostgreSQL 資料損壞。
+- 新驗收程式的 ORM 操作順序存在可重現的外鍵問題：`ShoppingList`／`ShoppingItem` 沒有 mapper relationship，同一輪 flush 可能先 insert 子品項；已修改為先 flush parent，再 flush items，新增順序測試。下輪以四項 CI 和 Release 真實執行讀回判定修復，**不能先記 DONE**。
+- 新增有限的 Cloud Run task exit code 分類（41 交接 DB 存取、42 交接一致性、43 購物交易、44 rollback 讀回），後續日誌權限不足時仍可定位錯誤階段，不需調整 GCP IAM。
+
 Snapshot: **2026-10-15 Asia/Taipei**. This is a concise evidence index, not an automatically refreshed monitor. On any new code SHA, independently recheck the matching runs and runtime.
 
 ## 2026-10-15｜正式版真人驗收補正（使用者驗收回報）

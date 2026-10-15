@@ -7,8 +7,6 @@ do not prove GAS provenance or Sheet row-version parity.
 import asyncio
 import re
 import uuid
-from datetime import datetime, timezone
-
 from sqlalchemy import select
 from fastapi import HTTPException
 
@@ -20,6 +18,23 @@ from app.services.ownership import get_owned, visible_clause
 
 HASH = re.compile(r"^[a-f0-9]{64}$")
 MAX_ROWS = 50000
+
+# Expose a coarse failure stage via Cloud Run task exitCode when logging
+# is unavailable to the GitHub deployer. Never expose source row contents.
+FAILURE_CODES = {
+    "handoff_read": 41,
+    "handoff_integrity": 42,
+    "shopping_mutation": 43,
+    "shopping_rollback": 44,
+}
+
+
+async def insert_shopping_fixtures(db, shopping_list, items):
+    """Flush the FK parent first; there is no mapped ORM relationship."""
+    db.add(shopping_list)
+    await db.flush()
+    db.add_all(items)
+    await db.flush()
 
 
 def inspect_handoff(rows):
@@ -41,6 +56,18 @@ def inspect_handoff(rows):
 
 
 async def main():
+    try:
+        await _run_acceptance()
+    except Exception:
+        print(f"life_0103_runtime=FAIL category={_acceptance_stage}", flush=True)
+        raise SystemExit(FAILURE_CODES[_acceptance_stage])
+
+
+_acceptance_stage = "handoff_read"
+
+
+async def _run_acceptance():
+    global _acceptance_stage
     nonce = uuid.uuid4().hex
     own = {"sub": "acceptance-shopping-" + nonce}
     other = {"sub": "acceptance-other-" + nonce}
@@ -55,6 +82,7 @@ async def main():
         if len(existing) > MAX_ROWS:
             raise RuntimeError("handoff_db_readback_bounded_limit")
         total, malformed, missing_parent = inspect_handoff(existing)
+        _acceptance_stage = "handoff_integrity"
         if malformed:
             # No IDs or source text in error messages.
             raise RuntimeError(f"handoff_db_version_malformed_count_{malformed}")
@@ -63,18 +91,20 @@ async def main():
             f"orphan_parent_refs={missing_parent} sheet_parity=NOT_VERIFIED",
             flush=True,
         )
+        _acceptance_stage = "shopping_mutation"
         shopping_list = ShoppingList(
             id=list_id, user_sub=own["sub"],
             name="Rollback-only acceptance list", project_id=None
         )
-        db.add(shopping_list)
-        for index, item_id in enumerate(item_ids):
-            db.add(ShoppingItem(
+        items_to_create = [
+            ShoppingItem(
                 id=item_id, list_id=list_id, name=f"Fixture {index}",
                 category=None, is_done=False, sort_order=index
-            ))
+            )
+            for index, item_id in enumerate(item_ids)
+        ]
         try:
-            await db.flush()
+            await insert_shopping_fixtures(db, shopping_list, items_to_create)
             items = (await db.execute(
                 select(ShoppingItem).where(ShoppingItem.list_id == list_id)
                 .order_by(ShoppingItem.sort_order, ShoppingItem.id)
@@ -108,6 +138,7 @@ async def main():
                 raise RuntimeError("shopping_item_delete_readback_failed")
         finally:
             await db.rollback()
+    _acceptance_stage = "shopping_rollback"
     async with SessionLocal() as db:
         if await db.get(ShoppingList, list_id) is not None:
             raise RuntimeError("shopping_fixture_list_not_rolled_back")

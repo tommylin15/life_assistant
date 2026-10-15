@@ -1,7 +1,10 @@
 """Bounded source consistency tests for real DB acceptance."""
 import unittest
 from types import SimpleNamespace
-from scripts.run_life_0103_runtime_acceptance import inspect_handoff
+from unittest.mock import AsyncMock, MagicMock
+from scripts.run_life_0103_runtime_acceptance import (
+    FAILURE_CODES, inspect_handoff, insert_shopping_fixtures,
+)
 
 
 class Life0103ReadbackTests(unittest.TestCase):
@@ -27,3 +30,24 @@ class Life0103ReadbackTests(unittest.TestCase):
 
     def test_empty_pool_is_not_fake_data(self):
         self.assertEqual(inspect_handoff([]), (0, 0, 0))
+
+
+
+class ShoppingRollbackFixtureTests(unittest.IsolatedAsyncioTestCase):
+    async def test_parent_is_flushed_before_children_without_orm_relationship(self):
+        db = MagicMock()
+        calls = []
+        db.add.side_effect = lambda _: calls.append("parent_add")
+        db.add_all.side_effect = lambda _: calls.append("child_add")
+        async def flush():
+            calls.append("flush")
+        db.flush = AsyncMock(side_effect=flush)
+        await insert_shopping_fixtures(db, object(), [object(), object()])
+        self.assertEqual(calls, ["parent_add", "flush", "child_add", "flush"])
+
+    def test_failure_exit_codes_are_distinct_without_logging_access(self):
+        self.assertEqual(set(FAILURE_CODES), {
+            "handoff_read", "handoff_integrity", "shopping_mutation",
+            "shopping_rollback",
+        })
+        self.assertEqual(len(set(FAILURE_CODES.values())), 4)

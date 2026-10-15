@@ -9,7 +9,12 @@ WF = ROOT / ".github/workflows"
 
 
 def load(name):
-    source = (WF / name).read_text(encoding="utf-8")
+    path = WF / name
+    if not path.is_file():
+        # Retired one-time workflows remain audited in doc/archive, but must
+        # never be treated as active workflow entries.
+        path = ROOT / "doc/archive/workflows" / (name + ".txt")
+    source = path.read_text(encoding="utf-8")
     return source, yaml.safe_load(source)
 
 

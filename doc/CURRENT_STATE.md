@@ -13,7 +13,7 @@ At audit time the source baseline was `fc800b280be59f44f485dfc170fe45a14fc9c981`
 - **Life→Gateway→Gemini signed synthetic smoke: PASS** — [#38570644451](https://github.com/tommylin15/life_assistant/actions/runs/38570644451), including real Life runtime signed call and unchanged production traffic. Authenticated browser user's `POST /ai/text` full UX E2E remains **NOT VERIFIED** by this test.
 - **Promoted production Cloud Run release: PASS for its defined release gates** — [#38572432707](https://github.com/tommylin15/life_assistant/actions/runs/38572432707): immutable GHCR digest, 0%-candidate, PostgreSQL additive migration 0018, core DB/auth smoke, Preview, fixed staging, 100% traffic promotion, postdeploy, controlled rollback and restoration, Job image alignment.
 - **Production Firebase Hosting: PASS for its defined checks** — [#38576667267](https://github.com/tommylin15/life_assistant/actions/runs/38576667267): Hosting deploy/readback plus Task/Project automated browser acceptance.
-- **Revision retention: PARTIAL** — the release log shows `PARTIAL_PROTECTED`, `remaining_count=62` (2026-10-14); tagged/traffic/rollback-protected revisions cannot be blindly pruned to 10. This is not a release-failure claim.
+- **Revision retention at that historical 2026-10-14 baseline: PARTIAL** — the original release had `PARTIAL_PROTECTED` and `remaining_count=62`. **Superseded by the 2026-10-15 V3 #38675052751 real deletion/readback PASS (68→10); see latest section below.**
 - **Importer image pin: PASS; importer execution in that release: NOT_RUN** — the release's own summary says `curated_handoff_image=PASS … execution=NOT_RUN`.
 
 ## 2026-10-15｜P0/P1 Actions 版本整併（source；runtime evidence 待驗）
@@ -23,7 +23,14 @@ At audit time the source baseline was `fc800b280be59f44f485dfc170fe45a14fc9c981`
 ## 2026-10-15｜P0/P1 發布後最新讀回
 - [V3 staging-only #38670120522](https://github.com/tommylin15/life_assistant/actions/runs/38670120522) 的 fixed staging、Preview、OAuth redirect 全部 PASS，且正式流量維持不變；當次 maintenance step 被 newer main SHA 擋下，輸出 `retirement=SUPERSEDED`，**沒有執行任何 Revision 清理**。GitHub 顯示該 step success 僅代表 skip 成功，不是清到 10 版。
 - 最新 main `c7ecb96` 的 [CI #38670191848](https://github.com/tommylin15/life_assistant/actions/runs/38670191848) 四項 PASS；[V3 staging #38670433974](https://github.com/tommylin15/life_assistant/actions/runs/38670433974) Preview PASS 但 preflight HTTP 404，固定 staging 發布前即 FAIL，沒有切正式流量，後置退版未執行。預檢的 Firebase Hosting API 或 CDN 資源沒有明確標示，因此針對 preflight 添加不放寬 gate 的 bounded retries 與精確資源類別診斷後重新驗證。
-- 維持區分 CI PASS、Staging PASS、Revision retention PASS 與 production traffic；**最新 10 版目前 NOT VERIFIED**。
+- 維持區分 CI PASS、Staging PASS、Revision retention PASS 與 production traffic；**當時（#38670433974）最新 10 版仍 NOT VERIFIED；後續 #38675052751 以真實 GCP 刪除／讀回完成 68→10，已取代該舊結論**。
+
+## 2026-10-15｜P0/P1 CI/CD 實際結案（最後 verified main 23d898c）
+- **CI 四項 PASS**：[CI #38674814026](https://github.com/tommylin15/life_assistant/actions/runs/38674814026)，SHA `23d898ccd6906d037bc3ee16d60af782c36def92`；Backend、Flutter、deployment-scripts、free-events-postgres 四項全部 successful。
+- **V3 staging-only PASS**：[V3 staging-only #38675052751](https://github.com/tommylin15/life_assistant/actions/runs/38675052751)，同 SHA；固定 staging 的 preflight、Preview、hosting pinned rewrites、OAuth redirect、API 401/readback 成功，`staging_live=PASS`、`traffic_unchanged=true`。Production **沒有** promotion，本輪不能據此推論新版正式產品驗收。
+- **Revision Retention PASS（真實 GCP 讀回）**：Release 內 `life_cloud_run_retirement_apply.py` 實際讀得清理前 **68**，解除 **56** 個舊 0%-traffic tags、刪除 **58** 個歷史 Revisions，最後 `stage=DONE,status=PASS,remaining=10,live_unchanged=true,services_deleted=0,jobs_deleted=0`；`life-assistant-api-00281-men` 仍為本輪唯一 100% 正式流量的 baseline；正式 flow 沒有動到其他 Service／Job。本結果取代本文件更早 `remaining_count=62` 的歷史快照。
+- **前一版 404 已修復**：上一版 [#38670433974](https://github.com/tommylin15/life_assistant/actions/runs/38670433974) 失敗於 staging preflight HTTP 404；最新版本新增明確資源分類及有上限的重試後，真實 preflight 與 staging 全部 PASS。舊 [#38670120522](https://github.com/tommylin15/life_assistant/actions/runs/38670120522) 雖 release PASS，但當時 `retirement=SUPERSEDED`，沒有清理；真正清理執行證據只以 #38675052751 為準。
+- **範圍 DONE**：僅指 GitHub Actions P0/P1 精簡、staging 404 修復、Revision 10 版清理及完整匹配 SHA CI/staging/runtime gate；活動 GAS importer、Gemini 登入後 UX、各項功能 Live E2E 等仍依下列 backlog **NOT VERIFIED**，不能混同完成。
 
 ## Open evidence gaps (do not infer PASS)
 1. **GAS → importer → PostgreSQL → Sheet:** GAS 07:30 Asia/Taipei trigger's actual installation/success, the newest production importer Execution exit code, Sheet version-fenced ACK/ERROR and PostgreSQL row-level readback are **NOT VERIFIED** by the above release runs. Old 52 ACKED/2 ERROR is a historical snapshot only.

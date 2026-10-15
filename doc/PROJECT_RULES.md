@@ -150,7 +150,7 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 - 新流程不得呼叫 Cloud Build、不得主動寫 GCS/Artifact Registry，也不得新增其 repo/bucket；過去 Cloud Build 僅允許獨立、WIF **唯讀** 診斷。部署採**分離的最小權限 deployer**；唯讀 WIF 無法部署。
 - Cloud Run **僅允許直接讀取公開 GHCR package 的 immutable manifest digest**；package visibility/讀取、live/candidate digest、服務身份和 0% tagged URL 安全均需實測。私人 GHCR 所需的 Artifact Registry remote repo 與本決策衝突，因此失敗關閉，不自動替換架構。
 - 禁止因寫好文件而標示 V3 DONE。切換前盤點現有 workflow/Cloud Build triggers，實作後先取得 Actions、GHCR、WIF、0% revision、真實候選/Preview/Live、rollback 及未觸發 Cloud Build/未主動寫 GCS/AR 證據；再停用舊入口，不刪歷史記錄。
-- **Cloud Run Revision 保留最新 10 個**：V3 promotion + live gates 全數 PASS 後，於成功 release pipeline 最後安全清理舊版；含流量、回滾 baseline、候選 tag 的版本不可刪。保護條件使數量超過 10 時必須 PARTIAL，禁止強行刪除。無流量且無最小實例的版本通常不計運算費；GHCR image digest 與 Jobs 所需映像另行保留。
+- **Cloud Run Revision 固定只保留最新 10 個（2026-10-15 使用者明確授權）**：每次 V3 staging／production release 及真實 gates PASS 後，Life 專用後處理工作流先核對當前 main SHA、唯一 100% 正式 revision 與 latestReady/latestCreated 均在最新 10 個之內，才解除第 11 個以後的舊 V2/V3 0% 候選 tag，逐筆刪除超額 Revision，最後 readback 必須恰為 10；舊候選／歷史回滾版不再永久保留。若新版尚在發布、live/最新候選超出最新 10、tag 身分未知、流量改變或刪除失敗，必須 FAIL／PARTIAL，禁止為達數量而刪正式版本。此政策不允許刪除現役 Service、任何 Job、GHCR 當前所需 digest、資料庫或跨專案資源。相關工作流為 `.github/workflows/life-cloud-run-retirement-apply.yml`。
 - 實作與驗收規範以 `ci_cd_ghcr_release_policy.md` 為準；V2 已歸檔至 [archive/ci_cd_v2_policy.md](archive/ci_cd_v2_policy.md)，只供稽核，不再作為新建/變更 pipeline 的目標。
 
 ## 歷史政策

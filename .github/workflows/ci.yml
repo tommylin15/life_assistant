@@ -253,7 +253,7 @@ jobs:
         run: python -m unittest tests/test_v3_curated_handoff_alignment.py -v
 
       - name: Test V3 revision retention fail-closed contracts
-        run: python -m unittest tests/test_v3_revision_retention.py -v
+        run: python -m unittest tests/test_v3_revision_retention.py tests/test_life_cloud_run_retirement.py -v
 
       - name: Test V3 staging version and pinned Cloud Run revision gates
         run: python -m unittest tests/test_v3_staging_gate.py -v

@@ -1,0 +1,68 @@
+name: Life Cloud Run retire old revisions after verified V3 release
+on:
+  workflow_run:
+    workflows: ["V3 Release - GHCR to Cloud Run"]
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: life-assistant-v3-production-release
+  cancel-in-progress: false
+jobs:
+  life-revision-retirement:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'workflow_dispatch' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    environment: dev-test
+    timeout-minutes: 85
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      RELEASE_RUN: ${{ github.event.workflow_run.id }}
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+    steps:
+      - name: Verify a successful current-main V3 staging or promoted release
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          MAIN_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+          if [ "$MAIN_SHA" != "$RELEASE_SHA" ]; then
+            echo "retirement=SKIP reason=outdated_release main=$MAIN_SHA release=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+            echo "SKIP_RETIREMENT=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN" |
+            jq -e --arg sha "$RELEASE_SHA" '.status=="completed" and .conclusion=="success" and .event=="workflow_dispatch" and .head_sha==$sha and .head_branch=="main"'
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN/jobs?per_page=100" |
+            jq -e '[.jobs[].steps[]? | select(.name=="Promote exact Preview to independent fixed staging live and verify pinned routes" and .conclusion=="success")] | length == 1'
+          echo "retirement_source_gate=PASS sha=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v4
+        if: env.SKIP_RETIREMENT != '1'
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+      - name: Contract tests for bounded revision retirement
+        if: env.SKIP_RETIREMENT != '1'
+        run: python -m unittest tests/test_life_cloud_run_retirement.py -v
+      - uses: google-github-actions/auth@v2
+        if: env.SKIP_RETIREMENT != '1'
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+        if: env.SKIP_RETIREMENT != '1'
+      - name: Detach 0%-candidate tags older than ten and delete only obsolete API revisions
+        if: env.SKIP_RETIREMENT != '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/life_cloud_run_retirement_apply.py \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --apply \
+            | tee "$RUNNER_TEMP/life-retirement-result.log"
+          cat "$RUNNER_TEMP/life-retirement-result.log" >> "$GITHUB_STEP_SUMMARY"

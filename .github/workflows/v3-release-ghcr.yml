@@ -375,6 +375,18 @@ jobs:
           echo "curated_db_readback=PASS schema=20261012_0018 rollback_only=true" >> "$GITHUB_STEP_SUMMARY"
           echo "tenant_ownership=PASS schema=20261012_0018 rollback_only=true" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Read existing handoff DB versions and rollback-only Shopping CRUD
+        if: ${{ inputs.promote || inputs.publish_staging }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.run_life_0103_runtime_acceptance \
+            --task-timeout 5m --wait --quiet
+          echo "handoff_pg_consistency_and_shopping_rollback=PASS external_sheet_and_gas=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Pre-promotion Drive AI consent runtime acceptance
         if: ${{ inputs.promote }}
         shell: bash

@@ -100,7 +100,6 @@ class CalendarPage extends ConsumerStatefulWidget {
 class _CalendarPageState extends ConsumerState<CalendarPage> {
   late DateTime _month = _monthOnly(DateTime.now());
   late DateTime _selectedDay = _dateOnly(DateTime.now());
-  bool _showDay = false;
   bool _busy = false;
 
   void _reload() => ref.invalidate(_calendarWorkspace(_month));
@@ -109,7 +108,6 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     setState(() {
       _month = DateTime(_month.year, _month.month + change);
       _selectedDay = DateTime(_month.year, _month.month, 1);
-      _showDay = false;
     });
   }
 
@@ -124,7 +122,6 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     setState(() {
       _selectedDay = _dateOnly(value);
       _month = _monthOnly(value);
-      _showDay = true;
     });
   }
 
@@ -242,10 +239,126 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     );
   }
 
+
+  Widget _monthGrid(_CalendarWorkspace value) {
+    final first = DateTime(_month.year, _month.month);
+    final leading = first.weekday % 7; // Sunday-first month grid.
+    final firstCell = first.subtract(Duration(days: leading));
+    final count = ((leading + DateUtils.getDaysInMonth(
+        _month.year, _month.month) + 6) ~/ 7) * 7;
+    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+    final scheme = Theme.of(context).colorScheme;
+    return Column(children: [
+      Row(children: [
+        for (var i = 0; i < 7; i++)
+          Expanded(child: Center(child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Text(weekdays[i], style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: i == 0 ? scheme.error : scheme.onSurfaceVariant)),
+          ))),
+      ]),
+      LayoutBuilder(builder: (context, constraints) {
+        final compact = constraints.maxWidth < 520;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: count,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 7, crossAxisSpacing: 2, mainAxisSpacing: 2,
+            childAspectRatio: compact ? 0.72 : 1.1),
+          itemBuilder: (context, index) {
+            final day = DateTime(firstCell.year, firstCell.month, firstCell.day + index);
+            final inMonth = day.month == _month.month && day.year == _month.year;
+            final selected = DateUtils.isSameDay(day, _selectedDay);
+            final today = DateUtils.isSameDay(day, DateTime.now());
+            final items = inMonth ? value.events.where((e) => e.occursOn(day)).toList()
+                : <_CalendarEvent>[];
+            return Semantics(
+              button: true, selected: selected,
+              label: _dayText(day) + '，' + items.length.toString() + ' 筆行程',
+              child: InkWell(
+                key: ValueKey('calendar-day-' + _dayText(day)),
+                onTap: () => setState(() {
+                  _month = _monthOnly(day);
+                  _selectedDay = _dateOnly(day);
+                }),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 2 : 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: selected ? scheme.primaryContainer
+                        : today ? scheme.surfaceContainerHighest : null,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: selected ? scheme.primary : scheme.outlineVariant)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(day.day.toString(), textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: selected || today ? FontWeight.bold : FontWeight.normal,
+                          color: inMonth ? scheme.onSurface : scheme.outline)),
+                      if (items.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(items.first.title, maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: compact ? 10 : 12, height: 1.1)),
+                        if (items.length > 1)
+                          Text('+' + (items.length - 1).toString(),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 10, color: scheme.primary)),
+                      ],
+                    ]),
+                ),
+              ),
+            );
+          },
+        );
+      }),
+    ]);
+  }
+
+  void _showDetails(_CalendarEvent event) {
+    final source = event.title.startsWith('活動日期參考：') ||
+        event.description.startsWith('活動網址：');
+    final url = source ? activityUrlInText(event.description,
+        allowBare: event.title.startsWith('活動日期參考：')) : null;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(event.title),
+        content: SizedBox(width: 480, child: SingleChildScrollView(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min, children: [
+              Text(event.period(dialogContext)),
+              if (event.location.isNotEmpty) ...[
+                const SizedBox(height: 8), Text('地點：' + event.location)],
+              if (event.description.isNotEmpty) ...[
+                const SizedBox(height: 12), SelectableText(event.description)],
+              if (url != null) TextButton.icon(
+                onPressed: () => openExternalBrowser(url.toString()),
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('前往網址')),
+            ]),
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('關閉')),
+          TextButton.icon(onPressed: _busy ? null : () {
+            Navigator.of(dialogContext).pop();
+            _edit(event);
+          }, icon: const Icon(Icons.edit_outlined), label: const Text('編輯')),
+          TextButton.icon(onPressed: _busy ? null : () {
+            Navigator.of(dialogContext).pop();
+            _delete(event);
+          }, icon: const Icon(Icons.delete_outline), label: const Text('刪除')),
+        ],
+      ),
+    );
+  }
+
   Widget _content(_CalendarWorkspace value) {
-    final visibleEvents = _showDay
-        ? value.events.where((e) => e.occursOn(_selectedDay)).toList()
-        : value.events;
+    final daily = value.events.where((e) => e.occursOn(_selectedDay)).toList();
     return RefreshIndicator(
       onRefresh: () async {
         _reload();
@@ -254,145 +367,71 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          AppPageFrame(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                LifeFeatureHeader(feature: LifeVisualFeature.calendar,
-                  trailing: MediaQuery.sizeOf(context).width >= AppBreakpoints.pageActions
+          AppPageFrame(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LifeFeatureHeader(feature: LifeVisualFeature.calendar,
+                trailing: MediaQuery.sizeOf(context).width >= AppBreakpoints.pageActions
                     ? FilledButton.icon(
                         onPressed: _busy ? null : () => _edit(),
                         icon: const Icon(Icons.add),
                         label: const Text('新增行程')) : null),
-                const SizedBox(height: AppSpacing.lg),
-
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    IconButton(
-                      tooltip: '上一個月',
-                      onPressed: () => _moveMonth(-1),
-                      icon: const Icon(Icons.chevron_left),
-                    ),
-                    Text(DateFormat('yyyy / MM').format(_month),
-                        style: Theme.of(context).textTheme.titleLarge),
-                    IconButton(
-                      tooltip: '下一個月',
-                      onPressed: () => _moveMonth(1),
-                      icon: const Icon(Icons.chevron_right),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _chooseDay,
-                      icon: const Icon(Icons.event_outlined),
-                      label: Text('選擇日期 ' + _dayText(_selectedDay)),
-                    ),
-                    IconButton(
-                      tooltip: '重新讀取目前月份的 Google 行程',
-                      onPressed: _busy ? null : _reload,
-                      icon: const Icon(Icons.sync_outlined),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        final today = DateTime.now();
-                        setState(() {
-                          _month = _monthOnly(today);
-                          _selectedDay = _dateOnly(today);
-                          _showDay = true;
-                        });
-                      },
-                      child: const Text('今天'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  children: [
-                    ChoiceChip(
-                      label: const Text('整月'),
-                      selected: !_showDay,
-                      onSelected: (_) => setState(() => _showDay = false),
-                    ),
-                    ChoiceChip(
-                      label: const Text('選定日期'),
-                      selected: _showDay,
-                      onSelected: (_) => setState(() => _showDay = true),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(AppSpacing.sm),
-                      child: Text('共 ' + visibleEvents.length.toString() + ' 筆'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                if (visibleEvents.isEmpty)
-                  AppStatePanel(
-                    title: _showDay ? '這一天沒有行程' : '本月還沒有行程',
-                    message: '可新增一筆行程，或切換日期查看其他事件。',
-                    icon: const Icon(Icons.event_available_outlined),
-                    action: FilledButton.icon(
-                      onPressed: _busy ? null : () => _edit(),
-                      icon: const Icon(Icons.add),
-                      label: const Text('新增行程'),
-                    ),
-                  )
-                else
-                  for (final event in visibleEvents) ...[
-                    AppSectionCard(
-                      title: event.title,
-                      subtitle: event.period(context),
-                      action: Wrap(
-                        spacing: 0,
-                        children: [
-                          IconButton(
-                            key: ValueKey('calendar-edit-' + event.id),
-                            tooltip: '編輯行程：' + event.title,
-                            onPressed: _busy ? null : () => _edit(event),
-                            icon: const Icon(Icons.edit_outlined),
+              const SizedBox(height: AppSpacing.md),
+              Row(children: [
+                IconButton(tooltip: '上一個月', onPressed: () => _moveMonth(-1),
+                  icon: const Icon(Icons.chevron_left)),
+                Expanded(child: TextButton(
+                  onPressed: _chooseDay,
+                  child: Text(DateFormat('yyyy年 M月').format(_month),
+                    style: Theme.of(context).textTheme.titleLarge))),
+                IconButton(tooltip: '下一個月', onPressed: () => _moveMonth(1),
+                  icon: const Icon(Icons.chevron_right)),
+                IconButton(tooltip: '今天', onPressed: () => setState(() {
+                  _selectedDay = _dateOnly(DateTime.now());
+                  _month = _monthOnly(_selectedDay);
+                }), icon: const Icon(Icons.today_outlined)),
+                IconButton(tooltip: '重新讀取目前月份的 Google 行程',
+                  onPressed: _busy ? null : _reload,
+                  icon: const Icon(Icons.sync_outlined)),
+              ]),
+              _monthGrid(value),
+              const SizedBox(height: AppSpacing.md),
+              AppSectionCard(
+                title: DateFormat('M月d日 EEEE', 'zh_TW').format(_selectedDay),
+                subtitle: daily.length.toString() + ' 筆行程',
+                child: daily.isEmpty
+                    ? const Padding(padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Text('這一天沒有行程'))
+                    : Column(children: [
+                        for (final event in daily)
+                          ListTile(
+                            key: ValueKey('calendar-agenda-' + event.id),
+                            dense: true, contentPadding: EdgeInsets.zero,
+                            leading: Icon(event.allDay ? Icons.event_available_outlined
+                                : Icons.schedule_outlined),
+                            title: Text(event.title, maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                            subtitle: Text([
+                              if (event.allDay) '全天'
+                              else if (DateUtils.isSameDay(event.start, _selectedDay))
+                                TimeOfDay.fromDateTime(event.start).format(context)
+                              else '跨日行程',
+                              if (event.location.isNotEmpty) event.location,
+                            ].join(' · '), maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => _showDetails(event),
                           ),
-                          IconButton(
-                            key: ValueKey('calendar-delete-' + event.id),
-                            tooltip: '刪除行程：' + event.title,
-                            onPressed: _busy ? null : () => _delete(event),
-                            icon: const Icon(Icons.delete_outline),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (event.allDay)
-                            const AppStatusChip(label: '全天', icon: Icons.wb_sunny_outlined),
-                          if (event.location.isNotEmpty)
-                            Text('地點：' + event.location),
-                          if (event.description.isNotEmpty)
-                            Text(event.description),
-                          if (event.title.startsWith('活動日期參考：') ||
-                              event.description.startsWith('活動網址：'))
-                            Builder(builder: (context) {
-                              final url = activityUrlInText(event.description,
-                                allowBare: event.title.startsWith('活動日期參考：'));
-                              if (url == null) return const SizedBox.shrink();
-                              return TextButton.icon(
-                                onPressed: () => openExternalBrowser(url.toString()),
-                                icon: const Icon(Icons.open_in_new),
-                                label: const Text('前往網址'));
-                            }),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                  ],
-                const SizedBox(height: 76),
-              ],
-            ),
-          ),
+                      ]),
+              ),
+              const SizedBox(height: 76),
+            ],
+          )),
         ],
       ),
     );
   }
+
 }
 
 class _CalendarEditor extends StatefulWidget {

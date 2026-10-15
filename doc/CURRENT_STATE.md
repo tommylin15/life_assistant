@@ -20,6 +20,11 @@ At audit time the source baseline was `fc800b280be59f44f485dfc170fe45a14fc9c981`
 - 失敗的 staging-only [#38664515788](https://github.com/tommylin15/life_assistant/actions/runs/38664515788)：固定 staging 與 OAuth redirect 已 PASS，最後因舊 SHA 的獨立 Gemini smoke 派送步驟 FAIL；後續成功 staging [#38665056200](https://github.com/tommylin15/life_assistant/actions/runs/38665056200) 已證明部署路徑可用。獨立 [smoke #38667868716](https://github.com/tommylin15/life_assistant/actions/runs/38667868716) 的舊 Gateway pilot tag 不存在，不能據此推論正式 Gemini API 故障。
 - 已精簡 main workflow 29→21，保留 CI 四項獨立 jobs，停用過時 one-time／bootstrap；文件專用 CI 不啟動 staging；Gemini Smoke 改手動／現行 live URL；修正 Revision 清理於 V3 成功後直接執行，保留正式流量與十版候選、精確偵測併發 ready/created 更新。這些 source 實作**不是** Cloud Run 最後十版的 runtime PASS。
 
+## 2026-10-15｜P0/P1 發布後最新讀回
+- [V3 staging-only #38670120522](https://github.com/tommylin15/life_assistant/actions/runs/38670120522) 的 fixed staging、Preview、OAuth redirect 全部 PASS，且正式流量維持不變；當次 maintenance step 被 newer main SHA 擋下，輸出 `retirement=SUPERSEDED`，**沒有執行任何 Revision 清理**。GitHub 顯示該 step success 僅代表 skip 成功，不是清到 10 版。
+- 最新 main `c7ecb96` 的 [CI #38670191848](https://github.com/tommylin15/life_assistant/actions/runs/38670191848) 四項 PASS；[V3 staging #38670433974](https://github.com/tommylin15/life_assistant/actions/runs/38670433974) Preview PASS 但 preflight HTTP 404，固定 staging 發布前即 FAIL，沒有切正式流量，後置退版未執行。預檢的 Firebase Hosting API 或 CDN 資源沒有明確標示，因此針對 preflight 添加不放寬 gate 的 bounded retries 與精確資源類別診斷後重新驗證。
+- 維持區分 CI PASS、Staging PASS、Revision retention PASS 與 production traffic；**最新 10 版目前 NOT VERIFIED**。
+
 ## Open evidence gaps (do not infer PASS)
 1. **GAS → importer → PostgreSQL → Sheet:** GAS 07:30 Asia/Taipei trigger's actual installation/success, the newest production importer Execution exit code, Sheet version-fenced ACK/ERROR and PostgreSQL row-level readback are **NOT VERIFIED** by the above release runs. Old 52 ACKED/2 ERROR is a historical snapshot only.
 2. **Gemini UX:** signed text path is proven, but individual logged-in user API/frontend handling, timeout/failure UX and quotas are not proved by synthetic smoke.

@@ -39,6 +39,17 @@ class ConsolidatedV3Tests(unittest.TestCase):
         self.assertIn("active[0]",smoke)
         self.assertIn('gcloud run jobs execute "$JOB"',smoke)
 
+    def test_staging_preflight_404_retry_is_bounded_and_identifiable(self):
+        script=(ROOT/"scripts/v3_fixed_staging_release.sh").read_text()
+        self.assertIn("preview_channel_release_index", script)
+        self.assertIn("staging_live_release_index", script)
+        self.assertIn("baseline_staging_public_sha", script)
+        self.assertIn("non_retryable=true", script)
+        self.assertIn("attempt<=8", script)
+        self.assertIn("staging_http=FAIL", script)
+        self.assertIn("v3_staging_gate.py", script)
+        self.assertIn('if [[ "$current" != "$expected" ]]', script)
+
     def test_no_redundant_flutter_navigation_test(self):
         ci=(WF/"ci.yml").read_text()
         self.assertIn("flutter test --no-pub --reporter expanded",ci)

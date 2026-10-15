@@ -31,9 +31,51 @@ BASELINE=""
 PREVIEW_VERSION=""
 PHASE="preflight"
 
+# Firebase Hosting REST endpoints can briefly return 404 after Preview
+# publication. Retry only transient statuses and retain all identity gates.
+# Never echo tokens, auth headers, or response bodies to Actions logs.
 hosting_get() {
-  curl --fail --silent --show-error --retry 2 \
-    -H "Authorization: Bearer ${TOKEN}" "$1" > "$2"
+  local label="${3:-firebase_hosting_resource}"
+  local status="" attempt
+  for ((attempt=1; attempt<=8; attempt++)); do
+    status="$(curl --silent --show-error --retry 0 --output "$2" --write-out '%{http_code}' \
+      -H "Authorization: Bearer ${TOKEN}" "$1")" || status="000"
+    if [[ "$status" == "200" ]]; then
+      return 0
+    fi
+    if [[ "$status" != "404" && "$status" != "429" && "$status" != "000" &&
+          ! "$status" =~ ^5[0-9]{2}$ ]]; then
+      echo "staging_http=FAIL resource=$label status=$status non_retryable=true" >&2
+      return 1
+    fi
+    if ((attempt < 8)); then
+      echo "staging_http=RETRY resource=$label status=$status attempt=$attempt" >&2
+      sleep 3
+    fi
+  done
+  echo "staging_http=FAIL resource=$label status=$status attempts=8" >&2
+  return 1
+}
+# The CDN may lag the Hosting API; a missing baseline is never guessed.
+static_sha_get() {
+  local label="$1" url="$2" output="$3" status="" attempt
+  for ((attempt=1; attempt<=8; attempt++)); do
+    status="$(curl --silent --show-error --retry 0 \
+      -H 'Cache-Control: no-cache' --output "$output" --write-out '%{http_code}' \
+      "$url")" || status="000"
+    if [[ "$status" == "200" ]]; then return 0; fi
+    if [[ "$status" != "404" && "$status" != "429" && "$status" != "000" &&
+          ! "$status" =~ ^5[0-9]{2}$ ]]; then
+      echo "staging_http=FAIL resource=$label status=$status non_retryable=true" >&2
+      return 1
+    fi
+    if ((attempt < 8)); then
+      echo "staging_http=RETRY resource=$label status=$status attempt=$attempt" >&2
+      sleep 3
+    fi
+  done
+  echo "staging_http=FAIL resource=$label status=$status attempts=8" >&2
+  return 1
 }
 hosting_post() {
   local version="$1"
@@ -54,7 +96,7 @@ PY
 version_get() {
   local version="$1"
   [[ "$version" == "sites/${STAGING_HOSTING_SITE}/versions/"* ]]
-  hosting_get "https://firebasehosting.googleapis.com/v1beta1/${version}" "$2"
+  hosting_get "https://firebasehosting.googleapis.com/v1beta1/${version}" "$2" "${3:-hosting_version}"
 }
 snapshot_cloud() {
   gcloud run services describe "${CLOUD_RUN_SERVICE}" \
@@ -62,7 +104,7 @@ snapshot_cloud() {
     --format=json > "$1"
 }
 live_snapshot() {
-  hosting_get "${BASE}/releases?pageSize=20" "$1"
+  hosting_get "${BASE}/releases?pageSize=20" "$1" "staging_live_release_index"
 }
 verify_live() {
   local expected="$1" expected_sha="$2" expected_revision="$3"
@@ -150,17 +192,15 @@ trap cleanup EXIT
 
 # Read-only snapshot before making any staging live change. A missing baseline,
 # unpinned old version or missing original SHA is a hard stop.
-hosting_get "${BASE}/channels/${CHANNEL}/releases?pageSize=20" "${WORK}/preview-releases.json"
+hosting_get "${BASE}/channels/${CHANNEL}/releases?pageSize=20" "${WORK}/preview-releases.json" "preview_channel_release_index"
 live_snapshot "${WORK}/stage-before-releases.json"
 PREVIEW_VERSION="$(release_version "${WORK}/preview-releases.json" "$CHANNEL")"
 BASELINE="$(release_version "${WORK}/stage-before-releases.json" live)"
-version_get "$PREVIEW_VERSION" "${WORK}/preview-version.json"
-version_get "$BASELINE" "${WORK}/stage-before-version.json"
+version_get "$PREVIEW_VERSION" "${WORK}/preview-version.json" "preview_version"
+version_get "$BASELINE" "${WORK}/stage-before-version.json" "baseline_staging_version"
 snapshot_cloud "${WORK}/cloud-before.json"
-curl --fail --silent --show-error -H 'Cache-Control: no-cache' \
-  "${PREVIEW_URL}/release.txt" > "${WORK}/preview-sha"
-curl --fail --silent --show-error -H 'Cache-Control: no-cache' \
-  "${STAGE_URL}/release.txt" > "${WORK}/prior-live-sha"
+static_sha_get "preview_public_sha" "${PREVIEW_URL}/release.txt" "${WORK}/preview-sha"
+static_sha_get "baseline_staging_public_sha" "${STAGE_URL}/release.txt" "${WORK}/prior-live-sha"
 
 python .github/scripts/v3_staging_gate.py \
   --preview-releases "${WORK}/preview-releases.json" \

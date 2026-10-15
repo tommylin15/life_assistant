@@ -68,15 +68,6 @@ jobs:
             exit 0
           fi
 
-          # A one-time user-authorized release request owns this exact commit.
-          # It dispatches the normal V3 workflow with promote=true only after
-          # the same four CI gates, preventing duplicate staging-only releases.
-          COMMIT_MSG="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA" --jq '.commit.message')"
-          if [[ "$COMMIT_MSG" == "ops(life): request one-time 01-03 production promotion" ]]; then
-            echo "auto_staging=SKIP user_authorized_one_time_production_request" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
           # Do not start a second same-SHA release for CI re-runs, including
           # releases already dispatched manually. The V3 release has its own
           # immutable SHA guard and shared release concurrency lock.

@@ -1,4 +1,12 @@
-# Life — Acceptance (2026-10-10)
+# Life — Acceptance
+
+## 2026-10-15｜正式版真人驗收補正（現行）
+- **Google OAuth 真人登入／授權／登入後正常使用：PASS**。由使用者明確回報已在正式發布版本操作並真人驗收無誤。
+- **多使用者資料隔離：PASS**。由使用者明確回報已在正式發布版本真人驗收無誤。
+- 驗收來源是**使用者正式環境操作回報**，非本次重新執行真人操作的工具紀錄；帳號數量、每個 API 的逐項矩陣及驗收當下精確 revision 未另附，不虛構。既有 production [Release #38572432707](https://github.com/tommylin15/life_assistant/actions/runs/38572432707) 與 [Hosting #38576667267](https://github.com/tommylin15/life_assistant/actions/runs/38576667267) 是部署證據，不假裝能獨立證明真人登入。
+- **兩項從當前阻塞與高風險缺口清單結案**，不影響每次新版本的安全回歸，也不恢復人工 OAuth 發布阻擋。下方 2026-10-10 記錄為當時歷史快照，不得覆蓋本節。
+
+## 2026-10-10 historical acceptance snapshot
 
 ## 本批開發與驗收安排（2026-10-10 最新）
 

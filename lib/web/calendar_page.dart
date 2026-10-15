@@ -426,7 +426,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
               _monthGrid(value),
               const SizedBox(height: AppSpacing.md),
               AppSectionCard(
-                title: DateFormat('M月d日 EEEE', 'zh_TW').format(_selectedDay),
+                title: '${_selectedDay.month}月${_selectedDay.day}日 星期${const ['日', '一', '二', '三', '四', '五', '六'][_selectedDay.weekday % 7]}',
                 subtitle: daily.length.toString() + ' 筆行程',
                 child: daily.isEmpty
                     ? const Padding(padding: EdgeInsets.symmetric(vertical: 12),

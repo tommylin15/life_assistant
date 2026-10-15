@@ -1,3 +1,7 @@
+# RETIRED historical workflow — not executed by GitHub Actions.
+# Retired 2026-10-15. Original path: .github/workflows/v3-cutover-disable-triggers.yml
+# Preserved for traceability; do not reactivate without verifying current V3 policy.
+
 name: V3 Cutover - disable legacy Cloud Build triggers
 
 on:

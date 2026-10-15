@@ -1,3 +1,7 @@
+# RETIRED historical workflow — not executed by GitHub Actions.
+# Retired 2026-10-15. Original path: .github/workflows/v3-initial-bootstrap.yml
+# Preserved for traceability; do not reactivate without verifying current V3 policy.
+
 # Calendar #8 nested-Navigator dialog fix: final guarded one-time V3 + Firebase + true account + browser E2E verification.
 name: V3 One-Time Controlled Release Bootstrap
 

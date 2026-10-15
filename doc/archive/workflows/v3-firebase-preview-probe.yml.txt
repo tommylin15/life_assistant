@@ -1,3 +1,7 @@
+# RETIRED historical workflow — not executed by GitHub Actions.
+# Retired 2026-10-15. Original path: .github/workflows/v3-firebase-preview-probe.yml
+# Preserved for traceability; do not reactivate without verifying current V3 policy.
+
 name: V3 Firebase Hosting Preview Probe (no production changes)
 
 on:

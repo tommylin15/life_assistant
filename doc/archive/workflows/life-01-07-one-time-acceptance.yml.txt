@@ -1,3 +1,7 @@
+# RETIRED historical workflow — not executed by GitHub Actions.
+# Retired 2026-10-15. Original path: .github/workflows/life-01-07-one-time-acceptance.yml
+# Preserved for traceability; do not reactivate without verifying current V3 policy.
+
 # One-shot 01-07 verification; no cron, no production promotion, no IAM change.
 name: Life 01-07 One-time Batch Acceptance
 on:

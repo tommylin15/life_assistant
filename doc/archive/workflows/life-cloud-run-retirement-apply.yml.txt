@@ -1,3 +1,7 @@
+# RETIRED historical workflow — not executed by GitHub Actions.
+# Retired 2026-10-15. Original path: .github/workflows/life-cloud-run-retirement-apply.yml
+# Preserved for traceability; do not reactivate without verifying current V3 policy.
+
 name: Life Cloud Run retire old revisions after verified V3 release
 on:
   workflow_run:

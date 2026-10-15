@@ -13,16 +13,18 @@ const _homeLabels = <String, String>{
   'calendar': '下一個行程',
   'attention': '需要關注',
   'habits': '今日習慣',
-  'events': '精選活動',
-  'opportunities': '限時機會',
   'explore': '活動探索',
   'projects': '進行中專案',
   'notes': '筆記',
   'shopping': '購物清單',
   'drive': 'Google Drive',
 };
+List<String> _unifiedHomeCards(Iterable<String> saved) => saved
+    .map((key) => (key == 'events' || key == 'opportunities') ? 'explore' : key)
+    .where(_homeLabels.containsKey).toSet().toList();
+
 const _defaultHome = <String>[
-  'tasks', 'calendar', 'attention', 'habits', 'events', 'projects',
+  'tasks', 'calendar', 'attention', 'habits', 'explore', 'projects',
 ];
 
 class PersonalizePage extends ConsumerStatefulWidget {
@@ -64,7 +66,7 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
           (value['pinned'] as List).cast<String>(), (_) => true),
       'more_order': normalizeNavigationOrder(
           (value['more_order'] as List).cast<String>()),
-      'home_cards': (value['home_cards'] as List).cast<String>().toList(),
+      'home_cards': _unifiedHomeCards((value['home_cards'] as List).cast<String>()),
     };
   }
 

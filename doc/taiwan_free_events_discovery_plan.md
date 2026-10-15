@@ -8,4 +8,7 @@
 - 原 direct ChatGPT bearer API 與既有 URL-based identity 暫留相容；目前 Python importer 原始碼已固定讀新交接 Sheet、以 `event_key/content_hash` 入庫與寫回 ACK；**但這是 source，不代表最近一次真實 Job 已通過**。2026-10-12 GAS 啟動 Cloud Run Job 成功，Execution Exit 1，需於新 SHA 部署後驗證 DB/ACK/UI 與每日 GAS 觸發器。全部規則見 [Life 端唯一交接契約](curated_sheet_job_ingestion.md)。
 - Life 不負責文化部／觀光署／官網／第三方網站探索或爬蟲，不做第二次 AI、舊候選 Queue／claim／lease、舊來源觀測／獨立二次發布，也不自動建立私人待辦／行事曆／通知。Drive 上游自行維護來源快照，不屬於 Life 爬蟲。
 
-**狀態：2026-10-12 GAS GET/preflight 與 jobs.run 接受請求 PASS，當次 Cloud Run Execution FAIL；新版本 importer CI／部署、PostgreSQL readback、Sheet ACK 與每日 09:30 GAS trigger 仍未完成真實驗收。整體 PARTIAL。**
+**歷史狀態（2026-10-12；非當前終態）：** GAS GET/preflight 與 jobs.run 接受請求 PASS，當次 Cloud Run Execution FAIL；新版本 importer CI／部署、PostgreSQL readback、Sheet ACK 與每日 07:30 GAS trigger 仍未完成真實驗收。整體 PARTIAL。**
+
+
+**2026-10-15 最新 Life runtime 索引：** 2026-10-14 對應原始 SHA 的 [CI](https://github.com/tommylin15/life_assistant/actions/runs/38567184081)、[promoted release](https://github.com/tommylin15/life_assistant/actions/runs/38572432707) PASS；release 僅對既有 Job 進行相同 digest pin 和讀回，`execution=NOT_RUN`。最新 GAS 定期觸發、當輪 PG/Sheet ACK 仍 **NOT VERIFIED**；本文件的舊 2026-10-12 失敗事件不代表最新 Job 再次失敗。證據主入口 [CURRENT_STATE](CURRENT_STATE.md)。

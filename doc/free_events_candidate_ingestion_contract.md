@@ -1,3 +1,5 @@
+> **LEGACY COMPATIBILITY CONTRACT ONLY (2026-10-15):** 只用於維護仍存在的 bearer API，不能當作目前的活動探索→Life 匯入、個人化活動操作或實際部署狀態。以下 2026-10-10「尚未實作／NOT VERIFIED」為歷史規格快照；現況請以 [CURRENT_STATE](CURRENT_STATE.md)、[curated_sheet_job_ingestion](curated_sheet_job_ingestion.md) 和 GitHub source 為準。
+
 # Life Direct ChatGPT → Curated Pool API (2026-10-10)
 
 **EXISTING API IMPLEMENTED IN GITHUB MAIN / RUNTIME NOT VERIFIED; COMPATIBILITY PATH, NOT NEW DEFAULT IMPORT.** 最新以 [獨立 Drive「交接資料」Job 契約](curated_sheet_job_ingestion.md) 為準；舊 Queue／來源 crawler 取消。

@@ -1,6 +1,6 @@
 # AGENTS.md — Life Assistant
 
-這是「生活助理 App v0.1」的代理人工作指引。正式專案規則（唯一現行部署政策為 CI/CD V3）以 [`doc/PROJECT_RULES.md`](doc/PROJECT_RULES.md) 為準；開始任何工作前必須先完整閱讀它。
+這是 life_assistant 的代理人工作指引（現行主線為 Web/PWA + FastAPI + PostgreSQL）。正式專案規則（唯一現行部署政策為 CI/CD V3）以 [`doc/PROJECT_RULES.md`](doc/PROJECT_RULES.md) 為準；開始任何工作前必須先完整閱讀它。
 
 > **專案級禁令：本專案不得使用、呼叫或套用任何 Superpowers skill / workflow。** 所有 `skills://plugins/superpowers/...` skills 均禁止；已移離工作樹的 `docs/superpowers/` 僅視為 Git 歷史資料，不得作為目前工作流程、Source of Truth 或必要輸入。完整規則見 `doc/PROJECT_RULES.md`。
 
@@ -41,7 +41,7 @@ PostgreSQL
 - schema 變更必須 migration；不得 drop 或清空現有使用者資料。
 - Bridge 外部 JSON 必須驗證；未支援 action、錯誤 bridge/schema 或重複 action 不得執行。
 - 重要寫入在適用時記錄 Activity Log / execution log；不得記錄 token、PIN、密碼或敏感正文。
-- 不把 Firebase Hosting、Cloud Run、PostgreSQL migration、排程、LangGraph 或其他尚未完成能力寫成已實作。
+- 對 Firebase Hosting、Cloud Run、PostgreSQL migration、排程與外部 Gemini 路徑，僅依最新 main 的 source／Actions／runtime evidence 判定；不把未驗證子功能寫成 DONE。LangGraph orchestration 仍屬 omniAgent。
 - 未經使用者明確指示，不主動擴大到 Temporal、Iceberg、多人協作或 production 級複雜基礎設施。
 
 ## Ponytail 實作風格
@@ -55,7 +55,7 @@ PostgreSQL
 ## 驗證與 Git
 
 - 優先執行與變更相符的測試、lint、`flutter analyze`、backend tests；若某一層尚未建立，做文件與可執行本機檢查並明確說明。
-- 未經明確授權，不部署 production、不建立或擴大付費 GCP 資源。
+- 正常既有 V3 production 發布依 doc/PROJECT_RULES.md 的持續授權與正式門檻辦理；新增付費資源或高風險 production 操作須遵守額外確認要求。
 - 任何 commit 或 push 前，應先完成專案要求的 `/ponytail-review` 或等價人工 review。
 
 ## 回報格式

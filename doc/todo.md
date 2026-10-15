@@ -1,22 +1,15 @@
-# Life — Active TODO（2026-10-14；01～07 同批）
-本檔是唯一現行工程待辦入口；歷史狀態及執行證據見 [CURRENT_STATE](CURRENT_STATE.md)。**所有未通過的整合驗收維持 PARTIAL / NOT VERIFIED；不要因本次推送就標 DONE。**
+# Life — Active engineering TODO
+Updated 2026-10-15. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
 
-| 順序 | 範圍 | 已查證與剩餘門檻 |
-|---|---|---|
-| 01 | 活動 GAS→Job→PostgreSQL→Sheet ACK/ERROR | 2026-10-14 正式 release #38502483297 將 importer Job pin 到 live digest；**該 Release 不執行匯入**。舊 Execution 52 ACKED / 2 ERROR；新版本需手動 Job Exit 0、Sheet/DB 版本 readback，GAS 07:30 trigger 另驗 |
-| 02 | Life→omniAgent Gateway→Gemini Flash-Lite | 10/13 Signed Smoke #38376914628 PASS；10/14 #38500240196 Job FAIL，原因尚未從該 Cloud Run Execution 安全讀回；再跑最新同版 signed smoke 並檢查 synthetic response；**登入使用者 API** 仍另驗 |
-| 03 | 正式一般帳號隔離 | 2026-10-14 V3 Release 的 `run_private_ownership_acceptance` 在真實 PostgreSQL rollback-only PASS；真人跨 Owner／第二／第三帳號互相讀寫仍 NOT VERIFIED |
-| 04 | 活動 V3 的多日、搜尋、5+10 分頁、收藏映射 | 已有 Flutter／API 主流程；持續補跨日速查、舊收藏和資料更新時 offset drift；PG 多人操作／Google Calendar 真實回讀須獨立驗 |
-| 05 | Life Drive AI 管理 | 原已有 Provider 控制、健康探針、用量筆數；本次顯示分 Provider 結果，**Token／成本及預算不可推估**，實際多 Provider 與 budget gate NOT VERIFIED |
-| 06 | Cloud Run revisions 留 10 個 | 2026-10-14 Release 清理結果仍 60、`PARTIAL_PROTECTED`；新增受保護原因唯讀診斷，不移除 tag、不強行刪除、不改正式流量 |
-| 07 | GitHub 文件與 Issue 收斂 | 按本檔及 CURRENT_STATE 更新，不重複舊 10/10 待辦；Issue #10 direct-API 描述已由現行 Sheet Job 契約取代，暫保留追溯 |
+| Priority | Work / exit gate | Status |
+| --- | --- | --- |
+| P0-1 | Verify actual **GAS 07:30 trigger → importer Job Exit 0 → PostgreSQL event_key/content_hash readback → Sheet version-fenced ACK/ERROR** on same execution; separate `data_status=PARTIAL` from technical failure. Prevent duplicate imports. | **NOT VERIFIED**; promoted Job image aligned, execution was NOT_RUN in Release |
+| P0-2 | Complete **three real-account** private-data isolation + activities/notes/tasks/shopping; test cannot cross-read/write another account. | Synthetic PG acceptance **PASS**, full real-user matrix **NOT VERIFIED** |
+| P1-1 | Complete **signed Gemini through logged-in Life `/ai/text` and UI** including 429/502/503/timeout, permission/quotas and no implicit Google Drive content transfer. | Signed synthetic smoke **PASS**, UX E2E **NOT VERIFIED** |
+| P1-2 | Verify activities **multi-day search, pagination during updates, old favorites, personal tracking/Task, Google Calendar actual write/readback**, including user-level isolation. | Source/CI **PASS**, full live E2E **NOT VERIFIED** |
+| P1-3 | Validate **Shopping list + item edit/delete, multiline add and Task deletion** across production browser, fresh reload, secondary account and error cases. | User manual checks positive; expanded automated regression **NOT VERIFIED** |
+| P1-4 | Drive AI admin/per-user consent, provider failures, **real token/cost/accounting** if introducing budget enforcement; never fabricate spend. | Partial implementation, costs/budget **NOT VERIFIED** |
+| P2-1 | Investigate Cloud Run **62 retained revisions protected by tags/rollback**; review actual traffic/tag/retention dependencies before cleanup, without risking rollback. | `PARTIAL_PROTECTED` |
+| P2-2 | Audit dependency/action pinning, public-repository hygiene, access to operational docs, observability, backup restoration and scheduled-job dedupe. | Risk follow-up **NOT VERIFIED** |
 
-**同批測試策略：** 將程式、測試、部署診斷與文件在一個 main commit 交付；先由 push 觸發四工作 CI，再由既有流程走 staging-only，同時一次性受控 workflow 核對正式 live digest 並可手動等價執行既有匯入 Job；該工作流 **無 cron / 無 production promotion / 不動 IAM**。正式發布仍需獨立符合人工 workflow_dispatch 門檻。不可用 staging PASS 推定正式生產新 SHA PASS。
-
-**範圍排除：** 取消的人工作業 OAuth 驗收不恢復；自動 OAuth 安全檢查仍維持。Life 不重開活動 crawler、Queue、MCP 替代匯入、第二輪 AI，不把本次研究內容視為正式功能。
-
-## 2026-10-14｜購物 CRUD + 批次輸入／待辦刪除白屏（獨立使用者回報）
-
-- 購物：補清單修改／刪除、品項修改／刪除四項獨立操作；同一份清單支援一次輸入多行、至多 50 個品項，批次 API 用單一 DB transaction；保留既有勾選 API、使用者隔離與 audit。
-- 待辦：修正巢狀 Navigator 中刪除確認對話框錯誤 pop 頁面的風險，加入 widget regression。
-- 驗收狀態：implementation committed 前 **NOT VERIFIED**；待最新 main CI 四項、staging 以及實際使用者購物／待辦頁操作確認；不得以單元測試代替正式網頁驗收。
+Release reference: [latest verified original source SHA and actions](CURRENT_STATE.md). New `main` documentation commits start a new SHA and do not inherit production evidence. A standard `main` push runs the four CI jobs and staging-only flow; production promotion has its distinct manual V3 release gate. Do not run a second importer on top of GAS without checking the execution ledger.

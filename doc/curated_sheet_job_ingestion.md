@@ -1,5 +1,7 @@
 # 台灣活動｜獨立 Drive 交接資料 → Life 每日匯入契約
 
+> **2026-10-15 evidence update:** 正式 [V3 Release #38572432707](https://github.com/tommylin15/life_assistant/actions/runs/38572432707) 將 importer Job pin 至 production promoted digest 並 readback PASS；該 Release **execution=NOT_RUN**，不是最新 GAS 定期排程/PG/Sheet ACK 成功的證據。舊 2026-10-12 FAIL 與 2026-10-14 52 ACKED / 2 ERROR 為歷史觀測。最新驗收狀態以 [CURRENT_STATE](CURRENT_STATE.md) 為準；技術 status 與來源資料 data_status 仍分開判定。
+
 **2026-10-12 現行契約：`verified_at_tpe` 一律選填，未知必須留空；不得以發現時間、批次時間、匯入時間冒充核證。每日 GAS 接收排程最新設定為 07:30（Asia/Taipei，使用者已確認；Apps Script 時間觸發器與定時執行證據仍 NOT VERIFIED）。** `handoff_updated_at_tpe` 仍是必要版本時點。2026-10-12 GAS read-only preflight 與 Job 啟動請求 PASS；當次 Cloud Run Execution 容器 Exit 1，實際入庫與回執 E2E 尚未通過。GitHub 匯入原始碼採選填契約並須由新 SHA 的 CI／部署及真實 DB/Sheet 讀回各自驗證。 探索規則本身以 Drive「台灣活動探索」正式 01～05 文件為準；這份文件僅規定 Life 如何消費交接資料。不要因文件寫好就宣稱 Life 已上線。
 
 ## 唯一交接來源與責任邊界

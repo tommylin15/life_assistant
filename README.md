@@ -1,13 +1,17 @@
 # life_assistant
 
-**Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL.** GitHub `main` is the current code and release source of truth. Cloud deployment uses GitHub Actions → public GHCR immutable digest → Cloud Run V3, with each production release independently validated.
+Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL.
 
-## Documentation
+**Current implementation and releases:** [GitHub main](https://github.com/tommylin15/life_assistant) and exact-SHA GitHub Actions/runtime evidence. Documents describe rules or snapshots, not automatic proof of completed deployment.
 
-- **[Project document index](doc/README.md)** — canonical navigation.
-- **[Current state and exact PASS/FAIL evidence](doc/CURRENT_STATE.md)** — current source/runtime PASS/FAIL/NOT VERIFIED.
-- **[Approved product architecture](doc/CURRENT_PRODUCT_ARCHITECTURE.md)** — direct ChatGPT → curated pool; planned independent 限時機會／活動探索 user entries, Life AI admin and per-user navigation.
-- [Project rules](doc/PROJECT_RULES.md) · [Delivery order](doc/phase1_delivery_order.md) · [Active TODO](doc/todo.md) · [Acceptance ledger](doc/acceptance.md).
-- [V3 release policy](doc/ci_cd_ghcr_release_policy.md) · [Deployment runbook](doc/deployment_runbook.md).
+## Start here
 
-The direct curated API, shared Flutter curated list, administrative feature rollout and customized Home/nav have a **source implementation baseline**; staging/production/runtime acceptance is not implied. The newly approved [two activity user features](doc/curated_activity_user_features.md) and their task/calendar/reminder actions are **design only**. Life no longer operates event collectors, MoC/TDX sources, Queue or official-site Excel; ChatGPT submits curated events directly via authenticated API. Do not crawl EventGo or yii.tw. Historical checkpoints, old Cloud Build policies and legacy Bridge designs are archived under [doc/archive/](doc/archive/README.md); forbidden Superpowers drafts were removed from the current working tree but remain in Git history.
+- [Current state and evidence](doc/CURRENT_STATE.md) — last verified SHA, separate CI/deployment/runtime outcomes and remaining gaps.
+- [Active TODO](doc/todo.md) — only active execution priorities; previous batch plans are historical.
+- [Risk register](doc/RISK_REGISTER.md) — ranked engineering, security, integration and operating risks.
+- [Documentation index](doc/README.md) — governing rules, product contracts and archived history.
+- [Project rules](doc/PROJECT_RULES.md) · [V3 release policy](doc/ci_cd_ghcr_release_policy.md) · [Deployment runbook](doc/deployment_runbook.md).
+
+**Activity data:** Drive curated pool → independent handoff Sheet → scheduled Life GCP importer Job → PostgreSQL → Flutter; the older direct-write bearer API remains a compatibility endpoint, **not** the canonical importer. Discovery/source crawling belongs to Drive exploration, not Life's backend. See [handoff contract](doc/curated_sheet_job_ingestion.md) and [user-facing activity features](doc/curated_activity_user_features.md).
+
+No historical green check transfers to a later SHA. User-facing OAuth login E2E is no longer a mandatory manual release gate, but automated OAuth redirect/session checks remain mandatory.

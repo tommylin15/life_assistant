@@ -1,10 +1,18 @@
 # Life — Current state
 
+## 2026-10-16｜01 GAS／Life 匯入技術驗收 PASS／DONE（本批 01～03 完整結案）
+- **01 正式匯入流程：PASS／DONE（實際資料鏈）**。正式 [V3 #38734655151](https://github.com/tommylin15/life_assistant/actions/runs/38734655151) 已更新 `life-assistant-free-events` 至正式 promoted immutable GHCR digest，`job_digest_and_contract=PASS`；2026-10-16 上午 **07:34:20 台北時間** [Execution `life-assistant-free-events-ds4bq`](https://console.cloud.google.com/run/jobs/executions/details/us-central1/life-assistant-free-events-ds4bq?project=gen-lang-client-0593591102) Completed=True。當天 07:00 後至稽核時僅見這一筆完成的 importer Execution（舊歷史累計 17）。
+- **Sheet／PostgreSQL 真實版本一致：PASS**。固定交接 Sheet `交接資料` 讀得 **59 列：58 ACKED、1 ERROR**；2026-10-16 **07:34:15.797234+08:00** 有 **5 筆新 ACKED／CREATED**。不重跑 importer，而透過 [唯讀驗收 #38825509671](https://github.com/tommylin15/life_assistant/actions/runs/38825509671) 執行既有 `life-assistant-core-acceptance` Job（Execution `life-assistant-core-acceptance-xr6sq`，成功退出），在 PostgreSQL 精確比對這 5 筆 `handoff_event_key`、`content_hash`、`handoff_updated_at_tpe`，並驗證 `created_at` 落在本次來源版本與 ACK 時間範圍；GitHub check `life_oct16_handoff_pg_readback=PASS exact_new_ack_versions=5`。
+- **排程證據邊界**：Cloud Run 07:34 成功執行與同輪 Sheet／DB 讀回，足以結束產品的「每日交接匯入」功能驗收；**Apps Script 原始 Trigger ID／單次觸發 ledger 未直接讀到，維持 NOT VERIFIED（可觀測性補強，不反推為已證實的觸發來源）**。這是功能運作驗證，不是所有後續日期必定成功的保證。
+- **來源品質與技術成功分離**：唯一 `ERROR=invalid_handoff_record` 仍為 `ntpclib:9af3c52d:20261024:parent-halloween`，屬探索端來源修補事項；來源品質 **PARTIAL**，但不構成本次 Cloud Run 技術驗收 FAIL，不重寫錯誤列或假填核證時刻。
+- **本批完成判定**：01（定時匯入技術資料鏈）、02（購物／待辦）、03（活動／個人操作及 Calendar）皆 **PASS／DONE**。01 由真實 execution、5 筆 Sheet→PG 精確比對證明；02／03 為先前已確認的正式版使用者人工驗收。其它獨立產品待辦與剩餘風險照常保留。
+
+
 ## 2026-10-15｜02／03 正式版使用者人工驗收結案（最新）
 - **02｜Shopping／Task：PASS，功能範圍 DONE（使用者正式版人工驗收）**。使用者在正式部署 [V3 #38734655151](https://github.com/tommylin15/life_assistant/actions/runs/38734655151) 與 [Hosting #38738435372](https://github.com/tommylin15/life_assistant/actions/runs/38738435372) 成功後明確回報「02,03驗收完畢」，按本輪預先列明的驗收範圍結案：購物清單／品項獨立編輯及刪除、一次新增多品項、重新載入、待辦刪除不白畫面與相關權限操作。
 - **03｜活動個人操作／Calendar：PASS，功能範圍 DONE（使用者正式版人工驗收）**。同一使用者驗收回報涵蓋此批預先列明的跨日活動搜尋／分頁、收藏及個人待辦／追蹤、Google Calendar 操作與讀回。這是**使用者回報的整批功能驗收**，不是 Actions 自動產生的每個 OAuth 寫入事件或逐條 API log；未提供各帳號／事件數與逐項追蹤紀錄，不捏造。
 - **證據分層**：implementation/CI/PG rollback-only/production deployment 為 GitHub workflow PASS；正式 UI 操作為**使用者回報 PASS**。兩項功能不應在待辦重列為「尚無正式人工驗收」。未來相關程式變動仍應依受影響範圍回歸測試，不把這次人工驗收推論為任何未跑過的壓力／併發／全部帳號路由自動驗收。
-- **01 未結案**：正式匯入 Job 映像已 PASS，但下一輪 GAS 07:30 → Job execution → PostgreSQL/Sheet 同輪版本回執與目前唯一 ERROR 的資料品質仍待核對（NOT VERIFIED／PARTIAL），**不因 02／03 通過而推定 01 DONE**。
+- **01（2026-10-15 當時尚未結案）**：後續 2026-10-16 已取得正常 Execution + Sheet ACK + PostgreSQL 精確版本讀回，**技術資料鏈 PASS／DONE**；來源單筆 ERROR 的品質改善仍屬獨立事項。
 
 
 ## 2026-10-15｜01–03 正式 Release / Hosting 驗收（發布時快照；02／03 狀態由上方人工驗收更新）
@@ -69,7 +77,7 @@ At audit time the source baseline was `fc800b280be59f44f485dfc170fe45a14fc9c981`
 - **03｜活動／個人操作：** 後端列表回傳時間快照 `snapshot`，後續分頁以 `as_of` 鎖定來源建立時間，前端在篩選／重整／收藏後清掉舊頁碼並更新快照；有 Postgres 測試涵蓋新活動插入與跨日活動，原 Calendar/Task URL 相容單元測試保留。Calendar OAuth 真實寫入及其他特殊 E2E 未被這些 tests 證明。
 
 ## Open evidence gaps (do not infer PASS)
-1. **GAS → importer → PostgreSQL → Sheet:** GAS 07:30 Asia/Taipei trigger's actual installation/success, the newest production importer Execution exit code, Sheet version-fenced ACK/ERROR and PostgreSQL row-level readback are **NOT VERIFIED** by the above release runs. Old 52 ACKED/2 ERROR is a historical snapshot only.
+1. **GAS → importer → PostgreSQL → Sheet:** 2026-10-16 同輪實測已 **PASS／DONE**（見最上方）。只有 Apps Script Trigger ID／觸發 ledger 未取得（NOT VERIFIED；可觀測性補強），及 1 筆來源品質 ERROR（非技術故障）仍需分別處理；舊 52 ACKED/2 ERROR 僅為歷史快照。
 2. **Gemini UX:** signed text path is proven, but individual logged-in user API/frontend handling, timeout/failure UX and quotas are not proved by synthetic smoke.
 3. **Activity UX:** 02／03 的正式版功能人工驗收已由使用者回報 PASS；未另取得逐事件 Calendar API 紀錄、全帳號組合或壓力／併發極端情境獨立儀表化證據，這些不當作此次產品人工驗收的未完成項。
 4. **Drive AI provider governance:** source has admin controls/health counts, but token/cost-based budgets, per-user consent E2E and multi-provider runtime cost proof are **NOT VERIFIED**.

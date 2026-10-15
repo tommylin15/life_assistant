@@ -1,0 +1,90 @@
+# Safe, read-only runtime evidence. Never executes the importer or mutates Sheet/DB.
+name: Life 01-03 existing importer evidence (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/life-01-03-runtime-evidence.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      JOB: life-assistant-free-events
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read existing Cloud Run importer executions without launching a new one
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run jobs describe "$JOB" --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/job.json"
+          if ! gcloud run jobs executions list --job "$JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/executions.json" 2>"$RUNNER_TEMP/executions.err"; then
+            echo "existing_execution_readback=NOT_VERIFIED (list permission or API unavailable)" >> "$GITHUB_STEP_SUMMARY"
+            printf '%s' '[]' > "$RUNNER_TEMP/executions.json"
+          fi
+          if ! gcloud logging read \
+            'resource.type="cloud_run_job" AND resource.labels.job_name="life-assistant-free-events" AND timestamp>="2026-10-12T00:00:00Z"' \
+            --project "$GCP_PROJECT_ID" --limit 200 --format=json \
+            > "$RUNNER_TEMP/logs.json" 2>"$RUNNER_TEMP/logs.err"; then
+            echo "existing_execution_log_readback=NOT_VERIFIED (logs permission unavailable)" >> "$GITHUB_STEP_SUMMARY"
+            printf '%s' '[]' > "$RUNNER_TEMP/logs.json"
+          fi
+          python3 - "$RUNNER_TEMP/executions.json" "$RUNNER_TEMP/logs.json" <<'PY'
+          import json,re,sys,os
+          def load(path):
+              try:
+                  data=json.load(open(path))
+                  return data if isinstance(data,list) else []
+              except (ValueError,OSError):
+                  return []
+          jobs=load(sys.argv[1])
+          logs=load(sys.argv[2])
+          # No source row fields, tokens, exception traces, or email addresses.
+          names=[]
+          for j in jobs[:10]:
+              name=str(j.get("metadata",{}).get("name") or j.get("name") or "").split("/")[-1]
+              status=j.get("status",{})
+              conditions=status.get("conditions") or j.get("conditions") or []
+              done=next((c for c in conditions if c.get("type") in ("Completed","Ready")), {})
+              state=done.get("status", "UNKNOWN")
+              names.append((name,str(state),str(status.get("completionTime") or j.get("completionTime") or "")))
+          receipts=[]
+          fields=("status","data_status","created","updated","unchanged","invalid","import_failed","ack_failed")
+          for row in logs:
+              msg=str(row.get("textPayload") or (row.get("jsonPayload") or {}).get("message") or "")
+              if not msg.startswith("life_handoff_import "):
+                  continue
+              vals=dict(re.findall(r"\b(status|data_status|created|updated|unchanged|invalid|import_failed|ack_failed)=([A-Z_]+|\d+)",msg))
+              receipts.append({"timestamp":row.get("timestamp",""),
+                  **{name:vals.get(name,"UNKNOWN") for name in fields}})
+          summary=os.environ["GITHUB_STEP_SUMMARY"]
+          with open(summary,"a") as out:
+              print("## Existing importer (read only; no new execution)",file=out)
+              print(f"- execution_inventory_count: {len(jobs)}",file=out)
+              for name,state,ended in names:
+                  print(f"- execution: {name} completed_condition={state} completion={ended}",file=out)
+              print(f"- historical_import_summaries_read: {len(receipts)}",file=out)
+              for info in receipts[:8]:
+                  print("- importer: "+" ".join(f"{k}={v}" for k,v in info.items()),file=out)
+              print("- GAS_07_30_actual_trigger: NOT_VERIFIED (Apps Script triggers/logs are external to Cloud Run)",file=out)
+              print("- Sheet_ack_and_PostgreSQL_same_execution_readback: NOT_VERIFIED by this read-only inventory",file=out)
+          print("importer_evidence=READ_ONLY execution_count=%s summaries=%s" %(len(jobs),len(receipts)))
+          PY

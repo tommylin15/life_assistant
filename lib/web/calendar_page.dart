@@ -33,6 +33,22 @@ class _CalendarEvent {
   final DateTime end;
   final bool allDay;
 
+  // Visual hints are derived from existing event text, never from guessed
+  // holiday/weather metadata. Unknown types get the neutral calendar icon.
+  IconData get icon {
+    if (title.startsWith('活動日期參考：') ||
+        description.startsWith('活動網址：')) return Icons.local_activity_outlined;
+    if (title.contains('生日') || title.contains('慶生')) return Icons.cake_outlined;
+    if (title.contains('會議') || title.contains('開會')) return Icons.groups_outlined;
+    if (title.contains('繳費') || title.contains('帳單')) return Icons.receipt_long_outlined;
+    if (title.contains('旅行') || title.contains('旅遊') ||
+        title.contains('出遊')) return Icons.luggage_outlined;
+    if (title.contains('搭車') || title.contains('公車') ||
+        title.contains('火車')) return Icons.directions_transit_outlined;
+    if (title.contains('提醒')) return Icons.notifications_outlined;
+    return allDay ? Icons.event_available_outlined : Icons.event_note_outlined;
+  }
+
   static DateTime _readDate(dynamic raw) {
     final field = raw is Map ? raw : const <String, dynamic>{};
     final timed = field['dateTime'] as String?;
@@ -293,18 +309,31 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(day.day.toString(), textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: selected || today ? FontWeight.bold : FontWeight.normal,
-                          color: inMonth ? scheme.onSurface : scheme.outline)),
+                      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        if (today) Padding(
+                          padding: const EdgeInsets.only(right: 2),
+                          child: Icon(Icons.circle, size: 5, color: scheme.primary)),
+                        Text(day.day.toString(),
+                          style: TextStyle(
+                            fontWeight: selected || today ? FontWeight.bold : FontWeight.normal,
+                            color: inMonth ? scheme.onSurface : scheme.outline)),
+                      ]),
                       if (items.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text(items.first.title, maxLines: 2,
+                        Wrap(alignment: WrapAlignment.center, spacing: 2,
+                          runSpacing: 0, children: [
+                            for (final event in items.take(compact ? 2 : 3))
+                              Icon(event.icon, size: compact ? 12 : 14,
+                                color: selected ? scheme.onPrimaryContainer
+                                    : scheme.tertiary),
+                          ]),
+                        Text(items.first.title, maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: compact ? 10 : 12, height: 1.1)),
-                        if (items.length > 1)
-                          Text('+' + (items.length - 1).toString(),
+                          style: TextStyle(fontSize: compact ? 9 : 11, height: 1.1,
+                            color: selected ? scheme.onPrimaryContainer : scheme.onSurface)),
+                        if (items.length > (compact ? 2 : 3))
+                          Text('+' + (items.length - (compact ? 2 : 3)).toString(),
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 10, color: scheme.primary)),
                       ],
@@ -407,8 +436,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                           ListTile(
                             key: ValueKey('calendar-agenda-' + event.id),
                             dense: true, contentPadding: EdgeInsets.zero,
-                            leading: Icon(event.allDay ? Icons.event_available_outlined
-                                : Icons.schedule_outlined),
+                            leading: Icon(event.icon),
                             title: Text(event.title, maxLines: 1,
                                 overflow: TextOverflow.ellipsis),
                             subtitle: Text([

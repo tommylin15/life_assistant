@@ -177,6 +177,21 @@ class CloudBuildV2Tests(unittest.TestCase):
                                   '--apply --live-passed', 'schedule:',
                                   '--raw-field promote=true'):
                     self.assertNotIn(forbidden, source)
+            elif workflow.name == 'life-cloud-run-retirement-apply.yml':
+                # 2026-10-15 user explicitly approved retiring 0%-traffic old
+                # revisions after a successful same-SHA V3 release. Only
+                # life-assistant-api, no services/jobs or cross-project writes.
+                self.assertIn('workflow_run:', source)
+                self.assertIn('workflows: ["V3 Release - GHCR to Cloud Run"]', source)
+                self.assertIn("workflow_run.conclusion == 'success'", source)
+                self.assertIn("workflow_run.event == 'workflow_dispatch'", source)
+                self.assertIn("workflow_run.head_branch == 'main'", source)
+                self.assertIn('MAIN_SHA', source)
+                self.assertIn('life_cloud_run_retirement_apply.py', source)
+                self.assertIn('test_life_cloud_run_retirement.py', source)
+                self.assertNotIn('push:', source)
+                self.assertNotIn('gcloud run jobs delete', source)
+                self.assertNotIn('gcloud run services delete', source)
             elif workflow.name == 'life-gemini-p0v-signed-smoke.yml':
                 # Approved 2026-10-13 P0-V: only after V3 staging-only SUCCESS,
                 # exact main SHA and four CI gates. This workflow may execute

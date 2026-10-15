@@ -13,4 +13,6 @@ Updated 2026-10-15. **One active backlog only.** Prior 01–07 execution plan ha
 
 **Accepted / removed from active blocker list (2026-10-15):** production Google OAuth human sign-in and production multi-user data isolation — both **PASS by user-reported live human acceptance**. Do not reopen solely because workflow artifacts do not include a human interaction log. Keep automated OAuth and tenant-ownership security tests. See [acceptance](acceptance.md).
 
+**2026-10-15 P0/P1 CI/CD 收斂：** 已歸檔 8 個老舊 workflow（29→21），CI 仍維持四項獨立 gate；移除重複 Flutter navigation 測試，文件專用 SHA 不啟動 staging，Gemini Smoke 改人工按需／現行 Gateway URL，V3 release 後直接跑帶競態保護的最新 10 版清理。以上屬 source 實作；**新 SHA CI/staging、最後 10 版 GCP readback 應分層驗收，未讀回前不能標 DONE**。
+
 Release reference: [latest verified original source SHA and actions](CURRENT_STATE.md). New `main` documentation commits start a new SHA and do not inherit production evidence. A standard `main` push runs the four CI jobs and staging-only flow; production promotion has its distinct manual V3 release gate. Do not run a second importer on top of GAS without checking the execution ledger.

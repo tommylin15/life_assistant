@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1] / ".github" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -35,6 +36,21 @@ class LifeRetentionTests(unittest.TestCase):
         self.assertEqual(len(result["old"]), 4)
         self.assertEqual(result["tags"], ["v3-123456789a"])
         self.assertEqual(result["live"], "life-assistant-api-00014")
+
+    def test_concurrent_ready_switch_inside_newest_ten_aborts(self):
+        original_service = service()
+        baseline = mod.select(original_service, revisions())
+        baseline["preserved_tags"] = {
+            (n, tag) for n, tag, _ in mod.traffic_snapshot(original_service)
+            if tag and n in baseline["newest"]
+        }
+        baseline["latest_ready"] = original_service["status"]["latestReadyRevisionName"]
+        baseline["latest_created"] = original_service["status"]["latestCreatedRevisionName"]
+        changed = service()
+        changed["status"]["latestReadyRevisionName"] = "life-assistant-api-00013"
+        with patch.object(mod, "service_state", return_value=changed):
+            with self.assertRaisesRegex(ValueError, "Concurrent ready revision changed"):
+                mod.verify_baseline(baseline, "gen-lang-client-0593591102", "us-central1")
 
     def test_active_old_revision_denied(self):
         with self.assertRaisesRegex(ValueError, "Live revision"):

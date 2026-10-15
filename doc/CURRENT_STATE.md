@@ -16,6 +16,10 @@ At audit time the source baseline was `fc800b280be59f44f485dfc170fe45a14fc9c981`
 - **Revision retention: PARTIAL** — the release log shows `PARTIAL_PROTECTED`, `remaining_count=62` (2026-10-14); tagged/traffic/rollback-protected revisions cannot be blindly pruned to 10. This is not a release-failure claim.
 - **Importer image pin: PASS; importer execution in that release: NOT_RUN** — the release's own summary says `curated_handoff_image=PASS … execution=NOT_RUN`.
 
+## 2026-10-15｜P0/P1 Actions 版本整併（source；runtime evidence 待驗）
+- 失敗的 staging-only [#38664515788](https://github.com/tommylin15/life_assistant/actions/runs/38664515788)：固定 staging 與 OAuth redirect 已 PASS，最後因舊 SHA 的獨立 Gemini smoke 派送步驟 FAIL；後續成功 staging [#38665056200](https://github.com/tommylin15/life_assistant/actions/runs/38665056200) 已證明部署路徑可用。獨立 [smoke #38667868716](https://github.com/tommylin15/life_assistant/actions/runs/38667868716) 的舊 Gateway pilot tag 不存在，不能據此推論正式 Gemini API 故障。
+- 已精簡 main workflow 29→21，保留 CI 四項獨立 jobs，停用過時 one-time／bootstrap；文件專用 CI 不啟動 staging；Gemini Smoke 改手動／現行 live URL；修正 Revision 清理於 V3 成功後直接執行，保留正式流量與十版候選、精確偵測併發 ready/created 更新。這些 source 實作**不是** Cloud Run 最後十版的 runtime PASS。
+
 ## Open evidence gaps (do not infer PASS)
 1. **GAS → importer → PostgreSQL → Sheet:** GAS 07:30 Asia/Taipei trigger's actual installation/success, the newest production importer Execution exit code, Sheet version-fenced ACK/ERROR and PostgreSQL row-level readback are **NOT VERIFIED** by the above release runs. Old 52 ACKED/2 ERROR is a historical snapshot only.
 2. **Gemini UX:** signed text path is proven, but individual logged-in user API/frontend handling, timeout/failure UX and quotas are not proved by synthetic smoke.

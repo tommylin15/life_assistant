@@ -136,6 +136,14 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 - 下列高風險操作仍需使用者明確確認：重大 IAM / Service Account 擴權、跨專案或跨組織權限、production credential / secret rotation、刪除 production GCP / database / Firebase 資源、destructive migration、可能造成重大 production outage 的權限或資源變更。
 - 可使用本機 WSL 執行 dev migration、Linux/shell 驗證（包含 `bash -n`）與 GCP dev 驗收；production 部署仍以 GitHub Actions 為主線。
 
+
+## 2026-10-15｜P0/P1 GitHub Actions 精簡補正
+- 正式每日流程為 main push → 四項 CI → 非文件變更的固定 staging；production promotion 仍需獨立 workflow_dispatch。沒有刪除 PostgreSQL／OAuth／部署驗收安全門檻。
+- 八個一次性、舊 cutover/bootstrap、舊 probe 和獨立退版 workflow 已移到 doc/archive/workflows，保留歷史契約測試但不再觸發 GitHub Actions。21 個現行 workflow 包含多項按需人工驗收與緊急回復，不代表 21 個常駐 worker。
+- 不再自動派送已過期 Gateway pilot tag 的 Gemini Smoke；有需求時手動觸發獨立 synthetic smoke，讀取當前 live Gateway URL，不把這視作產品 UI E2E。
+- 在 V3 成功發布的同一 workflow 中進行舊 0%-tag 的受控解除及 revision 最後 10 版清理，維護失敗需單獨顯示；避免將維護失敗誤判為 OAuth、Staging、Cloud Run 正式流量發布失敗。
+- 新 SHA CI、GCP 清理及十版實際 readback 必須各自取得證據；文件不構成實際刪除結果。
+
 ## 2026-10-12 最新決策（Owner 澄清）：只取消人工 OAuth 登入驗收
 
 - **僅取消人工操作**：GitHub Actions 的 Staging 和 production Release 不再要求 Owner 本人打開瀏覽器完成 Google 登入、開啟 /auth/me 或等待同 revision 的 callback+session 配對。真人 Google 登入 E2E 記為 **NOT VERIFIED**，不列為 release blocker；不准假報 PASS。
@@ -146,11 +154,11 @@ life_assistant 的完成條件不得依賴 omniAgent 是否完成；兩個專案
 
 ## CI/CD V3 — 正式目標（2026-10-08，依上述 2026-10-12 更新）
 
-- **單一正式目標**：`ChatGPT → GitHub main → GitHub Actions 完整測試/發布公開 GHCR digest → GCP API → GitHub Actions Logs → ChatGPT`。`main` push 先執行完整 CI；**2026-10-10 使用者最新核准變更**：只有四個 CI Job 全 PASS 的當次 `main` SHA，才由 `.github/workflows/v3-auto-staging-after-ci.yml` 的 `workflow_run` 自動啟動既有 V3 **staging-only** 發布（`promote=false`、`publish_staging=true`）。嚴格核對 CI push 來源、SHA 等於當前 main、避免重複發布；不對 PR／手動 CI／過期 SHA 發布。正式 production 切流仍需另外明確手動要求，不得由自動 staging 啟動。既有 GHCR digest、Cloud Run 0% 候選、Preview、401 存取控制、自動化 OAuth redirect/state/cookie 與 Google 整合、失敗恢復及所有其餘驗收不可略過。
+- **單一正式目標**：`ChatGPT → GitHub main → GitHub Actions 完整測試/發布公開 GHCR digest → GCP API → GitHub Actions Logs → ChatGPT`。`main` push 先執行完整 CI；**2026-10-10 使用者最新核准變更**：只有四個 CI Job 全 PASS 的當次 `main` SHA，且非純文件修改（`doc/`、`README.md`、`AGENTS.md`、`CHANGELOG.md`），才由 `.github/workflows/v3-auto-staging-after-ci.yml` 的 `workflow_run` 自動啟動既有 V3 **staging-only** 發布（`promote=false`、`publish_staging=true`）。嚴格核對 CI push 來源、SHA 等於當前 main、避免重複發布；不對 PR／手動 CI／過期 SHA 發布。正式 production 切流仍需另外明確手動要求，不得由自動 staging 啟動。既有 GHCR digest、Cloud Run 0% 候選、Preview、401 存取控制、自動化 OAuth redirect/state/cookie 與 Google 整合、失敗恢復及所有其餘驗收不可略過。
 - 新流程不得呼叫 Cloud Build、不得主動寫 GCS/Artifact Registry，也不得新增其 repo/bucket；過去 Cloud Build 僅允許獨立、WIF **唯讀** 診斷。部署採**分離的最小權限 deployer**；唯讀 WIF 無法部署。
 - Cloud Run **僅允許直接讀取公開 GHCR package 的 immutable manifest digest**；package visibility/讀取、live/candidate digest、服務身份和 0% tagged URL 安全均需實測。私人 GHCR 所需的 Artifact Registry remote repo 與本決策衝突，因此失敗關閉，不自動替換架構。
 - 禁止因寫好文件而標示 V3 DONE。切換前盤點現有 workflow/Cloud Build triggers，實作後先取得 Actions、GHCR、WIF、0% revision、真實候選/Preview/Live、rollback 及未觸發 Cloud Build/未主動寫 GCS/AR 證據；再停用舊入口，不刪歷史記錄。
-- **Cloud Run Revision 固定只保留最新 10 個（2026-10-15 使用者明確授權）**：每次 V3 staging／production release 及真實 gates PASS 後，Life 專用後處理工作流先核對當前 main SHA、唯一 100% 正式 revision 與 latestReady/latestCreated 均在最新 10 個之內，才解除第 11 個以後的舊 V2/V3 0% 候選 tag，逐筆刪除超額 Revision，最後 readback 必須恰為 10；舊候選／歷史回滾版不再永久保留。若新版尚在發布、live/最新候選超出最新 10、tag 身分未知、流量改變或刪除失敗，必須 FAIL／PARTIAL，禁止為達數量而刪正式版本。此政策不允許刪除現役 Service、任何 Job、GHCR 當前所需 digest、資料庫或跨專案資源。相關工作流為 `.github/workflows/life-cloud-run-retirement-apply.yml`。
+- **Cloud Run Revision 固定只保留最新 10 個（2026-10-15 使用者明確授權）**：每次 V3 staging／production release 及真實 gates PASS 後，Life 專用後處理工作流先核對當前 main SHA、唯一 100% 正式 revision 與 latestReady/latestCreated 均在最新 10 個之內，才解除第 11 個以後的舊 V2/V3 0% 候選 tag，逐筆刪除超額 Revision，最後 readback 必須恰為 10；舊候選／歷史回滾版不再永久保留。若新版尚在發布、live/最新候選超出最新 10、tag 身分未知、流量改變或刪除失敗，必須 FAIL／PARTIAL，禁止為達數量而刪正式版本。此政策不允許刪除現役 Service、任何 Job、GHCR 當前所需 digest、資料庫或跨專案資源。現行清理直接整合在 `.github/workflows/v3-release-ghcr.yml` 的 staging／production gates 之後；歷史獨立清理 workflow 已歸檔。清理 PASS／FAIL 為獨立維護結果，發布 gate 的 PASS 不等於清理 PASS，清理 FAIL 亦不將先前已驗收的登入或 staging 判作 FAIL。
 - 實作與驗收規範以 `ci_cd_ghcr_release_policy.md` 為準；V2 已歸檔至 [archive/ci_cd_v2_policy.md](archive/ci_cd_v2_policy.md)，只供稽核，不再作為新建/變更 pipeline 的目標。
 
 ## 歷史政策

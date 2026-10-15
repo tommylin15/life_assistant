@@ -75,10 +75,12 @@ def verify_baseline(original, project=PROJECT, region=REGION):
     positive = [(name, pct) for name, _tag, pct in traffic_snapshot(observed) if pct]
     if positive != original["serving"]:
         raise ValueError("Production traffic weights changed")
-    if observed.get("status", {}).get("latestReadyRevisionName") not in original["newest"]:
-        raise ValueError("Concurrent new ready revision")
-    if observed.get("status", {}).get("latestCreatedRevisionName") not in original["newest"]:
-        raise ValueError("Concurrent new created revision")
+    # A concurrent release may still point to a revision inside the latest
+    # ten; membership is not enough. Require the exact pre-cleanup identities.
+    if observed.get("status", {}).get("latestReadyRevisionName") != original["latest_ready"]:
+        raise ValueError("Concurrent ready revision changed")
+    if observed.get("status", {}).get("latestCreatedRevisionName") != original["latest_created"]:
+        raise ValueError("Concurrent created revision changed")
     current_tags = {(n, t) for n, t, _p in traffic_snapshot(observed) if t and n in original["newest"]}
     original_tags = original["preserved_tags"]
     if current_tags != original_tags:
@@ -95,6 +97,8 @@ def apply(project, region):
     snapshot["preserved_tags"] = {
         (n, t) for n, t, _p in traffic_snapshot(svc) if t and n in snapshot["newest"]
     }
+    snapshot["latest_ready"] = svc["status"]["latestReadyRevisionName"]
+    snapshot["latest_created"] = svc["status"]["latestCreatedRevisionName"]
     print(json.dumps({"stage": "PLAN", "before": snapshot["before"],
                       "keep": KEEP, "to_delete": len(snapshot["old"]),
                       "detach_old_tags": len(snapshot["tags"]),

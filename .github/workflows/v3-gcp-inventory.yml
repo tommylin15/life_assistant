@@ -2,16 +2,6 @@ name: V3 GCP Dependency Inventory (read only)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/v3-gcp-inventory.yml
-      - .github/workflows/v3-release-ghcr.yml
-      - .github/scripts/v3_revision_retention.py
-      - .github/scripts/v3_gcp_inventory.py
-      - .github/scripts/v3_ar_docker_inventory.py
-      - .github/scripts/v3_no_rollback_retirement_inventory.py
-      - .github/scripts/v3_free_event_retirement_readback.py
 
 permissions:
   contents: read

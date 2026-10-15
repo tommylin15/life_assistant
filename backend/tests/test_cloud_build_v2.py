@@ -197,9 +197,9 @@ class CloudBuildV2Tests(unittest.TestCase):
                 # exact main SHA and four CI gates. This workflow may execute
                 # ONE existing Job for a real text smoke, not deploy/mutate.
                 self.assertIn('workflow_dispatch:', source)
-                self.assertIn('push:', source)
+                self.assertNotIn('push:', source)
                 self.assertNotIn('workflow_run:', source)
-                self.assertIn('bootstrap_source_mismatch', source)
+                self.assertNotIn('bootstrap_source_mismatch', source)
                 self.assertIn('current_sha" = "$SOURCE_SHA"', source)
                 self.assertIn('.event=="workflow_dispatch" and .conclusion=="success"', source)
                 self.assertIn("Require explicit promotion selection", source)

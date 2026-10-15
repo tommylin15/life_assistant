@@ -11,12 +11,7 @@ on:
         description: "Verified staging-only V3 release workflow run ID"
         required: true
         type: string
-  # One-time self-start for the already-verified 20e709a9 staging release.
-  # Later pushes cannot pass the exact parent-SHA gate. Subsequent releases
-  # explicitly dispatch this workflow from their own successful V3 run.
-  push:
-    branches: [main]
-    paths: [.github/workflows/life-gemini-p0v-signed-smoke.yml]
+
 permissions:
   contents: read
   actions: read
@@ -26,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   signed-smoke:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: dev-test
@@ -38,8 +33,8 @@ jobs:
       # V3 pins CORE on staging-only release; POSTDEPLOY is pinned only before production promotion.
       JOB: life-assistant-core-acceptance
       EXPECTED_SA: omniagent-codex-life-client@gen-lang-client-0593591102.iam.gserviceaccount.com
-      SOURCE_SHA: ${{ inputs.source_sha || '20e709a9d151691390f449cea4e5a8be839ef503' }}
-      SOURCE_RUN: ${{ inputs.source_run || '38363418508' }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      SOURCE_RUN: ${{ inputs.source_run }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -55,16 +50,7 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           current_sha="$(git rev-parse HEAD)"
           test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)" = "$current_sha"
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            # Run once against the last verified V3 candidate; a later workflow
-            # edit cannot silently replay that old run.
-            if [[ "$(git rev-parse HEAD^)" != "09e237e8733648f4e7937d058135a52e9c7ba3a7" || "$SOURCE_SHA" != "20e709a9d151691390f449cea4e5a8be839ef503" ]]; then
-              echo "gemini_smoke=SKIP bootstrap_source_mismatch" >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-          else
-            test "$current_sha" = "$SOURCE_SHA"
-          fi
+          test "$current_sha" = "$SOURCE_SHA"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" |
             jq -e --arg sha "$SOURCE_SHA" '
               .name=="V3 Release - GHCR to Cloud Run" and
@@ -98,7 +84,7 @@ jobs:
           project_id: ${{ env.PROJECT }}
       - uses: google-github-actions/setup-gcloud@v2
         if: ${{ steps.gate.outputs.run == 'true' }}
-      - name: Read-only identity, pinned image and zero traffic Gateway pilot
+      - name: Read-only identity, pinned image and current Gateway live URL
         if: ${{ steps.gate.outputs.run == 'true' }}
         shell: bash
         run: |
@@ -139,12 +125,17 @@ jobs:
           print("life_acceptance_job_image_ref="+str(canonical(job_image)))
           if canonical(image)!=canonical(job_image) or not re.fullmatch(r"ghcr[.]io/tommylin15/life_assistant-backend@sha256:[a-f0-9]{64}",canonical(image)):
               raise SystemExit("NOT VERIFIED: source and consumer Job image not the same immutable GHCR digest")
-          tags=[t for t in (gw.get("status") or {}).get("traffic") or []
-                if t.get("tag")=="gemini-p0v-b03e5f55" and t.get("percent",0)==0]
-          if len(tags)!=1 or not re.fullmatch(r"https://gemini-p0v-b03e5f55---omniagent-agent-gateway-[a-z0-9-]+[.]a[.]run[.]app",tags[0].get("url","")):
-              raise SystemExit("NOT VERIFIED: approved zero-traffic Gateway pilot not found")
-          (root/"gateway-url").write_text(tags[0]["url"])
-          print("life_runtime_identity=PASS immutable_image=PASS gateway_pilot_zero_traffic=PASS")
+          # The retired one-off pilot is not a stable integration endpoint.
+          # Use the approved currently serving Gateway service (no routing writes).
+          active=[t for t in (gw.get("status") or {}).get("traffic") or []
+                  if int(t.get("percent") or 0)>0]
+          url=(gw.get("status") or {}).get("url") or ""
+          if len(active)!=1 or int(active[0].get("percent") or 0)!=100:
+              raise SystemExit("NOT VERIFIED: Gateway has no sole 100% serving revision")
+          if not re.fullmatch(r"https://omniagent-agent-gateway-[a-z0-9-]+[.]a[.]run[.]app",url):
+              raise SystemExit("NOT VERIFIED: canonical Gateway URL unavailable")
+          (root/"gateway-url").write_text(url)
+          print("life_runtime_identity=PASS immutable_image=PASS gateway_current_live_url=PASS")
           PY
       - name: One real Life runtime signed Gemini Flash-Lite call
         if: ${{ steps.gate.outputs.run == 'true' }}

@@ -1,0 +1,49 @@
+"""Check the retained release path; all external changes stay GCP-gated."""
+from pathlib import Path
+import unittest
+
+ROOT=Path(__file__).resolve().parents[1]
+WF=ROOT/".github/workflows"
+
+
+class ConsolidatedV3Tests(unittest.TestCase):
+    def test_one_time_triggers_retired(self):
+        for old in ("life-01-07-one-time-acceptance.yml",
+                    "life-cloud-run-retirement-apply.yml",
+                    "v3-initial-bootstrap.yml",
+                    "v3-cutover-once-after-release.yml"):
+            self.assertFalse((WF/old).exists(), old)
+
+    def test_document_only_ci_does_not_release(self):
+        stage=(WF/"v3-auto-staging-after-ci.yml").read_text()
+        self.assertIn("docs_only_ci_passed",stage)
+        self.assertIn("length<300",stage)
+        self.assertIn("four_jobs=PASS",stage)
+        self.assertIn("--raw-field promote=false",stage)
+
+    def test_retention_inline_and_isolated(self):
+        release=(WF/"v3-release-ghcr.yml").read_text()
+        self.assertIn("Retire old Cloud Run revisions after successful V3 gates",release)
+        self.assertIn("life_cloud_run_retirement_apply.py",release)
+        self.assertIn("continue-on-error: true",release)
+        self.assertIn("retirement=FAIL maintenance_only",release)
+        self.assertNotIn("gh workflow run life-gemini",release)
+        self.assertIn("Controlled rollback rehearsal and restore promoted live traffic",release)
+
+    def test_gemini_manual_and_current_gateway(self):
+        smoke=(WF/"life-gemini-p0v-signed-smoke.yml").read_text()
+        self.assertIn("workflow_dispatch:",smoke)
+        self.assertNotIn("\n  push:",smoke)
+        self.assertNotIn("gemini-p0v-b03e5f55",smoke)
+        self.assertIn('get("url")',smoke)
+        self.assertIn("active[0]",smoke)
+        self.assertIn('gcloud run jobs execute "$JOB"',smoke)
+
+    def test_no_redundant_flutter_navigation_test(self):
+        ci=(WF/"ci.yml").read_text()
+        self.assertIn("flutter test --no-pub --reporter expanded",ci)
+        self.assertNotIn("flutter test --no-pub test/drive_navigation_test.dart",ci)
+
+
+if __name__=="__main__":
+    unittest.main()

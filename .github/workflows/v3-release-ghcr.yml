@@ -19,7 +19,6 @@ permissions:
   checks: read
   id-token: write
   packages: write
-  actions: write  # Dispatch narrow post-staging smoke using GITHUB_TOKEN; never production.
 
 concurrency:
   group: life-assistant-v3-production-release
@@ -568,12 +567,35 @@ jobs:
           echo "Legacy Cloud Build and GCS/AR deletion are separately gated; NOT VERIFIED until readback." \
             >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Dispatch isolated Gemini signed smoke after staging-only SUCCESS
-        if: ${{ success() && inputs.publish_staging && !inputs.promote }}
+      # The cleanup is a separate maintenance outcome, not an OAuth, DB,
+      # traffic-promotion or Hosting release gate.
+      - name: Retire old Cloud Run revisions after successful V3 gates
+        id: retire_revisions
+        if: ${{ success() && inputs.publish_staging }}
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_SHA"
-          gh workflow run life-gemini-p0v-signed-smoke.yml --repo "$GITHUB_REPOSITORY" --ref main \
-            -f source_sha="$RELEASE_SHA" -f source_run="$GITHUB_RUN_ID"
-          echo "life_gemini_signed_smoke=DISPATCHED run=$GITHUB_RUN_ID sha=$RELEASE_SHA (independent gate; not automatically PASS)" >> "$GITHUB_STEP_SUMMARY"
+          CURRENT_MAIN="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ "$CURRENT_MAIN" != "$RELEASE_SHA" ]]; then
+            echo "retirement=SUPERSEDED previous_sha=$RELEASE_SHA current_main=$CURRENT_MAIN" >> "$GITHUB_STEP_SUMMARY"
+            echo "retirement=SUPERSEDED" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python3 .github/scripts/life_cloud_run_retirement_apply.py \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --apply \
+            | tee "$RUNNER_TEMP/life-retirement-result.jsonl"
+          grep -E '"stage": "DONE".*"status": "PASS"' "$RUNNER_TEMP/life-retirement-result.jsonl"
+          echo "retirement=PASS" >> "$GITHUB_OUTPUT"
+          echo "retirement=PASS exactly_ten=YES" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish independent release and maintenance outcomes
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${{ steps.retire_revisions.outcome }}" == "failure" ]]; then
+            echo "retirement=FAIL maintenance_only release_gates_not_retroactively_failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "${{ steps.retire_revisions.outcome }}" == "skipped" ]]; then
+            echo "retirement=NOT_RUN" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "gemini_signed_smoke=MANUAL_INDEPENDENT non_blocking" >> "$GITHUB_STEP_SUMMARY"

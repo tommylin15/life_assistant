@@ -1,11 +1,7 @@
 name: Life Cloud Run retirement inventory (read only)
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/life-cloud-run-retirement-inventory.yml
-      - .github/scripts/life_cloud_run_retirement_inventory.py
   workflow_dispatch:
+
 permissions:
   contents: read
   id-token: write

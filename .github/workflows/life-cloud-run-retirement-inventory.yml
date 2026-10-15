@@ -45,3 +45,4 @@ jobs:
               print(f"- latest_job_executions={d['recent_job_executions']}",file=f)
               print("no_delete=true",file=f)
           PY
+          cat "$RUNNER_TEMP/life-retirement.json"

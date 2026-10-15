@@ -34,6 +34,55 @@ jobs:
           set -euo pipefail
           gcloud run jobs describe "$JOB" --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/job.json"
+          # Read only: prove which immutable digest the production API and
+          # importer Job currently use. A staging-only release never pins this
+          # production Job, so do not infer that it contains new main code.
+          if gcloud run services describe life-assistant-api \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/service.json" 2>"$RUNNER_TEMP/service.err"; then
+            LIVE_REV="$(python3 - "$RUNNER_TEMP/service.json" <<'PY'
+          import json,sys
+          j=json.load(open(sys.argv[1]))
+          live=[x for x in j.get("status",{}).get("traffic",[])
+                if int(x.get("percent") or 0)==100]
+          if len(live)!=1: sys.exit(2)
+          print(live[0].get("revisionName",""))
+          PY
+          )" || LIVE_REV=""
+            if [[ -n "$LIVE_REV" ]]; then
+              gcloud run revisions describe "$LIVE_REV" \
+                --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+                --format=json > "$RUNNER_TEMP/live-revision.json" \
+                2>"$RUNNER_TEMP/live-revision.err" || true
+            fi
+          fi
+          python3 - "$RUNNER_TEMP/job.json" "$RUNNER_TEMP/live-revision.json" <<'PY'
+          import json,os,sys
+          sys.path.insert(0,".github/scripts")
+          from v3_image_identity import canonical
+          from v3_curated_handoff_alignment import validate_job
+          summary=os.environ["GITHUB_STEP_SUMMARY"]
+          result="NOT_VERIFIED"
+          contract="NOT_VERIFIED"
+          try:
+              with open(sys.argv[1],encoding="utf-8") as f: job=json.load(f)
+              with open(sys.argv[2],encoding="utf-8") as f: rev=json.load(f)
+              live=canonical(rev.get("status",{}).get("imageDigest"))
+              job_image=canonical(job["spec"]["template"]["spec"]["template"]["spec"]["containers"][0]["image"])
+              result="PASS" if job_image==live else "MISMATCH"
+              try:
+                  validate_job(job,job_image)
+                  contract="PASS"
+              except (KeyError,ValueError,TypeError):
+                  contract="FAIL"
+          except (ValueError,KeyError,TypeError,FileNotFoundError,IndexError):
+              pass
+          with open(summary,"a") as f:
+              print(f"- importer_job_image_vs_100pct_production={result}",file=f)
+              print(f"- importer_job_command_sheet_contract={contract}",file=f)
+              print("- latest_main_import_lock_deployed=NOT_VERIFIED unless its immutable release digest was promoted",file=f)
+          print(f"importer_image_alignment={result} contract={contract}")
+          PY
           if ! gcloud run jobs executions list --job "$JOB" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
             > "$RUNNER_TEMP/executions.json" 2>"$RUNNER_TEMP/executions.err"; then

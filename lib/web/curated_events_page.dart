@@ -38,10 +38,17 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
   String fee = '';
   DateTime? from;
   bool savedOnly = false;
+  late String _activeEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeEntry = widget.entry == 'opportunities' ? 'opportunities' : 'explore';
+  }
   List<int> offsets = [0];
   String? snapshot;
 
-  bool get opportunity => widget.entry == 'opportunities';
+  bool get opportunity => _activeEntry == 'opportunities';
 
   static const opportunityChips = {
     'opening_soon': '即將開報', 'opening_today': '今天開報',
@@ -158,14 +165,15 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
                 const Text('目前沒有符合條件的活動'),
                 TextButton(onPressed: () => filter(() {
                   keyword = ''; search.clear(); quick = ''; region = '';
-                  city = ''; district = ''; category = ''; fee = ''; from = null; savedOnly = false;
+                  city = ''; district = ''; category = ''; fee = ''; from = null;
+                  savedOnly = false; _activeEntry = 'explore';
                 }), child: const Text('清除篩選')),
               ]));
           }
           Widget activityCard(List<Map<String, dynamic>> group) =>
               CuratedActivityCard(
                 key: ValueKey('group-${group.first['parent_event_key'] ?? group.first['handoff_event_key'] ?? group.first['identity_key']}'),
-                items: group, entry: widget.entry,
+                items: group, entry: _activeEntry,
                 actionIds: batchedActionIds, onChanged: _refreshPages);
           // One comfortable mobile column; two independently-sized desktop
           // columns (no fixed-height GridView that clips expanded offers).
@@ -201,8 +209,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16), children: [
-          LifeFeatureHeader(feature: opportunity
-            ? LifeVisualFeature.opportunities : LifeVisualFeature.explore),
+          const LifeFeatureHeader(feature: LifeVisualFeature.explore),
           const SizedBox(height: 12),
           const Text('活動與報名資訊以原站為準；收藏不代表已報名。'),
           const SizedBox(height: 12),
@@ -219,15 +226,30 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
               border: const OutlineInputBorder()),
             onSubmitted: (v) => filter(() => keyword = v.trim())),
           const SizedBox(height: 12),
-          Wrap(spacing: 7, runSpacing: 8, children: [
-            ChoiceChip(label: const Text('全部'),
-              selected: !savedOnly,
-              onSelected: (_) => filter(() => savedOnly = false)),
-            ChoiceChip(label: const Text('已收藏'),
-              avatar: const Icon(Icons.bookmark_outline, size: 17),
-              selected: savedOnly,
-              onSelected: (_) => filter(() => savedOnly = true)),
-          ]),
+          SingleChildScrollView(scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              ChoiceChip(key: const ValueKey('activity-mode-all'),
+                label: const Text('全部活動'),
+                selected: !opportunity && !savedOnly,
+                onSelected: (_) => filter(() {
+                  _activeEntry = 'explore'; savedOnly = false; quick = '';
+                })),
+              const SizedBox(width: 7),
+              ChoiceChip(key: const ValueKey('activity-mode-urgent'),
+                label: const Text('限時機會'),
+                selected: opportunity,
+                onSelected: (_) => filter(() {
+                  _activeEntry = 'opportunities'; savedOnly = false; quick = '';
+                })),
+              const SizedBox(width: 7),
+              ChoiceChip(key: const ValueKey('activity-mode-saved'),
+                label: const Text('已收藏'),
+                avatar: const Icon(Icons.bookmark_outline, size: 17),
+                selected: savedOnly,
+                onSelected: (_) => filter(() {
+                  _activeEntry = 'explore'; savedOnly = true; quick = '';
+                })),
+            ])),
           const SizedBox(height: 8),
           SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
             for (final entry in chips.entries)

@@ -39,6 +39,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
   DateTime? from;
   bool savedOnly = false;
   List<int> offsets = [0];
+  String? snapshot;
 
   bool get opportunity => widget.entry == 'opportunities';
 
@@ -66,6 +67,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
   void filter(VoidCallback change) => setState(() {
     change();
     offsets = [0];
+    snapshot = null;
   });
 
   String _query(int offset) {
@@ -82,6 +84,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
     if (district.isNotEmpty) params['district'] = district;
     if (fee.isNotEmpty) params['fee_kind'] = fee;
     if (savedOnly) params['saved_only'] = 'true';
+    if (offset != 0 && snapshot != null) params['as_of'] = snapshot!;
     if (from != null) {
       final d = from!;
       params['starts_from'] = '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
@@ -90,8 +93,12 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
   }
 
   void _refreshPages() {
-    for (final offset in offsets) {
-      ref.invalidate(curatedListProvider(_query(offset)));
+    // Invalidate all cached pages but restart at the first page to prevent
+    // offsets from a former query snapshot being mixed with newer imports.
+    final keys = offsets.map(_query).toList();
+    setState(() { offsets = [0]; snapshot = null; });
+    for (final key in keys) {
+      ref.invalidate(curatedListProvider(key));
     }
   }
 
@@ -129,6 +136,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
             ]));
         },
         data: (data) {
+          if (offset == 0) snapshot = data['snapshot']?.toString();
           if (last) {
             hasMore = data['has_more'] == true;
             nextOffset = int.tryParse(data['next_cursor']?.toString() ?? '');

@@ -290,6 +290,7 @@ async def list_curated(
     district: str | None = Query(None, max_length=100),
     fee_kind: Literal["free", "paid", "conditional_free", "unknown"] | None = None,
     saved_only: bool = False,
+    as_of: datetime | None = Query(None, description="UTC snapshot from first page"),
 ):
     if _user and isinstance(db, AsyncSession):
         await feature_gate("events" if entry == "all" else entry)(user=_user, db=db)
@@ -298,6 +299,13 @@ async def list_curated(
     if not isinstance(quick, (str, type(None))): quick = None
     if not isinstance(keyword, (str, type(None))): keyword = None
     if not isinstance(district, (str, type(None))): district = None
+    if not isinstance(as_of, (datetime, type(None))): as_of = None
+    if as_of is not None and (as_of.tzinfo is None or as_of.utcoffset() is None):
+        raise HTTPException(422, "as_of must include timezone")
+    # An immutable page anchor prevents new imports from moving offset pages.
+    # Existing records changed after this time can still move; clients also
+    # reset all accumulated pages after personal actions or manual refresh.
+    snapshot = as_of or datetime.now(timezone.utc)
     today = datetime.now(TAIPEI).date()
     if quick and quick not in (
         {"latest", "opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"}
@@ -312,6 +320,7 @@ async def list_curated(
         category=category, fee_kind=fee_kind, starts_from=starts_from,
         today=today, saved_only=saved_only, user_sub=_user.get("sub"),
     )
+    statement = statement.where(CuratedActivity.created_at <= snapshot)
     # Legacy child saves and newer main saves both make the whole group saved.
     saves = (select(group.label("g"))
              .select_from(CuratedActivity)
@@ -367,7 +376,8 @@ async def list_curated(
     rows = []
     if keys:
         rows = (await db.execute(
-            select(CuratedActivity).where(_group_key().in_(keys))
+            select(CuratedActivity).where(_group_key().in_(keys),
+                CuratedActivity.created_at <= snapshot)
             .order_by(CuratedActivity.created_at, CuratedActivity.identity_key)
         )).scalars().all()
     lookup = {key: idx for idx, key in enumerate(keys)}
@@ -397,7 +407,7 @@ async def list_curated(
         for row in rows
     ], "returned": len(page), "has_more": len(selected) > limit,
        "next_cursor": str(offset + len(page)) if len(selected) > limit else None,
-       "policy": "v3_source_unverified"}
+       "snapshot": snapshot.isoformat(), "policy": "v3_source_unverified"}
 
 def _group_key_value(row: CuratedActivity) -> str:
     key = row.parent_event_key or row.handoff_event_key

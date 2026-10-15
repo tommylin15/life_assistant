@@ -4,7 +4,7 @@ import hashlib
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
-from scripts.import_curated_from_sheet import parse_rows, validate_record, SheetClient, run_import, SHEET_ID
+from scripts.import_curated_from_sheet import parse_rows, validate_record, SheetClient, run_import, run_exclusive_import, SHEET_ID, IMPORT_LOCK_KEY
 from app.services.curated_handoff import HEADERS
 
 
@@ -73,6 +73,27 @@ class HandoffContractTests(unittest.TestCase):
         self.assertFalse(item.curated().limited_offer)
         self.assertIsNone(item.curated().registration_deadline)
         self.assertEqual(item.model_dump(mode="json")["registration_deadline_at_tpe"], "2026-10-14")
+
+
+class ImportExclusiveLockTests(unittest.IsolatedAsyncioTestCase):
+    async def test_second_process_cannot_run_against_same_sheet(self):
+        guard = AsyncMock()
+        guard.scalar.return_value = False
+        sheet_client = AsyncMock()
+        with self.assertRaisesRegex(RuntimeError, "handoff_concurrent_execution"):
+            await run_exclusive_import(guard, sheet=sheet_client)
+        sheet_client.read.assert_not_awaited()
+        self.assertIn("pg_try_advisory_xact_lock", str(guard.scalar.await_args.args[0]))
+        self.assertEqual(guard.scalar.await_args.args[1]["key"], IMPORT_LOCK_KEY)
+
+    async def test_single_process_uses_standard_idempotent_import(self):
+        guard = AsyncMock()
+        guard.scalar.return_value = True
+        with patch("scripts.import_curated_from_sheet.run_import",
+                   new=AsyncMock(return_value={"status": "PASS"})) as importer:
+            result = await run_exclusive_import(guard)
+        self.assertEqual(result["status"], "PASS")
+        importer.assert_awaited_once()
 
 
 class ReceiptTests(unittest.IsolatedAsyncioTestCase):

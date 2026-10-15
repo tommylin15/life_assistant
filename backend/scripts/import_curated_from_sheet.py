@@ -7,6 +7,7 @@ from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
 import httpx
 from pydantic import ValidationError
+from sqlalchemy import text
 from app.db.session import SessionLocal, engine
 from app.services.curated_handoff import HEADERS, BUSINESS_FIELDS, HandoffItem, upsert_handoff
 
@@ -16,6 +17,9 @@ MAX_SHEET_ROWS = 1000
 RECEIPT_BATCH_ROWS = 100
 SHEETS_RETRYABLE = {429, 500, 502, 503, 504}
 SHEETS_MAX_ATTEMPTS = 6
+# Cross-process exclusion for GAS and manual fallback. Hold a dedicated
+# transaction lock during the entire import; releases on error/container exit.
+IMPORT_LOCK_KEY = 57926471020261015
 # shortcut: reject over 1000 outbox rows; add paged reads if 30-day cleanup exceeds this bound.
 
 
@@ -208,12 +212,24 @@ async def run_import(sheet=None, sessions=SessionLocal):
     return result
 
 
+async def run_exclusive_import(connection, sheet=None, sessions=SessionLocal):
+    locked = await connection.scalar(
+        text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": IMPORT_LOCK_KEY})
+    if locked is not True:
+        # Never let a second GAS/manual run overwrite the first run's receipt.
+        raise RuntimeError("handoff_concurrent_execution")
+    return await run_import(sheet, sessions)
+
+
 async def main():
     try:
-        result = await run_import()
-        print("life_handoff_import " + " ".join(f"{k}={v}" for k, v in result.items()))
-        if result["status"] != "PASS":
-            raise RuntimeError("handoff_import_system_failure")
+        # A separate transaction keeps the lock until DB commits and Sheet ACK
+        # readback finish; row-level DB connections remain independently short.
+        async with engine.begin() as guard:
+            result = await run_exclusive_import(guard)
+            print("life_handoff_import " + " ".join(f"{k}={v}" for k, v in result.items()))
+            if result["status"] != "PASS":
+                raise RuntimeError("handoff_import_system_failure")
     finally:
         await engine.dispose()
 

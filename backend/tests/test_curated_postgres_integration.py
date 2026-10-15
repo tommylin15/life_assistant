@@ -62,6 +62,46 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
                                       city=None, category=None, starts_from=None)
             self.assertTrue(any(x["title"] == "Updated 1" for x in feed["items"]))
 
+    async def test_frozen_pagination_excludes_new_imports_from_old_cursor(self):
+        # Three distinct events, including an ongoing cross-day event, are
+        # inserted before the first page; newer imports cannot shift page 2.
+        from datetime import date
+        from fastapi import HTTPException
+        city = "ci-pagination-" + uuid.uuid4().hex
+        events = [
+            {"title": "早先活動", "original_url": self.url + "/a",
+             "city": city, "starts_on": "2098-01-01", "ends_on": "2099-12-31"},
+            {"title": "第二個活動", "original_url": self.url + "/b",
+             "city": city, "starts_on": "2099-04-01"},
+            {"title": "第三個活動", "original_url": self.url + "/c",
+             "city": city, "starts_on": "2099-05-01"},
+        ]
+        async with self.sessions() as db:
+            await ingest_curated_batch(CuratedBatchIn.model_validate({"items": events}), Response(), db=db)
+            first = await list_curated(Response(), _user={}, db=db,
+                entry="explore", limit=1, offset=0, city=city, category=None, starts_from=None)
+            self.assertTrue(first["has_more"])
+            self.assertIn("+00:00", first["snapshot"])
+        # New record sorts before the existing events and would shift OFFSET 1.
+        fresh = CuratedBatchIn.model_validate({"items": [{
+            "title": "新增較早活動", "original_url": self.url + "/new",
+            "city": city, "starts_on": "2097-01-01"}]})
+        async with self.sessions() as db:
+            await ingest_curated_batch(fresh, Response(), db=db)
+            from datetime import datetime
+            second = await list_curated(Response(), _user={}, db=db,
+                entry="explore", limit=1, offset=1, city=city, category=None,
+                starts_from=None, as_of=datetime.fromisoformat(first["snapshot"]))
+            self.assertEqual(second["returned"], 1)
+            self.assertNotEqual(first["items"][0]["identity_key"],
+                                second["items"][0]["identity_key"])
+            self.assertNotIn("新增較早活動", [v["title"] for v in second["items"]])
+            with self.assertRaises(HTTPException) as error:
+                await list_curated(Response(), _user={}, db=db, entry="explore",
+                    limit=1, offset=1, city=city, category=None, starts_from=None,
+                    as_of=datetime(2026, 10, 15))
+            self.assertEqual(error.exception.status_code, 422)
+
     async def test_owner_release_and_ai_policy_races_are_rejected(self):
         from unittest.mock import patch
         from fastapi import HTTPException

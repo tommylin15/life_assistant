@@ -1,0 +1,47 @@
+name: Life Cloud Run retirement inventory (read only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/life-cloud-run-retirement-inventory.yml
+      - .github/scripts/life_cloud_run_retirement_inventory.py
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  inventory:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: dev-test
+    timeout-minutes: 20
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read current Life services, jobs, revisions, traffic and scheduler metadata
+        run: |
+          set -euo pipefail
+          python .github/scripts/life_cloud_run_retirement_inventory.py --project "$GCP_PROJECT_ID" --region "$GCP_REGION" > "$RUNNER_TEMP/life-retirement.json"
+          python - "$RUNNER_TEMP/life-retirement.json" <<'PY'
+          import json, os, sys
+          d=json.load(open(sys.argv[1]))
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as f:
+              print("## Life Cloud Run retirement READ ONLY",file=f)
+              print(f"- life_services={d['life_services']}",file=f)
+              print(f"- life_jobs={d['life_jobs']}",file=f)
+              print(f"- revision_count={d['revision_count']}, tagged={d['tagged_revision_count']}",file=f)
+              print(f"- live={d['live_revisions']} latest_ready={d['latest_ready_revision']}",file=f)
+              print(f"- all_traffic_tags={d['traffic']}",file=f)
+              print(f"- newest_10={d['newest_10']}",file=f)
+              print(f"- scheduler_status={d['scheduler_status']}; scheduler={d['schedule']}",file=f)
+              print(f"- latest_job_executions={d['recent_job_executions']}",file=f)
+              print("no_delete=true",file=f)
+          PY

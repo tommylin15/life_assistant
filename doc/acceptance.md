@@ -1,5 +1,12 @@
 # Life — Acceptance
 
+## 2026-10-15｜02／03 正式版使用者驗收結案（最新）
+- **02 Shopping／待辦：PASS / DONE（人工功能驗收）** — 本輪預先定義的購物清單／品項各自修改與刪除、同一清單一次加入多品項、重新載入，以及待辦刪除不白畫面與相關權限操作。使用者於正式版發布後直接回報「02,03驗收完畢」。
+- **03 活動探索／個人操作：PASS / DONE（人工功能驗收）** — 本輪預先定義的跨日搜尋及分頁、收藏、加入待辦／個人追蹤、Google Calendar 操作與讀回；依使用者同一回報結案。
+- **證據區分**：機器端同一發布 SHA `6fdb4cf7e12f6c76d0b6955bc3f6e9325a5cbcce` 的 [CI #38730407125](https://github.com/tommylin15/life_assistant/actions/runs/38730407125)、[Cloud Run Release #38734655151](https://github.com/tommylin15/life_assistant/actions/runs/38734655151) 與 [Firebase Hosting #38738435372](https://github.com/tommylin15/life_assistant/actions/runs/38738435372) 為 CI、runtime smoke 和正式部署 PASS；**使用者回報**是 02／03 真人操作的驗收證據。使用者未逐一提供測試帳號、 Calendar event ID、 API request ID、操作明細及每步截圖，故不作此類獨立機器核證聲明。
+- **不包含**：01 定時 GAS 實際來源、最新版 importer 執行與 PostgreSQL／Sheet 版本一致 ACK，仍為 PARTIAL；其他功能（例如登入後 Gemini UI、Drive AI 成本）依各自 gate 判定。更動 02／03 相關程式後照常回歸，不恢復本次已通過的人工 E2E 阻塞。
+
+
 ## 2026-10-15｜正式版真人驗收補正（現行）
 - **Google OAuth 真人登入／授權／登入後正常使用：PASS**。由使用者明確回報已在正式發布版本操作並真人驗收無誤。
 - **多使用者資料隔離：PASS**。由使用者明確回報已在正式發布版本真人驗收無誤。

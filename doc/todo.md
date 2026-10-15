@@ -5,14 +5,14 @@ Updated 2026-10-15. **One active backlog only.** Prior 01–07 execution plan ha
 | --- | --- | --- |
 | P0-1 | GAS 07:30 → importer Execution 終態 → PG 版本／Sheet ACK 讀回；確認正式 Job image 已包含跨流程排他鎖，再做同輪驗收（禁止因驗收重觸發匯入）。 | **PARTIAL**：新版排他鎖已經正式 V3 [#38734655151](https://github.com/tommylin15/life_assistant/actions/runs/38734655151) 部署，Job digest/命令/Sheet 設定讀回 **PASS**；現有 Sheet 53 ACKED／1 ERROR。**剩餘**：新版首次 GAS 07:30 來源及 Execution、同輪 PostgreSQL/Sheet 版本 ACK 實讀 **NOT VERIFIED**；禁止為驗收重覆啟動 importer |
 | P1-1 | Complete **signed Gemini through logged-in Life `/ai/text` and UI** including 429/502/503/timeout, permission/quotas and no implicit Google Drive content transfer. | Signed synthetic smoke **PASS**, UX E2E **NOT VERIFIED** |
-| P1-2 | 驗證活動跨日搜尋、分頁新活動插入、舊收藏、個人追蹤/Task、Google Calendar 寫入讀回。 | **PARTIAL**：已新增固定 as_of 分頁快照及刷新重置，PostgreSQL 測試 PASS；既有收藏／Calendar 單元測試保留；真人 Calendar 寫入與新版正式 URL **NOT VERIFIED** |
-| P1-3 | 購物清單及品項編輯/刪除、一次新增多品項、重新載入、待辦刪除不白畫面與權限回歸。 | **PARTIAL**：已增購物批次排序鎖、Flutter 真實 widget 交互回歸、保留 Task nested Navigator 刪除測試；新版 CI 四項 PASS。正式使用者實際重新載入與跨帳號 runtime **NOT VERIFIED** |
 | P1-4 | Drive AI admin/per-user consent, provider failures, **real token/cost/accounting** if introducing budget enforcement; never fabricate spend. | Partial implementation, costs/budget **NOT VERIFIED** |
 | P2-2 | Audit dependency/action pinning, public-repository hygiene, access to operational docs, observability, backup restoration and scheduled-job dedupe. | Risk follow-up **NOT VERIFIED** |
 
+**02／03 使用者正式版人工驗收：PASS／DONE（2026-10-15）**。使用者明確回報「02,03驗收完畢」：02 購物清單／品項修改、刪除、批次新增、重載及待辦刪除不白畫面；03 活動跨日搜尋／分頁、收藏、個人待辦／追蹤及 Calendar 操作與讀回。已從 active backlog 移除 P1-2／P1-3；正式版操作是使用者回報，非自動化每條 API log。原有 CI/正式部署證據分開保留見 [acceptance.md](acceptance.md) 與 [CURRENT_STATE.md](CURRENT_STATE.md)。**01 GAS → PostgreSQL／Sheet 同輪回執仍為 P0-1 PARTIAL**。
+
 **01–03 正式部署／Hosting：PASS（2026-10-15）**：[V3 #38734655151](https://github.com/tommylin15/life_assistant/actions/runs/38734655151) 完成 production promotion、回滾演練、importer Job 映像同 digest；[Hosting #38738435372](https://github.com/tommylin15/life_assistant/actions/runs/38738435372) 同 SHA live readback PASS。這只關閉部署 gate，不代替 GAS 同輪匯入或使用者 E2E。
 
-**01–03 開發／PostgreSQL／Staging 最新驗收：PASS（2026-10-15）**：同 SHA `8d27207` [CI #38719801492](https://github.com/tommylin15/life_assistant/actions/runs/38719801492) 四項 PASS；[V3 #38720078074](https://github.com/tommylin15/life_assistant/actions/runs/38720078074) 固定 Staging PASS、活動交接 DB 檢查 + Shopping rollback-only runtime PASS，修復了舊 [#38715747623](https://github.com/tommylin15/life_assistant/actions/runs/38715747623) 的新驗收失敗，production traffic unchanged。上表 P0-1 / P1-2 / P1-3 **只保留外部來源及正式使用者 E2E**；不要把已 PASS 的 DB/CI/Staging 再列成待修 bug。
+**01–03 開發／PostgreSQL／Staging 最新驗收：PASS（2026-10-15）**：同 SHA `8d27207` [CI #38719801492](https://github.com/tommylin15/life_assistant/actions/runs/38719801492) 四項 PASS；[V3 #38720078074](https://github.com/tommylin15/life_assistant/actions/runs/38720078074) 固定 Staging PASS、活動交接 DB 檢查 + Shopping rollback-only runtime PASS，修復了舊 [#38715747623](https://github.com/tommylin15/life_assistant/actions/runs/38715747623) 的新驗收失敗，production traffic unchanged。上表僅保留尚待核實的外部來源與系統整合事項；P1-2／P1-3 已經使用者正式人工驗收 PASS 並自 active backlog 移除。
 
 **Closed / removed from active blockers:** P2-1 Revision 清理 **PASS**（68→10、刪 58、未刪 Service/Job、live unchanged），證據見 [Release #38675052751](https://github.com/tommylin15/life_assistant/actions/runs/38675052751)。P0/P1 CI/CD workflow 收斂 **PASS**（同 SHA CI + staging）。
 

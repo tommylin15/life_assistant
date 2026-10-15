@@ -1,11 +1,18 @@
 # Life — Current state
 
-## 2026-10-15｜01–03 正式 Release / Hosting 驗收（當次最新）
+## 2026-10-15｜02／03 正式版使用者人工驗收結案（最新）
+- **02｜Shopping／Task：PASS，功能範圍 DONE（使用者正式版人工驗收）**。使用者在正式部署 [V3 #38734655151](https://github.com/tommylin15/life_assistant/actions/runs/38734655151) 與 [Hosting #38738435372](https://github.com/tommylin15/life_assistant/actions/runs/38738435372) 成功後明確回報「02,03驗收完畢」，按本輪預先列明的驗收範圍結案：購物清單／品項獨立編輯及刪除、一次新增多品項、重新載入、待辦刪除不白畫面與相關權限操作。
+- **03｜活動個人操作／Calendar：PASS，功能範圍 DONE（使用者正式版人工驗收）**。同一使用者驗收回報涵蓋此批預先列明的跨日活動搜尋／分頁、收藏及個人待辦／追蹤、Google Calendar 操作與讀回。這是**使用者回報的整批功能驗收**，不是 Actions 自動產生的每個 OAuth 寫入事件或逐條 API log；未提供各帳號／事件數與逐項追蹤紀錄，不捏造。
+- **證據分層**：implementation/CI/PG rollback-only/production deployment 為 GitHub workflow PASS；正式 UI 操作為**使用者回報 PASS**。兩項功能不應在待辦重列為「尚無正式人工驗收」。未來相關程式變動仍應依受影響範圍回歸測試，不把這次人工驗收推論為任何未跑過的壓力／併發／全部帳號路由自動驗收。
+- **01 未結案**：正式匯入 Job 映像已 PASS，但下一輪 GAS 07:30 → Job execution → PostgreSQL/Sheet 同輪版本回執與目前唯一 ERROR 的資料品質仍待核對（NOT VERIFIED／PARTIAL），**不因 02／03 通過而推定 01 DONE**。
+
+
+## 2026-10-15｜01–03 正式 Release / Hosting 驗收（發布時快照；02／03 狀態由上方人工驗收更新）
 - **Production CI/CD 發布：PASS**，source SHA `6fdb4cf7e12f6c76d0b6955bc3f6e9325a5cbcce`。[四項 CI #38730407125](https://github.com/tommylin15/life_assistant/actions/runs/38730407125)、[正式 V3 #38734655151](https://github.com/tommylin15/life_assistant/actions/runs/38734655151)、[正式 Firebase Hosting #38738435372](https://github.com/tommylin15/life_assistant/actions/runs/38738435372) 全部 success；保留固定 staging、登入 redirect/401、核心/購物/活動 PostgreSQL rollback-only、Drive AI/Google 自動化、正式 health/ready、回滾演練與恢復。Hosting `release_check=PASS` 確認 production 靜態版 SHA 與 promoted backend 相同；Task/Project 自動 UI 驗收 PASS（非所有私人帳號的真人 E2E）。
 - **01 正式匯入器新版映像：PASS**：V3 的 `Pin curated handoff Job after verified production promotion` success，Job `life-assistant-free-events` 更新，`{"check":"job_digest_and_contract","status":"PASS"}` 讀回；包含本輪已 CI PASS 的 `pg_try_advisory_xact_lock` 版本。未手動執行 GAS/importer。**下一輪定時 GAS 07:30 的來源 ledger、該新映像 Job Execution、PG 與 Sheet 同輪版本 ACK 尚 NOT VERIFIED**，不能以發版即當作執行成功。
 - **正式 Revision 維護 PASS**：當輪讀回 13→10，刪 3 個舊 Revision，`jobs_deleted=0`，`services_deleted=0`，`live_unchanged=true`。
 - **來源 Google Sheet 再次唯讀**：54 rows，53 ACKED／1 ERROR（`invalid_handoff_record`），最後可見 ACK 為 2026-10-14 13:41 台北時間；來源錯誤未修復，且原 ACK 不等於最新發版後同輪版本確認。
-- **02/03**：Shopping/Tasks、跨日活動/分頁/收藏/Calendar 已經通過自動 CI、Staging 及對應 PostgreSQL smoke；但購物真人修改/刪除/重載與跨帳號操作、活動 Google Calendar 實際寫入讀回等尚未有當次正式使用者 E2E 證據，仍依性質為 PARTIAL，未宣稱全部 DONE。
+- **02/03（發布當時狀態，已由上方 2026-10-15 最新人工驗收取代）**：Shopping/Tasks、跨日活動／分頁／收藏／Calendar 自動 CI、Staging 與 PostgreSQL smoke 均 PASS；發布時真人驗收尚未回報，後續使用者已明確確認 02／03 驗收完畢。
 
 
 ## 2026-10-15｜01–03 新驗收 Release 修復完成（取代以下 #38715747623 FAIL 事件）
@@ -64,9 +71,9 @@ At audit time the source baseline was `fc800b280be59f44f485dfc170fe45a14fc9c981`
 ## Open evidence gaps (do not infer PASS)
 1. **GAS → importer → PostgreSQL → Sheet:** GAS 07:30 Asia/Taipei trigger's actual installation/success, the newest production importer Execution exit code, Sheet version-fenced ACK/ERROR and PostgreSQL row-level readback are **NOT VERIFIED** by the above release runs. Old 52 ACKED/2 ERROR is a historical snapshot only.
 2. **Gemini UX:** signed text path is proven, but individual logged-in user API/frontend handling, timeout/failure UX and quotas are not proved by synthetic smoke.
-3. **Activity UX:** current source has activities, personal actions and Calendar integration paths. Live multi-user collection, cross-day search, pagination stability, Google Calendar mutation/readback and consistent old-favorite linkage require independent acceptance.
+3. **Activity UX:** 02／03 的正式版功能人工驗收已由使用者回報 PASS；未另取得逐事件 Calendar API 紀錄、全帳號組合或壓力／併發極端情境獨立儀表化證據，這些不當作此次產品人工驗收的未完成項。
 4. **Drive AI provider governance:** source has admin controls/health counts, but token/cost-based budgets, per-user consent E2E and multi-provider runtime cost proof are **NOT VERIFIED**.
-5. **Shopping/list edit/delete/batch and Task delete white-screen:** GitHub contains changes and matching main CI is PASS; user-reported hands-on verification was positive on 2026-10-14. Do not promote this to an independently automated full multi-account/regression proof.
+5. **Shopping/list edit/delete/batch and Task delete white-screen:** 正式部署後，使用者再次回報 02 人工驗收完畢；該功能範圍 PASS／DONE。已完成的 widget/CI、PG 及正式 UI 佐證各自歸類，不聲稱已跑過全部帳號／API 自動回歸矩陣。
 
 ## Rules
 - `PASS / FAIL / NOT VERIFIED` apply **per** implementation, tests, CI, deployment, runtime, integration; aggregate DONE only with required evidence. Otherwise PARTIAL.

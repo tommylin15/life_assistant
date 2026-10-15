@@ -55,10 +55,15 @@ class _FakeShoppingApi implements ShoppingApi {
     batchCalls++;
     final list = lists.firstWhere((l) => l['id'] == listId);
     final items = list['items'] as List<Map<String, dynamic>>;
-    final created = (body['items'] as List).map((raw) =>
-      <String, dynamic>{'id': 'new${items.length + 1}',
-        'is_done': false, ...Map<String, dynamic>.from(raw as Map)}).toList();
-    items.addAll(created);
+    final created = <Map<String, dynamic>>[];
+    for (final raw in body['items'] as List) {
+      final item = <String, dynamic>{
+        'id': 'new${items.length + 1}', 'is_done': false,
+        ...Map<String, dynamic>.from(raw as Map),
+      };
+      items.add(item);
+      created.add(item);
+    }
     return created;
   }
 

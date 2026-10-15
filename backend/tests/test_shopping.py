@@ -244,6 +244,10 @@ class ShoppingRouterBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([item.sort_order for item in items], [6, 7])
         self.assertEqual(db.commit.await_count, 1)
         db.add_all.assert_called_once()
+        calls = db.execute.await_args_list
+        self.assertEqual(len(calls), 2)
+        self.assertIn("pg_advisory_xact_lock", str(calls[0].args[0]))
+        self.assertIn("max(", str(calls[1].args[0]).lower())
 
     async def test_item_delete_does_not_delete_list_and_list_delete_cascades_explicitly(self):
         from app.api.shopping import delete_shopping_item, delete_shopping_list

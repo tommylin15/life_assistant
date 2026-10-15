@@ -1,8 +1,9 @@
 import uuid
+import hashlib
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
@@ -223,6 +224,12 @@ async def create_shopping_items_batch(
         summary="Create shopping items batch",
     )
     try:
+        # Serialize batch inserts for one list across devices/sessions so
+        # both transactions cannot allocate the same sort_order range.
+        batch_lock = int.from_bytes(
+            hashlib.sha256(("shopping-items:" + list_id).encode()).digest()[:8],
+            "big", signed=True)
+        await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": batch_lock})
         result = await db.execute(
             select(func.max(ShoppingItem.sort_order)).where(ShoppingItem.list_id == list_id)
         )

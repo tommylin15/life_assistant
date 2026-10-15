@@ -1,5 +1,13 @@
 # Life — Current state
 
+## 2026-10-15｜01–03 正式 Release / Hosting 驗收（當次最新）
+- **Production CI/CD 發布：PASS**，source SHA `6fdb4cf7e12f6c76d0b6955bc3f6e9325a5cbcce`。[四項 CI #38730407125](https://github.com/tommylin15/life_assistant/actions/runs/38730407125)、[正式 V3 #38734655151](https://github.com/tommylin15/life_assistant/actions/runs/38734655151)、[正式 Firebase Hosting #38738435372](https://github.com/tommylin15/life_assistant/actions/runs/38738435372) 全部 success；保留固定 staging、登入 redirect/401、核心/購物/活動 PostgreSQL rollback-only、Drive AI/Google 自動化、正式 health/ready、回滾演練與恢復。Hosting `release_check=PASS` 確認 production 靜態版 SHA 與 promoted backend 相同；Task/Project 自動 UI 驗收 PASS（非所有私人帳號的真人 E2E）。
+- **01 正式匯入器新版映像：PASS**：V3 的 `Pin curated handoff Job after verified production promotion` success，Job `life-assistant-free-events` 更新，`{"check":"job_digest_and_contract","status":"PASS"}` 讀回；包含本輪已 CI PASS 的 `pg_try_advisory_xact_lock` 版本。未手動執行 GAS/importer。**下一輪定時 GAS 07:30 的來源 ledger、該新映像 Job Execution、PG 與 Sheet 同輪版本 ACK 尚 NOT VERIFIED**，不能以發版即當作執行成功。
+- **正式 Revision 維護 PASS**：當輪讀回 13→10，刪 3 個舊 Revision，`jobs_deleted=0`，`services_deleted=0`，`live_unchanged=true`。
+- **來源 Google Sheet 再次唯讀**：54 rows，53 ACKED／1 ERROR（`invalid_handoff_record`），最後可見 ACK 為 2026-10-14 13:41 台北時間；來源錯誤未修復，且原 ACK 不等於最新發版後同輪版本確認。
+- **02/03**：Shopping/Tasks、跨日活動/分頁/收藏/Calendar 已經通過自動 CI、Staging 及對應 PostgreSQL smoke；但購物真人修改/刪除/重載與跨帳號操作、活動 Google Calendar 實際寫入讀回等尚未有當次正式使用者 E2E 證據，仍依性質為 PARTIAL，未宣稱全部 DONE。
+
+
 ## 2026-10-15｜01–03 新驗收 Release 修復完成（取代以下 #38715747623 FAIL 事件）
 - **正式 importer 唯讀配置驗收：PASS（限對齊既有 production）** — [Cloud Run Audit #38725678405](https://github.com/tommylin15/life_assistant/actions/runs/38725678405) 經 WIF 讀取既有 production 100% API Revision 與 `life-assistant-free-events` Job：`importer_image_alignment=PASS contract=PASS`，且固定 Sheet ID、`python -m scripts.import_curated_from_sheet` 及 `LIFE_CURATED_IMPORT_APPLY=1` 契約吻合。舊 16 筆 execution 最新 `life-assistant-free-events-krcmj` 於 2026-10-15 07:34 台北時間 Completed=True；Cloud Logging 聚合日誌依權限無法讀取（`summaries=0` 不是 0 次匯入）。**這僅驗證既有正式版 digest，沒有讓目前 staging-only 的 importer 排他鎖新版進入正式 Job。GAS 實際觸發來源及同輪 Sheet/PG receipt 仍 NOT VERIFIED。**
 - **最新可驗證的 staging-only Release：PASS** — [V3 #38720078074](https://github.com/tommylin15/life_assistant/actions/runs/38720078074)，SHA `8d2720758d3d2bacf92f023ea64b96ef58646595`。相同 SHA 的 [四項 CI #38719801492](https://github.com/tommylin15/life_assistant/actions/runs/38719801492) Backend／Flutter／deployment-scripts／free-events-postgres 全 PASS。

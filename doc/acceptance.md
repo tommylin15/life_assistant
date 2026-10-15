@@ -4,6 +4,7 @@
 - **01 定時匯入／資料一致性：PASS／DONE**。10/16 台灣時間 07:34:20 `life-assistant-free-events-ds4bq` Execution Completed=True；固定 Sheet 為 59 筆／58 ACKED／1 ERROR，07:34:15 五筆新 `CREATED`。以 [唯讀 #38825509671](https://github.com/tommylin15/life_assistant/actions/runs/38825509671) 的 `life-assistant-core-acceptance-xr6sq` 獨立比對該 5 筆 PostgreSQL 鍵、hash、來源版本與建立時間，Cloud Run Job 成功退出。正式固定 Job digest 已於 [V3 #38734655151](https://github.com/tommylin15/life_assistant/actions/runs/38734655151) readback PASS。未再次執行 importer。
 - **02 購物／待辦及 03 活動／Calendar：PASS／DONE**。使用者已於 10/15 明確確認兩項正式版人工驗收，詳見下方原始結案紀錄。
 - **完成範圍與保留風險**：01 的 GAS 原始觸發 ID／Apps Script 單次紀錄未從 Apps Script 直接取得（NOT VERIFIED），但實際 07:30 附近的執行、五筆 ACKED 與 PostgreSQL 比對有 runtime 證據。1 筆 `invalid_handoff_record` 屬探索端來源品質，維持 `ERROR`，不假報 59/59 成功；獨立的 Gemini／Drive AI／運維待辦不受本批結案影響。
+- **一次性驗收清理：PASS**：10/16 五筆版本比對只在 [#38825509671](https://github.com/tommylin15/life_assistant/actions/runs/38825509671) 受控執行，已從日常 `.github/workflows/life-01-03-runtime-evidence.yml` 移除日期與固定五筆快照，恢復原本的通用唯讀 Execution／映像盤點；保留 GitHub History 和上述驗收日誌供稽核，不新增第二支常駐排程。
 
 
 ## 2026-10-15｜02／03 正式版使用者驗收結案（最新）

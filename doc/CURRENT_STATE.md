@@ -1,5 +1,12 @@
 # Life — Current state
 
+## 2026-10-15｜01–03 新驗收 Release 修復完成（取代以下 #38715747623 FAIL 事件）
+- **最新可驗證的 staging-only Release：PASS** — [V3 #38720078074](https://github.com/tommylin15/life_assistant/actions/runs/38720078074)，SHA `8d2720758d3d2bacf92f023ea64b96ef58646595`。相同 SHA 的 [四項 CI #38719801492](https://github.com/tommylin15/life_assistant/actions/runs/38719801492) Backend／Flutter／deployment-scripts／free-events-postgres 全 PASS。
+- **原阻塞已實際回歸：PASS** — V3 `Read existing handoff DB versions and rollback-only Shopping CRUD` job step `success`、Cloud Run `life-assistant-core-acceptance` execution exit=0；rollback-only curated/ownership、additive migration 0018 及固定 staging 均 successful。新版 `staging_live=PASS`、`oauth_redirect=PASS`、`traffic_unchanged=true`，未將新 candidate 切至 production。
+- **事件診斷** — 前次 [#38715747623](https://github.com/tommylin15/life_assistant/actions/runs/38715747623) 在新加的購物/活動驗收 Job Exit 1。修正 shopping fixture parent-first `flush` 後，同一真實 gate PASS，符合 ORM FK 插入順序的根因判斷；原部署帳號不能讀 Cloud Logging，所以不聲稱曾取得原失敗 Execution 的 Python traceback。
+- **範圍界線** — PostgreSQL handoff 欄位一致性與 rollback-only Shopping 實測已 PASS；**不等於** GAS 07:30 trigger source、同輪 Sheet/PG 逐筆版本 ACK、正式 importer 最新映像、Calendar OAuth 真實寫入，以及使用者登入後的購物/活動前端完整 E2E 均 PASS。後者仍是活躍 TODO 的 PARTIAL／NOT VERIFIED。文件專用後續 commit 不繼承新的 production 流量證據。
+
+
 ## 2026-10-15｜V3 #38715747623 失敗診斷與修正中
 - [V3 #38715747623](https://github.com/tommylin15/life_assistant/actions/runs/38715747623) SHA `296e50f` **FAIL**，失敗只在新加入的 `Read existing handoff DB versions and rollback-only Shopping CRUD`；Execution `life-assistant-core-acceptance-kdl4r` exit=1，先前既有 curated/ownership tests 正常。
 - WIF deployer 讀 Cloud Logging 回傳 `PERMISSION_DENIED`，沒有 Python traceback；不能判定實際 PostgreSQL 資料損壞。

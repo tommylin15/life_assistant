@@ -50,6 +50,15 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
 
   bool get opportunity => _activeEntry == 'opportunities';
 
+  @override
+  void didUpdateWidget(covariant CuratedEventsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.entry != widget.entry) {
+      _activeEntry = widget.entry == 'opportunities' ? 'opportunities' : 'explore';
+      quick = ''; savedOnly = false; offsets = [0]; snapshot = null;
+    }
+  }
+
   static const opportunityChips = {
     'opening_soon': '即將開報', 'opening_today': '今天開報',
     'closing_soon': '3 天內截止', 'limited': '限額優惠',
@@ -111,6 +120,9 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final features = ref.watch(effectiveFeaturesProvider).asData?.value;
+    final canExplore = features?['explore'] == true;
+    final canOpportunity = features?['opportunities'] == true;
     final chips = opportunity ? opportunityChips : explorationChips;
     final optionState = ref.watch(curatedOptionsProvider);
     final options = optionState.asData?.value ?? const {};
@@ -231,24 +243,24 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
               ChoiceChip(key: const ValueKey('activity-mode-all'),
                 label: const Text('全部活動'),
                 selected: !opportunity && !savedOnly,
-                onSelected: (_) => filter(() {
+                onSelected: canExplore ? (_) => filter(() {
                   _activeEntry = 'explore'; savedOnly = false; quick = '';
-                })),
+                }) : null),
               const SizedBox(width: 7),
               ChoiceChip(key: const ValueKey('activity-mode-urgent'),
                 label: const Text('限時機會'),
                 selected: opportunity,
-                onSelected: (_) => filter(() {
+                onSelected: canOpportunity ? (_) => filter(() {
                   _activeEntry = 'opportunities'; savedOnly = false; quick = '';
-                })),
+                }) : null),
               const SizedBox(width: 7),
               ChoiceChip(key: const ValueKey('activity-mode-saved'),
                 label: const Text('已收藏'),
                 avatar: const Icon(Icons.bookmark_outline, size: 17),
                 selected: savedOnly,
-                onSelected: (_) => filter(() {
+                onSelected: canExplore ? (_) => filter(() {
                   _activeEntry = 'explore'; savedOnly = true; quick = '';
-                })),
+                }) : null),
             ])),
           const SizedBox(height: 8),
           SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [

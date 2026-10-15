@@ -3,10 +3,10 @@ Updated 2026-10-15. **One active backlog only.** Prior 01–07 execution plan ha
 
 | Priority | Work / exit gate | Status |
 | --- | --- | --- |
-| P0-1 | Verify actual **GAS 07:30 trigger → importer Job Exit 0 → PostgreSQL event_key/content_hash readback → Sheet version-fenced ACK/ERROR** on same execution; separate `data_status=PARTIAL` from technical failure. Prevent duplicate imports. | **NOT VERIFIED**; promoted Job image aligned, execution was NOT_RUN in Release |
+| P0-1 | GAS 07:30 → importer Execution 終態 → PG 版本／Sheet ACK 讀回；確認正式 Job image 已包含跨流程排他鎖，再做同輪驗收（禁止因驗收重觸發匯入）。 | **PARTIAL**：主線新增 DB 排他鎖與測試 CI PASS；Sheet 實讀 54 筆＝ACKED 53／ERROR 1；GCP 唯讀掃到 16 個歷史 Execution。GAS 觸發、同輪 PG/Sheet、正式 Job 新映像 **NOT VERIFIED** |
 | P1-1 | Complete **signed Gemini through logged-in Life `/ai/text` and UI** including 429/502/503/timeout, permission/quotas and no implicit Google Drive content transfer. | Signed synthetic smoke **PASS**, UX E2E **NOT VERIFIED** |
-| P1-2 | Verify activities **multi-day search, pagination during updates, old favorites, personal tracking/Task, Google Calendar actual write/readback**; this is functionality-specific, not a reopen of the accepted multi-user isolation gate. | Source/CI **PASS**, these targeted live E2E cases **NOT VERIFIED** |
-| P1-3 | Validate **Shopping list + item edit/delete, multiline add and Task deletion** against fresh reload, browser error cases and automated regression. | User manual checks positive; targeted expanded regression **NOT VERIFIED** |
+| P1-2 | 驗證活動跨日搜尋、分頁新活動插入、舊收藏、個人追蹤/Task、Google Calendar 寫入讀回。 | **PARTIAL**：已新增固定 as_of 分頁快照及刷新重置，PostgreSQL 測試 PASS；既有收藏／Calendar 單元測試保留；真人 Calendar 寫入與新版正式 URL **NOT VERIFIED** |
+| P1-3 | 購物清單及品項編輯/刪除、一次新增多品項、重新載入、待辦刪除不白畫面與權限回歸。 | **PARTIAL**：已增購物批次排序鎖、Flutter 真實 widget 交互回歸、保留 Task nested Navigator 刪除測試；新版 CI 四項 PASS。正式使用者實際重新載入與跨帳號 runtime **NOT VERIFIED** |
 | P1-4 | Drive AI admin/per-user consent, provider failures, **real token/cost/accounting** if introducing budget enforcement; never fabricate spend. | Partial implementation, costs/budget **NOT VERIFIED** |
 | P2-2 | Audit dependency/action pinning, public-repository hygiene, access to operational docs, observability, backup restoration and scheduled-job dedupe. | Risk follow-up **NOT VERIFIED** |
 

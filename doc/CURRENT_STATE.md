@@ -32,6 +32,12 @@ At audit time the source baseline was `fc800b280be59f44f485dfc170fe45a14fc9c981`
 - **前一版 404 已修復**：上一版 [#38670433974](https://github.com/tommylin15/life_assistant/actions/runs/38670433974) 失敗於 staging preflight HTTP 404；最新版本新增明確資源分類及有上限的重試後，真實 preflight 與 staging 全部 PASS。舊 [#38670120522](https://github.com/tommylin15/life_assistant/actions/runs/38670120522) 雖 release PASS，但當時 `retirement=SUPERSEDED`，沒有清理；真正清理執行證據只以 #38675052751 為準。
 - **範圍 DONE**：僅指 GitHub Actions P0/P1 精簡、staging 404 修復、Revision 10 版清理及完整匹配 SHA CI/staging/runtime gate；活動 GAS importer、Gemini 登入後 UX、各項功能 Live E2E 等仍依下列 backlog **NOT VERIFIED**，不能混同完成。
 
+## 2026-10-15｜01–03 同批開發與驗收（最新）
+- **01｜GAS/Life Sheet 匯入：** GitHub `main` 新增 Postgres `pg_try_advisory_xact_lock` 保護整批同時進入的 GAS/手動 importer，避免兩次匯入競爭回執；原 event_key/content_hash 長期去重、個別欄位錯誤與技術狀態分離規則保持不變。新增 mock lock 測試 CI PASS，但 staging-only 不會更新 production Job，故實際正式 importer 新映像及 GAS 07:30 尚 **NOT VERIFIED**，不得因 source 變更或先前 Job pin 而宣告結案。
+- **01｜實際來源讀回：** 2026-10-15 對指定 Google Sheet「交接資料」唯讀 A1:AD1000，54 筆，ACKED 53、ERROR 1（`invalid_handoff_record`）；最近可見 ACK 時點 2026-10-14，ACKED 不代表 10/15 GAS 有/無執行（UNCHANGED 不重寫 ACK 時間）。[Cloud Run 唯讀調查 #38710051187](https://github.com/tommylin15/life_assistant/actions/runs/38710051187) 找到 16 個歷史 Job Executions，未找到可匹配的 importer 聚合日誌；Apps Script trigger 時間和同輪 PG row readback **NOT VERIFIED**。此調查未再次執行 Job，亦未寫 Sheet。
+- **02｜Shopping＋Task：** Shopping batch sort_order 加 per-list advisory transaction lock，補全 Flutter widget 測試涵蓋多項新增、品項刪除、清單更名及刪除後重新載入；Task 已有 nested Navigation 刪除後保留頁面的 widget regression，均納入 Flutter CI。真實多使用者 runtime 仍獨立。
+- **03｜活動／個人操作：** 後端列表回傳時間快照 `snapshot`，後續分頁以 `as_of` 鎖定來源建立時間，前端在篩選／重整／收藏後清掉舊頁碼並更新快照；有 Postgres 測試涵蓋新活動插入與跨日活動，原 Calendar/Task URL 相容單元測試保留。Calendar OAuth 真實寫入及其他特殊 E2E 未被這些 tests 證明。
+
 ## Open evidence gaps (do not infer PASS)
 1. **GAS → importer → PostgreSQL → Sheet:** GAS 07:30 Asia/Taipei trigger's actual installation/success, the newest production importer Execution exit code, Sheet version-fenced ACK/ERROR and PostgreSQL row-level readback are **NOT VERIFIED** by the above release runs. Old 52 ACKED/2 ERROR is a historical snapshot only.
 2. **Gemini UX:** signed text path is proven, but individual logged-in user API/frontend handling, timeout/failure UX and quotas are not proved by synthetic smoke.

@@ -70,7 +70,7 @@ jobs:
           fields=("status","data_status","created","updated","unchanged","invalid","import_failed","ack_failed")
           for row in logs:
               msg=str(row.get("textPayload") or (row.get("jsonPayload") or {}).get("message") or "")
-              if not msg.startswith("life_handoff_import "):
+              if "life_handoff_import " not in msg:
                   continue
               vals=dict(re.findall(r"\b(status|data_status|created|updated|unchanged|invalid|import_failed|ack_failed)=([A-Z_]+|\d+)",msg))
               receipts.append({"timestamp":row.get("timestamp",""),
@@ -87,4 +87,10 @@ jobs:
               print("- GAS_07_30_actual_trigger: NOT_VERIFIED (Apps Script triggers/logs are external to Cloud Run)",file=out)
               print("- Sheet_ack_and_PostgreSQL_same_execution_readback: NOT_VERIFIED by this read-only inventory",file=out)
           print("importer_evidence=READ_ONLY execution_count=%s summaries=%s" %(len(jobs),len(receipts)))
+          # Print only sanitized execution identity/time/condition in Actions logs
+          # so this audit can be verified without reading summary artifacts.
+          for name,state,ended in names:
+              print("importer_execution name=%s condition=%s completed=%s" %(name,state,ended))
+          for info in receipts[:8]:
+              print("importer_aggregate "+ " ".join(f"{k}={v}" for k,v in info.items()))
           PY

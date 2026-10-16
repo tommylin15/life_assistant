@@ -68,6 +68,13 @@ jobs:
             exit 0
           fi
 
+          # Owner-approved 2026-10-16 single-purpose production bridge.
+          # That bridge reruns staging and all live gates before promotion.
+          # Do not dispatch a duplicate staging-only release for its commit.
+          if jq -e 'any(.files[]; .filename==".github/workflows/life-approved-production-once-20261016.yml")' <<< "$CHANGED" > /dev/null; then
+            echo "auto_staging=SKIP one_shot_approved_production_bridge" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           # Do not start a second same-SHA release for CI re-runs, including
           # releases already dispatched manually. The V3 release has its own
           # immutable SHA guard and shared release concurrency lock.

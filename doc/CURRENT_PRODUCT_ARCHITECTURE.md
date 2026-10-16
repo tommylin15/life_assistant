@@ -10,7 +10,7 @@ Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL。Life
 
 ## 使用者產品（活動 UX V3，2026-10-11）
 
-**唯一正式細節規格：[活動 UX V3](curated_activity_user_features.md)**。前端只有「限時機會／活動探索」兩個活動入口，單一精選池，第三個「精選」退出導覽；無使用者星等顯示／排序／篩選。各入口預設從 PostgreSQL 查 5 個主活動群組，續看 10 個，支援最新收錄、時間速查、一般搜尋與少量篩選。使用者僅能自行選擇收藏、建立既有 Task、Google Calendar 活動日期標記。**Task 與 Life 日曆都要可從既有項目直接點「前往網址」**；日曆標記是全天 transparent、不占 busy。這些是核准 UX，不等於已實作或部署，現況見 [CURRENT_STATE](CURRENT_STATE.md)，工項見 [TODO](todo.md)。
+**唯一正式細節規格：[活動 UX V3](curated_activity_user_features.md)**。前端統一只有「活動探索」一個活動導覽入口，內有「全部活動／限時機會／已收藏」三種視角，單一精選池，舊入口及個人偏好保留相容並去重；無使用者星等顯示／排序／篩選。各入口預設從 PostgreSQL 查 5 個主活動群組，續看 10 個，支援最新收錄、時間速查、一般搜尋與少量篩選。使用者僅能自行選擇收藏、建立既有 Task、Google Calendar 活動日期標記。**Task 與 Life 日曆都要可從既有項目直接點「前往網址」**；日曆標記是全天 transparent、不占 busy。這些是核准 UX，不等於已實作或部署，現況見 [CURRENT_STATE](CURRENT_STATE.md)，工項見 [TODO](todo.md)。
 
 ## 管理端與個人化
 
@@ -20,7 +20,7 @@ Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL。Life
 
 ## Implementation ≠ release
 
-現有 GitHub main 已有 curated API/資料模型、兩入口 source、帳號隔離 action 與 Task/Google Calendar 的基本來源寫入；但 UX V3 的查詢、收藏、連結可點、刪除重複入口與實際 runtime **NOT VERIFIED**。源碼、CI、staging 與 production E2E 各自判定，不以本文件宣稱完成。
+現有 GitHub main 已有 curated API/資料模型、帳號隔離 action、活動探索統一入口及 Task/Google Calendar 來源寫入；2026-10-16 的整合 UI 源碼已提交但新 SHA 的 CI、正式 staging 與 runtime 仍須逐層驗證。源碼、CI、staging 與 production E2E 各自判定，不以本文件宣稱完成。
 
 ## 導覽與筆記 UX（2026-10-12，main source；實際部署另驗）
 

@@ -9,6 +9,7 @@ import 'app_shell.dart';
 import 'auth_state.dart';
 import 'browser_navigation.dart';
 import 'drive_page.dart';
+import 'drive_explorer_page.dart';
 import 'gmail_radar_page.dart';
 import 'habits_page.dart';
 import 'login_page.dart';
@@ -59,6 +60,8 @@ final _router = GoRouter(
           path: '/more/drive/settings',
           redirect: (_, __) => '/more/drive',
         ),
+        GoRoute(path: '/more/drive/files',
+          builder: (_, __) => const FeatureAccess(feature: 'drive', child: DriveExplorerPage())),
         GoRoute(
           path: '/more/drive',
           builder: (_, __) => const FeatureAccess(feature: 'drive', child: DrivePage()),

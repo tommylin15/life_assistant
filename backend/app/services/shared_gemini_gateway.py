@@ -50,9 +50,19 @@ async def _mint_identity(client: httpx.AsyncClient) -> str:
     return token.text.strip()
 
 
-async def generate_text(prompt: str, *, user_sub: str) -> dict[str, str]:
-    """One authenticated invocation, zero retries, no persistence or side effects."""
-    if not settings.gemini_gateway_text_enabled:
+async def generate_text(prompt: str, *, user_sub: str, purpose: str = "general") -> dict[str, str]:
+    """One signed invocation, zero retries, with independently gated Inbox access.
+
+    The caller must enforce feature_gate(life_inbox) before purpose=life_inbox.
+    This internal parameter is never supplied by the browser.
+    """
+    if purpose == "life_inbox":
+        enabled = settings.gemini_life_inbox_enabled
+    elif purpose == "general":
+        enabled = settings.gemini_gateway_text_enabled
+    else:
+        raise GatewayTextError("invalid_ai_purpose", 400)
+    if not enabled:
         raise GatewayTextError("gemini_text_disabled", 503)
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt.encode("utf-8")) > MAX_PROMPT_BYTES:
         raise GatewayTextError("invalid_prompt", 400)

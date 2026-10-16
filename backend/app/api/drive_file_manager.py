@@ -6,6 +6,7 @@ caller-provided raw Google file ID.
 """
 from datetime import datetime, timezone
 import uuid
+import hashlib
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -333,7 +334,7 @@ async def preview_authorized_drive_text(
     metadata = await _request_google(
         db, user["sub"], SERVICE_SCOPES["drive"][0], "GET",
         FILE_URL.format(file_id=_urlquote(file_id, safe="")),
-        params={"fields": "id,name,mimeType,size,modifiedTime"},
+        params={"fields": "id,name,mimeType,size,modifiedTime,version,capabilities(canEdit)"},
         preserve_transaction=True,
     )
     source = metadata.json()
@@ -362,4 +363,116 @@ async def preview_authorized_drive_text(
         raise HTTPException(415, "This file cannot be safely previewed as UTF-8")
     return {"id": file_id, "name": source.get("name"), "mime_type": mime,
             "text": decoded, "modified_at": source.get("modifiedTime"),
+            "version": source.get("version"),
+            "can_edit": (source.get("capabilities") or {}).get("canEdit") is True,
+            "content_sha256": hashlib.sha256(raw).hexdigest(),
             "truncated": False}
+
+class DriveTextEdit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(max_length=_MAX_PREVIEW_BYTES)
+    expected_version: str = Field(min_length=1, max_length=40)
+    expected_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("text")
+    @classmethod
+    def limit_utf8_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > _MAX_PREVIEW_BYTES:
+            raise ValueError("Inline text edit exceeds 64KiB UTF-8 limit")
+        return value
+
+
+@router.put("/documents/{document_id}/text")
+async def save_registered_drive_text(
+    document_id: str,
+    body: DriveTextEdit,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Safely scoped and version-checked, limited to small plain-text blob files.
+
+    Drive v3 does not provide a documented atomic conditional media update.
+    We preflight-check version+hash immediately before PATCH; Google remains
+    the source of truth. Other clients editing during the same small window
+    are possible, so only a verified readback counts as success.
+    """
+    document = await get_document(db, user["sub"], document_id)
+    google_id = _file_id(document.google_file_id)
+    meta_response = await _request_google(
+        db, user["sub"], SERVICE_SCOPES["drive"][0], "GET",
+        FILE_URL.format(file_id=_urlquote(google_id, safe="")),
+        params={"fields": "id,name,mimeType,size,version,modifiedTime,capabilities(canEdit)"},
+        preserve_transaction=True,
+    )
+    meta = meta_response.json()
+    if not isinstance(meta, dict) or meta.get("id") != google_id:
+        raise HTTPException(502, "Drive returned incomplete file metadata")
+    mime = str(meta.get("mimeType") or "")
+    if mime not in _ALLOWED_TEXT_PREVIEW_MIME:
+        raise HTTPException(415, "Use Google native editor for this file type")
+    if (meta.get("capabilities") or {}).get("canEdit") is not True:
+        raise HTTPException(403, "Drive file is read-only")
+    if str(meta.get("version") or "") != body.expected_version:
+        raise HTTPException(409, "Drive file version changed; reload before saving")
+    try:
+        size = int(meta["size"])
+    except (ValueError, TypeError, KeyError):
+        raise HTTPException(409, "Drive file size unknown; open in Google Drive")
+    if size > _MAX_PREVIEW_BYTES:
+        raise HTTPException(413, "Drive text file is too large to edit in Life")
+
+    current = await _request_google(
+        db, user["sub"], SERVICE_SCOPES["drive"][0], "GET",
+        FILE_URL.format(file_id=_urlquote(google_id, safe="")),
+        params={"alt": "media"}, preserve_transaction=True,
+    )
+    original = current.content
+    if len(original) > _MAX_PREVIEW_BYTES:
+        raise HTTPException(413, "Drive file exceeds inline text edit limit")
+    if hashlib.sha256(original).hexdigest() != body.expected_sha256:
+        raise HTTPException(409, "Drive content changed; reload before saving")
+    try:
+        original.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(415, "This file cannot be edited as UTF-8")
+
+    modified = body.text.encode("utf-8")
+    if original == modified:
+        return {"id": document.id, "unchanged": True,
+                "version": body.expected_version, "verified": True}
+
+    update = await _request_google(
+        db, user["sub"], SERVICE_SCOPES["drive"][0], "PATCH",
+        "https://www.googleapis.com/upload/drive/v3/files/" + _urlquote(google_id, safe=""),
+        params={"uploadType": "media", "fields": "id,name,mimeType,version,modifiedTime"},
+        headers={"Content-Type": mime + "; charset=utf-8"},
+        content=modified,
+        preserve_transaction=True,
+    )
+    updated = update.json()
+    if not isinstance(updated, dict) or updated.get("id") != google_id:
+        raise HTTPException(502, "Drive saved state uncertain; inspect original file")
+    verification = await _request_google(
+        db, user["sub"], SERVICE_SCOPES["drive"][0], "GET",
+        FILE_URL.format(file_id=_urlquote(google_id, safe="")),
+        params={"alt": "media"}, preserve_transaction=True,
+    )
+    if verification.content != modified:
+        raise HTTPException(502, "Drive content readback did not match; inspect original")
+    meta_after_response = await _request_google(
+        db, user["sub"], SERVICE_SCOPES["drive"][0], "GET",
+        FILE_URL.format(file_id=_urlquote(google_id, safe="")),
+        params={"fields": "id,name,mimeType,modifiedTime,version"},
+        preserve_transaction=True,
+    )
+    after = meta_after_response.json()
+    if not isinstance(after, dict) or after.get("id") != google_id:
+        raise HTTPException(502, "Drive metadata readback unavailable")
+    document.modified_at = datetime.fromisoformat(
+        str(after["modifiedTime"]).replace("Z", "+00:00"))
+    document.name = str(after["name"])
+    document.mime_type = str(after["mimeType"])
+    _record_google_write(db, user["sub"], "drive.file.text_edit", google_id, "saved")
+    await db.commit()
+    return {"id": document.id, "unchanged": False, "verified": True,
+            "version": str(after.get("version") or "")}

@@ -135,7 +135,7 @@ class TodayPage extends ConsumerWidget {
       case 'explore':
         return _tile(context, '活動探索', data['events'] == null
             ? '活動資料目前無法取得'
-            : events == null || events.isEmpty
+            : events.isEmpty
               ? '目前沒有符合的活動'
               : events.map((e) => e['title']?.toString() ?? '未命名活動').join(' · '),
           '/more/explore');

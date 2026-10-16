@@ -150,6 +150,25 @@ class InboxCommitTests(unittest.IsolatedAsyncioTestCase):
         reserve.assert_not_awaited()
 
 
+class ArticleSummaryParseTests(unittest.TestCase):
+    def test_pure_json_and_markdown_fence_are_valid(self):
+        raw = '{"key_points":["第一點","第二點"],"uncertainties":["要核對"]}'
+        for candidate in (raw, "```json\\n" + raw + "\\n```",
+                          "以下是摘要：\\n" + raw):
+            with self.subTest(candidate=candidate[:25]):
+                value = inbox_articles.parse_gemini_summary(
+                    candidate.replace("\\n", "\n"))
+                self.assertEqual(value.key_points, ["第一點", "第二點"])
+
+    def test_invalid_or_unbounded_summary_rejected(self):
+        for raw in ("Plain text", "{}", "{" + "x" * 18001 + "}",
+                    '{"key_points":["' + "x" * 351 +
+                    '"],"uncertainties":[]}'):
+            with self.subTest(length=len(raw)), self.assertRaises(
+                    (ValueError, ValidationError)):
+                inbox_articles.parse_gemini_summary(raw)
+
+
 class ArticleSafetyTests(unittest.IsolatedAsyncioTestCase):
     async def test_local_and_metadata_addresses_never_trigger_http_fetch(self):
         with patch.object(inbox_articles.socket, "getaddrinfo",

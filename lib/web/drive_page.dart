@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../app/design_system/design_system.dart';
 import 'drive_api.dart';
+import 'platform_api.dart';
+import 'browser_navigation.dart';
 import 'drive_note_actions.dart';
 import 'google_drive_picker.dart';
 import 'note_api.dart';
@@ -19,6 +21,9 @@ class DrivePage extends ConsumerStatefulWidget {
 class _DrivePageState extends ConsumerState<DrivePage> {
   bool _loading = true;
   bool _addingDocuments = false;
+  String _fileQuery = '';
+  bool _sortNewestFirst = true;
+  final Set<String> _renamingDocuments = <String>{};
   Object? _loadError;
   List<Map<String, dynamic>> _documents = const [];
   Map<String, dynamic> _settings = const {};
@@ -133,6 +138,92 @@ class _DrivePageState extends ConsumerState<DrivePage> {
         setState(() => _addingDocuments = false);
       }
     }
+  }
+
+  bool _safeDriveUrl(String? raw) {
+    final uri = Uri.tryParse(raw ?? '');
+    if (uri == null || uri.scheme != 'https') return false;
+    return uri.host == 'drive.google.com' ||
+        uri.host == 'docs.google.com' || uri.host == 'sheets.google.com';
+  }
+
+  Future<void> _renameDriveFile(Map<String, dynamic> document) async {
+    final id = document['id']?.toString() ?? '';
+    final name = document['name']?.toString() ?? '';
+    final modified = document['modified_at']?.toString() ?? '';
+    if (id.isEmpty || modified.isEmpty || _renamingDocuments.contains(id)) {
+      if (modified.isEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('沒有可核對的 Google Drive 修改版本，請先重新整理此檔案。'),
+        ));
+      }
+      return;
+    }
+    final controller = TextEditingController(text: name);
+    final nextName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('重新命名 Drive 原始檔案'),
+        content: TextField(
+          controller: controller,
+          maxLength: 500,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '檔案名稱'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext)
+                .pop(controller.text.trim()),
+            child: const Text('確認修改'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || nextName == null || nextName.isEmpty ||
+        nextName == name) return;
+    setState(() => _renamingDocuments.add(id));
+    try {
+      await ref.read(platformApiProvider).patch(
+        '/drive/manager/documents/${Uri.encodeComponent(id)}/rename',
+        {'name': nextName, 'expected_modified_at': modified},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google Drive 已更新檔名並完成讀回。')),
+      );
+      await _load();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+          '重新命名未確認成功。請先重新整理確認 Google 原始檔案狀態，避免重複修改。')),
+      );
+    } finally {
+      if (mounted) setState(() => _renamingDocuments.remove(id));
+    }
+  }
+
+  List<Map<String, dynamic>> get _visibleDocuments {
+    final search = _fileQuery.trim().toLowerCase();
+    final results = _documents.where((file) =>
+        search.isEmpty ||
+        (file['name']?.toString() ?? '').toLowerCase().contains(search) ||
+        (file['mime_type']?.toString() ?? '').toLowerCase().contains(search)
+    ).toList();
+    results.sort((a, b) {
+      if (!_sortNewestFirst) {
+        return (a['name']?.toString() ?? '')
+            .compareTo(b['name']?.toString() ?? '');
+      }
+      return (b['modified_at']?.toString() ?? '')
+          .compareTo(a['modified_at']?.toString() ?? '');
+    });
+    return results;
   }
 
   Future<void> _reanalyze(String documentId) async {
@@ -271,6 +362,29 @@ class _DrivePageState extends ConsumerState<DrivePage> {
               ),
             ],
             const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
+            Text('已授權檔案管理', style: Theme.of(context).textTheme.titleMedium),
+            const Text('僅能操作透過 Google Picker 授權的檔案；不是整個雲端硬碟。'),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              key: const ValueKey('drive-manager-search'),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                labelText: '搜尋已授權的檔名與類型',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) => setState(() => _fileQuery = value),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () =>
+                    setState(() => _sortNewestFirst = !_sortNewestFirst),
+                icon: Icon(_sortNewestFirst
+                    ? Icons.update_outlined : Icons.sort_by_alpha_outlined),
+                label: Text(_sortNewestFirst ? '最近修改優先' : '依檔名排序'),
+              ),
+            ),
             if (_documents.isEmpty)
               AppStatePanel(
                 title: '目前沒有已註冊的 Drive 文件',
@@ -284,7 +398,7 @@ class _DrivePageState extends ConsumerState<DrivePage> {
                 ),
               )
             else
-              ..._documents.map((document) => Padding(
+              ..._visibleDocuments.map((document) => Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.lg),
                     child: _buildDocumentCard(document),
                   )),
@@ -328,6 +442,29 @@ class _DrivePageState extends ConsumerState<DrivePage> {
                   tone: AppStatusTone.info,
                   icon: Icons.cached,
                 ),
+            ],
+          ),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              if (_safeDriveUrl(document['web_view_link']?.toString()))
+                OutlinedButton.icon(
+                  key: ValueKey('drive-manager-open-$id'),
+                  onPressed: () => openExternalBrowser(
+                    document['web_view_link'].toString(),
+                  ),
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('開啟／預覽原檔'),
+                ),
+              OutlinedButton.icon(
+                key: ValueKey('drive-manager-rename-$id'),
+                onPressed: (_renamingDocuments.contains(id) ||
+                    document['modified_at'] == null)
+                    ? null : () => _renameDriveFile(document),
+                icon: const Icon(Icons.drive_file_rename_outline),
+                label: const Text('重新命名'),
+              ),
             ],
           ),
           DriveNoteActions(document: document),

@@ -549,7 +549,7 @@ class _EditorDialogState extends ConsumerState<_EditorDialog> {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            if (ref.watch(effectiveFeaturesProvider).asData?.value?['life_inbox'] == true && _bodyIsUrl) ...[
+                            if (ref.watch(effectiveFeaturesProvider).asData?.value['life_inbox'] == true && _bodyIsUrl) ...[
                               ListTile(
                                 key: const ValueKey('note-article-summary-offer'),
                                 leading: const Icon(Icons.auto_awesome),

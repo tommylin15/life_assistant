@@ -93,6 +93,18 @@ class CloudBuildV2Tests(unittest.TestCase):
                 continue
             source = workflow.read_text()
             self.assertNotIn('--no-dry-run', source)
+            if workflow.name in ('_reusable-ui-acceptance.yml', '_reusable-acceptance.yml'):
+                # Reusable workflows cannot be triggered directly by push,
+                # dispatch or workflow_run. A caller must pass its own release
+                # gates, while keeping the shared acceptance implementation.
+                self.assertIn('workflow_call:', source)
+                self.assertNotIn('workflow_dispatch:', source)
+                self.assertNotIn('workflow_run:', source)
+                self.assertNotIn('push:', source)
+                self.assertNotIn('gcloud run services update-traffic', source)
+                self.assertNotIn('gcloud run services delete', source)
+                self.assertNotIn('firebase deploy', source)
+                continue
             if workflow.name == 'v3-cutover-once-after-release.yml':
                 # Strict one-time audited Release completion is the sole
                 # exception to the legacy ban on workflow_run chains.

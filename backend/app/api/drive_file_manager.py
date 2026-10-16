@@ -293,3 +293,53 @@ async def move_registered_drive_document(
     await db.commit()
     return {"id": document.id, "destination_folder_id": destination,
             "unchanged": False}
+
+# Preview is ephemeral and never copied to Life PostgreSQL or Gemini.
+_ALLOWED_TEXT_PREVIEW_MIME = frozenset({
+    "text/plain", "text/markdown", "text/csv", "application/json",
+})
+_MAX_PREVIEW_BYTES = 65536
+
+
+@router.get("/files/{file_id}/text-preview")
+async def preview_authorized_drive_text(
+    file_id: str,
+    response: Response,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "no-store"
+    file_id = _file_id(file_id)
+    metadata = await _request_google(
+        db, user["sub"], SERVICE_SCOPES["drive"][0], "GET",
+        FILE_URL.format(file_id=_urlquote(file_id, safe="")),
+        params={"fields": "id,name,mimeType,size,modifiedTime"},
+        preserve_transaction=True,
+    )
+    source = metadata.json()
+    if not isinstance(source, dict) or source.get("id") != file_id:
+        raise HTTPException(502, "Drive metadata mismatch")
+    mime = str(source.get("mimeType") or "")
+    if mime not in _ALLOWED_TEXT_PREVIEW_MIME:
+        raise HTTPException(415, "This Drive file type opens in Google's viewer")
+    try:
+        size = int(source["size"])
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(409, "Drive file size unavailable; use Google viewer")
+    if size > _MAX_PREVIEW_BYTES:
+        raise HTTPException(413, "File too large for safe inline preview")
+    content = await _request_google(
+        db, user["sub"], SERVICE_SCOPES["drive"][0], "GET",
+        FILE_URL.format(file_id=_urlquote(file_id, safe="")),
+        params={"alt": "media"}, preserve_transaction=True,
+    )
+    raw = content.content
+    if len(raw) > _MAX_PREVIEW_BYTES:
+        raise HTTPException(413, "Inline preview exceeds limit")
+    try:
+        decoded = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(415, "This file cannot be safely previewed as UTF-8")
+    return {"id": file_id, "name": source.get("name"), "mime_type": mime,
+            "text": decoded, "modified_at": source.get("modifiedTime"),
+            "truncated": False}

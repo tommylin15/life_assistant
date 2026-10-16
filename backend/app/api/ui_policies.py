@@ -36,6 +36,7 @@ FEATURES = {
     "explore": ("/more/explore", "活動探索"),
     "drive": ("/more/drive", "Google Drive"),
     "integrations": ("/integrations", "Google 整合"),
+    "life_inbox": ("/capture", "生活收件匣／快速新增"),
 }
 DEFAULT_PINNED = ["tasks", "calendar", "projects"]
 DEFAULT_MORE = ["notes", "habits", "events", "opportunities", "explore", "shopping", "drive", "integrations"]
@@ -47,7 +48,7 @@ AI_PROVIDERS = ["gemini", "gemini_lite", "groq", "openrouter", "openai", "codex"
 
 def _default_rollout(key: str) -> tuple[str, str]:
     # New curated feature stays owner-only until actual V3 E2E release.
-    return ("beta", "owner") if key in ("events", "opportunities", "explore") else ("enabled", "all")
+    return ("beta", "owner") if key in ("events", "opportunities", "explore", "life_inbox") else ("enabled", "all")
 
 
 
@@ -117,7 +118,7 @@ async def effective_features(db: AsyncSession, user: dict) -> list[dict]:
         policy = policies.get(key)
         status, audience = (
             (policy.status, policy.audience) if policy else
-            ("hidden", "owner") if (pre_0015 and key in ("events", "opportunities", "explore")) else
+            ("hidden", "owner") if (pre_0015 and key in ("events", "opportunities", "explore", "life_inbox")) else
             _default_rollout(key)
         )
         permitted = status not in ("hidden", "maintenance") and (
@@ -125,7 +126,7 @@ async def effective_features(db: AsyncSession, user: dict) -> list[dict]:
         ) and (status != "beta" or is_owner(user))
         if not is_owner(user) and key not in {
             "today", "tasks", "calendar", "integrations",
-            "projects", "notes", "habits", "shopping", "opportunities", "explore",
+            "projects", "notes", "habits", "shopping", "opportunities", "explore", "life_inbox",
         }:
             # Private Drive and other unaudited legacy features stay hidden
             # from all non-Owner accounts, including on production.
@@ -146,11 +147,11 @@ def feature_gate(key: str):
                 raise
             # Existing features retain their pre-rollout behavior while the
             # approved additive migration is pending; no new feature opens.
-            if key in ("events", "opportunities", "explore"):
+            if key in ("events", "opportunities", "explore", "life_inbox"):
                 raise HTTPException(503, "Curated feature requires verified migration") from exc
             return
         if row is None:
-            if key in ("events", "opportunities", "explore") and not is_owner(user):
+            if key in ("events", "opportunities", "explore", "life_inbox") and not is_owner(user):
                 raise HTTPException(403, "Feature requires verified rollout")
             return
         if row.status in ("hidden", "maintenance") or row.audience == "owner" and not is_owner(user) or row.status == "beta" and not is_owner(user):

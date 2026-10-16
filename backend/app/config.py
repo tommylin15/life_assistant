@@ -382,6 +382,9 @@ class Settings(BaseSettings):
     codex_shared_model: str = ""
     # Isolated Gemini P0-V text-only route; never implies Drive AI authorization.
     gemini_gateway_text_enabled: bool = False
+    # Independent, authenticated owner-rollout-gated Life Inbox. The generic
+    # /ai/text API stays disabled by default; this flag is server-side only.
+    gemini_life_inbox_enabled: bool = True
     gemini_gateway_url: str = "https://omniagent-agent-gateway-2oo7qbkd5q-uc.a.run.app"
 
     model_config = SettingsConfigDict(extra="ignore", env_file=".env", env_file_encoding="utf-8")

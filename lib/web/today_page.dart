@@ -99,7 +99,7 @@ class TodayPage extends ConsumerWidget {
                   title: const Text('生活快速新增'),
                   subtitle: const Text('貼上文字或網址，辨識後自行確認新增'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => navigateBrowser('/capture'),
+                  onTap: () => context.go('/capture'),
                 )),
                 const SizedBox(height: 12),
               ],

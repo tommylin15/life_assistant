@@ -73,6 +73,7 @@ class DriveExplorerBehaviorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_owner_authentication_precedes_folder_write(self):
         db = MagicMock()
+        db.commit = AsyncMock()
         with (
             patch("app.api.drive_file_manager._authorized_folder",
                   new_callable=AsyncMock, return_value="folder-1") as authorized,

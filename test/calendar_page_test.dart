@@ -90,6 +90,10 @@ class _FakeCalendarApi implements CalendarApi {
 }
 
 Future<void> _pump(WidgetTester tester, _FakeCalendarApi api) async {
+  tester.view.physicalSize = const Size(1000, 1600);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     ProviderScope(
       key: UniqueKey(),
@@ -167,7 +171,7 @@ void main() {
       (tester) async {
     final api = _FakeCalendarApi();
     await _pump(tester, api);
-    await tester.tap(find.byTooltip('新增行程').first);
+    await tester.tap(find.text('新增行程'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('calendar-title-field')), '醫院回診');
     await tester.tap(find.text('儲存'));
@@ -213,7 +217,7 @@ void main() {
       (tester) async {
     final api = _FakeCalendarApi();
     await _pump(tester, api);
-    await tester.tap(find.byTooltip('新增行程').first);
+    await tester.tap(find.text('新增行程'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('calendar-title-field')), '全天研討');
     await tester.tap(find.byType(SwitchListTile));

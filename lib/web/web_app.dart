@@ -9,6 +9,7 @@ import 'app_shell.dart';
 import 'auth_state.dart';
 import 'browser_navigation.dart';
 import 'drive_page.dart';
+import 'gmail_radar_page.dart';
 import 'habits_page.dart';
 import 'login_page.dart';
 import 'notes_page.dart';
@@ -62,6 +63,8 @@ final _router = GoRouter(
           path: '/more/drive',
           builder: (_, __) => const FeatureAccess(feature: 'drive', child: DrivePage()),
         ),
+        GoRoute(path: '/more/gmail-radar',
+          builder: (_, __) => const FeatureAccess(feature: 'gmail_radar', child: GmailRadarPage())),
         GoRoute(path: '/more/events', redirect: (_, __) => '/more/explore'),
         GoRoute(path: '/more/curated', redirect: (_, __) => '/more/explore'),
         GoRoute(path: '/more/opportunities', builder: (_, __) => const FeatureAccess(feature: 'opportunities', child: CuratedEventsPage(entry: 'opportunities'))),

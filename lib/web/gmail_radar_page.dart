@@ -205,6 +205,12 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
     final url = item['gmail_url']?.toString() ?? '';
     final fallback = item['gmail_fallback_url']?.toString() ?? '';
     final pending = item['status'] == 'pending';
+    final linkedTarget = item['linked_target']?.toString();
+    final linkedRoute = item['linked_route']?.toString();
+    const targetLabels = {
+      'task': '待辦', 'note': '筆記', 'shopping': '購物清單', 'calendar': '日曆',
+    };
+
     return Card(key: ValueKey('gmail-radar-item-' + id),
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(padding: const EdgeInsets.all(12),
@@ -223,7 +229,25 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
           Text('分類：' + (item['category']?.toString() ?? '') +
               '　郵件時間：' + _date(item['received_at']),
               style: Theme.of(context).textTheme.bodySmall),
+          if (linkedTarget != null)
+            Text('已完成 · 已存入' + (targetLabels[linkedTarget] ?? 'Life'),
+                style: Theme.of(context).textTheme.bodySmall),
           Wrap(spacing: 8, children: [
+            if (linkedTarget == null && pending)
+              TextButton.icon(
+                key: ValueKey('gmail-radar-send-inbox-' + id),
+                onPressed: () => context.go(
+                    '/capture?gmail_item=' + Uri.encodeComponent(id)),
+                icon: const Icon(Icons.move_to_inbox_outlined),
+                label: const Text('送到生活收件匣'),
+              ),
+            if (linkedTarget != null && linkedRoute != null)
+              TextButton.icon(
+                key: ValueKey('gmail-radar-linked-' + id),
+                onPressed: () => context.go(linkedRoute),
+                icon: const Icon(Icons.open_in_new),
+                label: Text('開啟' + (targetLabels[linkedTarget] ?? '已儲存功能')),
+              ),
             if (url.startsWith('https://mail.google.com/'))
               TextButton.icon(
                 onPressed: () => openExternalBrowser(url),
@@ -235,11 +259,12 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
                 onPressed: () => openExternalBrowser(fallback),
                 child: const Text('Gmail 信箱備援'),
               ),
-            TextButton(
-              onPressed: _updating.contains(id) ? null :
-                  () => _updateItem(id, pending ? 'completed' : 'pending'),
-              child: Text(pending ? '標示完成' : '恢復待處理'),
-            ),
+            if (linkedTarget == null)
+              TextButton(
+                onPressed: _updating.contains(id) ? null :
+                    () => _updateItem(id, pending ? 'completed' : 'pending'),
+                child: Text(pending ? '標示完成' : '恢復待處理'),
+              ),
             if (pending) TextButton(
               onPressed: _updating.contains(id) ? null :
                   () => _updateItem(id, 'ignored'),

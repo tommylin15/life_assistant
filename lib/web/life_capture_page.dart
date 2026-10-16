@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'platform_api.dart';
+import 'inbox_article_errors.dart';
 import 'shopping_api.dart';
 
 /// Single, account-gated capture surface. Suggestions never persist until commit.
@@ -117,7 +118,7 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
             (pending.isEmpty ? '' : '\n\n## 需要核對\n' + pending);
       });
     } catch (error) {
-      if (mounted) setState(() => _error = '摘要無法取得，可只存網址（$error）');
+      if (mounted) setState(() => _error = inboxArticleErrorMessage(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

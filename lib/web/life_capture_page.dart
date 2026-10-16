@@ -220,7 +220,7 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
             _field(fields, 'title', '筆記標題（可留白）'),
             _field(fields, 'body', '筆記內容', lines: 4),
             if (_isUrl(fields['body']?.toString() ?? '') &&
-                ref.watch(effectiveFeaturesProvider).asData?.value?['life_inbox'] == true)
+                ref.watch(effectiveFeaturesProvider).asData?.value['life_inbox'] == true)
               TextButton.icon(
                 onPressed: _busy || !editable ? null : () => _summarize(candidate),
                 icon: const Icon(Icons.auto_awesome),
@@ -251,7 +251,7 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
                   child: Text('請先在購物功能建立清單，再返回選擇。'))
             else
               DropdownButtonFormField<String>(
-                value: fields['shopping_list_id'] as String?,
+                initialValue: fields['shopping_list_id'] as String?,
                 decoration: const InputDecoration(labelText: '存入哪一份購物清單？'),
                 items: [
                   for (final list in _lists)

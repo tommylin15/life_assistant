@@ -2,6 +2,7 @@
 import asyncio
 import ipaddress
 import json
+import logging
 import socket
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -16,6 +17,7 @@ from app.api.auth import current_user
 from app.api.inbox import is_http_url
 from app.api.ui_policies import feature_gate
 from app.db.session import get_db
+from app.errors import ApiError
 from app.services.shared_gemini_gateway import GatewayTextError, generate_text
 
 router = APIRouter(prefix="/inbox", tags=["life-inbox"])
@@ -64,65 +66,95 @@ class ArticleExtractor(HTMLParser):
 
 
 async def pinned_public_article(url: str) -> tuple[str, str, str]:
-    """Resolve + reject non-global DNS; connect only to checked IP with original TLS SNI.
+    """Follow public HTTP redirects with checked DNS + pinned IP per hop.
 
-    No proxy, no HTTP auto redirects or TLS verify bypass. Redirects are checked
-    independently. Rejects every mixed public/private DNS answer.
+    Prefer IPv4 for Cloud Run egress; fall back to other verified public IPs.
+    Preserve original TLS SNI and Host so a pinned-IP connection remains verified.
+    Does not execute JavaScript, bypass access restrictions or fetch private hosts.
     """
-    async with httpx.AsyncClient(timeout=httpx.Timeout(10), follow_redirects=False,
-                                 trust_env=False) as client:
-        for hop in range(4):
+    original_host = urlsplit(url).hostname or ""
+    shortlink = original_host.lower().rstrip(".") in ("share.google", "search.app")
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(10), follow_redirects=False, trust_env=False
+    ) as client:
+        for _hop in range(6):
             try:
                 parts = urlsplit(url)
                 host = (parts.hostname or "").rstrip(".").lower()
                 port = parts.port or (443 if parts.scheme == "https" else 80)
             except ValueError:
-                raise HTTPException(422, "Invalid article host")
+                raise ApiError(422, "article_invalid_url", "文章連結格式無效")
             if (parts.scheme not in ("https", "http") or not host
                     or parts.username is not None or parts.password is not None
                     or "." not in host or host.endswith((".local", ".localhost", ".internal"))
                     or port not in (80, 443)):
-                raise HTTPException(422, "Unsupported article URL")
+                raise ApiError(422, "article_unsafe_url", "文章連結無法安全讀取")
             try:
                 dns = await asyncio.wait_for(
                     asyncio.to_thread(socket.getaddrinfo, host, port,
                                       type=socket.SOCK_STREAM), timeout=3)
-                addresses = [ipaddress.ip_address(entry[4][0]) for entry in dns]
+                addresses = list(dict.fromkeys(
+                    ipaddress.ip_address(entry[4][0]) for entry in dns))
             except (ValueError, OSError, asyncio.TimeoutError):
-                raise HTTPException(422, "Cannot resolve article host")
+                raise ApiError(503, "article_dns_unavailable", "網站解析暫時失敗")
             if not addresses or not all(ip.is_global for ip in addresses):
-                raise HTTPException(422, "Non-public URL is not permitted")
-            url_by_ip = httpx.URL(url).copy_with(host=str(addresses[0]))
-            req = client.build_request(
-                "GET", url_by_ip,
-                headers={"Host": parts.netloc, "Accept": "text/html"},
-                extensions={"sni_hostname": host})
-            try:
-                async with client.stream(req.method, req.url, headers=req.headers,
-                                         extensions=req.extensions) as result:
-                    if result.status_code in (301, 302, 303, 307, 308):
-                        location = result.headers.get("location")
-                        if not location:
-                            raise HTTPException(422, "Invalid article redirect")
-                        url = urljoin(url, location)
-                        continue
-                    if result.status_code != 200 or "text/html" not in result.headers.get(
-                            "content-type", "").lower():
-                        raise HTTPException(422, "No readable public HTML")
-                    received = bytearray()
-                    async for chunk in result.aiter_bytes():
-                        received.extend(chunk)
-                        if len(received) > 1_048_576:
-                            raise HTTPException(413, "Article exceeds size limit")
-                    parser = ArticleExtractor()
-                    parser.feed(received.decode("utf-8", errors="replace"))
-                    article = " ".join(parser.parts)[:20000].strip()
-                    if len(article) < 80:
-                        raise HTTPException(422, "Article text not available")
-                    return url, parser.title[:200], article
-            except httpx.HTTPError:
-                raise HTTPException(503, "Public article fetch unavailable")
-    raise HTTPException(422, "Article redirects exceeded limit")
+                raise ApiError(422, "article_unsafe_url", "文章連結無法安全讀取")
+            # IPv4-first avoids an IPv6-only first result on a v4-only runtime.
+            addresses.sort(key=lambda ip: (ip.version != 4, str(ip)))
+            new_url = None
+            for address in addresses[:3]:
+                req = client.build_request(
+                    "GET", httpx.URL(url).copy_with(host=str(address)),
+                    headers={"Host": parts.netloc, "Accept": "text/html",
+                             "User-Agent": "LifeAssistantArticlePreview/1.0"},
+                    extensions={"sni_hostname": host})
+                try:
+                    async with client.stream(
+                        req.method, req.url, headers=req.headers,
+                        extensions=req.extensions
+                    ) as result:
+                        if result.status_code in (301, 302, 303, 307, 308):
+                            location = result.headers.get("location")
+                            if not location:
+                                raise ApiError(422, "article_invalid_redirect", "網址轉址失敗")
+                            new_url = urljoin(url, location)
+                            break
+                        if result.status_code in (401, 403, 404, 429):
+                            raise ApiError(422, "article_site_restricted",
+                                           "網站拒絕讀取或文章不存在，請改貼原始文章網址")
+                        if result.status_code >= 500:
+                            raise ApiError(503, "article_site_unavailable",
+                                           "文章網站目前無法回應")
+                        if result.status_code != 200 or "text/html" not in result.headers.get(
+                                "content-type", "").lower():
+                            raise ApiError(422, "article_not_html", "網址不是可讀取的網頁文章")
+                        received = bytearray()
+                        async for chunk in result.aiter_bytes():
+                            received.extend(chunk)
+                            if len(received) > 1_048_576:
+                                raise ApiError(413, "article_too_large", "文章內容超過可讀取上限")
+                        parser = ArticleExtractor()
+                        parser.feed(received.decode("utf-8", errors="replace"))
+                        article = " ".join(parser.parts)[:20000].strip()
+                        # A share.google/search.app landing page is not article content.
+                        if (urlsplit(url).hostname or "").lower() in ("share.google", "search.app"):
+                            raise ApiError(422, "article_short_link_unresolved",
+                                           "Google 短網址未導向原文，請開啟連結並複製文章原始網址")
+                        if len(article) < 80:
+                            code = "article_short_link_unresolved" if shortlink else "article_no_body"
+                            raise ApiError(422, code,
+                                           "無法讀取原文，請改貼原始文章網址"
+                                           if shortlink else "網頁沒有足夠的文章內容")
+                        return url, parser.title[:200], article
+                except (httpx.TimeoutException, httpx.TransportError):
+                    # A failed public IP must not become a silent SSRF fallback.
+                    continue
+            if new_url is not None:
+                url = new_url
+                continue
+            raise ApiError(503, "article_fetch_unavailable",
+                           "目前無法連線讀取文章，可改貼原始網址或只存連結")
+    raise ApiError(422, "article_too_many_redirects", "網址轉址次數過多，請貼上原文網址")
 
 
 @router.post("/article-preview")
@@ -144,14 +176,20 @@ async def article_preview(body: ArticlePreviewInput, response: Response,
         + json.dumps(article[:1700], ensure_ascii=False)
     )
     try:
-        raw = (await generate_text(prompt, user_sub=user["sub"]))["text"]
+        raw = (await generate_text(prompt, user_sub=user["sub"], purpose="life_inbox"))["text"]
         fence = chr(96) * 3
         raw = raw.strip()
         if raw.startswith(fence):
             raw = raw.split("\n", 1)[-1].rsplit(fence, 1)[0].strip()
         summary = SummaryOutput.model_validate(json.loads(raw))
-    except (GatewayTextError, ValidationError, ValueError, TypeError, KeyError):
-        raise HTTPException(503, "Summary unavailable; you may save the URL")
+    except GatewayTextError as exc:
+        logging.warning("inbox_article_summary=FAIL phase=gateway code=%s", exc.code)
+        raise ApiError(503, "article_ai_" + exc.code,
+                       "文章已讀取，但 AI 摘要服務暫時無法使用；可以只存網址") from exc
+    except (ValidationError, ValueError, TypeError, KeyError) as exc:
+        logging.warning("inbox_article_summary=FAIL phase=model_output")
+        raise ApiError(502, "article_ai_invalid_response",
+                       "文章已讀取，但 AI 摘要格式異常；可以只存網址") from exc
     return {"status": "ok", "saved": False, "source_url": canonical_url,
             "source_title": title, "fetched_at": datetime.now(timezone.utc).isoformat(),
             "key_points": summary.key_points, "uncertainties": summary.uncertainties}

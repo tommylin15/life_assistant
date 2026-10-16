@@ -122,34 +122,97 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
       const {'text/plain', 'text/markdown', 'text/csv', 'application/json'}
           .contains(file['mime_type']);
 
-  Future<void> _previewText(Map<String, dynamic> file) async {
+  Future<void> _previewText(Map<String, dynamic> file, {bool edit = false}) async {
     final id = file['id']?.toString() ?? '';
     if (id.isEmpty || !_canPreviewText(file)) return;
+    if (edit && (file['can_edit'] != true || _working)) return;
     try {
       final result = await ref.read(platformApiProvider).get(
         '/drive/manager/files/' + Uri.encodeComponent(id) + '/text-preview');
       if (!mounted) return;
-      await showDialog<void>(
+      final originalText = result['text']?.toString() ?? '';
+      final canSave = edit && result['can_edit'] == true &&
+          (result['version']?.toString() ?? '').isNotEmpty &&
+          (result['content_sha256']?.toString() ?? '').isNotEmpty;
+      if (edit && !canSave) {
+        setState(() => _error = '缺少 Drive 寫入權限或文件版本，無法安全編輯；請使用 Google 原檔。');
+        return;
+      }
+      var draft = originalText;
+      final submitted = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('文字預覽：' + (result['name']?.toString() ?? '檔案')),
+          title: Text((edit ? '編輯：' : '文字預覽：') +
+              (result['name']?.toString() ?? '檔案')),
           content: SizedBox(
             width: 540,
             height: 380,
-            child: SingleChildScrollView(
-              child: SelectableText(result['text']?.toString() ?? ''),
-            ),
+            child: edit
+                ? TextFormField(
+                    key: const ValueKey('drive-explorer-text-editor'),
+                    initialValue: originalText,
+                    expands: true,
+                    maxLines: null,
+                    minLines: null,
+                    keyboardType: TextInputType.multiline,
+                    onChanged: (value) => draft = value,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      helperText: '限 64KiB UTF-8，儲存前再次檢查原檔版本',
+                    ),
+                  )
+                : SingleChildScrollView(
+                    child: SelectableText(originalText),
+                  ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('關閉')),
+            TextButton(onPressed: () => Navigator.pop(ctx),
+                child: Text(edit ? '取消' : '關閉')),
+            if (edit)
+              FilledButton(
+                key: const ValueKey('drive-explorer-text-save'),
+                onPressed: () => Navigator.pop(ctx, draft),
+                child: const Text('儲存回 Google Drive'),
+              ),
           ],
         ),
       );
+      if (!edit || submitted == null || submitted == originalText || !mounted) {
+        return;
+      }
+      setState(() => _working = true);
+      try {
+        final pickerApi = ref.read(drivePickerApiProvider);
+        final docs = await pickerApi.registerDocuments([id]);
+        if (docs.isEmpty) throw StateError('Unable to register Drive file');
+        final documentId = docs.first['id']?.toString() ?? '';
+        if (documentId.isEmpty) throw StateError('Missing registered document');
+        final resultSave = await ref.read(platformApiProvider).put(
+          '/drive/manager/documents/' +
+              Uri.encodeComponent(documentId) + '/text',
+          {
+            'text': submitted,
+            'expected_version': result['version']?.toString() ?? '',
+            'expected_sha256': result['content_sha256']?.toString() ?? '',
+          },
+        );
+        if (resultSave['verified'] != true) {
+          throw StateError('Drive readback not verified');
+        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('文字已寫入 Google Drive，並完成來源讀回驗證。')),
+        );
+        await _read();
+      } catch (_) {
+        if (mounted) setState(() => _error =
+          '文字修改未確認成功或原檔版本已變更，請先重新開啟原檔檢查；不會自動覆寫。');
+      } finally {
+        if (mounted) setState(() => _working = false);
+      }
     } catch (_) {
       if (mounted) setState(() => _error =
-          '無法安全預覽這個檔案，請使用 Google Drive 原始檔案入口。');
+          '無法安全開啟此檔案，請使用 Google Drive 原始檔案入口。');
     }
   }
 
@@ -338,12 +401,15 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
                     onSelected: (choice) {
                       if (choice == 'open') _open(file);
                       if (choice == 'preview') _previewText(file);
+                      if (choice == 'edit') _previewText(file, edit: true);
                       if (choice == 'move') _move(file);
                     },
                     itemBuilder: (ctx) => [
                       const PopupMenuItem(value: 'open', child: Text('原檔開啟／預覽')),
                       if (_canPreviewText(file))
                         const PopupMenuItem(value: 'preview', child: Text('Life 內文字預覽')),
+                      if (_canPreviewText(file) && file['can_edit'] == true)
+                        const PopupMenuItem(value: 'edit', child: Text('在 Life 內編輯文字')),
                       if (file['can_edit'] == true)
                         const PopupMenuItem(value: 'move', child: Text('移動至資料夾')),
                     ],

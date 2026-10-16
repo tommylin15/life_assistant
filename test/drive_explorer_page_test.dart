@@ -2,15 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:life_assistant/web/drive_explorer_page.dart';
+import 'package:life_assistant/web/drive_api.dart';
 import 'package:life_assistant/web/platform_api.dart';
 
 class _FakeDriveExplorerApi extends PlatformApi {
   final calls = <String>[];
   final writes = <Map<String, dynamic>>[];
+  final textSaves = <Map<String, dynamic>>[];
 
   @override
   Future<Map<String, dynamic>> get(String path) async {
     calls.add(path);
+    if (path.endsWith('/text-preview')) {
+      return {
+        'id': 'file-one', 'name': 'Planning.txt',
+        'text': 'Original note', 'version': '12',
+        'content_sha256': '4b8cf23995d2c9ee4a1f548aadb2a1f1d75adc5f0a3f3ebc42c676a1d68a721e',
+        'mime_type': 'text/plain', 'can_edit': true,
+      };
+    }
     final query = Uri.parse(path).queryParameters;
     if (query['folder_id'] == 'folder-a') {
       return {
@@ -36,11 +46,28 @@ class _FakeDriveExplorerApi extends PlatformApi {
   }
 
   @override
+  Future<Map<String, dynamic>> put(
+      String path, Map<String, dynamic> body) async {
+    textSaves.add({'path': path, ...body});
+    return {'verified': true, 'unchanged': false, 'version': '13'};
+  }
+
+  @override
   Future<Map<String, dynamic>> post(
       String path, Map<String, dynamic> body) async {
     writes.add({'path': path, ...body});
     return {'id': 'new-folder', 'name': body['name'], 'visibility': 'app_authorized_only'};
   }
+}
+
+class _FakePickerDriveApi implements DrivePickerApi {
+  @override
+  Future<Map<String, dynamic>> getPickerConfig() async => const {};
+  @override
+  Future<List<Map<String, dynamic>>> registerDocuments(
+      List<String> googleFileIds, {String? workspaceId}) async => [
+    {'id': 'doc-1', 'google_file_id': googleFileIds.single},
+  ];
 }
 
 void main() {
@@ -80,4 +107,39 @@ void main() {
     expect(api.writes.first['name'], 'New Folder');
     expect(api.writes.first['parent_id'], 'folder-a');
   });
+  testWidgets('Drive small text can be edited and saved through owner-bound API',
+      (tester) async {
+    final api = _FakeDriveExplorerApi();
+    tester.view.physicalSize = const Size(1000, 1500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        platformApiProvider.overrideWithValue(api),
+        drivePickerApiProvider.overrideWithValue(_FakePickerDriveApi()),
+      ],
+      child: const MaterialApp(home: DriveExplorerPage()),
+    ));
+    await tester.pumpAndSettle();
+    final item = find.byKey(const ValueKey('drive-file-file-one'));
+    expect(item, findsOneWidget);
+    await tester.tap(find.descendant(
+        of: item, matching: find.byType(PopupMenuButton<String>)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('在 Life 內編輯文字'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('drive-explorer-text-editor')), findsOneWidget);
+    await tester.enterText(
+        find.byKey(const ValueKey('drive-explorer-text-editor')), 'Edited note');
+    await tester.tap(find.byKey(const ValueKey('drive-explorer-text-save')));
+    await tester.pumpAndSettle();
+    expect(api.textSaves, hasLength(1));
+    expect(api.textSaves.first['path'],
+        '/drive/manager/documents/doc-1/text');
+    expect(api.textSaves.first['text'], 'Edited note');
+    expect(api.textSaves.first['expected_version'], '12');
+    expect(api.textSaves.first['expected_sha256'], isNotEmpty);
+  });
+
 }

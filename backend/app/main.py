@@ -11,6 +11,7 @@ from app import config as app_config
 from app.api.activity import router as activity_router
 from app.api.auth import SESSION_COOKIE, router as auth_router
 from app.api.gemini_text import router as gemini_text_router
+from app.api.inbox import router as inbox_router
 from app.api.drive import router as drive_router
 from app.api.drive_note_import import router as drive_note_import_router
 from app.api.google_integrations import router as google_integrations_router
@@ -139,6 +140,7 @@ async def ready():
 
 app.include_router(auth_router)
 app.include_router(gemini_text_router, prefix="/api/v1")
+app.include_router(inbox_router, prefix="/api/v1", dependencies=[Depends(feature_gate("life_inbox"))])
 CORE_FEATURE_GATES = {key: feature_gate(key) for key in ("projects", "notes", "habits", "shopping")}
 DRIVE_FEATURE_GATE = feature_gate("drive")
 app.include_router(tasks_router, prefix="/api/v1", dependencies=[Depends(feature_gate("tasks"))])

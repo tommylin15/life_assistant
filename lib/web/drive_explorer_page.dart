@@ -1,0 +1,333 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import 'browser_navigation.dart';
+import 'drive_api.dart';
+import 'google_drive_picker.dart';
+import 'platform_api.dart';
+
+/// Google Drive explorer for files *created/opened by this application*.
+/// This intentionally does not claim that drive.file grants entire-Drive access.
+class DriveExplorerPage extends ConsumerStatefulWidget {
+  const DriveExplorerPage({super.key});
+
+  @override
+  ConsumerState<DriveExplorerPage> createState() => _DriveExplorerPageState();
+}
+
+class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
+  List<Map<String, dynamic>> _files = const [];
+  List<({String id, String name})> _path = const [];
+  bool _loading = true;
+  bool _working = false;
+  String? _error;
+  String? _pageToken;
+  String? _nextPageToken;
+  String _query = '';
+  final TextEditingController _search = TextEditingController();
+
+  String? get _folderId => _path.isEmpty ? null : _path.last.id;
+
+  @override
+  void initState() {
+    super.initState();
+    _read();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  String _apiPath({String? token}) {
+    final query = <String, String>{'page_size': '50'};
+    if (_folderId != null) query['folder_id'] = _folderId!;
+    if (_query.isNotEmpty) query['q'] = _query;
+    if (token != null) query['page_token'] = token;
+    return '/drive/manager/files?' + Uri(queryParameters: query).query;
+  }
+
+  Future<void> _read({String? token}) async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final data = await ref.read(platformApiProvider).get(_apiPath(token: token));
+      if (!mounted) return;
+      setState(() {
+        _files = (data['files'] as List? ?? const [])
+            .map((x) => Map<String, dynamic>.from(x as Map)).toList();
+        _nextPageToken = data['next_page_token']?.toString();
+        _pageToken = token;
+        if (data['incomplete_search'] == true) {
+          _error = 'Google Drive 回報搜尋結果可能不完整，請縮小搜尋條件。';
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _files = [];
+          _nextPageToken = null;
+          _error = '無法讀取已授權的 Drive 檔案。請檢查 Google 連線或重新授權。';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _enterFolder(Map<String, dynamic> folder) {
+    final id = folder['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+    setState(() {
+      _path = [..._path, (id: id, name: folder['name']?.toString() ?? '資料夾')];
+      _query = '';
+      _search.clear();
+    });
+    _read();
+  }
+
+  void _goToIndex(int index) {
+    setState(() {
+      _path = index < 0 ? [] : _path.sublist(0, index + 1);
+      _query = '';
+      _search.clear();
+    });
+    _read();
+  }
+
+  bool _safeGoogleUrl(String? url) {
+    final parsed = Uri.tryParse(url ?? '');
+    return parsed != null && parsed.scheme == 'https' &&
+        const {
+          'drive.google.com', 'docs.google.com',
+          'sheets.google.com', 'slides.google.com'
+        }.contains(parsed.host);
+  }
+
+  void _open(Map<String, dynamic> file) {
+    final url = file['web_view_link']?.toString();
+    if (!_safeGoogleUrl(url)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Google 沒有提供可驗證的原檔網址，請從 Google Drive 開啟。'),
+      ));
+      return;
+    }
+    openExternalBrowser(url!);
+  }
+
+  Future<void> _createFolder() async {
+    if (_working) return;
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('建立 Google Drive 資料夾'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 200,
+          decoration: const InputDecoration(labelText: '資料夾名稱'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('建立')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || name == null || name.isEmpty) return;
+    setState(() => _working = true);
+    try {
+      final payload = <String, dynamic>{'name': name};
+      if (_folderId != null) payload['parent_id'] = _folderId;
+      await ref.read(platformApiProvider).post('/drive/manager/folders', payload);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('資料夾已在 Google Drive 建立並確認。')),
+      );
+      await _read();
+    } catch (_) {
+      if (mounted) setState(() => _error =
+          '建立資料夾未確認成功，請先重新整理 Google Drive 再重試。');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _move(Map<String, dynamic> file) async {
+    if (_working || file['is_folder'] == true) return;
+    final sourceId = file['id']?.toString() ?? '';
+    final sourceVersion = file['modified_at']?.toString() ?? '';
+    if (sourceId.isEmpty || sourceVersion.isEmpty) return;
+    setState(() => _working = true);
+    try {
+      final pickerApi = ref.read(drivePickerApiProvider);
+      final picker = PickerConfig.fromJson(await pickerApi.getPickerConfig());
+      final targets = await ref.read(googleDrivePickerProvider)
+          .pick(picker, folders: true, multiSelect: false);
+      if (targets.isEmpty) return;
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('確認移動原始檔案'),
+          content: Text('將「' + (file['name']?.toString() ?? '未命名檔案') +
+              '」移動到剛選取的 Google Drive 資料夾？'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('確定移動')),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      // The existing picker-backed registration checks file access, and
+      // the move API verifies document ownership again before Google write.
+      final docs = await pickerApi.registerDocuments([sourceId]);
+      if (docs.isEmpty) throw StateError('Drive document registration failed');
+      final docId = docs.first['id']?.toString() ?? '';
+      await ref.read(platformApiProvider).post(
+        '/drive/manager/documents/' + Uri.encodeComponent(docId) + '/move',
+        {'destination_folder_id': targets.first,
+         'expected_modified_at': sourceVersion},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('檔案已移動並從 Google Drive 讀回確認。')),
+      );
+      await _read();
+    } catch (_) {
+      if (mounted) setState(() => _error =
+          '移動未確認成功；請先回 Google Drive 檢查檔案位置，不要連續重試。');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  IconData _icon(Map<String, dynamic> file) {
+    if (file['is_folder'] == true) return Icons.folder_outlined;
+    final mime = file['mime_type']?.toString() ?? '';
+    if (mime.contains('pdf')) return Icons.picture_as_pdf_outlined;
+    if (mime.contains('image')) return Icons.image_outlined;
+    if (mime.contains('spreadsheet')) return Icons.table_chart_outlined;
+    return Icons.description_outlined;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: _read,
+        child: ListView(padding: const EdgeInsets.all(16), children: [
+          Wrap(spacing: 12, runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(onPressed: () => context.go('/more/drive'),
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Drive 智能整理')),
+              Text('Google Drive 檔案總管',
+                style: Theme.of(context).textTheme.headlineSmall),
+              FilledButton.icon(
+                key: const ValueKey('drive-explorer-new-folder'),
+                onPressed: _loading || _working ? null : _createFolder,
+                icon: const Icon(Icons.create_new_folder_outlined),
+                label: const Text('新建資料夾')),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text('顯示 Life 已獲授權的檔案及資料夾，不代表全部 Google Drive。'
+              '編輯 Google Docs／Sheets／Slides 請按「原檔開啟」。'),
+          const SizedBox(height: 12),
+          Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ActionChip(
+                avatar: const Icon(Icons.folder_open, size: 18),
+                label: const Text('已授權檔案'),
+                onPressed: _loading ? null : () => _goToIndex(-1)),
+              for (var i = 0; i < _path.length; i++)
+                ActionChip(
+                  label: Text(_path[i].name),
+                  onPressed: _loading ? null : () => _goToIndex(i)),
+            ]),
+          const SizedBox(height: 12),
+          TextField(
+            key: const ValueKey('drive-explorer-search'),
+            controller: _search,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              labelText: '搜尋目前範圍檔名',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: IconButton(
+                onPressed: _loading ? null : () {
+                  _query = _search.text.trim();
+                  _read();
+                },
+                icon: const Icon(Icons.search)),
+              border: const OutlineInputBorder()),
+            onSubmitted: (text) { _query = text.trim(); _read(); },
+          ),
+          const SizedBox(height: 12),
+          if (_working) const LinearProgressIndicator(),
+          if (_error != null)
+            Card(child: ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: Text(_error!),
+              trailing: IconButton(onPressed: () => _read(),
+                icon: const Icon(Icons.refresh)))),
+          if (_loading)
+            const Center(child: Padding(
+              padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
+          else if (_files.isEmpty)
+            const Card(child: Padding(
+              padding: EdgeInsets.all(18),
+              child: Text('這個範圍沒有可使用的檔案。可以從 Drive 智能整理使用 Google Picker 加入檔案。')))
+          else for (final file in _files)
+            Card(key: ValueKey('drive-file-' + (file['id']?.toString() ?? '')),
+              child: ListTile(
+                leading: Icon(_icon(file)),
+                title: Text(file['name']?.toString() ?? '未命名',
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: Text(file['is_folder'] == true
+                  ? '資料夾' : (file['mime_type']?.toString() ?? '檔案'),
+                  maxLines: 1),
+                onTap: file['is_folder'] == true
+                  ? () => _enterFolder(file) : () => _open(file),
+                trailing: file['is_folder'] == true
+                  ? const Icon(Icons.chevron_right)
+                  : PopupMenuButton<String>(
+                    onSelected: (choice) {
+                      if (choice == 'open') _open(file);
+                      if (choice == 'move') _move(file);
+                    },
+                    itemBuilder: (ctx) => [
+                      const PopupMenuItem(value: 'open', child: Text('原檔開啟／預覽')),
+                      if (file['can_edit'] == true)
+                        const PopupMenuItem(value: 'move', child: Text('移動至資料夾')),
+                    ],
+                  ),
+              ),
+            ),
+          if (!_loading) Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton(
+              onPressed: _nextPageToken == null || _working
+                ? null : () => _read(token: _nextPageToken),
+              child: const Text('載入下一頁')),
+          ),
+          const SizedBox(height: 12),
+          Text('結果為 Google Drive 即時查詢，不複製整個檔案資料庫；'
+              '檔案異動有版本檢查及原站讀回。',
+              style: Theme.of(context).textTheme.bodySmall),
+        ]),
+      ),
+    );
+  }
+}

@@ -14,6 +14,7 @@ from app.api.gemini_text import router as gemini_text_router
 from app.api.inbox import router as inbox_router
 from app.api.inbox_articles import router as inbox_articles_router
 from app.api.drive import router as drive_router
+from app.api.drive_file_manager import router as drive_file_manager_router
 from app.api.drive_note_import import router as drive_note_import_router
 from app.api.google_integrations import router as google_integrations_router
 from app.api.gmail_radar import router as gmail_radar_router
@@ -153,8 +154,9 @@ app.include_router(habits_router, prefix="/api/v1", dependencies=[Depends(CORE_F
 app.include_router(shopping_router, prefix="/api/v1", dependencies=[Depends(CORE_FEATURE_GATES["shopping"])])
 app.include_router(templates_router, prefix="/api/v1")
 app.include_router(drive_router, prefix="/api/v1", dependencies=[Depends(DRIVE_FEATURE_GATE)])
+app.include_router(drive_file_manager_router, prefix="/api/v1", dependencies=[Depends(DRIVE_FEATURE_GATE)])
 app.include_router(drive_note_import_router, prefix="/api/v1", dependencies=[Depends(DRIVE_FEATURE_GATE)])
-app.include_router(gmail_radar_router)
+app.include_router(gmail_radar_router, prefix="/api/v1", dependencies=[Depends(feature_gate("gmail_radar"))])
 app.include_router(google_integrations_router, prefix="/api/v1", dependencies=[Depends(feature_gate("integrations"))])
 app.include_router(google_project_router, prefix="/api/v1", dependencies=[Depends(feature_gate("integrations"))])
 app.include_router(activity_router, prefix="/api/v1")

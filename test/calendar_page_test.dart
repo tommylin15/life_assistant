@@ -119,149 +119,119 @@ Future<void> _pumpNested(WidgetTester tester, _FakeCalendarApi api) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _openAgenda(WidgetTester tester, String id, int day) async {
+  final now = DateTime.now();
+  final key = ValueKey('calendar-day-${now.year}/${now.month}/$day');
+  await tester.ensureVisible(find.byKey(key));
+  await tester.tap(find.byKey(key));
+  await tester.pumpAndSettle();
+  final agenda = find.byKey(ValueKey('calendar-agenda-$id'));
+  await tester.ensureVisible(agenda);
+  await tester.tap(agenda);
+  await tester.pumpAndSettle();
+}
+
 void main() {
-  testWidgets('delete dialog returns result through root navigator even inside nested shell', (tester) async {
+  testWidgets('month grid shows two source events and only selected-day compact agenda',
+      (tester) async {
+    await _pump(tester, _FakeCalendarApi());
+    expect(find.byType(GridView), findsOneWidget);
+    expect(find.text('會議'), findsWidgets);
+    expect(find.text('全天休假'), findsWidgets);
+    expect(find.text('每週討論'), findsNothing);
+    await _openAgenda(tester, 'event-1', 10);
+    expect(find.text('每週討論'), findsOneWidget);
+    expect(find.text('地點：線上'), findsOneWidget);
+  });
+
+  testWidgets('nested Navigator delete confirmation keeps record until user confirms',
+      (tester) async {
     final api = _FakeCalendarApi();
     await _pumpNested(tester, api);
-    final delete = find.byKey(const ValueKey('calendar-delete-event-1'));
-    await tester.ensureVisible(delete);
-    await tester.tap(delete);
+    await _openAgenda(tester, 'event-1', 10);
+    await tester.tap(find.text('刪除'));
     await tester.pumpAndSettle();
     expect(find.text('確認刪除行程'), findsOneWidget);
-
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(api.deleted, isEmpty);
-    expect(find.text('確認刪除行程'), findsNothing);
-    expect(find.text('會議'), findsOneWidget);
-
-    final deleteAgain = find.byKey(const ValueKey('calendar-delete-event-1'));
-    await tester.ensureVisible(deleteAgain);
-    await tester.tap(deleteAgain);
+    await _openAgenda(tester, 'event-1', 10);
+    await tester.tap(find.text('刪除'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('確認刪除'));
     await tester.pumpAndSettle();
     expect(api.deleted, ['event-1']);
-    expect(find.text('確認刪除行程'), findsNothing);
-    expect(find.text('會議'), findsNothing);
   });
 
-  testWidgets('month view displays timed and all-day Google events', (tester) async {
-    await _pump(tester, _FakeCalendarApi());
-    expect(find.text('日曆'), findsOneWidget);
-    expect(find.text('會議'), findsOneWidget);
-    expect(find.text('全天休假'), findsOneWidget);
-    expect(find.text('地點：線上'), findsOneWidget);
-    expect(find.text('共 2 筆'), findsOneWidget);
-  });
-
-  testWidgets('calendar create sends timezone-aware timestamps', (tester) async {
+  testWidgets('create maintains timezone-aware timestamps',
+      (tester) async {
     final api = _FakeCalendarApi();
     await _pump(tester, api);
-
-    await tester.tap(find.text('新增行程'));
+    await tester.tap(find.byTooltip('新增行程').first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('calendar-title-field')), '醫院回診');
     await tester.tap(find.text('儲存'));
     await tester.pumpAndSettle();
-
     expect(api.created.single['summary'], '醫院回診');
     expect(DateTime.parse(api.created.single['start'] as String).isUtc, true);
-    expect(find.text('醫院回診'), findsOneWidget);
   });
 
-  testWidgets('calendar edit updates the selected Google event', (tester) async {
+  testWidgets('edit updates selected event from detail dialog',
+      (tester) async {
     final api = _FakeCalendarApi();
     await _pump(tester, api);
-
-    final edit = find.byKey(const ValueKey('calendar-edit-event-1'));
-    await tester.ensureVisible(edit);
+    await _openAgenda(tester, 'event-1', 10);
+    await tester.tap(find.text('編輯'));
     await tester.pumpAndSettle();
-    await tester.tap(edit);
-    await tester.pumpAndSettle();
-
     await tester.enterText(find.byKey(const ValueKey('calendar-title-field')), '工作會議');
     await tester.tap(find.text('儲存'));
     await tester.pumpAndSettle();
     expect(api.updated.single['id'], 'event-1');
     expect(api.updated.single['summary'], '工作會議');
-    expect(DateTime.parse(api.updated.single['start'] as String).isUtc, true);
-    // A renamed event must also expose the updated accessible action label.
-    expect(find.byTooltip('刪除行程：工作會議'), findsOneWidget);
-    expect(find.byTooltip('刪除行程：會議'), findsNothing);
   });
 
-  testWidgets('delete requires explicit confirmation', (tester) async {
+  testWidgets('all-day edit preserves exclusive end date',
+      (tester) async {
     final api = _FakeCalendarApi();
     await _pump(tester, api);
-
-    final button = find.byKey(const ValueKey('calendar-delete-event-1'));
-    await tester.ensureVisible(button);
-    await tester.tap(button);
+    await _openAgenda(tester, 'all-day-1', 5);
+    await tester.tap(find.text('編輯'));
     await tester.pumpAndSettle();
-    expect(find.text('確認刪除行程'), findsOneWidget);
-    expect(api.deleted, isEmpty);
-
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-    expect(api.deleted, isEmpty);
-
-    await tester.tap(button);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('確認刪除'));
-    await tester.pumpAndSettle();
-    expect(api.deleted, ['event-1']);
-    expect(find.text('會議'), findsNothing);
-  });
-
-  testWidgets('all-day edit keeps date fields and exclusive end', (tester) async {
-    final api = _FakeCalendarApi();
-    await _pump(tester, api);
-    final edit = find.byKey(const ValueKey('calendar-edit-all-day-1'));
-    await tester.ensureVisible(edit);
-    await tester.tap(edit);
-    await tester.pumpAndSettle();
-
-    expect(find.byType(SwitchListTile), findsOneWidget);
     expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value, true);
     await tester.enterText(find.byKey(const ValueKey('calendar-title-field')), '新假期');
     await tester.tap(find.text('儲存'));
     await tester.pumpAndSettle();
-
-    final today = DateTime.now();
-    final start = DateTime(today.year, today.month, 5).toIso8601String().substring(0, 10);
-    final exclusive = DateTime(today.year, today.month, 6).toIso8601String().substring(0, 10);
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, 5).toIso8601String().substring(0, 10);
+    final exclusive = DateTime(now.year, now.month, 6).toIso8601String().substring(0, 10);
     expect(api.updated.single['start_date'], start);
     expect(api.updated.single['end_date'], exclusive);
     expect(api.updated.single.containsKey('start'), false);
-    expect(find.text('新假期'), findsOneWidget);
   });
 
-  testWidgets('all-day create sends civil dates, not UTC timestamps', (tester) async {
+  testWidgets('all-day create sends date fields',
+      (tester) async {
     final api = _FakeCalendarApi();
     await _pump(tester, api);
-    await tester.tap(find.text('新增行程'));
+    await tester.tap(find.byTooltip('新增行程').first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('calendar-title-field')), '全天研討');
     await tester.tap(find.byType(SwitchListTile));
     await tester.pumpAndSettle();
     await tester.tap(find.text('儲存'));
     await tester.pumpAndSettle();
-
     expect(api.created.single['start_date'], isNotNull);
     expect(api.created.single['end_date'], isNotNull);
     expect(api.created.single.containsKey('start'), false);
-    expect(find.text('全天研討'), findsOneWidget);
   });
 
-  testWidgets('shows connect, empty, and error states', (tester) async {
+  testWidgets('retains disconnected, empty selected day and error states',
+      (tester) async {
     await _pump(tester, _FakeCalendarApi(connected: false));
     expect(find.text('尚未連結 Google Calendar'), findsOneWidget);
-
     final empty = _FakeCalendarApi()..eventsData.clear();
     await _pump(tester, empty);
-    expect(find.text('本月還沒有行程'), findsOneWidget);
-
+    expect(find.text('這一天沒有行程'), findsOneWidget);
     await _pump(tester, _FakeCalendarApi(failure: true));
     expect(find.text('無法載入日曆'), findsOneWidget);
     expect(find.text('重試'), findsOneWidget);

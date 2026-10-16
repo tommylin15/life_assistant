@@ -601,6 +601,25 @@ jobs:
           echo "retirement=PASS" >> "$GITHUB_OUTPUT"
           echo "retirement=PASS exactly_ten=YES" >> "$GITHUB_STEP_SUMMARY"
 
+      # Diagnostic only: report stable gateway error categories without ever
+      # exporting user prompts, article text, URLs, tokens or raw Cloud logs.
+      # This is NOT a signed Gemini smoke and does not change release verdicts.
+      - name: Read sanitized Life Inbox AI failures
+        if: ${{ always() && inputs.publish_staging }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          RAW="$(gcloud logging read             'resource.type="cloud_run_revision" AND resource.labels.service_name="life-assistant-api" AND textPayload:"inbox_article_summary=FAIL"'             --project "$GCP_PROJECT_ID" --freshness=6h --limit=60             --format='value(textPayload)' 2>/dev/null || true)"
+          CODE="$(printf '%s\n' "$RAW" |
+            grep -Eo 'inbox_article_summary=FAIL phase=(gateway code=[a-z_]+|model_output)' |
+            sort -u | tr '\n' ' ' || true)"
+          if [[ -z "$CODE" ]]; then
+            echo "inbox_ai_log_diagnostic=NOT_VERIFIED no_sanitized_logs_or_no_logging_access" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "inbox_ai_log_diagnostic=$CODE" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Publish independent release and maintenance outcomes
         if: always()
         shell: bash

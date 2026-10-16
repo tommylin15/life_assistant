@@ -40,7 +40,9 @@ final _router = GoRouter(
           path: '/today',
           builder: (_, __) => const FeatureAccess(feature: 'today', child: TodayPage()),
         ),
-        GoRoute(path: '/capture', builder: (_, __) => const FeatureAccess(feature: 'life_inbox', child: LifeCapturePage())),
+        GoRoute(path: '/capture', builder: (_, state) => FeatureAccess(
+          feature: 'life_inbox', child: LifeCapturePage(
+            gmailRadarItemId: state.uri.queryParameters['gmail_item']))),
         GoRoute(path: '/tasks', builder: (_, __) => const FeatureAccess(feature: 'tasks', child: TasksPage())),
         GoRoute(path: '/calendar', builder: (_, __) => const FeatureAccess(feature: 'calendar', child: CalendarPage())),
         GoRoute(path: '/projects', builder: (_, __) => const FeatureAccess(feature: 'projects', child: ProjectsPage())),

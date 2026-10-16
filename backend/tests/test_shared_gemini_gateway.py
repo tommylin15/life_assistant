@@ -15,7 +15,7 @@ from app.services.ai_enrichment_provider import codex_owner_uuid
 
 
 class GatewayTextClientTests(unittest.IsolatedAsyncioTestCase):
-    async def _run(self, handler, *, prompt="Say hello"):
+    async def _run(self, handler, *, prompt="Say hello", purpose="general", text_enabled=True):
         original = httpx.AsyncClient
         calls = []
 
@@ -24,13 +24,13 @@ class GatewayTextClientTests(unittest.IsolatedAsyncioTestCase):
             return handler(request)
 
         with (
-            patch.object(settings, "gemini_gateway_text_enabled", True),
+            patch.object(settings, "gemini_gateway_text_enabled", text_enabled),
             patch.object(settings, "gemini_gateway_url", gateway.AUDIENCE),
             patch.object(gateway.httpx, "AsyncClient", side_effect=lambda **kw: original(
                 transport=httpx.MockTransport(record), **kw
             )),
         ):
-            result = await gateway.generate_text(prompt, user_sub="verified-google-sub")
+            result = await gateway.generate_text(prompt, user_sub="verified-google-sub", purpose=purpose)
         return result, calls
 
     @staticmethod
@@ -65,6 +65,23 @@ class GatewayTextClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["model"], "gemini-3.5-flash-lite")
         self.assertNotIn("ownerId", result)
         self.assertNotIn("prompt", result)
+
+    async def test_life_inbox_uses_its_own_switch_without_enabling_generic_ai(self):
+        with patch.object(settings, "gemini_life_inbox_enabled", True):
+            result, calls = await self._run(
+                self.metadata_or_success, purpose="life_inbox", text_enabled=False)
+        self.assertEqual(result["text"], "Hello from Gemini")
+        self.assertEqual(len(calls), 3)
+
+        with (
+            patch.object(settings, "gemini_life_inbox_enabled", False),
+            patch.object(settings, "gemini_gateway_text_enabled", False),
+            patch.object(gateway.httpx, "AsyncClient") as client,
+        ):
+            with self.assertRaises(gateway.GatewayTextError) as caught:
+                await gateway.generate_text("short", user_sub="verified-google-sub", purpose="life_inbox")
+        self.assertEqual(caught.exception.code, "gemini_text_disabled")
+        client.assert_not_called()
 
     async def test_disabled_is_zero_network(self):
         with patch.object(settings, "gemini_gateway_text_enabled", False), patch.object(

@@ -12,7 +12,8 @@ Updated 2026-10-15 (Asia/Taipei). **GitHub main and runtime evidence govern impl
 | What do users see/do with activities? | [curated_activity_user_features](curated_activity_user_features.md) |
 | How are UI and personal settings designed? | [life_navigation_personalization_v2](life_navigation_personalization_v2.md), [ui_visual_system](ui_visual_system.md), [design_system](design_system.md) |
 | How will Life capture free-form text, classify and optionally summarize a URL? | **[Life Inbox / Quick Capture V1 design](life_inbox_quick_capture_spec.md)** and **[AI developer instructions](life_inbox_ai_developer_instructions.md)** — implementation/acceptance status in [CURRENT_STATE](CURRENT_STATE.md). |
-| How will Gmail hourly intelligence and one-user quick scan work? | **[Gmail Smart Radar spec](gmail_smart_radar_spec.md)** — product/engineering contract; not implemented or released. |
+| How will manual-only Gmail radar quick scan work? | **[Gmail Smart Radar spec](gmail_smart_radar_spec.md)** — product/engineering contract; not implemented or released. |
+| How will full Drive file browsing, preview, editing and moving work? | **[Google Drive File Manager V1](google_drive_file_manager_spec.md)** — active design; implementation/CI/live E2E not verified. |
 | How is V3 released? | [ci_cd_ghcr_release_policy](ci_cd_ghcr_release_policy.md), [deployment_runbook](deployment_runbook.md), [release_checklist](release_checklist.md) |
 | How to test/secure data? | [testing_strategy](testing_strategy.md), [security](security.md), [permissions](permissions.md), [migration_spec](migration_spec.md) |
 | Where are prior decisions/acceptances? | [archive](archive/README.md), [acceptance](acceptance.md) |

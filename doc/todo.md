@@ -4,7 +4,7 @@ Updated 2026-10-16. **One active backlog only.** Prior 01–07 execution plan ha
 | Priority | Work / exit gate | Status |
 | --- | --- | --- |
 | P1-5 | **預設保持登入（Cloud Run 相容）**：將 Google 登入後短效 ID token Cookie 改成資料庫可撤銷、隨機 opaque Life session；建議同裝置 30 天、有感知的失效／重新登入、使用者主動登出即撤銷，不能只延長已過期 Google token。沿用 Firebase Hosting 的 `__session`、HttpOnly／Secure／SameSite、固定 staging 來源隔離及既有 Google per-user consent；先建立非破壞性 migration、權限測試／CI／真實 Google 瀏覽器 E2E，再發版。 | **NOT VERIFIED／尚未實作**：目前 `auth.py` 成功登入仍寫最長約 3600 秒的 Google ID token session；此項不能因日曆／活動 UI 提交而標 DONE。 |
-| P1-6 | **2026-10-16 行程與活動視覺整合驗收**：月曆格狀及小圖示、點選日期摘要與詳情；單一活動探索入口／三模式、首頁及個人化去重、舊連結／rollout／收藏資料兼容。 | **PARTIAL**：Flutter source 已提交 main，新增 nav／主活動分組測試；本 SHA 的 Flutter analyze/test、4 項 CI、staging、正式 Hosting 及真實 Google Calendar 操作 **NOT VERIFIED**。 |
+| P1-6 | **2026-10-16 行程與活動視覺整合驗收**：月曆格狀及小圖示、點選日期摘要與詳情；單一活動探索入口／三模式、首頁及個人化去重、舊連結／rollout／收藏資料兼容。 | **PARTIAL**：Flutter source 已提交 main，新增 nav／主活動分組及月曆選日詳情 widget 測試；本 SHA 的 Flutter analyze/test、4 項 CI、staging、正式 Hosting 及真實 Google Calendar 操作 **NOT VERIFIED**。 |
 | P1-1 | Complete **signed Gemini through logged-in Life `/ai/text` and UI** including 429/502/503/timeout, permission/quotas and no implicit Google Drive content transfer. | Signed synthetic smoke **PASS**, UX E2E **NOT VERIFIED** |
 | P1-4 | Drive AI admin/per-user consent, provider failures, **real token/cost/accounting** if introducing budget enforcement; never fabricate spend. | Partial implementation, costs/budget **NOT VERIFIED** |
 | P2-2 | Audit dependency/action pinning, public-repository hygiene, access to operational docs, observability, backup restoration and scheduled-job dedupe. | Risk follow-up **NOT VERIFIED** |

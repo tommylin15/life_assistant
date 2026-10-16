@@ -160,11 +160,13 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
         req = request(auth.STAGING_HOST, "oauth:staging:" + state)
         with patch("app.api.auth._complete_login",
                    new=AsyncMock(return_value=("signed-id-token", self.tester))) as complete, \
-             patch("app.api.auth._audit_staging_e2e", new_callable=AsyncMock):
+             patch("app.api.auth._audit_staging_e2e", new_callable=AsyncMock), \
+             patch("app.api.auth._create_persistent_session",
+                   new=AsyncMock(return_value="s" * 64)):
             response = await auth.callback("google-code", state, req, object())
         complete.assert_awaited_once_with("google-code", auth.STAGING_REDIRECT_URI)
         self.assertEqual(response.headers["location"], "https://" + auth.STAGING_HOST + "/")
-        self.assertIn("id:staging:signed-id-token", response.headers["set-cookie"])
+        self.assertIn("se:staging:" + "s" * 64, response.headers["set-cookie"])
         with self.assertRaises(HTTPException):
             owner_only(self.tester)
 
@@ -172,16 +174,18 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
         state = "y" * 32
         req = request("gen-lang-client-0593591102.web.app", "oauth:" + state)
         with patch("app.api.auth._complete_login",
-                   new=AsyncMock(return_value=("signed-id-token", self.tester))):
+                   new=AsyncMock(return_value=("signed-id-token", self.tester))), \
+             patch("app.api.auth._create_persistent_session",
+                   new=AsyncMock(return_value="s" * 64)):
             response = await auth.callback("google-code", state, req, object())
-        self.assertIn("id:signed-id-token", response.headers["set-cookie"])
-        self.assertNotIn("id:staging:", response.headers["set-cookie"])
+        self.assertIn("se:production:" + "s" * 64, response.headers["set-cookie"])
+        self.assertNotIn("se:staging:", response.headers["set-cookie"])
         with self.assertRaises(HTTPException):
             owner_only(self.tester)
 
     async def test_logout_deletes_auth_cookie(self):
         response = Response()
-        result = await auth.logout(response)
+        result = await auth.logout(request(auth.STAGING_HOST), response, object())
         self.assertEqual(result, {"status": "ok"})
         cookie = response.headers["set-cookie"].lower()
         self.assertIn("__session=", cookie)

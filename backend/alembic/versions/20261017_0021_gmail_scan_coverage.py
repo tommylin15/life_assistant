@@ -12,6 +12,8 @@ branch_labels = depends_on = None
 
 
 def upgrade():
+    op.add_column("gmail_radar_items", sa.Column("linked_target", sa.String(16), nullable=True))
+    op.add_column("gmail_radar_items", sa.Column("linked_entity_id", sa.String(255), nullable=True))
     op.add_column("gmail_radar_scan_states",
         sa.Column("scan_kind", sa.String(20), nullable=False, server_default="quick"))
     op.add_column("gmail_radar_scan_states",

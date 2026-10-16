@@ -29,7 +29,7 @@ from scripts.reconcile_projects_status_default import (
 )
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-PREVIOUS_RELEASE_REVISION = "20261012_0017"
+PREVIOUS_RELEASE_REVISION = "20261012_0018"
 LEGACY_DIRECT_RELEASE_REVISIONS = {
     "20261010_0016",
     "20261010_0015",
@@ -96,6 +96,7 @@ RELEASE_REQUIRED_TABLES = {
     "feature_rollouts",
     "user_ui_preferences",
     "life_ai_policy",
+    "life_login_sessions",
 }
 RELEASE_REQUIRED_TASK_COLUMNS = {"source_type", "source_ref", "completed_at", "deleted_at", "user_sub"}
 RELEASE_REQUIRED_OWNERSHIP_TABLES = ("notes", "projects", "habits", "shopping_lists")

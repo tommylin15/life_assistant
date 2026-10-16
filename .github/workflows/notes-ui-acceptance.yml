@@ -3,57 +3,41 @@ name: Notes UI Acceptance
 on:
   workflow_dispatch:
 
+concurrency:
+  group: notes-ui-acceptance-${{ github.sha }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
-concurrency:
-  group: notes-ui-acceptance-main-${{ github.event.workflow_run.conclusion || 'success' }}
-  cancel-in-progress: false
-
 jobs:
   accept:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102
-      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
-
+      RELEASE_SHA: ${{ github.sha }}
     steps:
-      - name: Checkout release commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.RELEASE_SHA }}
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
+      - uses: ./.github/actions/setup-playwright
 
-      - name: Validate acceptance script syntax
+      - name: Validate acceptance scripts
         run: |
           node --check .github/scripts/verify_notes_ui_production.mjs
           node --check .github/scripts/verify_drive_ui_production.mjs
           node --check .github/scripts/diagnose_notes_route.mjs
 
-      - name: Install production UI acceptance tooling
-        run: |
-          npm install --no-save playwright@1.55.0
-          npx playwright install chromium
-
-      - name: Diagnose deployed Notes route
+      - name: Diagnose Notes route
         run: |
           BASE_URL="https://${GCP_PROJECT_ID}.web.app"
           curl --fail --silent --show-error \
             --dump-header /tmp/notes-route.headers \
             --output /tmp/notes-route.html \
             "$BASE_URL/more/notes?notes_route=$RELEASE_SHA"
-          echo "notes_route_headers_begin"
-          cat /tmp/notes-route.headers
-          echo "notes_route_headers_end"
           grep -Fq '<title>生活助理</title>' /tmp/notes-route.html
           BASE_URL="$BASE_URL" node .github/scripts/diagnose_notes_route.mjs
 
-      - name: Verify deployed release, Notes UI, and Drive UI
+      - name: Verify release and run Notes/Drive UI acceptance
         run: |
           BASE_URL="https://${GCP_PROJECT_ID}.web.app"
           REMOTE_RELEASE="$(curl --fail --silent --show-error \
@@ -63,11 +47,11 @@ jobs:
           BASE_URL="$BASE_URL" node .github/scripts/verify_notes_ui_production.mjs
           BASE_URL="$BASE_URL" node .github/scripts/verify_drive_ui_production.mjs
 
-      - name: Upload Web UI acceptance diagnostics
+      - name: Upload diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: web-ui-production-acceptance-${{ env.RELEASE_SHA }}
+          name: web-ui-acceptance-${{ github.sha }}
           path: |
             /tmp/notes-ui-acceptance.png
             /tmp/drive-ui-acceptance.png

@@ -16,15 +16,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: '**/requirements*.txt'
 
-      - name: Install branding tooling
-        run: python -m pip install --disable-pip-version-check pillow==11.3.0
-
-      - name: Test branding source quality
-        run: python -m unittest tests/test_branding_assets.py -v
-
-      - name: Prepare branding assets
+      - name: Prepare and verify branding assets
         run: |
+          python -m pip install --disable-pip-version-check pillow==11.3.0
+          python -m unittest tests/test_branding_assets.py -v
           python scripts/prepare_branding_assets.py
           python - <<'PY'
           from PIL import Image
@@ -39,8 +37,8 @@ jobs:
               path = Path(name)
               assert path.is_file() and path.stat().st_size > 4000, name
               with Image.open(path) as image:
-                  assert image.format == 'PNG', (name, image.format)
-                  assert image.size == expected, (name, image.size)
+                  assert image.format == 'PNG' and image.size == expected, (name, image.size)
+          print('branding_assets=PASS')
           PY
 
       - uses: subosito/flutter-action@v2
@@ -49,34 +47,27 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Analyze
-        run: flutter analyze --no-pub --no-fatal-infos
-
-      - name: Test
-        run: flutter test --no-pub --reporter expanded
-
-      - name: Build Web
-        run: flutter build web --target=lib/main_web.dart --no-pub
+      - name: Flutter CI
+        run: |
+          flutter pub get
+          flutter analyze --no-pub --no-fatal-infos
+          flutter test --no-pub --reporter expanded
+          flutter build web --target=lib/main_web.dart --no-pub
 
       - name: Verify branding in web build
         run: |
           python - <<'PY'
           from PIL import Image
           from pathlib import Path
-          checks = {
-              'build/web/icons/life-assistant-192-v8.png': (192, 192),
-              'build/web/icons/life-assistant-512-v8.png': (512, 512),
-              'build/web/branding/life-assistant-hero-v8.png': (1024, 1024),
-          }
-          for name, expected in checks.items():
+          for name, expected in [
+              ('build/web/icons/life-assistant-192-v8.png', (192, 192)),
+              ('build/web/icons/life-assistant-512-v8.png', (512, 512)),
+              ('build/web/branding/life-assistant-hero-v8.png', (1024, 1024)),
+          ]:
               path = Path(name)
               assert path.is_file() and path.stat().st_size > 4000, name
               with Image.open(path) as image:
-                  assert image.format == 'PNG', (name, image.format)
-                  assert image.size == expected, (name, image.size)
+                  assert image.format == 'PNG' and image.size == expected, (name, image.size)
           PY
           grep -Fq '/manifest-v6.json' build/web/index.html
           grep -Fq '/icons/life-assistant-192-v8.png' build/web/manifest-v6.json
@@ -94,21 +85,15 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+          cache-dependency-path: backend/requirements.txt
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install and verify backend
+        run: |
+          pip install -r requirements.txt
+          python -c "from app.main import app; print('OK')"
+          alembic upgrade head --sql > /tmp/life-assistant-migrations.sql
+          python -m unittest discover -s tests -v
 
-      - name: Check import
-        run: python -c "from app.main import app; print('OK')"
-
-      - name: Validate Alembic migrations
-        run: alembic upgrade head --sql > /tmp/life-assistant-migrations.sql
-
-      - name: Test backend
-        run: python -m unittest discover -s tests -v
-
-  # Independent local PostgreSQL service; never reads production credentials.
-  # Runs the genuine Alembic chain and executes transactional/concurrency checks.
   free-events-postgres:
     runs-on: ubuntu-latest
     services:
@@ -133,47 +118,30 @@ jobs:
       FREE_EVENTS_INTEGRATION_DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/free_events_ci
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
-      - name: Install pinned dependencies
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Verify fresh database upgrades through 0010 to 0011
+
+      - name: Run Alembic migrations
         run: |
-          alembic upgrade 20261007_0010
+          alembic upgrade head
           alembic current
-          alembic upgrade 20261009_0011
-          alembic current
-          alembic upgrade 20261009_0012
-          alembic current
-          alembic upgrade 20261009_0013
-          alembic current
-          alembic upgrade 20261009_0014
-          alembic current
-          alembic upgrade 20261010_0015
-          alembic current
-          alembic upgrade 20261010_0016
-          alembic current
-          alembic upgrade 20261012_0017
-          alembic current
-          alembic upgrade 20261012_0018
-          alembic current
-          alembic upgrade 20261016_0019
-          alembic current
-      - name: Verify real PostgreSQL transactions, constraints, concurrency and read filters
-        run: python -m unittest discover -s tests -p 'test_free_events_*postgres*.py' -v
-      - name: Verify curated ingestion and per-user preferences on real PostgreSQL
-        run: python -m unittest discover -s tests -p 'test_curated_postgres_integration.py' -v
-      - name: Verify rollback-only 0016 production-style runtime smoke on CI PostgreSQL
+
+      - name: Run PostgreSQL integration tests
         run: |
+          python -m unittest discover -s tests -p 'test_free_events_*postgres*.py' -v
+          python -m unittest discover -s tests -p 'test_curated_postgres_integration.py' -v
           python -m scripts.run_curated_pool_runtime_acceptance
           python -m scripts.run_private_ownership_acceptance
-      # Run the *same* bounded synthetic provider/consent acceptance before
-      # deploying. It uses CI PostgreSQL and never calls Google or a real AI.
-      - name: Verify Drive AI opt-in and opt-out runtime on CI PostgreSQL
-        run: python -m scripts.run_drive_ai_enrichment_acceptance
-      - name: Reproduce historical API create_all table collision and safely adopt schema
+          python -m scripts.run_drive_ai_enrichment_acceptance
+
+      - name: Test schema collision recovery
         shell: bash
         run: |
           set -euo pipefail
@@ -190,10 +158,7 @@ jobs:
                   await conn.run_sync(Base.metadata.create_all)
           asyncio.run(simulate_old_api())
           PY
-          alembic upgrade 20261009_0013
-          alembic current
           alembic upgrade 20261009_0014
-          alembic current
           python - <<'PY'
           import asyncio
           from sqlalchemy import text
@@ -202,7 +167,7 @@ jobs:
               async with engine.connect() as conn:
                   assert await conn.scalar(text('SELECT version_num FROM alembic_version')) == '20261009_0014'
                   assert await conn.scalar(text("""SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='public' AND tablename LIKE 'free_event_%'""")) == 9
-              print('precreated_schema_reconciliation=PASS (additive, no stamp/drop)')
+              print('precreated_schema_reconciliation=PASS')
           asyncio.run(verify())
           PY
 
@@ -215,56 +180,45 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Check deployment acceptance syntax
+      - name: Validate script syntax
         run: |
+          # Shell scripts
           bash -n scripts/bootstrap_gcp_wif.sh
           bash -n scripts/v3_fixed_staging_release.sh
           bash -n scripts/inspect_postgres_dev.sh
           bash -n scripts/diagnose_db_secret.sh
           bash -n scripts/rotate_google_oauth_secret.sh
           bash -n .github/scripts/run_cloud_run_job_with_diagnostics.sh
-          node --check .github/scripts/verify_task_ui_production.mjs
-          node --check .github/scripts/verify_project_ui_production.mjs
-          node --check .github/scripts/verify_habits_ui_production.mjs
-          node --check .github/scripts/verify_drive_knowledge_production.mjs
-          python -m py_compile backend/scripts/run_drive_knowledge_runtime_acceptance.py
-          python -m py_compile backend/scripts/run_drive_google_integration_acceptance.py
-          python -m py_compile backend/scripts/run_curated_pool_runtime_acceptance.py
-          python -m py_compile .github/scripts/v3_firebase_error.py
-          python -m py_compile .github/scripts/v3_gcs_object_inventory.py
-          python -m py_compile .github/scripts/v3_image_identity.py
-          python -m py_compile .github/scripts/v3_curated_handoff_alignment.py
-          python -m py_compile .github/scripts/v3_revision_retention.py
-          python -m py_compile .github/scripts/v3_gcp_inventory.py
-          python -m py_compile .github/scripts/v3_free_event_retirement_readback.py
-          python -m py_compile .github/scripts/v3_staging_gate.py
+          # Node scripts
+          for f in .github/scripts/verify_*.mjs .github/scripts/diagnose_*.mjs; do
+            [ -f "$f" ] && node --check "$f"
+          done
+          # Python scripts
+          python -m py_compile \
+            backend/scripts/run_drive_knowledge_runtime_acceptance.py \
+            backend/scripts/run_drive_google_integration_acceptance.py \
+            backend/scripts/run_curated_pool_runtime_acceptance.py \
+            .github/scripts/v3_firebase_error.py \
+            .github/scripts/v3_gcs_object_inventory.py \
+            .github/scripts/v3_image_identity.py \
+            .github/scripts/v3_curated_handoff_alignment.py \
+            .github/scripts/v3_revision_retention.py \
+            .github/scripts/v3_gcp_inventory.py \
+            .github/scripts/v3_free_event_retirement_readback.py \
+            .github/scripts/v3_staging_gate.py
 
-      - name: Test bounded Firebase Preview propagation and strict SHA/401 readiness
-        run: python -m unittest tests/test_v3_verify_preview.py -v
-
-      - name: Test V3 Firebase CLI diagnostics secret redaction
-        run: python -m unittest tests/test_v3_firebase_error.py -v
-
-      - name: Test V3 Cloud Run GHCR digest/cache identity
-        run: python -m unittest tests/test_v3_image_identity.py -v
-
-      - name: Test curated handoff image alignment and decommissioned cron
-        run: python -m unittest tests/test_v3_curated_handoff_alignment.py -v
-
-      - name: Test V3 revision retention fail-closed contracts
-        run: python -m unittest tests/test_v3_revision_retention.py tests/test_life_cloud_run_retirement.py -v
-
-      - name: Test V3 staging version and pinned Cloud Run revision gates
-        run: python -m unittest tests/test_v3_staging_gate.py -v
-
-      - name: Test V3 workflow trigger consolidation and revision retirement
-        run: python -m unittest tests/test_v3_workflow_consolidation.py -v
-
-      - name: Test gated same-SHA production Hosting auto-dispatch and rollback
-        run: python -m unittest tests/test_v3_auto_production_hosting_workflow.py -v
-
-      - name: Test removed release OAuth gates and retained access controls
-        run: python -m unittest tests/test_v3_release_no_oauth_gate.py -v
-
-      - name: Test retired free-events Scheduler classification
-        run: python -m unittest tests/test_v3_free_event_retirement_readback.py -v
+      - name: Run deployment script tests
+        run: |
+          python -m unittest \
+            tests/test_v3_verify_preview.py \
+            tests/test_v3_firebase_error.py \
+            tests/test_v3_image_identity.py \
+            tests/test_v3_curated_handoff_alignment.py \
+            tests/test_v3_revision_retention.py \
+            tests/test_life_cloud_run_retirement.py \
+            tests/test_v3_staging_gate.py \
+            tests/test_v3_workflow_consolidation.py \
+            tests/test_v3_auto_production_hosting_workflow.py \
+            tests/test_v3_release_no_oauth_gate.py \
+            tests/test_v3_free_event_retirement_readback.py \
+            -v

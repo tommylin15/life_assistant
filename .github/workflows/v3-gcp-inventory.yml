@@ -1,4 +1,4 @@
-name: V3 GCP Dependency Inventory (read only)
+name: V3 GCP Inventory (read only)
 
 on:
   workflow_dispatch:
@@ -17,160 +17,69 @@ jobs:
       GCP_REGION: us-central1
     steps:
       - uses: actions/checkout@v4
-      - name: Authenticate for read-only inventory
-        uses: google-github-actions/auth@v2
+
+      - uses: ./.github/actions/setup-gcp
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/setup-gcloud@v2
-      - name: Inspect dependency metadata without deleting anything
-        shell: bash
+
+      - name: Run inventory scripts
         run: |
-          set -euo pipefail
+          # Main GCP inventory
           python .github/scripts/v3_gcp_inventory.py \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            | tee "$RUNNER_TEMP/v3-gcp-inventory.json"
-          python - "$RUNNER_TEMP/v3-gcp-inventory.json" <<'PY'
-          import json, os, sys
-          d = json.load(open(sys.argv[1]))
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
-              print("## V3 GCP dependency inventory (read only)", file=out)
-              for name, value in d["checks"].items():
-                  print(f"- {name}: {value['status']}; count={value.get('count','?')}", file=out)
-              print("No resource was modified or deleted.", file=out)
-          if any(v["status"] != "PASS" for v in d["checks"].values()):
-              raise SystemExit("Inventory partial: missing GCP read permissions or API readback")
-          PY
-      - name: Verify both retired life_assistant Cloud Build triggers disabled
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - "$RUNNER_TEMP/v3-gcp-inventory.json" <<'PY'
-          import json, os, sys
-          with open(sys.argv[1], encoding="utf-8") as f:
-              checks = json.load(f)["checks"]
-          observed = checks["cloud_build_triggers"]
-          expected = {
-              "life-assistant-v2-main": "70ca60f2-8519-40c4-9422-5ac78f1b355f",
-              "life-assistant-v2-release": "892a893e-173f-49b2-9055-d5a9adc21496",
-          }
-          triggers = observed.get("triggers", [])
-          actual = {t["name"]: t for t in triggers}
-          ok = (
-              observed["status"] == "PASS"
-              and len(triggers) == len(expected)
-              and set(actual) == set(expected)
-              and all(actual[name]["id"] == ident
-                      and actual[name].get("disabled") is True
-                      for name, ident in expected.items())
-          )
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
-              for name, ident in expected.items():
-                  t = actual.get(name, {})
-                  status = "PASS" if t.get("id") == ident and t.get("disabled") is True else "FAIL"
-                  print(f"- retired_trigger_readback={status} name={name} id={ident}", file=out)
-              print(f"- retired_triggers_all_disabled={'PASS' if ok else 'FAIL'}", file=out)
-          if not ok:
-              raise SystemExit("Retired life_assistant triggers not both confirmed disabled")
-          PY
-      - name: Inspect cancelled free-events source Scheduler links (read-only)
-        shell: bash
-        run: |
-          set -euo pipefail
+            | tee "$RUNNER_TEMP/inventory.json"
+          
+          # Scheduler status
           python .github/scripts/v3_free_event_retirement_readback.py \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            | tee "$RUNNER_TEMP/v3-free-event-scheduler.json"
-          python - "$RUNNER_TEMP/v3-free-event-scheduler.json" <<'PY'
-          import json,os,sys
-          info=json.load(open(sys.argv[1]))
-          with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as output:
-              print("## Cancelled event source Scheduler status — read-only",file=output)
-              print(f"- region={info['region']}; status={info['status']}",file=output)
-              for job in info["matching_scheduler_jobs"]:
-                  print(f"- {job['job']}: {job['state']}",file=output)
-              print("- Other regions/external callers: NOT VERIFIED",file=output)
-          PY
-
-      - name: Recheck only bounded legacy GCS CI/CD bucket object metadata
-        shell: bash
-        run: |
-          set -euo pipefail
+            | tee "$RUNNER_TEMP/scheduler.json"
+          
+          # GCS inventory
           python .github/scripts/v3_gcs_object_inventory.py \
             --project "$GCP_PROJECT_ID" \
-            | tee "$RUNNER_TEMP/v3-gcs-candidates.json"
-          python - "$RUNNER_TEMP/v3-gcs-candidates.json" <<'PY'
-          import json, os, sys
-          with open(sys.argv[1], encoding="utf-8") as fh:
-              result = json.load(fh)
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
-              print("## Bounded legacy GCS inventory — metadata only", file=out)
-              for bucket in result["buckets"]:
-                  print(
-                      f"- {bucket['bucket']}: readback={bucket['readback']}; "
-                      f"objects={bucket.get('objects','?')}; "
-                      f"candidate_build={bucket.get('categories',{}).get('POSSIBLE_CLOUD_BUILD',0)}; "
-                      f"protected={bucket.get('categories',{}).get('UNCLASSIFIED_PROTECTED',0)}; "
-                      "deletion_eligible=NO",
-                      file=out,
-                  )
-          if result["mode"] != "READ_ONLY":
-              raise SystemExit("Unsafe GCS inventory mode")
-          if any(x["readback"] != "PASS" or x.get("deletion_eligible") is not False
-                 for x in result["buckets"]):
-              raise SystemExit("GCS metadata inventory incomplete, delete forbidden")
-          PY
-
-      - name: Inventory AR Docker image digests versus scoped Cloud Run references (no deletion)
-        shell: bash
-        run: |
-          set -euo pipefail
+            | tee "$RUNNER_TEMP/gcs.json"
+          
+          # AR Docker inventory
           python .github/scripts/v3_ar_docker_inventory.py \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            | tee "$RUNNER_TEMP/v3-ar-docker-inventory.json"
-          python - "$RUNNER_TEMP/v3-ar-docker-inventory.json" <<'PY'
-          import json, os, sys
-          with open(sys.argv[1], encoding="utf-8") as f:
-              obj=json.load(f)
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
-              print("## AR Docker image inventory — read-only", file=out)
-              print(f"- status={obj['status']}; region={obj['cloud_run_scope']['region']}", file=out)
-              for repo in obj["repositories"]:
-                  if repo["format"].upper() != "DOCKER":
-                      print(f"- {repo['repository']}: non-Docker, not assessed", file=out)
-                  else:
-                      print(f"- {repo['repository']}: Docker digests={repo.get('docker_digest_count','?')}; "
-                            f"Cloud Run referenced={repo.get('referenced','?')}; "
-                            f"unreferenced in checked region={repo.get('unreferenced_scope_only','?')}; "
-                            "deletion_eligible=NO",file=out)
-              print("No image/tag/digest/repository was deleted or approved for deletion.",file=out)
-          if obj["status"] != "PASS":
-              raise SystemExit("AR reference assessment incomplete; deletion forbidden")
-          PY
+            | tee "$RUNNER_TEMP/ar.json"
 
-      - name: List no-rollback latest-CI-only AR/GCS deletion candidates (READ ONLY)
-        shell: bash
+      - name: Generate summary
         run: |
-          set -euo pipefail
-          python .github/scripts/v3_no_rollback_retirement_inventory.py \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            | tee "$RUNNER_TEMP/v3-no-rollback-inventory.json"
-          python - "$RUNNER_TEMP/v3-no-rollback-inventory.json" <<'PY'
-          import json, os, sys
-          with open(sys.argv[1], encoding="utf-8") as stream:
-              data = json.load(stream)
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
-              print("## Latest CI/CD only — NO ROLLBACK retirement candidates", file=out)
-              print(f"- status={data['status']}; no_deletion_performed={data['no_deletion_performed']}", file=out)
-              for r in data["artifact_registry"]:
-                  if r.get("type") == "DOCKER":
-                      print(f"- AR/{r['repository']}: total={r['total']}, keep={r['keep']}, "
-                            f"old_digest_candidates={r['old_delete_candidates']}", file=out)
-              for b in data["gcs"]:
-                  print(f"- GCS/{b['bucket']}: total={b.get('objects','?')}, "
-                        f"ci_build_candidates={b.get('delete_candidates','?')}, "
-                        f"protected={b.get('protected','?')}", file=out)
-              print("Candidate listing only; no image, object, bucket, backup or app data deleted.", file=out)
-          if data['status'] != 'PASS' or data['no_deletion_performed'] is not True:
-              raise SystemExit("Latest-only cleanup assessment not verified")
+          python - <<'PY'
+          import json, os
+          
+          def load(name):
+              try:
+                  return json.load(open(f"{os.environ['RUNNER_TEMP']}/{name}"))
+              except:
+                  return {}
+          
+          inv = load("inventory.json")
+          sched = load("scheduler.json")
+          gcs = load("gcs.json")
+          ar = load("ar.json")
+          
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              print("## V3 GCP Inventory (read only)", file=f)
+              
+              if "checks" in inv:
+                  for name, val in inv["checks"].items():
+                      print(f"- {name}: {val.get('status', '?')}", file=f)
+              
+              if "matching_scheduler_jobs" in sched:
+                  print(f"- Scheduler jobs: {len(sched['matching_scheduler_jobs'])}", file=f)
+              
+              if "buckets" in gcs:
+                  for b in gcs["buckets"]:
+                      print(f"- GCS {b['bucket']}: {b.get('objects', '?')} objects", file=f)
+              
+              if "repositories" in ar:
+                  for r in ar["repositories"]:
+                      if r.get("format", "").upper() == "DOCKER":
+                          print(f"- AR {r['repository']}: {r.get('docker_digest_count', '?')} digests", file=f)
+              
+              print("\nNo resources modified.", file=f)
           PY

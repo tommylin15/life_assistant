@@ -92,6 +92,17 @@ class TodayPage extends ConsumerWidget {
                 padding: const EdgeInsets.all(16), children: [
               const LifeFeatureHeader(feature: LifeVisualFeature.today),
               const SizedBox(height: 12),
+              if (flags?['life_inbox'] == true) ...[
+                Card(child: ListTile(
+                  key: const ValueKey('today-life-capture'),
+                  leading: const Icon(Icons.auto_awesome),
+                  title: const Text('生活快速新增'),
+                  subtitle: const Text('貼上文字或網址，辨識後自行確認新增'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => navigateBrowser('/capture'),
+                )),
+                const SizedBox(height: 12),
+              ],
               for (final key in cards)
                 if (flags?[key] ?? true) _card(context, ref, key, snapshot),
             ])),

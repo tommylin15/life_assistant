@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'api_client.dart';
 import 'platform_api.dart';
 import 'habit_api.dart';
+import 'curated_activity_card.dart';
 import 'session_identity.dart';
 import 'visual_system.dart';
 
@@ -109,7 +110,10 @@ class TodayPage extends ConsumerWidget {
       final end = DateTime.now();
       return due.isBefore(DateTime(end.year, end.month, end.day + 1));
     }).take(5).toList();
-    final events = (data['events']?['items'] as List?)?.take(3).toList();
+    final eventItems = (data['events']?['items'] as List? ?? const [])
+        .whereType<Map<String, dynamic>>().toList();
+    final events = groupActivities(eventItems)
+        .take(3).map((group) => group.first).toList();
     switch (key) {
       case 'tasks':
         return _tile(context, '待辦（今天及逾期）', filtered.isEmpty

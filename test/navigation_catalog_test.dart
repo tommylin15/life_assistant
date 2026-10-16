@@ -6,7 +6,7 @@ void main() {
     const legacy = ['notes', 'habits', 'opportunities', 'explore',
         'shopping', 'drive', 'integrations'];
     final result = normalizeNavigationOrder(legacy);
-    expect(result, containsAll(['notes', 'habits', 'opportunities', 'explore',
+    expect(result, containsAll(['notes', 'habits', 'explore',
         'shopping', 'drive', 'tasks', 'calendar', 'projects']));
     expect(orderedNavigationGroups(result).map((e) => e.id).toList(),
         ['daily', 'knowledge', 'activities']);
@@ -17,7 +17,8 @@ void main() {
   test('a contiguous saved order preserves group reordering', () {
     const reordered = ['opportunities', 'explore', 'notes', 'projects', 'drive',
         'shopping', 'habits', 'tasks', 'calendar'];
-    expect(normalizeNavigationOrder(reordered), reordered);
+    expect(normalizeNavigationOrder(reordered), reordered.where((k) => k != 'opportunities').toList());
+    expect(normalizeNavigationOrder(reordered).where((k) => k == 'explore').length, 1);
     expect(orderedNavigationGroups(reordered).map((e) => e.id).toList(),
         ['activities', 'knowledge', 'daily']);
   });

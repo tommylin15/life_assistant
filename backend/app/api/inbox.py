@@ -250,7 +250,9 @@ async def _internal_write(target: str, fields: dict, db: AsyncSession, user: dic
                                  **value.model_dump())
                     for index, (item_id, value) in enumerate(zip(ids, entries))])
         item = None
-        identity = ",".join(ids)
+        # ExecutionLog.entity_id has a 255-char bound; store the parent list ID.
+        # The items are created in the same transaction and identified by its receipt.
+        identity = list_id
     await commit_reserved_execution(
         db, reservation, result="created", entity_type=target,
         entity_id=identity, summary="Confirmed Life Inbox write",
@@ -264,7 +266,10 @@ async def commit(body: ConfirmBatch, response: Response,
     response.headers["Cache-Control"] = "no-store"
     results = []
     for item in body.items:
+        reserved = False
         try:
+            # Recheck the admin rollout between items in a multi-create batch.
+            await feature_gate('life_inbox')(user=user, db=db)
             await _verify_target(item.target, db, user)
             if item.target == "note":
                 NoteCreate.model_validate(item.fields)
@@ -282,6 +287,7 @@ async def commit(body: ConfirmBatch, response: Response,
                 request_payload={"target": item.target, "fields": item.fields},
                 entity_type=item.target, provider="life_assistant",
                 summary="User confirmed Life Inbox create")
+            reserved = True
             if receipt.is_replay:
                 results.append({"action_id": item.action_id, "target": item.target,
                                 "status": "ALREADY_APPLIED", "entity_id": receipt.execution.entity_id})
@@ -303,7 +309,8 @@ async def commit(body: ConfirmBatch, response: Response,
         except (ValidationError, HTTPException):
             await db.rollback()
             results.append({"action_id": item.action_id, "target": item.target,
-                            "status": "FAILED", "error": "invalid_or_unauthorized"})
+                            "status": "UNKNOWN" if reserved else "FAILED",
+                            "error": "check_receipt_before_retry" if reserved else "invalid_or_unauthorized"})
         except Exception:
             await db.rollback()
             results.append({"action_id": item.action_id, "target": item.target,

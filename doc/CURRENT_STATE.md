@@ -1,5 +1,12 @@
 # Life — Current state
 
+## 2026-10-16｜新 UI 改版來源提交，驗收待補（不改既有 01–03 正式結案）
+- **日曆／月曆 source 已提交 main**：`lib/web/calendar_page.dart` 改為七欄整月日期格、今日與點選標記、由既有事件文字分類的小圖示（會議／生日／帳單／旅行／交通／活動／提醒）與首筆短標題，底下只呈現選定日期的精簡行程；點入詳情才看描述、可信活動網址、編輯／刪除。保留原有 Google Calendar API 與 OAuth。
+- **活動統一 source 已提交 main**：`curated_events_page.dart` 以「全部活動／限時機會／已收藏」三模式查詢既有同一 PostgreSQL 活動池；`navigation_catalog.dart`／`personalize_page.dart`／`today_page.dart` 合併導覽與首頁偏好，保留 legacy 活動鍵與舊網址 API，新增 `test/web_activity_unification_test.dart` 檢查主活動分組及偏好映射。最後 UI 變動 commit [`dac1e17`](https://github.com/tommylin15/life_assistant/commit/dac1e17c085ba0e021b7cc9e6ab1090bf3004735)。
+- **新 UI 驗收狀態：PARTIAL**。源碼已 GitHub commit；新 SHA 的 Flutter analyze／widget tests／四項 GitHub CI／固定 Staging／正式 Hosting／真人 Google Calendar E2E 均 **NOT VERIFIED**，不能繼承 2026-10-15 已驗收的舊 UI 結果。尚未執行本次變更的 production promotion。
+- **記住登入：設計待實作（NOT VERIFIED）**。目前 `backend/app/api/auth.py` 的 `__session` 直接持有最長約 3600 秒有效的 Google ID Token；不能只延長 Cookie。須用 PostgreSQL 存可撤銷的 Life opaque session hash、短效 OAuth 登入換長效的 30 日 HttpOnly／Secure／SameSite cookie、logout server-side revoke，保留 staging provenance 及各帳號資料隔離；schema migration／測試／CI／runtime 尚未做。
+- 本新功能工作追蹤 `doc/todo.md` P1-5／P1-6。先前 01–03 的成功技術鏈及使用者正式驗收仍成立，但**不延伸為新版日曆／合併介面的驗收**。
+
 ## 2026-10-16｜01 GAS／Life 匯入技術驗收 PASS／DONE（本批 01～03 完整結案）
 - **01 正式匯入流程：PASS／DONE（實際資料鏈）**。正式 [V3 #38734655151](https://github.com/tommylin15/life_assistant/actions/runs/38734655151) 已更新 `life-assistant-free-events` 至正式 promoted immutable GHCR digest，`job_digest_and_contract=PASS`；2026-10-16 上午 **07:34:20 台北時間** [Execution `life-assistant-free-events-ds4bq`](https://console.cloud.google.com/run/jobs/executions/details/us-central1/life-assistant-free-events-ds4bq?project=gen-lang-client-0593591102) Completed=True。當天 07:00 後至稽核時僅見這一筆完成的 importer Execution（舊歷史累計 17）。
 - **Sheet／PostgreSQL 真實版本一致：PASS**。固定交接 Sheet `交接資料` 讀得 **59 列：58 ACKED、1 ERROR**；2026-10-16 **07:34:15.797234+08:00** 有 **5 筆新 ACKED／CREATED**。不重跑 importer，而透過 [唯讀驗收 #38825509671](https://github.com/tommylin15/life_assistant/actions/runs/38825509671) 執行既有 `life-assistant-core-acceptance` Job（Execution `life-assistant-core-acceptance-xr6sq`，成功退出），在 PostgreSQL 精確比對這 5 筆 `handoff_event_key`、`content_hash`、`handoff_updated_at_tpe`，並驗證 `created_at` 落在本次來源版本與 ACK 時間範圍；GitHub check `life_oct16_handoff_pg_readback=PASS exact_new_ack_versions=5`。

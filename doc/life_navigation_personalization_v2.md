@@ -88,3 +88,10 @@
 ## 2026-10-12｜Staging 登入回跳（Firebase pinTag）修復
 
 固定 Staging 在 GitHub V3 Release `#38240040197` 的真實 Hosting rewrite 使用 `run.pinTag=true`，其 Cloud Run 候選 Host 為 `v3-664a32cfc9---life-assistant-api-...a.run.app`。過往 `_fixed_staging_origin` 對候選 Host 的檢查只接受未加 `v3-<SHA>` tag 的 `life-assistant-api-...`，導致第二帳號 OAuth callback 之後 `/auth/me` 被 403 擋住，Flutter 回登入頁。現在以受限的 `v3-[0-9a-f]{10}---life-assistant-api-...a.run.app` 來辨識固定 Staging 的 pinned revision；在 Firebase 省略 `X-Forwarded-Host`、Referer、Origin 時也可核對，明確的 production forwarded host、未加 tag 的一般 Cloud Run 主機與非 staging Session 仍拒絕。CI 中測試正確候選 Host 與負向繞過；真人第二帳號登入仍需重試確認，不把單元測試當真實登入驗收。
+
+
+## 2026-10-16｜月曆格狀＋日期摘要改版（取代整月平鋪事件卡）
+
+- 手機優先，月曆上方以七欄顯示全月，每格有日期、必要時最多數個輕量事件小圖示、首筆短標題及其餘件數；今天有小圓點、點選日有醒目底色。會議、生日、帳單、旅行、交通、活動日期參考、提醒僅按現有標題／來源做視覺分類；**不預測假日、農曆、天氣、時效或任何未串接資料**，未知以一般行事曆圖示處理。
+- 下方只顯示**選定日期**的時間、單行標題與必要地點；點項目才展開完整說明／原網址／編輯刪除。沿用 Google Calendar 來源及原 API，跨日範圍正確顯示，全天事件 end.date exclusive。點前後月、今天、日期跳轉與重取本月行程仍支援。
+- 同一個月曆格不把所有細項塞滿，320／375px 小螢幕不可溢位。未連結 Google Calendar 保留原授權入口；失敗畫面明示，不能假顯示無行程。真實 Google Calendar 與各主題／桌面 UI 仍須正式驗收。

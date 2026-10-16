@@ -3,23 +3,16 @@ name: V3 Release - GHCR to Cloud Run
 on:
   workflow_dispatch:
     inputs:
-      auto_promote:
-        description: "Auto-promote to production after all gates pass (no manual intervention)"
-        required: false
-        default: true
-        type: boolean
-  workflow_call:
-    inputs:
-      auto_promote:
-        description: "Auto-promote to production"
-        required: false
-        default: true
-        type: boolean
-    secrets:
-      GCP_WORKLOAD_IDENTITY_PROVIDER:
+      promote:
+        description: "After candidate and Preview PASS, switch production traffic and run live gates"
         required: true
-      GCP_DEPLOY_SERVICE_ACCOUNT:
+        default: false
+        type: boolean
+      publish_staging:
+        description: "Publish pinned Preview to staging with automated OAuth redirect checks; no manual Owner login"
         required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -31,51 +24,61 @@ concurrency:
   group: life-assistant-v3-production-release
   cancel-in-progress: false
 
-env:
-  GCP_PROJECT_ID: gen-lang-client-0593591102
-  GCP_REGION: us-central1
-  CLOUD_RUN_SERVICE: life-assistant-api
-  GHCR_IMAGE: ghcr.io/tommylin15/life_assistant-backend
-  STAGING_SITE: life-assistant-v3-stage-tl15
-  PROD_SITE: gen-lang-client-0593591102
-
 jobs:
-  # ============================================================
-  # Stage 1: Build, scan, publish image
-  # ============================================================
-  build:
+  release:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    outputs:
-      image_ref: ${{ steps.publish.outputs.ref }}
-      release_sha: ${{ github.sha }}
+    timeout-minutes: 120
+    environment: dev-test
     env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      CLOUD_RUN_SERVICE: life-assistant-api
+      CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance
+      POSTDEPLOY_ACCEPTANCE_JOB: life-assistant-postdeploy-acceptance
+      RELEASE_SHA: ${{ github.sha }}
+      GHCR_IMAGE: ghcr.io/tommylin15/life_assistant-backend
+      FRONTEND_URL: https://gen-lang-client-0593591102.web.app
+      STAGING_HOSTING_SITE: life-assistant-v3-stage-tl15
       GH_TOKEN: ${{ github.token }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Guard main SHA and CI success
+      - name: Guard main SHA and required CI success
+        shell: bash
         run: |
           set -euo pipefail
-          RELEASE_SHA="${{ github.sha }}"
           [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
           MAIN_SHA="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$MAIN_SHA" = "$RELEASE_SHA"
           gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/check-runs?per_page=100" \
-            | jq -e '[.check_runs[] | select(.name=="flutter" or .name=="backend" or .name=="deployment-scripts" or .name=="free-events-postgres") | select(.conclusion=="success") | .name] | unique | length == 4'
+            | jq -e '
+              [.check_runs[] | select(.name=="flutter" or .name=="backend" or .name=="deployment-scripts" or .name=="free-events-postgres")
+               | select(.conclusion=="success") | .name] | unique | length == 4
+            '
+          echo "source=PASS sha=$RELEASE_SHA; required-ci=PASS" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Build Docker image
-        run: docker build --pull --platform linux/amd64 -t "$GHCR_IMAGE:${{ github.sha }}" backend
+      - name: Require fixed-staging acceptance for production promotion
+        if: ${{ inputs.promote && !inputs.publish_staging }}
+        run: |
+          echo "::error::Production promotion requires publish_staging and pinned staging readback"
+          exit 1
 
-      - name: Scan image
+      - name: Build Docker image ONCE on GitHub runner
+        run: |
+          set -euo pipefail
+          docker build --pull --platform linux/amd64 -t "$GHCR_IMAGE:$RELEASE_SHA" backend
+
+      - name: Scan local image before publishing
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
-          image-ref: ${{ env.GHCR_IMAGE }}:${{ github.sha }}
+          image-ref: ghcr.io/tommylin15/life_assistant-backend:${{ github.sha }}
           scanners: vuln,secret
           exit-code: '1'
           ignore-unfixed: true
@@ -88,401 +91,542 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to GHCR
+      - name: Publish immutable GHCR manifest reference
         id: publish
+        shell: bash
         run: |
-          docker push "$GHCR_IMAGE:${{ github.sha }}"
-          IMAGE_REF="$(docker image inspect --format '{{index .RepoDigests 0}}' "$GHCR_IMAGE:${{ github.sha }}")"
+          set -euo pipefail
+          docker push "$GHCR_IMAGE:$RELEASE_SHA"
+          IMAGE_REF="$(docker image inspect --format '{{index .RepoDigests 0}}' "$GHCR_IMAGE:$RELEASE_SHA")"
           [[ "$IMAGE_REF" =~ ^ghcr[.]io/tommylin15/life_assistant-backend@sha256:[a-f0-9]{64}$ ]]
           echo "ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
+          echo "ghcr_digest=PASS ref=$IMAGE_REF" >> "$GITHUB_STEP_SUMMARY"
 
-  # ============================================================
-  # Stage 2: Deploy candidate (0% traffic) and run migrations
-  # ============================================================
-  deploy-candidate:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: dev-test
-    outputs:
-      candidate_revision: ${{ steps.candidate.outputs.revision }}
-      candidate_url: ${{ steps.candidate.outputs.url }}
-      previous_revisions: ${{ steps.baseline.outputs.previous }}
-    steps:
-      - uses: actions/checkout@v4
+      - name: Prove package and digest are anonymously pullable
+        run: |
+          set -euo pipefail
+          ANON_CONFIG="$(mktemp -d)"
+          DOCKER_CONFIG="$ANON_CONFIG" docker manifest inspect "$IMAGE_REF" >/dev/null
+          echo "ghcr_anonymous_pull=PASS" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: ./.github/actions/setup-gcp
+      - name: Authenticate to GCP with deployer WIF
+        uses: google-github-actions/auth@v2
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
-      - name: Capture baseline traffic
-        id: baseline
+      - name: Install gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Capture pre-promotion traffic, service identity and images
         run: |
+          set -euo pipefail
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
-            > "$RUNNER_TEMP/pre-service.json"
-          PREVIOUS="$(jq -r '[.status.traffic[] | select((.percent // 0)>0) | "\(.revisionName)=\(.percent)"] | join(",")' "$RUNNER_TEMP/pre-service.json")"
-          echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
+            > "$RUNNER_TEMP/v3-pre-service.json"
+          jq -e '.status.url and (.status.traffic | type=="array") and
+                 (.status.traffic | map(.percent // 0) | add == 100)' \
+            "$RUNNER_TEMP/v3-pre-service.json"
+          jq -r '.status.traffic[] | select((.percent // 0)>0) |
+                 "before_revision=\(.revisionName) percent=\(.percent)"' \
+            "$RUNNER_TEMP/v3-pre-service.json" >> "$GITHUB_STEP_SUMMARY"
+          PREVIOUS_REVISIONS="$(jq -r '[.status.traffic[] |
+                        select((.percent // 0)>0) |
+                        "\(.revisionName)=\(.percent)"] | join(",")' \
+                        "$RUNNER_TEMP/v3-pre-service.json")"
+          test -n "$PREVIOUS_REVISIONS"
+          echo "PREVIOUS_REVISIONS=$PREVIOUS_REVISIONS" >> "$GITHUB_ENV"
 
-      - name: Deploy 0%-traffic candidate
+      - name: Create 0%-traffic digest-pinned candidate
         id: candidate
+        shell: bash
         run: |
-          TAG="v3-$(printf '%s' "${{ github.sha }}" | cut -c1-10)"
+          set -euo pipefail
+          TAG="v3-$(printf '%s' "$RELEASE_SHA" | cut -c1-10)"
           gcloud run deploy "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "${{ needs.build.outputs.image_ref }}" \
-            --no-traffic --tag "$TAG" --quiet
-          
+            --image "$IMAGE_REF" --no-traffic --tag "$TAG" --quiet
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
-            > "$RUNNER_TEMP/candidate-service.json"
-          
-          REVISION="$(jq -r '.status.latestReadyRevisionName' "$RUNNER_TEMP/candidate-service.json")"
-          URL="$(jq -r --arg tag "$TAG" '.status.traffic[] | select(.tag==$tag) | .url' "$RUNNER_TEMP/candidate-service.json")"
-          
+            > "$RUNNER_TEMP/v3-candidate-service.json"
+          REVISION="$(jq -r '.status.latestReadyRevisionName' "$RUNNER_TEMP/v3-candidate-service.json")"
+          URL="$(jq -r --arg tag "$TAG" '.status.traffic[] |
+                   select(.tag==$tag) | .url' "$RUNNER_TEMP/v3-candidate-service.json")"
+          test -n "$REVISION" && test -n "$URL"
+          jq -e --arg rev "$REVISION" --arg tag "$TAG" \
+            '[.status.traffic[] |
+             select((.revisionName==$rev) and ((.percent // 0)==0) and (.tag==$tag))] | length==1' \
+             "$RUNNER_TEMP/v3-candidate-service.json"
+          gcloud run revisions describe "$REVISION" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/v3-candidate-revision.json"
+          python .github/scripts/v3_image_identity.py \
+            --resource revision \
+            --json "$RUNNER_TEMP/v3-candidate-revision.json" \
+            --expected "$IMAGE_REF"
           echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "CANDIDATE_REVISION=$REVISION" >> "$GITHUB_ENV"
+          echo "candidate=PASS revision=$REVISION traffic=0 digest=$IMAGE_REF" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Run database migration
+      - name: Candidate health, database readiness, auth and authorization
         run: |
+          set -euo pipefail
+          URL="${{ steps.candidate.outputs.url }}"
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 "$URL/health" >/dev/null
+          curl --fail --silent --show-error --retry 3 --retry-delay 3 "$URL/ready" >/dev/null
+          HTTP="$(curl --silent --output /dev/null --write-out '%{http_code}' "$URL/api/v1/tasks")"
+          test "$HTTP" = 401
+          curl --silent --show-error --dump-header "$RUNNER_TEMP/v3-login-headers" \
+            --output /dev/null "$URL/auth/login"
+          grep -Eiq '^location: https://accounts\.google\.com/o/oauth2/' "$RUNNER_TEMP/v3-login-headers"
+          grep -Fq 'redirect_uri=https%3A%2F%2Fgen-lang-client-0593591102.web.app%2Fauth%2Fcallback' \
+            "$RUNNER_TEMP/v3-login-headers"
+          echo "candidate_http=PASS health,ready,401,oauth-redirect" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pin migration job to same immutable release digest (do not execute)
+        if: ${{ inputs.promote || inputs.publish_staging }}
+        shell: bash
+        run: |
+          set -euo pipefail
           gcloud run jobs update life-assistant-db-migrate \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "${{ needs.build.outputs.image_ref }}" --quiet
-          
+            --image "$IMAGE_REF" --quiet
+          gcloud run jobs describe life-assistant-db-migrate \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/v3-migration-job.json"
+          python .github/scripts/v3_image_identity.py \
+            --resource job \
+            --json "$RUNNER_TEMP/v3-migration-job.json" \
+            --expected "$IMAGE_REF"
+          echo "migration_job_image=PASS no_migration_executed image=$IMAGE_REF" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apply additive 0018 schema before staging or production cutover
+        if: ${{ inputs.promote || inputs.publish_staging }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Migrations 0011 through 0018 are additive; guarded runner checks actual head.
           .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-db-migrate \
             gcloud run jobs execute life-assistant-db-migrate \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --args=-m,scripts.apply_cloud_domain_parity_release \
             --task-timeout 10m --wait --quiet
+          echo "curated_schema_migration=PASS alembic=20261012_0018" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify candidate health
+      - name: Run real database/auth acceptance using release digest
         run: |
-          URL="${{ steps.candidate.outputs.url }}"
-          curl --fail --silent --retry 5 --retry-delay 3 "$URL/health" >/dev/null
-          curl --fail --silent --retry 3 --retry-delay 3 "$URL/ready" >/dev/null
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$URL/api/v1/tasks")" = 401
-
-  # ============================================================
-  # Stage 3: Core acceptance tests (PARALLEL)
-  # ============================================================
-  core-acceptance:
-    needs: [build, deploy-candidate]
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: dev-test
-    strategy:
-      fail-fast: false
-      matrix:
-        module:
-          - scripts.run_cloud_domain_parity_acceptance
-          - scripts.run_checklist_cloud_acceptance
-          - scripts.run_idempotency_acceptance
-          - scripts.run_google_failure_acceptance
-          - scripts.run_sqlite_backfill_acceptance
-          - scripts.run_sqlite_backfill_failure_acceptance
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: ./.github/actions/setup-gcp
-        with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Update job image
-        run: |
-          gcloud run jobs update life-assistant-core-acceptance \
+          set -euo pipefail
+          gcloud run jobs update "$CORE_ACCEPTANCE_JOB" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "${{ needs.build.outputs.image_ref }}" --quiet
+            --image "$IMAGE_REF" --quiet
+          for MODULE in \
+            scripts.run_cloud_domain_parity_acceptance \
+            scripts.run_checklist_cloud_acceptance \
+            scripts.run_idempotency_acceptance \
+            scripts.run_google_failure_acceptance \
+            scripts.run_sqlite_backfill_acceptance \
+            scripts.run_sqlite_backfill_failure_acceptance; do
+            .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+              gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+              --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+              --args="-m,$MODULE" --task-timeout 10m --wait --quiet
+          done
+          echo "core_acceptance=PASS image=$IMAGE_REF" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: ./.github/actions/run-acceptance-job
-        with:
-          job_name: life-assistant-core-acceptance
-          module: ${{ matrix.module }}
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          region: ${{ env.GCP_REGION }}
-
-  # ============================================================
-  # Stage 4: Build Flutter and deploy staging preview
-  # ============================================================
-  staging-preview:
-    needs: [build, deploy-candidate]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: dev-test
-    outputs:
-      preview_url: ${{ steps.preview.outputs.url }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - uses: subosito/flutter-action@v2
+      - name: Set up Flutter for candidate Hosting Preview
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.3'
           channel: stable
           cache: true
 
-      - name: Build Flutter web
+      - name: Prepare Flutter Preview and pin rewrites to candidate
+        shell: bash
         run: |
+          set -euo pipefail
           python -m pip install --disable-pip-version-check pillow==11.3.0
           python scripts/prepare_branding_assets.py
           flutter pub get
           flutter build web --target=lib/main_web.dart --no-pub
-          printf '%s\n' "${{ github.sha }}" > build/web/release.txt
-
-      - name: Configure staging rewrites
-        run: |
+          printf '%s\n' "$RELEASE_SHA" > build/web/release.txt
           python - <<'PY'
           import json
           from pathlib import Path
-          cfg = json.loads(Path("firebase.json").read_text())
-          cfg["hosting"]["site"] = "${{ env.STAGING_SITE }}"
+          import os
+          p = Path("firebase.json")
+          cfg = json.loads(p.read_text())
+          site = os.environ["STAGING_HOSTING_SITE"]
+          assert site == "life-assistant-v3-stage-tl15" and site != os.environ["GCP_PROJECT_ID"]
+          cfg["hosting"]["site"] = site
           for item in cfg["hosting"]["rewrites"]:
               if item.get("run", {}).get("serviceId") == "life-assistant-api":
                   item["run"]["pinTag"] = True
-          Path("firebase.json").write_text(json.dumps(cfg, indent=2) + "\n")
+          p.write_text(json.dumps(cfg, indent=2) + "\n")
           PY
 
-      - uses: ./.github/actions/setup-gcp
-        with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Deploy preview channel
-        id: preview
+      - name: Confirm separate staging Hosting Site exists
+        shell: bash
         run: |
+          set -euo pipefail
+          test "$STAGING_HOSTING_SITE" = "life-assistant-v3-stage-tl15"
+          test "$STAGING_HOSTING_SITE" != "$GCP_PROJECT_ID"
+          TOKEN="$(gcloud auth print-access-token)"
+          CODE="$(curl -sS -o "$RUNNER_TEMP/v3-stage-site-get.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://firebasehosting.googleapis.com/v1beta1/projects/$GCP_PROJECT_ID/sites/$STAGING_HOSTING_SITE")"
+          test "$CODE" = 200
+          jq -e --arg site "$STAGING_HOSTING_SITE" '.name | endswith("/sites/"+$site)' "$RUNNER_TEMP/v3-stage-site-get.json"
+
+      - name: Deploy preview channel (not production Hosting)
+        run: |
+          set -euo pipefail
           npm install --global firebase-tools
-          CHANNEL="v3-$(printf '%s' "${{ github.sha }}" | cut -c1-10)"
+          CHANNEL="v3-$(printf '%s' "$RELEASE_SHA" | cut -c1-10)"
+          set +e
           firebase hosting:channel:deploy "$CHANNEL" \
             --expires 1d --project "$GCP_PROJECT_ID" --no-authorized-domains --json \
-            > "$RUNNER_TEMP/preview.json"
-          
-          PREVIEW_URL="$(jq -r '[.. | objects | .url? // empty | select(type=="string" and (contains("web.app") or contains("firebaseapp.com")))] | first // empty' "$RUNNER_TEMP/preview.json")"
-          echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+            > "$RUNNER_TEMP/v3-hosting-preview.json" \
+            2> "$RUNNER_TEMP/v3-hosting-preview-stderr"
+          CODE=$?
+          set -e
+          if [ "$CODE" -ne 0 ]; then
+            python .github/scripts/v3_firebase_error.py \
+              "$RUNNER_TEMP/v3-hosting-preview.json" \
+              "$RUNNER_TEMP/v3-hosting-preview-stderr" "$CODE" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::error::Firebase pinned Preview deployment failed; provider message withheld"
+            exit 1
+          fi
+          PREVIEW="$(jq -r '[.. | objects | .url? // empty |
+                     select(type=="string" and (contains("web.app") or contains("firebaseapp.com")))] |
+                     first // empty' "$RUNNER_TEMP/v3-hosting-preview.json")"
+          test -n "$PREVIEW"
+          echo "PREVIEW_URL=$PREVIEW" >> "$GITHUB_ENV"
+          echo "preview_url=$PREVIEW" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify preview
+      - name: Verify pinned Preview API and static release
         run: |
-          PREVIEW_URL="${{ steps.preview.outputs.url }}"
-          for i in {1..12}; do
-            SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "$PREVIEW_URL/release.txt" || true)"
-            [ "$SHA" = "${{ github.sha }}" ] && break
-            sleep 5
-          done
-          test "$SHA" = "${{ github.sha }}"
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$PREVIEW_URL/api/v1/tasks")" = 401
+          set -euo pipefail
+          # A new Firebase Hosting channel may 404 until CDN propagation.
+          # Do not accept an incorrect SHA, an insecure API status or timeout.
+          python scripts/v3_verify_preview.py
+          # Probe the real Firebase -> Cloud Run rewrite BEFORE touching staging
+          # live; the stage OAuth entrypoint must work even when the proxy
+          # hides the original Host / X-Forwarded-Host. No Google login follows.
+          curl --fail --silent --show-error --dump-header "$RUNNER_TEMP/stage-oauth-preview-headers" \
+            --output /dev/null "$PREVIEW_URL/auth/staging/login"
+          grep -Eiq '^location: https://accounts[.]google[.]com/o/oauth2/' \
+            "$RUNNER_TEMP/stage-oauth-preview-headers"
+          grep -Fq 'redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app%2Fauth%2Fcallback' \
+            "$RUNNER_TEMP/stage-oauth-preview-headers"
+          grep -Eiq '^set-cookie: __session=' "$RUNNER_TEMP/stage-oauth-preview-headers"
+          grep -Fq 'oauth:staging:' "$RUNNER_TEMP/stage-oauth-preview-headers"
+          echo "preview=PASS release-sha=$RELEASE_SHA 401-protected stage-oauth-rewrite-and-state=PASS" >> "$GITHUB_STEP_SUMMARY"
 
-  # ============================================================
-  # Stage 5: Publish staging live
-  # ============================================================
-  staging-live:
-    needs: [build, deploy-candidate, core-acceptance, staging-preview]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: dev-test
-    steps:
-      - uses: actions/checkout@v4
+      - name: Read-only fixed staging preview and rollback baseline preflight
+        if: ${{ inputs.publish_staging }}
+        shell: bash
+        run: bash scripts/v3_fixed_staging_release.sh --preflight-only
 
-      - uses: ./.github/actions/setup-gcp
-        with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Promote preview to staging live
+      - name: Require real Google integration fixture and acceptance before promotion
+        if: ${{ inputs.promote }}
         run: |
-          npm install --global firebase-tools
-          CHANNEL="v3-$(printf '%s' "${{ github.sha }}" | cut -c1-10)"
-          firebase hosting:clone "$STAGING_SITE:$CHANNEL" "$STAGING_SITE:live" \
-            --project "$GCP_PROJECT_ID" --json
+          set -euo pipefail
+          gcloud run jobs describe "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/v3-real-provider-job.json"
+          python - "$RUNNER_TEMP/v3-real-provider-job.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          containers=d.get("spec",{}).get("template",{}).get("spec",{}).get("template",{}).get("spec",{}).get("containers",[])
+          if not containers:
+              raise SystemExit("Cannot verify real Google fixture in job metadata")
+          keys={e.get("name") for c in containers for e in c.get("env",[])}
+          required={"DRIVE_ACCEPTANCE_USER_SUB","DRIVE_ACCEPTANCE_GOOGLE_FILE_ID"}
+          if not required.issubset(keys):
+              raise SystemExit("Real Google fixture missing; not accepting synthetic gates as real OAuth")
+          PY
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.run_drive_google_integration_acceptance \
+            --task-timeout 10m --wait --quiet
+          echo "real_google_drive_integration=PASS" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify staging live
+      - name: Rollback-only curated pool migration and personal UI runtime acceptance
+        if: ${{ inputs.promote || inputs.publish_staging }}
+        shell: bash
         run: |
-          STAGE_URL="https://$STAGING_SITE.web.app"
-          for i in {1..12}; do
-            SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "$STAGE_URL/release.txt" || true)"
-            [ "$SHA" = "${{ github.sha }}" ] && break
-            sleep 5
-          done
-          test "$SHA" = "${{ github.sha }}"
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$STAGE_URL/api/v1/tasks")" = 401
-          
-          # Verify OAuth redirect
-          curl -sS -D "$RUNNER_TEMP/login-headers" -o /dev/null "$STAGE_URL/auth/login"
-          grep -Fq "redirect_uri=https%3A%2F%2F$STAGING_SITE.web.app%2Fauth%2Fcallback" "$RUNNER_TEMP/login-headers"
+          set -euo pipefail
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.run_curated_pool_runtime_acceptance \
+            --task-timeout 10m --wait --quiet
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.run_private_ownership_acceptance \
+            --task-timeout 10m --wait --quiet
+          echo "curated_db_readback=PASS schema=20261012_0018 rollback_only=true" >> "$GITHUB_STEP_SUMMARY"
+          echo "tenant_ownership=PASS schema=20261012_0018 rollback_only=true" >> "$GITHUB_STEP_SUMMARY"
 
-  # ============================================================
-  # Stage 6: Production promotion (AUTO if enabled)
-  # ============================================================
-  production-promote:
-    needs: [build, deploy-candidate, core-acceptance, staging-live]
-    if: ${{ inputs.auto_promote != false }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: dev-test
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: ./.github/actions/setup-gcp
-        with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Final SHA check before promotion
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Read existing handoff DB versions and rollback-only Shopping CRUD
+        if: ${{ inputs.promote || inputs.publish_staging }}
+        shell: bash
         run: |
-          MAIN_SHA="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-          test "$MAIN_SHA" = "${{ github.sha }}"
+          set -euo pipefail
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.run_life_0103_runtime_acceptance \
+            --task-timeout 5m --wait --quiet
+          echo "handoff_pg_consistency_and_shopping_rollback=PASS external_sheet_and_gas=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Promote to 100% traffic
+      - name: Pre-promotion Drive AI consent runtime acceptance
+        if: ${{ inputs.promote }}
+        shell: bash
         run: |
+          set -euo pipefail
+          # Exercise the exact release image against the configured dev-test DB
+          # before any production traffic is changed. This synthetic test must
+          # preserve the OFF-by-default consent and provider-isolation contract.
+          gcloud run jobs update "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --image "$IMAGE_REF" --quiet
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.run_drive_ai_enrichment_acceptance \
+            --task-timeout 10m --wait --quiet
+          echo "pre_promotion_drive_ai_consent=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Promote exact Preview to independent fixed staging live and verify pinned routes
+        if: ${{ inputs.publish_staging }}
+        shell: bash
+        run: bash scripts/v3_fixed_staging_release.sh
+
+      - name: Require explicit promotion selection
+        if: ${{ !inputs.promote }}
+        run: echo "PROMOTION=NOT REQUESTED; production traffic unchanged" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reconfirm source SHA and live traffic, then promote
+        if: ${{ inputs.promote }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_SHA"
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/v3-before-promotion.json"
+          jq -e --slurpfile previous "$RUNNER_TEMP/v3-pre-service.json" \
+            '(.status.traffic |
+              map(select((.percent // 0)>0) | {revisionName, percent:(.percent // 0)})) ==
+             ($previous[0].status.traffic |
+              map(select((.percent // 0)>0) | {revisionName, percent:(.percent // 0)}))' \
+            "$RUNNER_TEMP/v3-before-promotion.json"
           gcloud run services update-traffic "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --to-revisions="${{ needs.deploy-candidate.outputs.candidate_revision }}=100" --quiet
+            --to-revisions="$CANDIDATE_REVISION=100" --quiet
+          echo "promotion=ATTEMPTED revision=$CANDIDATE_REVISION" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify production health
+      - name: Post-promotion live health, PostgreSQL and access gates
+        if: ${{ inputs.promote }}
+        shell: bash
         run: |
-          SERVICE_URL="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --format='value(status.url)')"
-          curl --fail --silent --retry 5 "$SERVICE_URL/health" >/dev/null
-          curl --fail --silent --retry 3 "$SERVICE_URL/ready" >/dev/null
+          set -euo pipefail
+          SERVICE_URL="$(jq -r '.status.url' "$RUNNER_TEMP/v3-pre-service.json")"
+          test -n "$SERVICE_URL"
+          curl --fail --silent --show-error --retry 5 "$SERVICE_URL/health" >/dev/null
+          curl --fail --silent --show-error --retry 3 "$SERVICE_URL/ready" >/dev/null
           test "$(curl -s -o /dev/null -w '%{http_code}' "$SERVICE_URL/api/v1/tasks")" = 401
-
-      - name: Run post-deploy acceptance
-        run: |
-          gcloud run jobs update life-assistant-postdeploy-acceptance \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "${{ needs.build.outputs.image_ref }}" --quiet
-          
-          for module in \
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$SERVICE_URL/api/v1/free-events")" = 401
+          curl -sS -D "$RUNNER_TEMP/v3-live-login-headers" -o /dev/null \
+            "$FRONTEND_URL/auth/login"
+          grep -Fq 'redirect_uri=https%3A%2F%2Fgen-lang-client-0593591102.web.app%2Fauth%2Fcallback' \
+            "$RUNNER_TEMP/v3-live-login-headers"
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            | jq -e --arg rev "$CANDIDATE_REVISION" \
+                '[.status.traffic[] | select(.revisionName==$rev and .percent==100)] | length==1'
+          gcloud run jobs update "$POSTDEPLOY_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --image "$IMAGE_REF" --quiet
+          for MODULE in \
             scripts.run_notes_product_acceptance \
             scripts.run_project_drive_runtime_acceptance \
             scripts.run_drive_ai_enrichment_acceptance; do
-            .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-postdeploy-acceptance \
-              gcloud run jobs execute life-assistant-postdeploy-acceptance \
+            .github/scripts/run_cloud_run_job_with_diagnostics.sh "$POSTDEPLOY_ACCEPTANCE_JOB" \
+              gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB" \
               --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-              --args="-m,$module" --task-timeout 10m --wait --quiet
+              --args="-m,$MODULE" --task-timeout 10m --wait --quiet
           done
+          echo "live=PASS health,ready,401,oauth-redirect,postdeploy-integration" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Rollback on failure
-        if: failure()
+      - name: Controlled rollback rehearsal and restore promoted live traffic
+        if: ${{ inputs.promote && success() }}
+        shell: bash
         run: |
-          PREVIOUS="${{ needs.deploy-candidate.outputs.previous_revisions }}"
-          if [ -n "$PREVIOUS" ]; then
+          set -euo pipefail
+          test -n "$PREVIOUS_REVISIONS"
+          SERVICE_URL="$(jq -r '.status.url' "$RUNNER_TEMP/v3-pre-service.json")"
+          gcloud run services update-traffic "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --to-revisions="$PREVIOUS_REVISIONS" --quiet
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            | jq -e --slurpfile previous "$RUNNER_TEMP/v3-pre-service.json" \
+                '([.status.traffic[] | select((.percent // 0)>0) |
+                   {revisionName, percent}] | sort_by(.revisionName)) ==
+                 ([$previous[0].status.traffic[] | select((.percent // 0)>0) |
+                   {revisionName, percent}] | sort_by(.revisionName))'
+          curl -fsS --retry 5 "$SERVICE_URL/health" >/dev/null
+          curl -fsS --retry 5 "$SERVICE_URL/ready" >/dev/null
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$SERVICE_URL/api/v1/tasks")" = 401
+          echo "rollback_drill=PASS baseline=$PREVIOUS_REVISIONS" >> "$GITHUB_STEP_SUMMARY"
+          gcloud run services update-traffic "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --to-revisions="$CANDIDATE_REVISION=100" --quiet
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            | jq -e --arg rev "$CANDIDATE_REVISION" \
+                '[.status.traffic[] | select(.revisionName==$rev and .percent==100)] | length==1'
+          curl -fsS --retry 5 "$SERVICE_URL/ready" >/dev/null
+          echo "re_promotion_after_rollback=PASS revision=$CANDIDATE_REVISION" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore original Cloud Run traffic on failed live gate
+        if: ${{ failure() && inputs.promote && steps.candidate.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$RUNNER_TEMP/v3-pre-service.json"
+          ACTUAL="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json)"
+          if printf '%s' "$ACTUAL" | jq -e --arg rev "$CANDIDATE_REVISION" \
+            '[.status.traffic[] | select(.revisionName==$rev and (.percent // 0)==100)] | length==1' >/dev/null; then
             gcloud run services update-traffic "$CLOUD_RUN_SERVICE" \
               --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-              --to-revisions="$PREVIOUS" --quiet
-            echo "::warning::Rolled back to $PREVIOUS"
+              --to-revisions="$PREVIOUS_REVISIONS" --quiet
+            echo "automatic_rollback=ATTEMPTED original=$PREVIOUS_REVISIONS" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "automatic_rollback=NOT_APPLIED traffic does not match this release; manual review required" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  # ============================================================
-  # Stage 7: Production Hosting
-  # ============================================================
-  production-hosting:
-    needs: [build, production-promote]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: dev-test
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.47.3'
-          channel: stable
-          cache: true
-
-      - name: Build Flutter web
+      - name: Retain latest 10 revisions after all live gates PASS
+        if: ${{ inputs.promote && success() }}
+        shell: bash
         run: |
-          python -m pip install --disable-pip-version-check pillow==11.3.0
-          python scripts/prepare_branding_assets.py
-          flutter pub get
-          flutter build web --target=lib/main_web.dart --no-pub
-          printf '%s\n' "${{ github.sha }}" > build/web/release.txt
-
-      - uses: ./.github/actions/setup-gcp
-        with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Deploy production Hosting
-        run: |
-          npm install --global firebase-tools
-          firebase deploy --only hosting --project "$GCP_PROJECT_ID" --non-interactive
-
-      - name: Verify production Hosting
-        run: |
-          PROD_URL="https://$PROD_SITE.web.app"
-          for i in {1..12}; do
-            SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "$PROD_URL/release.txt" || true)"
-            [ "$SHA" = "${{ github.sha }}" ] && break
-            sleep 5
+          set -euo pipefail
+          mapfile -t PREVIOUS_PROTECTED < <(jq -r '.status.traffic[] |
+            select((.percent // 0)>0) | .revisionName' "$RUNNER_TEMP/v3-pre-service.json")
+          PROTECT_ARGS=()
+          for OLD_REV in "${PREVIOUS_PROTECTED[@]}"; do
+            PROTECT_ARGS+=(--protect "$OLD_REV")
           done
-          test "$SHA" = "${{ github.sha }}"
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$PROD_URL/api/v1/tasks")" = 401
-
-      - uses: ./.github/actions/setup-playwright
-
-      - name: Run production UI acceptance
-        run: |
-          BASE_URL="https://$PROD_SITE.web.app"
-          BASE_URL="$BASE_URL" node .github/scripts/verify_task_ui_production.mjs
-          BASE_URL="$BASE_URL" node .github/scripts/verify_project_ui_production.mjs
-
-  # ============================================================
-  # Stage 8: Cleanup and pin handoff job
-  # ============================================================
-  finalize:
-    needs: [build, deploy-candidate, production-promote, production-hosting]
-    if: ${{ always() && needs.production-promote.result == 'success' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: dev-test
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: ./.github/actions/setup-gcp
-        with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Pin curated handoff job
-        run: |
-          gcloud run jobs update life-assistant-free-events \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "${{ needs.build.outputs.image_ref }}" \
-            --command python \
-            --args=-m,scripts.import_curated_from_sheet \
-            --update-env-vars=LIFE_CURATED_SHEET_ID=1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4,LIFE_CURATED_IMPORT_APPLY=1 \
-            --quiet
-
-      - name: Retain latest 10 revisions
-        run: |
           python .github/scripts/v3_revision_retention.py \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --service "$CLOUD_RUN_SERVICE" --keep 10 \
-            --expected-live-revision "${{ needs.deploy-candidate.outputs.candidate_revision }}" \
-            --apply --live-passed
+            --expected-live-revision "$CANDIDATE_REVISION" \
+            "${PROTECT_ARGS[@]}" --apply --live-passed \
+            | tee "$RUNNER_TEMP/v3-retention.json"
+          jq -r '"revision_retention=\(.status) remaining=\(.remaining_count) deleted=\(.deleted | length)"' \
+            "$RUNNER_TEMP/v3-retention.json" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Summary
+      - name: Pin curated handoff Job after verified production promotion
+        if: ${{ inputs.promote && success() }}
+        shell: bash
         run: |
-          echo "## Release Complete 🚀" >> "$GITHUB_STEP_SUMMARY"
-          echo "- SHA: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Image: ${{ needs.build.outputs.image_ref }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Revision: ${{ needs.deploy-candidate.outputs.candidate_revision }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Production: https://$PROD_SITE.web.app" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Staging: https://$STAGING_SITE.web.app" >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          HANDOFF_JOB=life-assistant-free-events
+          # The daily importer no longer updates image/command/env. Only a
+          # successful promoted production release may reconcile its Job.
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/handoff-live-service.json"
+          gcloud run revisions describe "$CANDIDATE_REVISION" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/handoff-live-revision.json"
+          python .github/scripts/v3_curated_handoff_alignment.py \
+            --mode live --json "$RUNNER_TEMP/handoff-live-service.json" \
+            --revision-json "$RUNNER_TEMP/handoff-live-revision.json" \
+            --expected-revision "$CANDIDATE_REVISION" --expected-image "$IMAGE_REF"
+          # Existing Job must be present; never create a new service or job.
+          gcloud run jobs describe "$HANDOFF_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/handoff-job-before.json"
+          gcloud run jobs update "$HANDOFF_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --image "$IMAGE_REF" --command python \
+            --args=-m,scripts.import_curated_from_sheet \
+            --update-env-vars=LIFE_CURATED_SHEET_ID=1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4,LIFE_CURATED_IMPORT_APPLY=1 \
+            --quiet
+          gcloud run jobs describe "$HANDOFF_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/handoff-job-after.json"
+          python .github/scripts/v3_curated_handoff_alignment.py \
+            --mode job --json "$RUNNER_TEMP/handoff-job-after.json" \
+            --expected-image "$IMAGE_REF"
+          echo "curated_handoff_image=PASS source=promoted-production-digest job=$HANDOFF_JOB execution=NOT_RUN" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish stage verdict
+        if: always()
+        run: |
+          echo "run=$GITHUB_RUN_ID sha=$RELEASE_SHA promote=${{ inputs.promote }}" \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "Legacy Cloud Build and GCS/AR deletion are separately gated; NOT VERIFIED until readback." \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      # The cleanup is a separate maintenance outcome, not an OAuth, DB,
+      # traffic-promotion or Hosting release gate.
+      - name: Retire old Cloud Run revisions after successful V3 gates
+        id: retire_revisions
+        if: ${{ success() && inputs.publish_staging }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_MAIN="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ "$CURRENT_MAIN" != "$RELEASE_SHA" ]]; then
+            echo "retirement=SUPERSEDED previous_sha=$RELEASE_SHA current_main=$CURRENT_MAIN" >> "$GITHUB_STEP_SUMMARY"
+            echo "retirement=SUPERSEDED" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python3 .github/scripts/life_cloud_run_retirement_apply.py \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --apply \
+            | tee "$RUNNER_TEMP/life-retirement-result.jsonl"
+          grep -E '"stage": "DONE".*"status": "PASS"' "$RUNNER_TEMP/life-retirement-result.jsonl"
+          echo "retirement=PASS" >> "$GITHUB_OUTPUT"
+          echo "retirement=PASS exactly_ten=YES" >> "$GITHUB_STEP_SUMMARY"
+
+      # Diagnostic only: report stable gateway error categories without ever
+      # exporting user prompts, article text, URLs, tokens or raw Cloud logs.
+      # This is NOT a signed Gemini smoke and does not change release verdicts.
+      - name: Read sanitized Life Inbox AI failures
+        if: ${{ always() && inputs.publish_staging }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          RAW="$(gcloud logging read             'resource.type="cloud_run_revision" AND resource.labels.service_name="life-assistant-api" AND textPayload:"inbox_article_summary=FAIL"'             --project "$GCP_PROJECT_ID" --freshness=6h --limit=60             --format='value(textPayload)' 2>/dev/null || true)"
+          CODE="$(printf '%s\n' "$RAW" |
+            grep -Eo 'inbox_article_summary=FAIL phase=(gateway code=[a-z_]+|model_output)' |
+            sort -u | tr '\n' ' ' || true)"
+          if [[ -z "$CODE" ]]; then
+            echo "inbox_ai_log_diagnostic=NOT_VERIFIED no_sanitized_logs_or_no_logging_access" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "inbox_ai_log_diagnostic=$CODE" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Publish independent release and maintenance outcomes
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${{ steps.retire_revisions.outcome }}" == "failure" ]]; then
+            echo "retirement=FAIL maintenance_only release_gates_not_retroactively_failed" >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "${{ steps.retire_revisions.outcome }}" == "skipped" ]]; then
+            echo "retirement=NOT_RUN" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "gemini_signed_smoke=MANUAL_INDEPENDENT non_blocking" >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,4 @@
-# Manual fallback for Cloud Run deployment.
-# Normal releases use v3-release-ghcr.yml.
-name: Deploy Cloud Run (Manual)
+name: Deploy Cloud Run
 
 on:
   workflow_dispatch:
@@ -10,66 +8,351 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy-cloud-run
+  group: deploy-cloud-run-main-${{ github.event.workflow_run.conclusion || 'success' }}
   cancel-in-progress: true
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     environment: dev-test
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102
       GCP_REGION: us-central1
+      ARTIFACT_REPOSITORY: cloud-run-source-deploy
+      BACKEND_IMAGE: life-assistant-backend
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       CLOUD_RUN_SERVICE: life-assistant-api
-      RELEASE_SHA: ${{ github.sha }}
-    steps:
-      - uses: actions/checkout@v4
+      CODEX_CALLER_SA: omniagent-codex-life-client@gen-lang-client-0593591102.iam.gserviceaccount.com
+      MIGRATION_JOB: life-assistant-db-migrate
+      CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance
+      GCP_NETWORK: janusai-lake-poc
+      GCP_SUBNET: janusai-lake-poc-uscentral1
+      DATABASE_HOST: 10.42.0.5
+      DATABASE_PORT: '5432'
+      DATABASE_NAME: life_assistant
+      DATABASE_USER: life_assistant_user
+      DATABASE_SSLMODE: require
+      FRONTEND_URL: https://gen-lang-client-0593591102.web.app
+      GOOGLE_REDIRECT_URI: https://gen-lang-client-0593591102.web.app/auth/callback
+      GOOGLE_PICKER_APP_ID: '131494961796'
+      ALEMBIC_METADATA_BOOTSTRAP_APPROVED_REVISION: '20260926_0004'
 
-      - uses: google-github-actions/auth@v2
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build and push image
-        id: image
+      - name: Grant bounded runtime ID-token mint on dedicated Codex caller
         run: |
-          IMAGE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/cloud-run-source-deploy/life-assistant-backend:${RELEASE_SHA}"
-          gcloud builds submit backend \
+          # Inspect the actual serving identity. Do not conflate the GitHub CI
+          # deployer with the Cloud Run runtime service account.
+          RUNTIME_SA="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --tag "$IMAGE_TAG" --quiet
-          
-          IMAGE_DIGEST="$(gcloud artifacts docker images describe "$IMAGE_TAG" \
-            --project "$GCP_PROJECT_ID" --format='value(image_summary.digest)')"
-          echo "ref=${IMAGE_TAG%:*}@${IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
+            --format='value(spec.template.spec.serviceAccountName)')"
+          test -n "$RUNTIME_SA"
+          case "$RUNTIME_SA" in
+            *@gen-lang-client-0593591102.iam.gserviceaccount.com|*@developer.gserviceaccount.com) ;;
+            *) echo "::error::Unexpected Cloud Run runtime service account"; exit 1 ;;
+          esac
+          echo "shared_codex_runtime_identity=VERIFIED service_account=$RUNTIME_SA"
+          # OpenIdTokenCreator contains only getOpenIdToken: narrower than
+          # roles/iam.serviceAccountTokenCreator. Scope grant to this caller SA.
+          gcloud iam service-accounts add-iam-policy-binding "$CODEX_CALLER_SA" \
+            --project "$GCP_PROJECT_ID" \
+            --member "serviceAccount:$RUNTIME_SA" \
+            --role roles/iam.serviceAccountOpenIdTokenCreator \
+            --quiet >/dev/null
+          echo "shared_codex_runtime_mint_permission=PASS caller=$CODEX_CALLER_SA"
 
-      - name: Run migration
+      - name: Verify Artifact Registry repository
         run: |
-          gcloud run jobs update life-assistant-db-migrate \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "${{ steps.image.outputs.ref }}" --quiet
-          
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-db-migrate \
-            gcloud run jobs execute life-assistant-db-migrate \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+          gcloud artifacts repositories describe "$ARTIFACT_REPOSITORY" \
+            --project "$GCP_PROJECT_ID" \
+            --location "$GCP_REGION" \
+            --format='value(name)' >/dev/null
+
+      - name: Build backend image once
+        id: backend_image
+        run: |
+          IMAGE_BASE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${BACKEND_IMAGE}"
+          IMAGE_TAG="${IMAGE_BASE}:${RELEASE_SHA}"
+          BUILD_ID="$(gcloud builds submit backend \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --tag "$IMAGE_TAG" \
+            --async \
+            --quiet \
+            --format='value(id)' | tail -n1)"
+          test -n "$BUILD_ID"
+
+          BUILD_STATUS=""
+          for attempt in $(seq 1 120); do
+            BUILD_STATUS="$(gcloud builds describe "$BUILD_ID" \
+              --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" \
+              --format='value(status)')"
+            case "$BUILD_STATUS" in
+              SUCCESS)
+                break
+                ;;
+              QUEUED|WORKING|PENDING)
+                ;;
+              FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+                echo "::error::Cloud Build $BUILD_ID failed with status $BUILD_STATUS"
+                gcloud builds describe "$BUILD_ID" \
+                  --project "$GCP_PROJECT_ID" \
+                  --region "$GCP_REGION" \
+                  --format='yaml(id,status,statusDetail,logUrl,results.images)' || true
+                exit 1
+                ;;
+              *)
+                echo "::error::Unexpected Cloud Build status: ${BUILD_STATUS:-empty}"
+                exit 1
+                ;;
+            esac
+
+            if [ "$attempt" -eq 120 ]; then
+              echo "::error::Timed out waiting for Cloud Build $BUILD_ID; last status: ${BUILD_STATUS:-empty}"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          IMAGE_DIGEST="$(gcloud builds describe "$BUILD_ID" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(results.images[0].digest)')"
+          test -n "$IMAGE_DIGEST"
+          IMAGE_REF="${IMAGE_BASE}@${IMAGE_DIGEST}"
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "base=$IMAGE_BASE" >> "$GITHUB_OUTPUT"
+          echo "tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Apply verified database migration
+        id: migration
+        continue-on-error: true
+        run: |
+          gcloud run jobs deploy "$MIGRATION_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "${{ steps.backend_image.outputs.ref }}" \
+            --command python \
             --args=-m,scripts.apply_cloud_domain_parity_release \
-            --task-timeout 10m --wait --quiet
+            --network "$GCP_NETWORK" \
+            --subnet "$GCP_SUBNET" \
+            --vpc-egress private-ranges-only \
+            --max-retries 0 \
+            --task-timeout 10m \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,ALEMBIC_METADATA_BOOTSTRAP_APPROVED_REVISION=$ALEMBIC_METADATA_BOOTSTRAP_APPROVED_REVISION" \
+            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --wait \
+            --quiet
 
-      - name: Deploy
+      - name: Collect failed migration diagnostics
+        if: steps.migration.outcome == 'failure'
         run: |
-          gcloud run deploy "$CLOUD_RUN_SERVICE" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "${{ steps.image.outputs.ref }}" \
-            --allow-unauthenticated --quiet
+          EXECUTION="$(gcloud run jobs executions list \
+            --job "$MIGRATION_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --sort-by='~metadata.creationTimestamp' \
+            --limit=1 \
+            --format='value(metadata.name)' || true)"
 
-      - name: Verify
+          echo "Latest migration execution: ${EXECUTION:-unknown}"
+          if [ -n "$EXECUTION" ]; then
+            gcloud run jobs executions describe "$EXECUTION" \
+              --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" \
+              --format=yaml || true
+
+            TASK="$(gcloud run jobs executions tasks list \
+              --execution "$EXECUTION" \
+              --project "$GCP_PROJECT_ID" \
+              --region "$GCP_REGION" \
+              --limit=1 \
+              --format='value(metadata.name)' || true)"
+            echo "Latest migration task: ${TASK:-unknown}"
+
+            if [ -n "$TASK" ]; then
+              TASK_EXIT="$(gcloud run jobs executions tasks describe "$TASK" \
+                --project "$GCP_PROJECT_ID" \
+                --region "$GCP_REGION" \
+                --format='value(status.lastAttemptResult.exitCode)' || true)"
+              echo "Migration task exit code: ${TASK_EXIT:-unknown}"
+              gcloud run jobs executions tasks describe "$TASK" \
+                --project "$GCP_PROJECT_ID" \
+                --region "$GCP_REGION" \
+                --format='yaml(status.lastAttemptResult,status.conditions)' || true
+            fi
+          fi
+
+          gcloud logging read \
+            "resource.type=\"cloud_run_job\" AND resource.labels.job_name=\"$MIGRATION_JOB\"" \
+            --project "$GCP_PROJECT_ID" \
+            --freshness=30m \
+            --limit=200 \
+            --order=asc \
+            --format='value(timestamp,severity,textPayload,jsonPayload.message)' || true
+
+      - name: Fail migration gate
+        if: steps.migration.outcome == 'failure'
+        run: |
+          echo "::error::Verified database migration failed; see diagnostics above."
+          exit 1
+
+      - name: Deploy backend to Cloud Run
+        run: |
+          PROJECT_NUMBER="$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')"
+          test -n "$PROJECT_NUMBER"
+          test "$GOOGLE_PICKER_APP_ID" = "$PROJECT_NUMBER"
+          echo "drive_picker_app_id_contract=PASS project_number=$PROJECT_NUMBER"
+
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "${{ steps.backend_image.outputs.ref }}" \
+            --network "$GCP_NETWORK" \
+            --subnet "$GCP_SUBNET" \
+            --vpc-egress private-ranges-only \
+            --allow-unauthenticated \
+            --timeout 600 \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI,GOOGLE_PICKER_APP_ID=$GOOGLE_PICKER_APP_ID,CODEX_PRIMARY_ENABLED=true" \
+            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --quiet
+
+      - name: Resolve Cloud Run service URL
+        id: service_url
         run: |
           SERVICE_URL="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
             --format='value(status.url)')"
-          curl --fail --silent --retry 5 "$SERVICE_URL/health" >/dev/null
-          curl --fail --silent --retry 3 "$SERVICE_URL/ready" >/dev/null
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$SERVICE_URL/api/v1/tasks")" = 401
+          test -n "$SERVICE_URL"
+          echo "url=$SERVICE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Cloud Run health
+        run: |
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            "${{ steps.service_url.outputs.url }}/health"
+
+      - name: Verify Cloud Run database readiness
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-delay 3 --retry-all-errors \
+            "${{ steps.service_url.outputs.url }}/ready"
+
+      - name: Verify unauthenticated API is application-protected
+        run: |
+          STATUS="$(curl --silent --output /tmp/tasks-body --write-out '%{http_code}' \
+            "${{ steps.service_url.outputs.url }}/api/v1/tasks")"
+          test "$STATUS" = "401"
+
+      - name: Configure shared core acceptance runner
+        run: |
+          gcloud run jobs deploy "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "${{ steps.backend_image.outputs.ref }}" \
+            --command python \
+            --args=-m,scripts.run_cloud_domain_parity_acceptance \
+            --network "$GCP_NETWORK" \
+            --subnet "$GCP_SUBNET" \
+            --vpc-egress private-ranges-only \
+            --max-retries 0 \
+            --task-timeout 10m \
+            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI,CODEX_PRIMARY_ENABLED=true" \
+            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --quiet
+
+      - name: Run authenticated cloud-domain acceptance
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_cloud_domain_parity_acceptance \
+            --task-timeout 10m \
+            --wait \
+            --quiet
+
+      - name: Run checklist cloud runtime acceptance
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_checklist_cloud_acceptance \
+            --task-timeout 10m \
+            --wait \
+            --quiet
+
+      - name: Run action-id idempotency runtime acceptance
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_idempotency_acceptance \
+            --task-timeout 10m \
+            --wait \
+            --quiet
+
+      - name: Run Google provider failure-path runtime acceptance
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_google_failure_acceptance \
+            --task-timeout 10m \
+            --wait \
+            --quiet
+
+      - name: Run SQLite backfill runtime acceptance
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_sqlite_backfill_acceptance \
+            --task-timeout 10m \
+            --wait \
+            --quiet
+
+      - name: Run SQLite backfill failure-path runtime acceptance
+        run: |
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
+            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --args=-m,scripts.run_sqlite_backfill_failure_acceptance \
+            --task-timeout 10m \
+            --wait \
+            --quiet
+
+      - name: Keep only the latest life_assistant image
+        if: ${{ always() && steps.backend_image.outcome == 'success' }}
+        run: |
+          gcloud artifacts repositories set-cleanup-policies "$ARTIFACT_REPOSITORY" \
+            --project "$GCP_PROJECT_ID" \
+            --location "$GCP_REGION" \
+            --policy .github/artifact-registry-cleanup-policy.json \
+            --dry-run \
+            --quiet

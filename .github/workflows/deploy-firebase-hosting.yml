@@ -1,33 +1,28 @@
-# Manual fallback for Firebase Hosting deployment.
-# Normal releases use v3-release-ghcr.yml which includes hosting.
-name: Deploy Firebase Hosting (Manual)
+name: Deploy Firebase Hosting
 
 on:
   workflow_dispatch:
-    inputs:
-      release_sha:
-        description: "SHA to deploy (defaults to current main)"
-        required: false
-        type: string
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: deploy-firebase-hosting
+  group: deploy-firebase-hosting-main-${{ github.event.workflow_run.conclusion || 'success' }}
   cancel-in-progress: false
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     environment: dev-test
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102
-      RELEASE_SHA: ${{ inputs.release_sha || github.sha }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout release commit
+        uses: actions/checkout@v4
         with:
           ref: ${{ env.RELEASE_SHA }}
 
@@ -35,41 +30,307 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Prepare branding
+      - name: Prepare branding assets
         run: |
           python -m pip install --disable-pip-version-check pillow==11.3.0
           python scripts/prepare_branding_assets.py
+          echo "EXPECTED_ICON_SHA=$(sha256sum web/icons/life-assistant-192-v8.png | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "EXPECTED_HERO_SHA=$(sha256sum web/branding/life-assistant-hero-v8.png | awk '{print $1}')" >> "$GITHUB_ENV"
+          python - <<'PY'
+          from PIL import Image
+          checks = {
+              'web/icons/life-assistant-192-v8.png': (192, 192),
+              'web/icons/life-assistant-512-v8.png': (512, 512),
+              'web/branding/life-assistant-hero-v8.png': (1024, 1024),
+          }
+          for name, expected in checks.items():
+              with Image.open(name) as image:
+                  assert image.format == 'PNG', (name, image.format)
+                  assert image.size == expected, (name, image.size)
+          PY
 
-      - uses: subosito/flutter-action@v2
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.3'
           channel: stable
           cache: true
 
-      - name: Build Flutter web
-        run: |
-          flutter pub get
-          flutter build web --target=lib/main_web.dart --no-pub
-          printf '%s\n' "$RELEASE_SHA" > build/web/release.txt
+      - name: Install Flutter dependencies
+        run: flutter pub get
 
-      - uses: google-github-actions/auth@v2
+      - name: Build Flutter Web
+        run: flutter build web --target=lib/main_web.dart --no-pub
+
+      - name: Stamp release commit
+        run: printf '%s\n' "$RELEASE_SHA" > build/web/release.txt
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
-      - name: Deploy
-        run: |
-          npm install --global firebase-tools
-          firebase deploy --only hosting --project "$GCP_PROJECT_ID" --non-interactive
+      - name: Set up gcloud for production readback
+        uses: google-github-actions/setup-gcloud@v2
 
-      - name: Verify
+      - name: Guard same-SHA promoted backend and snapshot production Hosting
+        id: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_SHA"
+          gcloud run services describe life-assistant-api \
+            --project "$GCP_PROJECT_ID" --region us-central1 --format=json \
+            > "$RUNNER_TEMP/hosting-backend-service.json"
+          LIVE_REVISION="$(jq -er '
+            [.status.traffic[] | select((.percent // 0) == 100)] |
+            if length == 1 then .[0].revisionName else error("unexpected production traffic") end
+          ' "$RUNNER_TEMP/hosting-backend-service.json")"
+          gcloud run revisions describe "$LIVE_REVISION" \
+            --project "$GCP_PROJECT_ID" --region us-central1 --format=json \
+            > "$RUNNER_TEMP/hosting-backend-revision.json"
+          EXPECTED_DIGEST="$(docker buildx imagetools inspect \
+            "ghcr.io/tommylin15/life_assistant-backend:$RELEASE_SHA" \
+            --format '{{.Manifest.Digest}}')"
+          [[ "$EXPECTED_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          EXPECTED_IMAGE="ghcr.io/tommylin15/life_assistant-backend@$EXPECTED_DIGEST"
+          python .github/scripts/v3_image_identity.py --resource revision \
+            --json "$RUNNER_TEMP/hosting-backend-revision.json" \
+            --expected "$EXPECTED_IMAGE"
+          TOKEN="$(gcloud auth print-access-token)"
+          curl -fsS --retry 3 -H "Authorization: Bearer $TOKEN" \
+            "https://firebasehosting.googleapis.com/v1beta1/sites/$GCP_PROJECT_ID/releases?pageSize=10" \
+            > "$RUNNER_TEMP/production-hosting-before.json"
+          PREVIOUS="$(jq -er '.releases | max_by(.releaseTime) | .version.name' \
+            "$RUNNER_TEMP/production-hosting-before.json")"
+          [[ "$PREVIOUS" == "sites/$GCP_PROJECT_ID/versions/"* ]]
+          echo "version=$PREVIOUS" >> "$GITHUB_OUTPUT"
+          echo "production_hosting_preflight=PASS sha=$RELEASE_SHA backend_revision=$LIVE_REVISION prior_hosting=$PREVIOUS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools
+
+      - name: Deploy Firebase Hosting
+        id: firebase_publish
+        run: firebase deploy --only hosting --project "$GCP_PROJECT_ID" --non-interactive
+
+      - name: Capture exact published production Hosting version
+        id: published
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          curl -fsS --retry 3 -H "Authorization: Bearer $TOKEN" \
+            "https://firebasehosting.googleapis.com/v1beta1/sites/$GCP_PROJECT_ID/releases?pageSize=10" \
+            > "$RUNNER_TEMP/production-hosting-after.json"
+          PUBLISHED="$(jq -er '.releases | max_by(.releaseTime) | .version.name' \
+            "$RUNNER_TEMP/production-hosting-after.json")"
+          [[ "$PUBLISHED" == "sites/$GCP_PROJECT_ID/versions/"* ]]
+          echo "version=$PUBLISHED" >> "$GITHUB_OUTPUT"
+          echo "production_hosting_publish=ATTEMPTED version=$PUBLISHED sha=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify Firebase Hosting
         run: |
           BASE_URL="https://${GCP_PROJECT_ID}.web.app"
-          for i in {1..12}; do
-            SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "$BASE_URL/release.txt" || true)"
-            [ "$SHA" = "$RELEASE_SHA" ] && break
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            "$BASE_URL/" >/dev/null
+          echo "hosting_check=root:PASS"
+
+          REMOTE_RELEASE=""
+          for attempt in $(seq 1 12); do
+            REMOTE_RELEASE="$(curl --fail --silent --show-error \
+              --retry 2 --retry-delay 1 --retry-all-errors \
+              -H 'Cache-Control: no-cache' \
+              "$BASE_URL/release.txt?release=$RELEASE_SHA&attempt=$attempt" || true)"
+            if [ "$REMOTE_RELEASE" = "$RELEASE_SHA" ]; then
+              echo "release_check=PASS attempt=$attempt sha=$REMOTE_RELEASE"
+              break
+            fi
+            echo "release_check=WAIT attempt=$attempt expected=$RELEASE_SHA actual=${REMOTE_RELEASE:-<unavailable>}"
             sleep 5
           done
-          test "$SHA" = "$RELEASE_SHA"
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/api/v1/tasks")" = 401
+          if [ "$REMOTE_RELEASE" != "$RELEASE_SHA" ]; then
+            echo "release_check=FAIL expected=$RELEASE_SHA actual=${REMOTE_RELEASE:-<unavailable>}" >&2
+            exit 1
+          fi
+
+          CACHE_CONTROL="$(curl --silent --show-error --head "$BASE_URL/index.html" | tr -d '\r' | grep -i '^cache-control:' || true)"
+          if ! echo "$CACHE_CONTROL" | grep -Eiq 'no-cache|no-store|must-revalidate'; then
+            echo "hosting_check=cache_control:FAIL actual=${CACHE_CONTROL:-<missing>}" >&2
+            exit 1
+          fi
+          echo "hosting_check=cache_control:PASS value=$CACHE_CONTROL"
+
+          API_STATUS="$(curl --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            --output /tmp/tasks-body \
+            --write-out '%{http_code}' \
+            "$BASE_URL/api/v1/tasks")"
+          if [ "$API_STATUS" != "401" ]; then
+            echo "hosting_check=api_unauthenticated:FAIL status=$API_STATUS" >&2
+            cat /tmp/tasks-body >&2 || true
+            exit 1
+          fi
+          echo "hosting_check=api_unauthenticated:PASS status=$API_STATUS"
+
+          AUTH_HEADERS="$(mktemp)"
+          AUTH_STATUS="$(curl --silent --show-error \
+            --output /dev/null \
+            --dump-header "$AUTH_HEADERS" \
+            --write-out '%{http_code}' \
+            "$BASE_URL/auth/login")"
+          case "$AUTH_STATUS" in
+            302|303|307|308) ;;
+            *) echo "hosting_check=auth_redirect:FAIL status=$AUTH_STATUS" >&2; exit 1 ;;
+          esac
+          if ! grep -Eiq '^location: https://accounts\.google\.com/o/oauth2/v2/auth' "$AUTH_HEADERS"; then
+            echo "hosting_check=auth_location:FAIL" >&2
+            cat "$AUTH_HEADERS" >&2 || true
+            exit 1
+          fi
+          if ! grep -Eiq '^set-cookie: __session=' "$AUTH_HEADERS"; then
+            echo "hosting_check=auth_cookie:FAIL" >&2
+            cat "$AUTH_HEADERS" >&2 || true
+            exit 1
+          fi
+          echo "hosting_check=auth_redirect:PASS status=$AUTH_STATUS"
+
+          ICON_HEADERS="$(mktemp)"
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            --dump-header "$ICON_HEADERS" \
+            --output /tmp/life-assistant-192-v8.png \
+            "$BASE_URL/icons/life-assistant-192-v8.png"
+          grep -Eiq '^content-type: image/png' "$ICON_HEADERS"
+          test "$(sha256sum /tmp/life-assistant-192-v8.png | awk '{print $1}')" = "$EXPECTED_ICON_SHA"
+          echo "hosting_check=icon:PASS"
+
+          HERO_HEADERS="$(mktemp)"
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            --dump-header "$HERO_HEADERS" \
+            --output /tmp/life-assistant-hero-v8.png \
+            "$BASE_URL/branding/life-assistant-hero-v8.png"
+          grep -Eiq '^content-type: image/png' "$HERO_HEADERS"
+          test "$(sha256sum /tmp/life-assistant-hero-v8.png | awk '{print $1}')" = "$EXPECTED_HERO_SHA"
+          echo "hosting_check=hero:PASS"
+
+          python - <<'PY'
+          from PIL import Image
+          icon = Image.open('/tmp/life-assistant-192-v8.png')
+          hero = Image.open('/tmp/life-assistant-hero-v8.png')
+          assert icon.size == (192, 192), icon.size
+          assert hero.size == (1024, 1024), hero.size
+          PY
+
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            "$BASE_URL/manifest-v6.json" > /tmp/manifest-v6.json
+          grep -Fq '"id": "/life-assistant-v6"' /tmp/manifest-v6.json
+          grep -Fq '/icons/life-assistant-192-v8.png' /tmp/manifest-v6.json
+          grep -Fq '/icons/life-assistant-512-v8.png' /tmp/manifest-v6.json
+          echo "hosting_check=manifest:PASS"
+
+      - name: Install production UI acceptance tooling
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Run Task UI production acceptance
+        run: |
+          BASE_URL="https://${GCP_PROJECT_ID}.web.app"
+          for attempt in 1 2 3; do
+            echo "task_ui_attempt=$attempt"
+            if BASE_URL="$BASE_URL" node .github/scripts/verify_task_ui_production.mjs; then
+              echo "task_ui_acceptance=PASS attempt=$attempt"
+              exit 0
+            fi
+            echo "task_ui_acceptance=RETRY attempt=$attempt" >&2
+            if [ "$attempt" -lt 3 ]; then
+              sleep 2
+            fi
+          done
+          echo "task_ui_acceptance=FAIL attempts=3" >&2
+          exit 1
+
+      - name: Upload Task UI acceptance diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-ui-production-acceptance-${{ env.RELEASE_SHA }}
+          path: /tmp/task-ui-acceptance.png
+          if-no-files-found: ignore
+
+      - name: Run Project UI production acceptance
+        id: project_ui_acceptance
+        if: always()
+        run: |
+          BASE_URL="https://${GCP_PROJECT_ID}.web.app"
+          for attempt in 1 2 3; do
+            echo "project_ui_attempt=$attempt"
+            if BASE_URL="$BASE_URL" node .github/scripts/verify_project_ui_production.mjs; then
+              echo "project_ui_acceptance=PASS attempt=$attempt"
+              exit 0
+            fi
+            echo "project_ui_acceptance=RETRY attempt=$attempt" >&2
+            if [ "$attempt" -lt 3 ]; then
+              sleep 2
+            fi
+          done
+          echo "project_ui_acceptance=FAIL attempts=3" >&2
+          exit 1
+
+      - name: Upload Project UI acceptance diagnostics
+        if: steps.project_ui_acceptance.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-ui-production-acceptance-${{ env.RELEASE_SHA }}
+          path: /tmp/project-ui-acceptance.png
+          if-no-files-found: ignore
+
+      - name: Restore previous production Hosting on failed readback
+        if: ${{ failure() && steps.firebase_publish.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIOUS="${{ steps.baseline.outputs.version }}"
+          PUBLISHED="${{ steps.published.outputs.version }}"
+          [[ "$PREVIOUS" == "sites/$GCP_PROJECT_ID/versions/"* ]]
+          if [[ -z "$PUBLISHED" ]]; then
+            echo "::error::production_hosting_rollback=NOT_VERIFIED published_version_unavailable; manual review required"
+            exit 1
+          fi
+          TOKEN="$(gcloud auth print-access-token)"
+          BASE="https://firebasehosting.googleapis.com/v1beta1/sites/$GCP_PROJECT_ID"
+          curl -fsS --retry 3 -H "Authorization: Bearer $TOKEN" \
+            "$BASE/releases?pageSize=10" > "$RUNNER_TEMP/hosting-rollback-current.json"
+          CURRENT="$(jq -er '.releases | max_by(.releaseTime) | .version.name' \
+            "$RUNNER_TEMP/hosting-rollback-current.json")"
+          if [[ "$CURRENT" == "$PREVIOUS" ]]; then
+            echo "production_hosting_rollback=NOT_NEEDED already_previous_version" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ "$CURRENT" != "$PUBLISHED" ]]; then
+            echo "::error::production_hosting_rollback=NOT_VERIFIED concurrent_release_detected; manual review required"
+            exit 1
+          fi
+          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"message":"Restore prior production Hosting after failed V3 verification"}' \
+            "$BASE/releases?versionName=$PREVIOUS" \
+            > "$RUNNER_TEMP/hosting-rollback-response.json"
+          curl -fsS --retry 3 -H "Authorization: Bearer $TOKEN" \
+            "$BASE/releases?pageSize=10" > "$RUNNER_TEMP/hosting-rollback-after.json"
+          RESTORED="$(jq -er '.releases | max_by(.releaseTime) | .version.name' \
+            "$RUNNER_TEMP/hosting-rollback-after.json")"
+          test "$RESTORED" = "$PREVIOUS"
+          echo "production_hosting_rollback=PASS restored_version=$PREVIOUS" >> "$GITHUB_STEP_SUMMARY"

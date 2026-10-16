@@ -1,5 +1,5 @@
-name: Life Importer Evidence (read only)
-
+# Safe, read-only runtime evidence. Never executes the importer or mutates Sheet/DB.
+name: Life 01-03 existing importer evidence (read only)
 on:
   workflow_dispatch:
   push:
@@ -14,7 +14,7 @@ permissions:
 jobs:
   evidence:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     environment: dev-test
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102
@@ -22,62 +22,124 @@ jobs:
       JOB: life-assistant-free-events
     steps:
       - uses: actions/checkout@v4
-
-      - uses: ./.github/actions/setup-gcp
+      - uses: google-github-actions/auth@v2
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Read importer metadata
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read existing Cloud Run importer executions without launching a new one
+        shell: bash
         run: |
-          # Get job info
-          gcloud run jobs describe "$JOB" \
+          set -euo pipefail
+          gcloud run jobs describe "$JOB" --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/job.json"
+          # Read only: prove which immutable digest the production API and
+          # importer Job currently use. A staging-only release never pins this
+          # production Job, so do not infer that it contains new main code.
+          if gcloud run services describe life-assistant-api \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
-            > "$RUNNER_TEMP/job.json"
-          
-          # Get production revision
-          LIVE_REV="$(gcloud run services describe life-assistant-api \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --format='json(status.traffic)' | jq -r '[.status.traffic[] | select(.percent==100)][0].revisionName // empty')"
-          
-          if [ -n "$LIVE_REV" ]; then
-            gcloud run revisions describe "$LIVE_REV" \
-              --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
-              > "$RUNNER_TEMP/revision.json"
+            > "$RUNNER_TEMP/service.json" 2>"$RUNNER_TEMP/service.err"; then
+            LIVE_REV="$(python3 - "$RUNNER_TEMP/service.json" <<'PY'
+          import json,sys
+          j=json.load(open(sys.argv[1]))
+          live=[x for x in j.get("status",{}).get("traffic",[])
+                if int(x.get("percent") or 0)==100]
+          if len(live)!=1: sys.exit(2)
+          print(live[0].get("revisionName",""))
+          PY
+          )" || LIVE_REV=""
+            if [[ -n "$LIVE_REV" ]]; then
+              gcloud run revisions describe "$LIVE_REV" \
+                --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+                --format=json > "$RUNNER_TEMP/live-revision.json" \
+                2>"$RUNNER_TEMP/live-revision.err" || true
+            fi
           fi
-          
-          # Get recent executions
-          gcloud run jobs executions list --job "$JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --limit 10 --format=json > "$RUNNER_TEMP/executions.json" 2>/dev/null || echo '[]' > "$RUNNER_TEMP/executions.json"
-
-      - name: Generate summary
-        run: |
-          python - <<'PY'
-          import json, os
-          
-          def load(name):
+          python3 - "$RUNNER_TEMP/job.json" "$RUNNER_TEMP/live-revision.json" <<'PY'
+          import json,os,sys
+          sys.path.insert(0,".github/scripts")
+          from v3_image_identity import canonical
+          from v3_curated_handoff_alignment import validate_job
+          summary=os.environ["GITHUB_STEP_SUMMARY"]
+          result="NOT_VERIFIED"
+          contract="NOT_VERIFIED"
+          try:
+              with open(sys.argv[1],encoding="utf-8") as f: job=json.load(f)
+              with open(sys.argv[2],encoding="utf-8") as f: rev=json.load(f)
+              live=canonical(rev.get("status",{}).get("imageDigest"))
+              job_image=canonical(job["spec"]["template"]["spec"]["template"]["spec"]["containers"][0]["image"])
+              result="PASS" if job_image==live else "MISMATCH"
               try:
-                  return json.load(open(f"{os.environ['RUNNER_TEMP']}/{name}"))
-              except:
-                  return {}
-          
-          job = load("job.json")
-          rev = load("revision.json")
-          execs = load("executions.json") or []
-          
-          job_image = job.get("spec", {}).get("template", {}).get("spec", {}).get("template", {}).get("spec", {}).get("containers", [{}])[0].get("image", "")
-          rev_image = rev.get("spec", {}).get("containers", [{}])[0].get("image", "")
-          
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-              print("## Life Importer Evidence (read only)", file=f)
-              print(f"- Job image: {job_image[:80]}...", file=f)
-              print(f"- Production image: {rev_image[:80]}...", file=f)
-              print(f"- Images match: {job_image == rev_image}", file=f)
-              print(f"- Recent executions: {len(execs)}", file=f)
-              for e in execs[:5]:
-                  name = e.get("metadata", {}).get("name", "").split("/")[-1]
-                  status = e.get("status", {}).get("conditions", [{}])[0].get("status", "?")
-                  print(f"  - {name}: {status}", file=f)
+                  validate_job(job,job_image)
+                  contract="PASS"
+              except (KeyError,ValueError,TypeError):
+                  contract="FAIL"
+          except (ValueError,KeyError,TypeError,FileNotFoundError,IndexError):
+              pass
+          with open(summary,"a") as f:
+              print(f"- importer_job_image_vs_100pct_production={result}",file=f)
+              print(f"- importer_job_command_sheet_contract={contract}",file=f)
+              print("- latest_main_import_lock_deployed=NOT_VERIFIED unless its immutable release digest was promoted",file=f)
+          print(f"importer_image_alignment={result} contract={contract}")
+          PY
+          if ! gcloud run jobs executions list --job "$JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/executions.json" 2>"$RUNNER_TEMP/executions.err"; then
+            echo "existing_execution_readback=NOT_VERIFIED (list permission or API unavailable)" >> "$GITHUB_STEP_SUMMARY"
+            printf '%s' '[]' > "$RUNNER_TEMP/executions.json"
+          fi
+          if ! gcloud logging read \
+            'resource.type="cloud_run_job" AND resource.labels.job_name="life-assistant-free-events" AND timestamp>="2026-10-12T00:00:00Z"' \
+            --project "$GCP_PROJECT_ID" --limit 200 --format=json \
+            > "$RUNNER_TEMP/logs.json" 2>"$RUNNER_TEMP/logs.err"; then
+            echo "existing_execution_log_readback=NOT_VERIFIED (logs permission unavailable)" >> "$GITHUB_STEP_SUMMARY"
+            printf '%s' '[]' > "$RUNNER_TEMP/logs.json"
+          fi
+          python3 - "$RUNNER_TEMP/executions.json" "$RUNNER_TEMP/logs.json" <<'PY'
+          import json,re,sys,os
+          def load(path):
+              try:
+                  data=json.load(open(path))
+                  return data if isinstance(data,list) else []
+              except (ValueError,OSError):
+                  return []
+          jobs=load(sys.argv[1])
+          logs=load(sys.argv[2])
+          # No source row fields, tokens, exception traces, or email addresses.
+          names=[]
+          for j in jobs[:10]:
+              name=str(j.get("metadata",{}).get("name") or j.get("name") or "").split("/")[-1]
+              status=j.get("status",{})
+              conditions=status.get("conditions") or j.get("conditions") or []
+              done=next((c for c in conditions if c.get("type") in ("Completed","Ready")), {})
+              state=done.get("status", "UNKNOWN")
+              names.append((name,str(state),str(status.get("completionTime") or j.get("completionTime") or "")))
+          receipts=[]
+          fields=("status","data_status","created","updated","unchanged","invalid","import_failed","ack_failed")
+          for row in logs:
+              msg=str(row.get("textPayload") or (row.get("jsonPayload") or {}).get("message") or "")
+              if "life_handoff_import " not in msg:
+                  continue
+              vals=dict(re.findall(r"\b(status|data_status|created|updated|unchanged|invalid|import_failed|ack_failed)=([A-Z_]+|\d+)",msg))
+              receipts.append({"timestamp":row.get("timestamp",""),
+                  **{name:vals.get(name,"UNKNOWN") for name in fields}})
+          summary=os.environ["GITHUB_STEP_SUMMARY"]
+          with open(summary,"a") as out:
+              print("## Existing importer (read only; no new execution)",file=out)
+              print(f"- execution_inventory_count: {len(jobs)}",file=out)
+              for name,state,ended in names:
+                  print(f"- execution: {name} completed_condition={state} completion={ended}",file=out)
+              print(f"- historical_import_summaries_read: {len(receipts)}",file=out)
+              for info in receipts[:8]:
+                  print("- importer: "+" ".join(f"{k}={v}" for k,v in info.items()),file=out)
+              print("- GAS_07_30_actual_trigger: NOT_VERIFIED (Apps Script triggers/logs are external to Cloud Run)",file=out)
+              print("- Sheet_ack_and_PostgreSQL_same_execution_readback: NOT_VERIFIED by this read-only inventory",file=out)
+          print("importer_evidence=READ_ONLY execution_count=%s summaries=%s" %(len(jobs),len(receipts)))
+          # Print only sanitized execution identity/time/condition in Actions logs
+          # so this audit can be verified without reading summary artifacts.
+          for name,state,ended in names:
+              print("importer_execution name=%s condition=%s completed=%s" %(name,state,ended))
+          for info in receipts[:8]:
+              print("importer_aggregate "+ " ".join(f"{k}={v}" for k,v in info.items()))
           PY

@@ -1,4 +1,4 @@
-name: Curated Sheet Handoff (manual fallback)
+name: Manual curated Sheet handoff (fallback only)
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
   import:
     if: github.ref == 'refs/heads/main' && vars.LIFE_CURATED_HANDOFF_ENABLED == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     environment: dev-test
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102
@@ -23,33 +23,43 @@ jobs:
       JOB: life-assistant-free-events
     steps:
       - uses: actions/checkout@v4
-
-      - uses: ./.github/actions/setup-gcp
+      - uses: google-github-actions/auth@v2
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Verify job matches production
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Fail closed unless curated Job matches promoted production digest
+        shell: bash
         run: |
-          # Get production image
-          LIVE_REV="$(gcloud run services describe life-assistant-api \
+          set -euo pipefail
+          gcloud run services describe life-assistant-api \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/handoff-live-service.json"
+          LIVE_REVISION="$(jq -er \
+            '[.status.traffic[] | select((.percent // 0)==100)] | if length==1 then .[0].revisionName else error("no sole live revision") end' \
+            "$RUNNER_TEMP/handoff-live-service.json")"
+          gcloud run revisions describe "$LIVE_REVISION" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/handoff-live-revision.json"
+          IMAGE_REF="$(python -c 'import json,sys;sys.path.insert(0,".github/scripts");from v3_image_identity import canonical;print(canonical(json.load(open(sys.argv[1]))["spec"]["containers"][0]["image"]))' "$RUNNER_TEMP/handoff-live-revision.json")"
+          python .github/scripts/v3_curated_handoff_alignment.py \
+            --mode live --json "$RUNNER_TEMP/handoff-live-service.json" \
+            --revision-json "$RUNNER_TEMP/handoff-live-revision.json" \
+            --expected-revision "$LIVE_REVISION" --expected-image "$IMAGE_REF"
+          gcloud run jobs describe "$JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/handoff-job.json"
+          python .github/scripts/v3_curated_handoff_alignment.py \
+            --mode job --json "$RUNNER_TEMP/handoff-job.json" \
+            --expected-image "$IMAGE_REF"
+          echo "handoff_manual_preflight=PASS live=$LIVE_REVISION image=$IMAGE_REF" >> "$GITHUB_STEP_SUMMARY"
+      - name: Run existing curated handoff Job only after preflight PASS
+        shell: bash
+        run: |
+          set -euo pipefail
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$JOB" \
+            gcloud run jobs execute "$JOB" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --format='json(status.traffic)' | jq -r '[.status.traffic[] | select(.percent==100)][0].revisionName')"
-          PROD_IMAGE="$(gcloud run revisions describe "$LIVE_REV" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --format='value(spec.containers[0].image)')"
-          
-          # Get job image
-          JOB_IMAGE="$(gcloud run jobs describe "$JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --format='value(spec.template.spec.template.spec.containers[0].image)')"
-          
-          test "$PROD_IMAGE" = "$JOB_IMAGE"
-
-      - uses: ./.github/actions/run-acceptance-job
-        with:
-          job_name: ${{ env.JOB }}
-          module: scripts.import_curated_from_sheet
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          region: ${{ env.GCP_REGION }}
+            --task-timeout 10m --wait --quiet
+          echo "handoff_manual_execution=PASS; see Job logs and Sheet/DB receipts for row-level acceptance" >> "$GITHUB_STEP_SUMMARY"

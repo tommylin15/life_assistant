@@ -1,5 +1,12 @@
 # Life — Current state
 
+## 2026-10-16｜正式 Hosting 自動派送修復：source submitted; runtime gate open
+- 原先正式 V3 由 GITHUB_TOKEN 發起 workflow_dispatch，後續 workflow_run 不會建立，因此自動 Hosting 沒有 Run。修正為 V3 同一 workflow 的最終步驟直接使用 workflow_dispatch。
+- 僅在 promotion、fixed staging、postdeploy live、rollback drill、revision retention 與 curated importer 對齊皆 PASS 時允許派送。實際派送前重新核對 main SHA、四項 CI、100% live revision 和 immutable GHCR digest；同 SHA 已存在 Hosting Run 時跳過。
+- 舊 production Hosting workflow_run dispatcher 移除。Firebase Hosting 原有 SHA／digest／401／OAuth 讀回及失敗回復前一版本均保留。新來源 CI、Staging 尚待同 SHA 驗收；正式自動派送的 runtime 成功仍 NOT VERIFIED。
+- 上版正式來源 7e6f6cd 已有 V3 #38892900365 及手動 Hosting #38898216624 成功，不重新切流。
+
+
 ## 2026-10-16｜CI/CD 效能重構修復暨新版 Staging 真人驗收：PASS
 - **程式／流程證據**：已發布應用 SHA `2cfe1c9f1e4946bc2849a863f9891419f0db1c45`；經 `9d9fa33` 保留快取、共用 Action／Reusable Workflow 並恢復必要驗收，`eadc310` 修復精選池 Job live digest 與契約讀回，`2cfe1c9` 補共用 Workflow 觸發邊界測試，未刪減原本的安全驗收矩陣。[同 SHA CI #38886583192](https://github.com/tommylin15/life_assistant/actions/runs/38886583192) 四項成功。
 - **固定 Staging 與 runtime 自動證據：PASS**：[V3 Release #38886894486](https://github.com/tommylin15/life_assistant/actions/runs/38886894486) completed/success；`staging_live_readback=PASS`（Hosting SHA／pins/API 401）、`staging_live_ready=PASS`、`staging_google_redirect=PASS`；固定 Staging version `sites/life-assistant-v3-stage-tl15/versions/a1c3bd3ce0d7c6fc`，`staging_live=PASS sha=2cfe1c9... traffic_unchanged=true`。入口：https://life-assistant-v3-stage-tl15.web.app。

@@ -173,29 +173,6 @@ class CloudBuildV2Tests(unittest.TestCase):
                 self.assertIn('--raw-field publish_staging=true', source)
                 self.assertNotIn('--raw-field promote=true', source)
                 self.assertNotIn('gcloud run services update-traffic', source)
-            elif workflow.name == 'v3-auto-production-hosting-after-release.yml':
-                # A completed manual V3 release may dispatch production Hosting
-                # only after *all* live, rollback, and exact-SHA gates pass.
-                # A successful staging-only release cannot qualify.
-                self.assertIn('workflow_run:', source)
-                self.assertIn('workflows: ["V3 Release - GHCR to Cloud Run"]', source)
-                self.assertIn("workflow_run.event == 'workflow_dispatch'", source)
-                self.assertIn("workflow_run.conclusion == 'success'", source)
-                self.assertIn('MAIN_SHA', source)
-                self.assertIn('all(.[];', source)
-                for gate in (
-                    'Promote exact Preview to independent fixed staging live and verify pinned routes',
-                    'Reconfirm source SHA and live traffic, then promote',
-                    'Post-promotion live health, PostgreSQL and access gates',
-                    'Controlled rollback rehearsal and restore promoted live traffic',
-                    'Retain latest 10 revisions after all live gates PASS',
-                    'Pin curated handoff Job after verified production promotion',
-                ):
-                    self.assertIn(gate, source)
-                self.assertIn('gh workflow run deploy-firebase-hosting.yml', source)
-                self.assertNotIn('gh workflow run v3-release-ghcr.yml', source)
-                self.assertNotIn('--raw-field promote=true', source)
-                self.assertNotIn('gcloud run services update-traffic', source)
             elif workflow.name == 'life-01-07-one-time-acceptance.yml':
                 # 2026-10-14 explicit user-authorized *single* importer
                 # acceptance. It cannot re-run on arbitrary CI success,

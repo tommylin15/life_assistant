@@ -7,7 +7,6 @@ RELEASE = ROOT / ".github/workflows/v3-release-ghcr.yml"
 STAGE = ROOT / "scripts/v3_fixed_staging_release.sh"
 ALT_STAGE = ROOT / ".github/workflows/v3-staging-live.yml"
 HOSTING = ROOT / ".github/workflows/deploy-firebase-hosting.yml"
-DISPATCH = ROOT / ".github/workflows/v3-auto-production-hosting-after-release.yml"
 
 class ReleaseWithoutOAuthGate(unittest.TestCase):
     def test_no_interactive_owner_callback_session_gate(self):
@@ -32,8 +31,8 @@ class ReleaseWithoutOAuthGate(unittest.TestCase):
         self.assertIn("hosting_check=auth_redirect:PASS", hosting)
 
     def test_candidate_sha_staging_401_rollback_and_production_hosting_still_gated(self):
-        r, s, h, d = (f.read_text(encoding="utf-8") for f in
-                      (RELEASE, STAGE, HOSTING, DISPATCH))
+        r, s, h = (f.read_text(encoding="utf-8") for f in
+                   (RELEASE, STAGE, HOSTING))
         self.assertIn("inputs.promote && !inputs.publish_staging", r)
         self.assertIn("Production promotion requires publish_staging", r)
         self.assertIn("Verify pinned Preview API and static release", r)
@@ -42,8 +41,9 @@ class ReleaseWithoutOAuthGate(unittest.TestCase):
         self.assertIn("Controlled rollback rehearsal and restore promoted live traffic", r)
         self.assertIn("staging_live_readback=PASS layer=pins_and_api_401", s)
         self.assertIn("hosting_check=api_unauthenticated:PASS", h)
-        self.assertIn("Promote exact Preview to independent fixed staging live and verify pinned routes", d)
-        self.assertNotIn("verify owner OAuth", d)
+        self.assertIn("Promote exact Preview to independent fixed staging live and verify pinned routes", r)
+        self.assertIn("Dispatch production Hosting after successful V3 gates", r)
+        self.assertNotIn("verify owner OAuth", r.split("Dispatch production Hosting after successful V3 gates", 1)[1])
 
 if __name__ == "__main__":
     unittest.main()

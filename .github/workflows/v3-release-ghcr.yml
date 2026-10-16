@@ -17,6 +17,7 @@ on:
 permissions:
   contents: read
   checks: read
+  actions: write
   id-token: write
   packages: write
 
@@ -406,6 +407,7 @@ jobs:
           echo "pre_promotion_drive_ai_consent=PASS" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Promote exact Preview to independent fixed staging live and verify pinned routes
+        id: staging_live
         if: ${{ inputs.publish_staging }}
         shell: bash
         run: bash scripts/v3_fixed_staging_release.sh
@@ -415,6 +417,7 @@ jobs:
         run: echo "PROMOTION=NOT REQUESTED; production traffic unchanged" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Reconfirm source SHA and live traffic, then promote
+        id: promote_live
         if: ${{ inputs.promote }}
         shell: bash
         run: |
@@ -435,6 +438,7 @@ jobs:
           echo "promotion=ATTEMPTED revision=$CANDIDATE_REVISION" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Post-promotion live health, PostgreSQL and access gates
+        id: live_acceptance
         if: ${{ inputs.promote }}
         shell: bash
         run: |
@@ -467,6 +471,7 @@ jobs:
           echo "live=PASS health,ready,401,oauth-redirect,postdeploy-integration" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Controlled rollback rehearsal and restore promoted live traffic
+        id: rollback_drill
         if: ${{ inputs.promote && success() }}
         shell: bash
         run: |
@@ -516,6 +521,7 @@ jobs:
           fi
 
       - name: Retain latest 10 revisions after all live gates PASS
+        id: revision_retention
         if: ${{ inputs.promote && success() }}
         shell: bash
         run: |
@@ -536,6 +542,7 @@ jobs:
             "$RUNNER_TEMP/v3-retention.json" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pin curated handoff Job after verified production promotion
+        id: curated_handoff
         if: ${{ inputs.promote && success() }}
         shell: bash
         run: |
@@ -630,3 +637,63 @@ jobs:
             echo "retirement=NOT_RUN" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "gemini_signed_smoke=MANUAL_INDEPENDENT non_blocking" >> "$GITHUB_STEP_SUMMARY"
+
+      # workflow_dispatch from GITHUB_TOKEN is the supported handoff;
+      # workflow_run is not emitted for a token-originated V3 dispatch.
+      - name: Dispatch production Hosting after successful V3 gates
+        id: dispatch_production_hosting
+        if: >-
+          ${{ inputs.promote && inputs.publish_staging && success() &&
+              steps.staging_live.outcome == 'success' &&
+              steps.promote_live.outcome == 'success' &&
+              steps.live_acceptance.outcome == 'success' &&
+              steps.rollback_drill.outcome == 'success' &&
+              steps.revision_retention.outcome == 'success' &&
+              steps.curated_handoff.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          CURRENT_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+          if [[ "$CURRENT_MAIN" != "$RELEASE_SHA" ]]; then
+            echo "production_hosting_dispatch=SKIP superseded_sha=$RELEASE_SHA main=$CURRENT_MAIN" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" |
+            jq -e --arg sha "$RELEASE_SHA" --arg repo "$GITHUB_REPOSITORY" '
+              .head_sha==$sha and .head_branch=="main" and
+              .head_repository.full_name==$repo and .event=="workflow_dispatch"
+            ' >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/check-runs?per_page=100" |
+            jq -e '
+              [.check_runs[] |
+               select(.name=="flutter" or .name=="backend" or
+                      .name=="deployment-scripts" or .name=="free-events-postgres") |
+               select(.conclusion=="success") | .name] | unique | length==4
+            ' >/dev/null
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/hosting-dispatch-live-service.json"
+          jq -e --arg rev "$CANDIDATE_REVISION" '
+            [.status.traffic[] | select((.percent // 0)>0)] |
+            length==1 and .[0].revisionName==$rev and .[0].percent==100
+          ' "$RUNNER_TEMP/hosting-dispatch-live-service.json" >/dev/null
+          gcloud run revisions describe "$CANDIDATE_REVISION" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/hosting-dispatch-live-revision.json"
+          python .github/scripts/v3_image_identity.py --resource revision \
+            --json "$RUNNER_TEMP/hosting-dispatch-live-revision.json" \
+            --expected "$IMAGE_REF"
+          # Never enqueue again for this SHA, even if a prior Hosting failed.
+          HOSTING_RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-firebase-hosting.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
+          if jq -e --arg sha "$RELEASE_SHA" 'any(.workflow_runs[]; .head_sha==$sha)' <<< "$HOSTING_RUNS" >/dev/null; then
+            echo "production_hosting_dispatch=SKIP existing_run_for_sha=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Hosting independently checks same SHA/digest, live auth/routes,
+          # and restores the previous Firebase Hosting on failed readback.
+          gh workflow run deploy-firebase-hosting.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo "production_hosting_dispatch=DISPATCHED sha=$RELEASE_SHA source_v3_run=$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "production_hosting_runtime=NOT_VERIFIED until Hosting live readback PASS" >> "$GITHUB_STEP_SUMMARY"
+

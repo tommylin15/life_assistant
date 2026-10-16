@@ -155,13 +155,13 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
 
   Future<void> _createFolder() async {
     if (_working) return;
-    final controller = TextEditingController();
+    var enteredName = '';
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('建立 Google Drive 資料夾'),
         content: TextField(
-          controller: controller,
+          onChanged: (value) => enteredName = value,
           autofocus: true,
           maxLength: 200,
           decoration: const InputDecoration(labelText: '資料夾名稱'),
@@ -169,12 +169,11 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx),
               child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+          FilledButton(onPressed: () => Navigator.pop(ctx, enteredName.trim()),
               child: const Text('建立')),
         ],
       ),
     );
-    controller.dispose();
     if (!mounted || name == null || name.isEmpty) return;
     setState(() => _working = true);
     try {

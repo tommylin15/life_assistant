@@ -37,9 +37,10 @@ FEATURES = {
     "drive": ("/more/drive", "Google Drive"),
     "integrations": ("/integrations", "Google 整合"),
     "life_inbox": ("/capture", "生活收件匣／快速新增"),
+    "gmail_radar": ("/more/gmail-radar", "Gmail 智慧事項雷達"),
 }
 DEFAULT_PINNED = ["tasks", "calendar", "projects"]
-DEFAULT_MORE = ["notes", "habits", "events", "opportunities", "explore", "shopping", "drive", "integrations"]
+DEFAULT_MORE = ["notes", "habits", "events", "opportunities", "explore", "shopping", "drive", "gmail_radar", "integrations"]
 DEFAULT_HOME = ["tasks", "calendar", "habits", "explore", "projects"]
 # Keep legacy "attention" valid for old clients and stored layouts; the Web UI
 # merges it into "tasks" without mutating tenant preferences or introducing DDL.

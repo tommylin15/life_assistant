@@ -138,6 +138,7 @@ def _enforce_general_user_route(request: Request, user: dict) -> None:
         "/api/v1/shopping-lists/", "/api/v1/shopping-items/",
         "/api/v1/integrations/google/calendar",
         "/api/v1/integrations/google/gmail",
+        "/api/v1/inbox/",
     )
     action_prefix = "/api/v1/free-events/curated/"
     action_parts = path[len(action_prefix):].split("/") if path.startswith(action_prefix) else []

@@ -199,7 +199,7 @@ async def interpret(body: InterpretInput, response: Response,
     if fixed:
         return fixed
     try:
-        output = await generate_text(build_prompt(value, now), user_sub=user["sub"])
+        output = await generate_text(build_prompt(value, now), user_sub=user["sub"], purpose="life_inbox")
         raw = output["text"].strip()
         fence = chr(96) * 3
         if raw.startswith(fence):

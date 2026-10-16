@@ -32,7 +32,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
       CI_RUN_ID: ${{ github.event.workflow_run.id }}
-      BASE_SHA: a1d4850721afde10aa77acd898a7761dfc7cf89f
+      BASE_SHA: ca93125e5e49caa7d4a2a79cf5dc2cb02fafce91
+      DOCUMENTATION_SHA: a1d4850721afde10aa77acd898a7761dfc7cf89f
       ACCEPTED_STAGING_SHA: 2cfe1c9f1e4946bc2849a863f9891419f0db1c45
     steps:
       - name: Strictly verify one-time approved commit, same-source CI and human-accepted stage
@@ -51,14 +52,23 @@ jobs:
           jq -e --arg parent "$BASE_SHA" '
             (.parents | length)==1 and .parents[0].sha==$parent and
             ([.files[].filename] | sort) ==
-              ([".github/workflows/life-approved-production-once-20261016.yml", ".github/workflows/v3-auto-staging-after-ci.yml"] | sort)
+              ([".github/workflows/life-approved-production-once-20261016.yml", "backend/tests/test_cloud_build_v2.py"] | sort)
           ' <<< "$COMMIT" >/dev/null || {
             echo 'approved_prod=SKIP not_unique_approved_commit' >> "$GITHUB_STEP_SUMMARY"
             exit 0
           }
-          # Parent differed from human-accepted stage by docs only.
+          # Exact ancestry: approved Staging -> docs-only acceptance -> one-time dispatch bridge.
           BASE_COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$BASE_SHA?per_page=100")"
-          jq -e '(.files|length)==3 and all(.files[]; .filename|startswith("doc/"))' <<< "$BASE_COMMIT" >/dev/null
+          jq -e --arg parent "$DOCUMENTATION_SHA" '
+            .parents[0].sha==$parent and
+            ([.files[].filename] | sort) ==
+              ([".github/workflows/life-approved-production-once-20261016.yml", ".github/workflows/v3-auto-staging-after-ci.yml"] | sort)
+          ' <<< "$BASE_COMMIT" >/dev/null
+          DOC_COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$DOCUMENTATION_SHA?per_page=100")"
+          jq -e --arg sha "$ACCEPTED_STAGING_SHA" '
+            .parents[0].sha==$sha and
+            (.files|length)==3 and all(.files[]; .filename|startswith("doc/"))
+          ' <<< "$DOC_COMMIT" >/dev/null
           CI="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID")"
           jq -e --arg sha "$RELEASE_SHA" --arg repo "$GITHUB_REPOSITORY" '
             .status=="completed" and .conclusion=="success" and

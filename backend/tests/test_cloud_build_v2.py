@@ -105,6 +105,32 @@ class CloudBuildV2Tests(unittest.TestCase):
                 self.assertNotIn('gcloud run services delete', source)
                 self.assertNotIn('firebase deploy', source)
                 continue
+            if workflow.name == 'life-approved-production-once-20261016.yml':
+                # Explicitly user-approved one-time bridge. Release is only
+                # dispatched after exact-parent, four-CI, accepted-staging,
+                # dedupe and current-main guards; it contains no direct writes.
+                for token in (
+                    'workflow_run:', 'workflows: ["CI"]',
+                    "workflow_run.conclusion == 'success'",
+                    "workflow_run.event == 'push'",
+                    'BASE_SHA:', 'DOCUMENTATION_SHA:',
+                    'ACCEPTED_STAGING_SHA:',
+                    'not_unique_approved_commit',
+                    'already_dispatched',
+                    '--raw-field promote=true',
+                    '--raw-field publish_staging=true',
+                ):
+                    self.assertIn(token, source)
+                for forbidden in (
+                    'gcloud run services update-traffic',
+                    'gcloud run services deploy',
+                    'gcloud run jobs update',
+                    'gcloud run jobs execute',
+                    'firebase deploy',
+                    'gcloud run revisions delete',
+                ):
+                    self.assertNotIn(forbidden, source)
+                continue
             if workflow.name == 'v3-cutover-once-after-release.yml':
                 # Strict one-time audited Release completion is the sole
                 # exception to the legacy ban on workflow_run chains.

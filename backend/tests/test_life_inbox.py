@@ -155,9 +155,10 @@ class ArticleSafetyTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(inbox_articles.socket, "getaddrinfo",
                           return_value=[(None, None, None, None, ("127.0.0.1", 443))]), \
              patch.object(inbox_articles.httpx, "AsyncClient") as client:
-            with self.assertRaises(HTTPException) as error:
+            with self.assertRaises(inbox_articles.ApiError) as error:
                 await inbox_articles.pinned_public_article("https://example.com/article")
         self.assertEqual(error.exception.status_code, 422)
+        self.assertEqual(error.exception.code, "article_unsafe_url")
         client.assert_called_once()
 
     async def test_article_summary_only_triggered_by_explicit_preview_endpoint(self):

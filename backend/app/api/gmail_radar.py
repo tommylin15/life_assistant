@@ -14,11 +14,19 @@ from app.api.google_integrations import (
     GMAIL_LIST_URL, GMAIL_MESSAGE_URL, _gmail_header, _request_google,
 )
 from app.db.session import get_db
-from app.models.gmail_radar import GmailRadarItem, GmailRadarScanState
+from app.models.gmail_radar import GmailRadarItem, GmailRadarScanState, GmailRadarSeen
 from app.models.google_integration import GoogleConnection
 from app.services.google_oauth import SERVICE_SCOPES
 
 router = APIRouter(prefix="/integrations/google/gmail/radar", tags=["gmail-radar"])
+
+QUICK_LIMIT = 20
+BACKFILL_BATCH = 40
+THREE_DAY_PAGE_SIZE = 500
+THREE_DAY_MAX_PAGES = 4
+THREE_DAY_QUERY = "newer_than:3d -in:spam -in:trash"
+QUICK_QUERY = "newer_than:7d -in:spam -in:trash"
+
 
 # Precision-first rules: an ambiguous promotion must not become a pending item.
 _RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -76,13 +84,19 @@ def _serialize_state(state: GmailRadarScanState | None) -> dict:
     if state is None:
         return {"status": "never_scanned", "checked": 0, "added": 0,
                 "skipped": 0, "failed": 0, "last_started_at": None,
-                "last_finished_at": None}
+                "last_finished_at": None, "scan_kind": None,
+                "three_day_count": None, "three_day_remaining": None,
+                "three_day_complete": False}
     return {
         "status": state.status,
         "checked": state.checked, "added": state.added,
         "skipped": state.skipped, "failed": state.failed,
         "last_started_at": state.last_started_at,
         "last_finished_at": state.last_finished_at,
+        "scan_kind": state.scan_kind,
+        "three_day_count": state.three_day_count,
+        "three_day_remaining": state.three_day_remaining,
+        "three_day_complete": state.three_day_complete,
     }
 
 
@@ -138,15 +152,40 @@ async def update_radar_item(
     return {"item": _serialize_item(item, email)}
 
 
-@router.post("/quick-scan")
-async def manual_quick_scan(
-    user: dict = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Bounded synchronous manual scan; no cron, job, background task or AI body upload."""
+async def _list_three_day_ids(db: AsyncSession, sub: str, scope: str):
+    """Count actual enumerated message IDs, not Gmail resultSizeEstimate."""
+    found: list[str] = []
+    unique: set[str] = set()
+    page_token: str | None = None
+    complete = False
+    for _ in range(THREE_DAY_MAX_PAGES):
+        params: dict[str, str | int] = {
+            "q": THREE_DAY_QUERY, "maxResults": THREE_DAY_PAGE_SIZE,
+        }
+        if page_token:
+            params["pageToken"] = page_token
+        res = await _request_google(
+            db, sub, scope, "GET", GMAIL_LIST_URL,
+            params=params, preserve_transaction=True,
+        )
+        body = res.json()
+        if not isinstance(body, dict):
+            raise HTTPException(502, "Gmail returned invalid three-day list")
+        for raw in body.get("messages") or []:
+            if isinstance(raw, dict) and raw.get("id"):
+                message_id = str(raw["id"])
+                if message_id not in unique:
+                    found.append(message_id)
+                    unique.add(message_id)
+        page_token = str(body.get("nextPageToken") or "") or None
+        if not page_token:
+            complete = True
+            break
+    return found, complete
+
+
+async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "backfill"]):
     sub = user["sub"]
-    # xact advisory lock also serializes two web sessions of the same user.
-    # Neither the API nor its body accepts a target account.
     locked = (await db.execute(
         text("SELECT pg_try_advisory_xact_lock(5623, hashtext(:sub))"),
         {"sub": sub},
@@ -155,28 +194,58 @@ async def manual_quick_scan(
         raise HTTPException(409, "This account already has a Gmail scan in progress")
 
     connection = await db.get(GoogleConnection, sub)
-    if connection is None or SERVICE_SCOPES["gmail"][0] not in set(connection.scopes.split()):
-        raise HTTPException(409, "Please authorize Gmail in Google service connections")
-
-    now = datetime.now(timezone.utc)
-    checked, added, skipped, failed = 0, 0, 0, 0
     scope = SERVICE_SCOPES["gmail"][0]
-    response = await _request_google(
-        db, sub, scope, "GET", GMAIL_LIST_URL,
-        params={"q": "newer_than:7d -in:spam -in:trash", "maxResults": 20},
-        preserve_transaction=True,
-    )
-    ids = [str(item["id"]) for item in response.json().get("messages", [])
-           if isinstance(item, dict) and item.get("id")][:20]
+    if connection is None or scope not in set(connection.scopes.split()):
+        raise HTTPException(409, "Please authorize Gmail in Google service connections")
+    now = datetime.now(timezone.utc)
+    three_day_ids, listed_all = await _list_three_day_ids(db, sub, scope)
 
-    for message_id in ids:
+    if kind == "quick":
+        response = await _request_google(
+            db, sub, scope, "GET", GMAIL_LIST_URL,
+            params={"q": QUICK_QUERY, "maxResults": QUICK_LIMIT},
+            preserve_transaction=True,
+        )
+        body = response.json()
+        if not isinstance(body, dict):
+            raise HTTPException(502, "Gmail returned invalid quick scan list")
+        selected = [
+            str(ref["id"]) for ref in body.get("messages") or []
+            if isinstance(ref, dict) and ref.get("id")
+        ][:QUICK_LIMIT]
+    else:
+        selected = []
+
+    lookup_ids = list(dict.fromkeys([*three_day_ids, *selected]))
+    seen_ids: set[str] = set()
+    if lookup_ids:
+        result = await db.execute(select(GmailRadarSeen.gmail_message_id).where(
+            GmailRadarSeen.user_sub == sub,
+            GmailRadarSeen.gmail_message_id.in_(lookup_ids),
+        ))
+        seen_ids = set(result.scalars().all())
+
+    if kind == "backfill":
+        # Only unseen IDs, not the first 40 IDs again. Repeating backfill
+        # thus progresses through three days rather than wasting requests.
+        selected = [message_id for message_id in three_day_ids
+                    if message_id not in seen_ids][:BACKFILL_BATCH]
+    checked, added, skipped, failed = 0, 0, 0, 0
+    newly_seen: set[str] = set()
+    for message_id in selected:
         checked += 1
+        if message_id in seen_ids or message_id in newly_seen:
+            skipped += 1
+            continue
         existing = await db.scalar(select(GmailRadarItem.id).where(
             GmailRadarItem.user_sub == sub,
             GmailRadarItem.gmail_message_id == message_id,
         ))
         if existing:
             skipped += 1
+            db.add(GmailRadarSeen(user_sub=sub, gmail_message_id=message_id,
+                                 checked_at=now))
+            newly_seen.add(message_id)
             continue
         try:
             response = await _request_google(
@@ -189,28 +258,33 @@ async def manual_quick_scan(
                 preserve_transaction=True,
             )
             raw = response.json()
+            if not isinstance(raw, dict):
+                raise ValueError("Invalid Gmail metadata")
             subject = _gmail_header(raw, "Subject").strip()[:500]
             snippet = str(raw.get("snippet") or "").strip()[:500]
             category = classify_message(subject, snippet)
-            if not category:
+            if category:
+                stamp = raw.get("internalDate")
+                received_at = None
+                if stamp is not None:
+                    try:
+                        received_at = datetime.fromtimestamp(
+                            int(stamp) / 1000, tz=timezone.utc)
+                    except (ValueError, TypeError, OverflowError):
+                        pass
+                db.add(GmailRadarItem(
+                    user_sub=sub, gmail_message_id=message_id,
+                    gmail_thread_id=str(raw.get("threadId") or message_id),
+                    category=category, title=subject or "Gmail 待確認事項",
+                    summary=snippet[:320], sender=_gmail_header(raw, "From")[:320],
+                    status="pending", received_at=received_at,
+                ))
+                added += 1
+            else:
                 skipped += 1
-                continue
-            stamp = raw.get("internalDate")
-            received_at = None
-            if stamp is not None:
-                try:
-                    received_at = datetime.fromtimestamp(int(stamp) / 1000, tz=timezone.utc)
-                except (ValueError, TypeError, OverflowError):
-                    pass
-            item = GmailRadarItem(
-                user_sub=sub, gmail_message_id=message_id,
-                gmail_thread_id=str(raw.get("threadId") or message_id),
-                category=category, title=subject or "Gmail 待確認事項",
-                summary=snippet[:320], sender=_gmail_header(raw, "From")[:320],
-                status="pending", received_at=received_at,
-            )
-            db.add(item)
-            added += 1
+            db.add(GmailRadarSeen(user_sub=sub, gmail_message_id=message_id,
+                                 checked_at=now))
+            newly_seen.add(message_id)
         except HTTPException as exc:
             if exc.status_code in (401, 403, 409):
                 raise
@@ -218,17 +292,42 @@ async def manual_quick_scan(
         except (ValueError, TypeError, KeyError):
             failed += 1
 
+    covered_ids = seen_ids | newly_seen
+    remaining = sum(message_id not in covered_ids for message_id in three_day_ids)
+    three_day_complete = listed_all and remaining == 0
     state = await db.get(GmailRadarScanState, sub)
     if state is None:
         state = GmailRadarScanState(user_sub=sub, status="succeeded")
         db.add(state)
-    state.status = "partial" if failed else "succeeded"
+    state.status = "partial" if failed or not listed_all else "succeeded"
     state.last_started_at = now
     state.last_finished_at = datetime.now(timezone.utc)
-    state.checked = checked
-    state.added = added
-    state.skipped = skipped
-    state.failed = failed
+    state.scan_kind = kind
+    state.checked, state.added, state.skipped, state.failed = checked, added, skipped, failed
+    state.three_day_count = len(three_day_ids)
+    state.three_day_remaining = remaining
+    state.three_day_complete = three_day_complete
     await db.commit()
-    return {"source": "rules", "scan_window_days": 7, "limit": 20,
-            **_serialize_state(state)}
+    return {
+        "source": "rules", "scan_window_days": 7 if kind == "quick" else 3,
+        "limit": QUICK_LIMIT if kind == "quick" else BACKFILL_BATCH,
+        "three_day_count_capped": not listed_all,
+        **_serialize_state(state),
+    }
+
+
+@router.post("/quick-scan")
+async def manual_quick_scan(
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _run_scan(user, db, kind="quick")
+
+
+@router.post("/backfill-three-days")
+async def manual_three_day_backfill(
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Explicit per-user button only; bounded 40 unseen IDs per request."""
+    return await _run_scan(user, db, kind="backfill")

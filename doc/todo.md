@@ -10,11 +10,12 @@ Updated 2026-10-16. **One active backlog only.** Prior 01–07 execution plan ha
 | P2-2 | Audit dependency/action pinning, public-repository hygiene, access to operational docs, observability, backup restoration and scheduled-job dedupe. | Risk follow-up **NOT VERIFIED** |
 
 
-## Planned next feature — 設計完成，尚未開發（2026-10-16）
+## P2-3｜生活收件匣 V1 已開發、CI 與 Staging 通過（2026-10-16）
 
 | Priority | Work / exit gate | Status |
 | --- | --- | --- |
-| P2-3 | **Life 生活收件匣＋快速新增＋筆記網址摘要**：先完成已核准的架構／API Schema／Gemini developer prompt，後續才依 [單一規格](life_inbox_quick_capture_spec.md) 與 [工程 AI 指示](life_inbox_ai_developer_instructions.md) 實作；共用快速新增、待辦／購物／日曆／筆記多分類與原地勾選確認、選擇性安全文章摘要、per-item 去重及錯誤回復。後台 life_inbox 預設 beta/owner，僅 Admin 主動 enabled/all 才對一般帳號開放；所有新 API 需 server gate、登入及目的功能權限。 | **DESIGN READY / NOT STARTED**：本次只提交 docs，未改 application/schema/migration/tests/CI/deployment，不可標示已開放或上線。 |
+| P2-3 | **Life 生活收件匣＋快速新增＋筆記網址摘要**。依 [V1 規格](life_inbox_quick_capture_spec.md) 與 [AI 工程指示](life_inbox_ai_developer_instructions.md) 已將 Admin `life_inbox` 預設 `beta/owner`、`/inbox/interpret`／`commit`／`receipts`／`article-preview`、Flutter 首頁／全站快速新增及筆記網址摘要提示實作至程式 SHA `03295a0`；待完成 Owner 實際登入後分類、購物清單、日曆、筆記摘要／網頁抓取與各式部分失敗／重送的完整端到端驗收，再決定是否正式發布與由 Admin `enabled/all` 開放一般帳號。 | **IMPLEMENTATION PASS／CI PASS／STAGING PASS，整體 PARTIAL**。同 SHA [CI #38866256031](https://github.com/tommylin15/life_assistant/actions/runs/38866256031) 四項 PASS；[V3 staging-only #38866539155](https://github.com/tommylin15/life_assistant/actions/runs/38866539155) completed/success，固定 staging `staging_live=PASS`、OAuth redirect PASS、live traffic unchanged；Owner 真人操作／新的 Life Inbox E2E、production promotion **NOT VERIFIED／NOT DONE**。 |
+
 
 **02／03 使用者正式版人工驗收：PASS／DONE（2026-10-15）**。使用者明確回報「02,03驗收完畢」：02 購物清單／品項修改、刪除、批次新增、重載及待辦刪除不白畫面；03 活動跨日搜尋／分頁、收藏、個人待辦／追蹤及 Calendar 操作與讀回。已從 active backlog 移除 P1-2／P1-3；正式版操作是使用者回報，非自動化每條 API log。原有 CI/正式部署證據分開保留見 [acceptance.md](acceptance.md) 與 [CURRENT_STATE.md](CURRENT_STATE.md)。**01 已於 2026-10-16 由真實 Execution + Sheet／PG 版本比對 PASS 結案**。
 

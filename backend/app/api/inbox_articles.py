@@ -35,6 +35,23 @@ class SummaryOutput(BaseModel):
     uncertainties: list[str] = Field(default_factory=list, max_length=5)
 
 
+def parse_gemini_summary(raw: str) -> SummaryOutput:
+    """Parse only a bounded structured summary; allow harmless Gemini fences."""
+    if not isinstance(raw, str) or len(raw) > 18000:
+        raise ValueError("Summary response too long")
+    payload = raw.strip()
+    position = payload.find("{")
+    if position < 0 or position > 300:
+        raise ValueError("Summary has no JSON object")
+    parsed, _ = json.JSONDecoder().raw_decode(payload[position:])
+    output = SummaryOutput.model_validate(parsed)
+    if any(not s.strip() or len(s) > 350 for s in output.key_points):
+        raise ValueError("Invalid key point")
+    if any(not s.strip() or len(s) > 300 for s in output.uncertainties):
+        raise ValueError("Invalid uncertainty")
+    return output
+
+
 class ArticleExtractor(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -177,11 +194,7 @@ async def article_preview(body: ArticlePreviewInput, response: Response,
     )
     try:
         raw = (await generate_text(prompt, user_sub=user["sub"], purpose="life_inbox"))["text"]
-        fence = chr(96) * 3
-        raw = raw.strip()
-        if raw.startswith(fence):
-            raw = raw.split("\n", 1)[-1].rsplit(fence, 1)[0].strip()
-        summary = SummaryOutput.model_validate(json.loads(raw))
+        summary = parse_gemini_summary(raw)
     except GatewayTextError as exc:
         logging.warning("inbox_article_summary=FAIL phase=gateway code=%s", exc.code)
         raise ApiError(503, "article_ai_" + exc.code,

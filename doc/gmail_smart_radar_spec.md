@@ -1,53 +1,38 @@
-# Gmail 智慧事項雷達 — 週期掃描與個人「快掃」設計
+# Gmail 智慧事項雷達 — V1「單人手動快掃」
 
-更新：2026-10-16（Asia/Taipei）
-狀態：**使用者產品需求已提出；設計／工作契約，非已上線功能。** Implementation / tests / CI / staging / production / real-account E2E = **NOT VERIFIED**。
-Source of truth：現行 GitHub main 與實際 runtime；本文件提供實作驗收契約，不能取代證據。
+日期：2026-10-16（Asia/Taipei）
+**最新核准範圍：僅手動個人快掃；每小時排程、全員掃描、主動推播全部暫緩。**
+文件類型：核准需求／工程設計；實作、CI、staging、正式版、真實帳號整合均須個別證據才能標 PASS。
 
-## 目的及與現有功能的關係
+## 產品定位
+Life 不複製 Gmail 全信箱，不做郵件用戶端。使用者在 Life「Gmail 智慧事項雷達」按「立即快掃」後，僅讀目前登入者所連結且有效授權的 Gmail 近期候選郵件，辨識有生活行動價值的資訊，寫入本人的「Gmail 事項清單」，附上原信連結。使用者可以忽略或完成事項，完整內容回 Gmail 查閱。
+此功能與使用者輸入自由文字的「生活收件匣」是不同入口，不新增另一套 Task 或 Calendar。未經本人明確按下轉換動作，不代替使用者建立待辦或日曆。
 
-Life 不重做 Gmail 郵件客戶端。定期或按需檢查**逐人明確授權且啟用**的 Gmail，辨識有行動價值的資訊，寫入個人「Gmail 智慧事項」清單，依使用者通知設定提示；完整信件仍在 Gmail，Life 僅顯示適量摘要與「開啟 Gmail」。
-與現有 Life Inbox 快速新增（使用者主動輸入文字）分開入口但共用必要的分類／確認原則，不另創 Task／Calendar 資料表。
-現有 `backend/app/api/google_integrations.py` 只有最近郵件 metadata/snippet 清單及使用者手動 Gmail→Task/Calendar，`backend/app/services/google_oauth.py` 提供 Gmail readonly scope 與 refresh token；**尚無**可聲稱通過驗收的智慧雷達、單人快掃端點、增量游標、常駐郵件通知排程。新設計不應把既有手動轉換當成已完成的快掃。
+## V1 UI
+- 獨立功能頁與個人化可選導覽。右上角明顯「立即快掃」按鈕，旁邊只顯示上次真實掃描時間／此次掃描結果，**不顯示尚未實作的排程開關**。
+- 有 Gmail OAuth 授權才允許開始。缺少授權顯示「前往個人化 → Google 服務連結」。
+- 扫描中禁止本裝置重複點擊；後端確保登入者專用 scan 狀態互斥（多瀏覽器），掃描結果：已檢查／新增事項／已存在略過／失敗數／時間。零筆新發現仍是成功；錯誤不得顯示掃描成功。
+- 事項卡：分類、簡短標題／摘要、來源寄件者與日期（有證據才顯示）、原始 Gmail 連結、待處理／已完成／已忽略。盡量少保存敏感資訊。
+- 先實作「原信查看、完成、忽略」；後續沿用既有手動 Gmail→Task/Calendar 操作（需個人確認），不另外做自動寫入。
 
-## 核心 UX
+## V1 技術與授權
+1. Flutter Web/PWA → FastAPI `POST /integrations/google/gmail/radar/quick-scan` → Google Gmail API `gmail.readonly` → PostgreSQL。API **不接受其他人的 user_id / email**，使用 `current_user.sub` 授權。
+2. 首版限定近期窗口（預設最近 7 天）和封數上限（最多 50），使用 bounded Gmail `messages.list` 與 `messages.get(format=metadata)`。先用 deterministic 規則辨識明確通知與高價值候選；**未取得本人獨立 AI 同意時，不讀全文傳 Gemini**。未使用 Gemini 的狀態必須如實標「規則辨識」，不能標 AI 已分析。
+3. 每人獨立資料與唯一約束 `(user_sub, gmail_message_id)`；相同郵件重掃不重建、不覆蓋已完成/忽略。必要資料：message ID、thread ID、分類、簡短說明、時間、狀態、最後掃描時間；不保存原信、附件、完整正文或 token。
+4. 同使用者後端操作採有界互斥／資料庫 advisory lock 或 durable lease，不能只靠前端 disabled。快掃可以採有上限同步執行並返回實際結果；若工作超過 Cloud Run 請求可靠時間，應另採可靠 queue/Job 方案，不用無保證背景任務。
+5. 在 Gmail 原信上有 Web/Android 連結；注意多帳號情境及 Gmail API messageId 不一定等同前端可直接定位的 thread route，若無法可靠直達則明確 fallback 至 Gmail 搜尋/收件匣；不假造保證。
+6. 不建立 Cloud Scheduler、沒有 hourly/全員 worker、不啟用 background push，**本輪不以通知系統完整建成為 gate**。
+7. API 權限失效、重連、Google 429/5xx、單封部分失敗，應顯示清楚；進行中不應寫成成功。紀錄不包含私人郵件正文。
+8. Google `gmail.readonly` 是 restricted OAuth scope，對外產品 OAuth verification、安全評估仍為獨立風險，不能視為已核准。
 
-- Life 導覽：`Gmail 智慧事項雷達`；頁面標題右側有明顯 **「快掃」** 按鈕（手機可單指操作）。
-- 頁首顯示「每小時掃描（啟用／停用）」、「上次成功掃描時間」、「目前掃描進度／錯誤或重新授權提示」；時間以實際完成紀錄顯示，不用預估冒充實績。
-- **快掃**：按下立即對「目前登入的 Life 使用者所綁定的 Gmail」提交一次單人掃描，不觸發其它使用者、也不觸發全員 hourly scan。按鈕在同帳號執行中不可再次啟動，顯示原 job 狀態（queued/running/completed/partial/failed）。
-- 每次完成更新結果摘要：`檢查郵件數 / 新增事項數 / 已存在略過數 / 需要人工確認數 / 失敗數`；只顯示真實統計。
-- 個人事項卡：重要性、分類、可信日期（不確定時待確認）、最短必要說明、來源寄件者與郵件時間、處理狀態，以及 **「開啟 Gmail 原信」**。可選忽略、已處理、建立 Task/Calendar（使用者明確確認）。
-- **不複製完整 Gmail UI**：不做 Gmail 收信、寄送、回覆、封存、標籤或郵件刪除；不長期保存原始郵件／附件。
+## 驗收
+- 使用者 A 快掃只讀寫 A，任何參數篡改無法處理 B；沒 Gmail scope 就返回明確重新授權狀態。
+- 同人重複掃描只新增一次；完成／忽略狀態持久化；不同使用者可各自掃描。
+- Flutter 在授權／成功零項／部分失敗／無權限／讀取失敗各狀態正確。
+- 不啟用 Scheduler、Cron、通知 Worker 或私有全文 Gemini 處理。
+- Backend tests、Flutter tests、Migration、4 類 CI、固定 Staging、正式發布與真實 Gmail 授權手機／Web 完整讀回：逐層 PASS／FAIL／NOT VERIFIED，不能僅憑程式提交標 DONE。
 
-## 後端與執行契約
+## 暫緩第二階段
+每小時自動掃描、Gmail historyId 增量游標、AI 本文理解、推播通知、全員後台管理與個人開關：均不屬 V1 交付。後續由使用者另行啟動，勿提前建立排程。
 
-1. 保持 Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL。
-2. 兩種觸發共用**同一個 scanner domain service**：
-   - Cloud Scheduler 每小時啟動一次安全的 batch job，僅處理 enabled 且有效授權的個人。
-   - `POST /integrations/google/gmail/radar/quick-scan`（建議 API contract）使用現有 `current_user` 授權，**無** user_sub、email 或 target_user_id 的可傳入參數。僅操作綁定至本人的 Gmail；回應 `202 Accepted` 加不含私人內容的 `scan_id`，非同步工作完成由 `GET /integrations/google/gmail/radar/scans/{scan_id}`（建議）查狀態。
-   - API 必須先在 DB 持久保存 job reservation／per-user lock，再交由可靠執行載體（現有 GCP Jobs／有驗證的 Cloud Tasks 等）處理，不依賴請求返回後可能遭 Cloud Run 結束的記憶體 background task。不得為一人快掃啟動全員排程。
-   - 每位使用者跨手動與定期來源**最多一個同時執行**；重複點擊／同時 hourly 觸發回傳既有 job ID，完成後保留摘要與實際時間；使用者重新整理仍可取得進度。
-3. 使用 Gmail API 增量游標 `historyId`，儲存 user_sub / cursor / last_success / scan source / scan status；第一次啟用採保守有限時間窗與數量上限（建議最近 7 天、最多 100 封，可逐步分頁）。手動和自動共用游標及同一套 dedupe；只在**所有已取得頁面完成持久處理後**推進游標。
-4. `history.list` 游標過期（Gmail 可能回 404）時，執行**有界限補掃**並記錄 partial，不得默默跳過信件或宣稱全信箱掃描成功。正確處理分頁、quota、429/5xx、逾時、OAuth 失效和重試。
-5. 初篩採 deterministic 規則；真正需要語意判讀的候選才呼叫既有 Life → omniAgent Gateway → Gemini，遵守使用者**單獨的郵件內容 AI 同意**、成本控制、超時與降級。AI 不可猜測金額/日期；有證據才提供，否則標「待確認」。原信的信件內容不可寫入 log 或永久留存。
-6. 每位 user 保留最小必要資料：事項標題／短摘要／分類／重要性／可能的 date、Gmail message ID／thread ID、已處理狀態、掃描時間、來源與模型／規則 provenance。以 `user_sub + message_id + semantic_action_key` 或等價穩定鍵做 unique/idempotency；同項內容沒有實質改變，不重建立、不重通知。
-7. 通知與掃描分離：只在新增且符合個人通知設定的高重要性事項通知，先保存 notification intent／dedupe key；失敗重試不得推送第二次。快掃也遵守通知設定，不另建重複通知服務；低重要性只更新清單。
-8. `開啟 Gmail` 使用 Gmail HTTPS 原信／會話導向，不將全文在 Life 展開。**Gmail API messageId/threadId 並不等同於可保證跨瀏覽器、多 Gmail 帳號與原生 App 均直達的穩定網址**；要用真實雙帳號與 Android/Web 驗證來源連結；不能保證深連結時採可明確辨識帳號的 Gmail 搜尋／信箱入口，絕不顯示錯誤帳號的郵件。
-9. 任何要求掃描他人信箱、未授權、AI 同意關閉、取消連結、登入逾期均依最小權限拒絕或優雅降級。原始 Gmail 正文不進 user-visible execution log；admin 不得閱讀個人郵件或事項內容。
-
-## 驗收清單（不得以 UI 存在當作已完成）
-
-- 授權：使用者 A 按快掃只產生 A 的掃描，無法以竄改 request / scan_id 取得 B 的信件或結果；未授權給出可操作的重連提示。
-- 排程：每小時只選 enabled 且 Gmail scope 合法的帳號；停用後不繼續讀取，取消 AI 同意不發送正文。
-- 共用引擎：同封郵件經 hourly → quick scan → retry，事項只新增一次、推播只發一次；同時提交只保留一筆 active scan。
-- UI：按鈕有 queued/running/complete/partial/failed 及真實統計；中斷網路、重新整理頁面仍能讀取執行結果；掃描失敗不顯示「完成」。
-- 連結：Android Gmail App/瀏覽器、Web、多登入帳號的原信跳轉逐一 E2E；不可直達時有安全 fallback。
-- 完成條件：implementation、tests、四項 CI、staging、production 與真實登入 Gmail 整合視任務需求各別 PASS/FAIL/NOT VERIFIED；沒有實證只能 PARTIAL。
-
-## 外部規格依據
-
-- Gmail history.list: https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.history/list
-- Gmail sync: https://developers.google.com/workspace/gmail/api/guides/sync
-- Gmail OAuth scopes: https://developers.google.com/workspace/gmail/api/auth/scopes
-
-限制：目前 `gmail.readonly` 是 restricted scope；對外公開使用及 Gmail 資料的伺服器保存／傳輸可能涉及 Google OAuth 驗證與安全評估，正式產品化前應核查，不宣稱已獲核准。
+唯一工作追蹤：`doc/todo.md` P1-G1。重複舊草案不代表更新的核准指令。

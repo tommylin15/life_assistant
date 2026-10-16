@@ -1,5 +1,12 @@
 # Life — Current state
 
+## 2026-10-16｜生活收件匣 Gemini 啟用修復：最新 Staging #38877006034 PASS
+- **實作與同 SHA CI：PASS** — code SHA `2aa917663c037c57887defb6fa6c1d4c0ab82344`，Life Inbox 專用 Gemini `gemini_life_inbox_enabled=True`，經內部 `purpose=life_inbox` 呼叫 Gateway，保留通用 `/ai/text` 的獨立既有開關；網址摘要新增 Google share.google／公開 URL 安全轉址、失敗原因分類與中文提示、SSRF 保護，無任何用戶資料自動寫入。對應 [CI #38876663435](https://github.com/tommylin15/life_assistant/actions/runs/38876663435)：backend / flutter / free-events-postgres / deployment-scripts 四項 success。
+- **最新固定 Staging：PASS／該發布範圍 DONE** — [Release #38877006034](https://github.com/tommylin15/life_assistant/actions/runs/38877006034) `completed/success`，相同 `2aa9176` SHA，`staging_live_readback=PASS layer=hosting_version_and_static_sha`、`staging_live_readback=PASS layer=pins_and_api_401`、`staging_live_ready=PASS attempt=1`、`staging_google_redirect=PASS fixed_staging_callback`、`staging_live=PASS sha=2aa9176... version=sites/life-assistant-v3-stage-tl15/versions/1b45d60d34fbed2b oauth_redirect=PASS owner_login_e2e=NOT_VERIFIED traffic_unchanged=true`。固定入口：https://life-assistant-v3-stage-tl15.web.app。
+- **未被本次 release 證明的事項：NOT VERIFIED** — Owner 真實登入後測試多語意分類 Gemini 模型回覆、實際 share.google 轉址與文章擷取／摘要、Gateway 原因碼、單筆與多筆持久化讀回／重送；Cloud Run runtime 是否有覆蓋 `GEMINI_LIFE_INBOX_ENABLED=false` 的顯式環境設定亦未做獨立 config readback。生產正式流量未切換，Admin `life_inbox` 開放 all 未啟動。整體產品仍 PARTIAL。
+- **證據限制**：`staging_live=PASS` 代表 matching-SHA 部署、403/401 及固定版讀回，不應把它敘述成 Gemini 真實推論的 PASS。文件變更只記錄證據，不更改上述已發布應用 SHA。
+
+
 ## 2026-10-16｜生活收件匣 V1：同 SHA 四項 CI + Staging 完成（優先於下方歷史快照）
 - **實作來源：PASS**：`03295a0b8067d3046da2877c70a7874b06976a78`，新增 `life_inbox` owner-only 預設 rollout、分類候選、用戶明確確認的寫入、收據、文章預覽、Flutter 入口及筆記摘要提示；單元與 Flutter widget 測試在 CI 執行。詳細設計見 [V1 SPEC](life_inbox_quick_capture_spec.md) 及 [AI 工程指示](life_inbox_ai_developer_instructions.md)。
 - **CI：PASS**：[CI #38866256031](https://github.com/tommylin15/life_assistant/actions/runs/38866256031) 同 SHA backend、flutter、deployment-scripts、free-events-postgres 四項成功。

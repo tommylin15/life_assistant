@@ -335,6 +335,13 @@ class _DrivePageState extends ConsumerState<DrivePage> {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
+            FilledButton.icon(
+              key: const ValueKey('drive-open-explorer'),
+              onPressed: () => context.go('/more/drive/files'),
+              icon: const Icon(Icons.folder_open_outlined),
+              label: const Text('開啟 Google Drive 檔案總管'),
+            ),
+            const SizedBox(height: AppSpacing.md),
             if (_settings['allow_document_content'] == false) ...[
               const SizedBox(height: AppSpacing.lg),
               AppSectionCard(

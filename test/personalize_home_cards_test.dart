@@ -23,7 +23,7 @@ class _FakeAuth extends AuthNotifier {
 }
 
 void main() {
-  testWidgets('home personalization includes opportunities and explore and saves their order',
+  testWidgets('home personalization dedupes legacy opportunities and explore into one card',
       (tester) async {
     tester.view.physicalSize = const Size(1200, 1200);
     tester.view.devicePixelRatio = 1;
@@ -44,25 +44,21 @@ void main() {
     ], child: const MaterialApp(home: PersonalizePage())));
     await tester.pumpAndSettle();
 
-    final opportunity = find.byKey(const ValueKey('home-card-opportunities'));
     final explore = find.byKey(const ValueKey('home-card-explore'));
-    expect(opportunity, findsOneWidget);
+    expect(find.byKey(const ValueKey('home-card-opportunities')), findsNothing);
     expect(explore, findsOneWidget);
-    expect(tester.widget<CheckboxListTile>(opportunity).value, false);
+    expect(tester.widget<CheckboxListTile>(explore).value, false);
 
-    await tester.ensureVisible(opportunity);
-    await tester.tap(opportunity);
-    await tester.pumpAndSettle();
     await tester.ensureVisible(explore);
     await tester.tap(explore);
     await tester.pumpAndSettle();
-    expect(tester.widget<CheckboxListTile>(opportunity).value, true);
+    expect(find.byKey(const ValueKey('home-card-opportunities')), findsNothing);
     expect(tester.widget<CheckboxListTile>(explore).value, true);
 
     final save = find.text('儲存偏好');
     await tester.ensureVisible(save);
     await tester.tap(save);
     await tester.pumpAndSettle();
-    expect(api.lastBody?['home_cards'], ['tasks', 'opportunities', 'explore']);
+    expect(api.lastBody?['home_cards'], ['tasks', 'explore']);
   });
 }

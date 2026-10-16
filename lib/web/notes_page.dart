@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'browser_navigation.dart';
 import 'note_api.dart';
 import 'platform_api.dart';
+import 'inbox_article_errors.dart';
 import 'note_drive_relations.dart';
 import 'visual_system.dart';
 
@@ -431,9 +432,9 @@ class _EditorDialogState extends ConsumerState<_EditorDialog> {
             '\n\n## 文章摘要\n' + points +
             (uncertain.isEmpty ? '' : '\n\n## 需要核對\n' + uncertain);
       });
-    } catch (_) {
+    } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('文章無法摘要，可以只保留網址儲存筆記')),
+        SnackBar(content: Text(inboxArticleErrorMessage(error))),
       );
     } finally {
       if (mounted) setState(() => _summarizing = false);

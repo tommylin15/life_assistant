@@ -43,7 +43,7 @@ class DriveTextEditTests(IsolatedAsyncioTestCase):
         self.db = MagicMock()
         self.db.commit = AsyncMock()
         self.doc = SimpleNamespace(
-            user_sub="owner-a", google_file_id="google-id-1",
+            id="doc-1", user_sub="owner-a", google_file_id="google-id-1",
             name="note.txt", modified_at=None, mime_type="text/plain")
 
     async def test_foreign_document_cannot_trigger_google_read(self):

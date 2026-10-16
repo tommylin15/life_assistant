@@ -118,6 +118,41 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
     openExternalBrowser(url!);
   }
 
+  bool _canPreviewText(Map<String, dynamic> file) =>
+      const {'text/plain', 'text/markdown', 'text/csv', 'application/json'}
+          .contains(file['mime_type']);
+
+  Future<void> _previewText(Map<String, dynamic> file) async {
+    final id = file['id']?.toString() ?? '';
+    if (id.isEmpty || !_canPreviewText(file)) return;
+    try {
+      final result = await ref.read(platformApiProvider).get(
+        '/drive/manager/files/' + Uri.encodeComponent(id) + '/text-preview');
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('文字預覽：' + (result['name']?.toString() ?? '檔案')),
+          content: SizedBox(
+            width: 540,
+            height: 380,
+            child: SingleChildScrollView(
+              child: SelectableText(result['text']?.toString() ?? ''),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('關閉')),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) setState(() => _error =
+          '無法安全預覽這個檔案，請使用 Google Drive 原始檔案入口。');
+    }
+  }
+
   Future<void> _createFolder() async {
     if (_working) return;
     final controller = TextEditingController();
@@ -303,10 +338,13 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
                   : PopupMenuButton<String>(
                     onSelected: (choice) {
                       if (choice == 'open') _open(file);
+                      if (choice == 'preview') _previewText(file);
                       if (choice == 'move') _move(file);
                     },
                     itemBuilder: (ctx) => [
                       const PopupMenuItem(value: 'open', child: Text('原檔開啟／預覽')),
+                      if (_canPreviewText(file))
+                        const PopupMenuItem(value: 'preview', child: Text('Life 內文字預覽')),
                       if (file['can_edit'] == true)
                         const PopupMenuItem(value: 'move', child: Text('移動至資料夾')),
                     ],

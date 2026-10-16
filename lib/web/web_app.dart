@@ -20,6 +20,7 @@ import 'platform_api.dart';
 import 'today_page.dart';
 import 'personalize_page.dart';
 import 'admin_center_page.dart';
+import 'life_capture_page.dart';
 
 final _router = GoRouter(
   routes: [
@@ -37,6 +38,7 @@ final _router = GoRouter(
           path: '/today',
           builder: (_, __) => const FeatureAccess(feature: 'today', child: TodayPage()),
         ),
+        GoRoute(path: '/capture', builder: (_, __) => const FeatureAccess(feature: 'life_inbox', child: LifeCapturePage())),
         GoRoute(path: '/tasks', builder: (_, __) => const FeatureAccess(feature: 'tasks', child: TasksPage())),
         GoRoute(path: '/calendar', builder: (_, __) => const FeatureAccess(feature: 'calendar', child: CalendarPage())),
         GoRoute(path: '/projects', builder: (_, __) => const FeatureAccess(feature: 'projects', child: ProjectsPage())),

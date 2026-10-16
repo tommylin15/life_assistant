@@ -88,13 +88,16 @@ class AuthApiTests(IsolatedAsyncioTestCase):
                 "name": "Owner", "exp": 9999999999}
         with patch("app.api.auth._complete_login",
                    new=AsyncMock(return_value=("jwt-token", user))) as complete, \
-             patch("app.api.auth._audit_staging_e2e", new_callable=AsyncMock) as audit:
+             patch("app.api.auth._audit_staging_e2e", new_callable=AsyncMock) as audit, \
+             patch("app.api.auth._create_persistent_session",
+                   new=AsyncMock(return_value="test-session")) as create:
             response = await auth.callback("google-code", state, callback_req, object())
         complete.assert_awaited_once_with("google-code", auth.STAGING_REDIRECT_URI)
         audit.assert_awaited_once()
         self.assertEqual(response.headers["location"],
                          "https://life-assistant-v3-stage-tl15.web.app/")
-        self.assertIn("id:staging:jwt-token", response.headers["set-cookie"])
+        self.assertIn("se:staging:test-session", response.headers["set-cookie"])
+        create.assert_awaited_once()
         with patch("app.api.auth._verify_id_token",
                    new=AsyncMock(return_value=user)) as verify:
             session_request = Request({"type": "http", "path": "/auth/me", "headers": [

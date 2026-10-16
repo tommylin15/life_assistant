@@ -35,6 +35,10 @@ String _dateString(DateTime d) =>
 void main() {
   testWidgets('month grid selects a day and keeps the agenda compact until details',
       (tester) async {
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final today = DateTime.now();
     final day = DateTime(today.year, today.month, today.day == 1 ? 2 : 1);
     final tomorrow = DateTime(day.year, day.month, day.day + 1);

@@ -8,6 +8,7 @@ Updated 2026-10-16. **One active backlog only.** Prior 01–07 execution plan ha
 | P1-6 | **2026-10-16 行程與活動視覺整合驗收**：月曆格狀及小圖示、點選日期摘要與詳情；單一活動探索入口／三模式、首頁及個人化去重、舊連結／rollout／收藏資料兼容。 | **PARTIAL**：Flutter source 已提交 main，新增 nav／主活動分組及月曆選日詳情 widget 測試；本 SHA 的 Flutter analyze/test、4 項 CI、staging、正式 Hosting 及真實 Google Calendar 操作 **NOT VERIFIED**。 |
 | P1-1 | Complete **signed Gemini through logged-in Life `/ai/text` and UI** including 429/502/503/timeout, permission/quotas and no implicit Google Drive content transfer. | Signed synthetic smoke **PASS**, UX E2E **NOT VERIFIED** |
 | P1-4 | Drive AI admin/per-user consent, provider failures, **real token/cost/accounting** if introducing budget enforcement; never fabricate spend. | Partial implementation, costs/budget **NOT VERIFIED** |
+| P1-7 | **Gmail 智慧事項雷達（每小時＋單人立即快掃）**：每小時只掃授權且已 opt-in 使用者，Flutter「立即快掃」只觸發當前 Login Owner 的單人掃描；同使用者排程／手動共用耐久工作與鎖、historyId 增量、結構化候選事項、通知與 Gmail 原信連結，按需 Gemini 並尊重個人 consent。操作須提供掃描進度及 0 新事項／部分失敗回報；**未經確認不自動建 Task／Calendar**。唯一設計入口：[Gmail radar spec](gmail_radar_spec.md)。 | **SPEC PASS／IMPLEMENTATION NOT VERIFIED**：截至本次盤點現有 Gmail 僅有近期 metadata 列表及手動轉 Task/Calendar；獨立雷達清單、每小時 worker、快速掃描 API/UI、正式通知／手機原信連結均未驗收。 |
 | P2-2 | Audit dependency/action pinning, public-repository hygiene, access to operational docs, observability, backup restoration and scheduled-job dedupe. | Risk follow-up **NOT VERIFIED** |
 
 

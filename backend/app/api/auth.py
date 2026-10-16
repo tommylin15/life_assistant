@@ -1,4 +1,5 @@
 import hashlib
+from datetime import datetime, timedelta, timezone
 import logging
 import os
 import re
@@ -10,6 +11,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.life_login_session import LifeLoginSession
 
 from app.config import settings
 from app.db.session import get_db
@@ -164,7 +167,7 @@ def oauth_redirect_for_request(request: Request) -> str:
     # fixed, allowlisted staging callback; never use an arbitrary URL supplied
     # by a request parameter.
     session = request.cookies.get(SESSION_COOKIE, "")
-    if session.startswith(("oauth:staging:", "id:staging:")):
+    if session.startswith(("oauth:staging:", "id:staging:", "se:staging:")):
         return STAGING_REDIRECT_URI
     hostname = request.headers.get("host", "").split(":", 1)[0].lower()
     forwarded = request.headers.get("x-forwarded-host", "").strip().lower()
@@ -191,6 +194,8 @@ def frontend_for_request(request: Request) -> str:
 # rewritten Cloud Run backends. Prefix the value so an OAuth state cookie
 # cannot be mistaken for an authenticated session.
 SESSION_COOKIE = "__session"
+SESSION_DAYS = 30
+SESSION_SECONDS = SESSION_DAYS * 86400
 SCOPES = " ".join(IDENTITY_SCOPES)
 _verify_id_token = verify_google_id_token
 
@@ -228,7 +233,7 @@ async def _audit_staging_e2e(
         and revision.startswith("life-assistant-api-")
         and (
             request.cookies.get(SESSION_COOKIE, "").startswith(
-                ("oauth:staging:", "id:staging:")
+                ("oauth:staging:", "id:staging:", "se:staging:")
             )
             or oauth_redirect_for_request(request) == STAGING_REDIRECT_URI
         )
@@ -242,28 +247,72 @@ async def _audit_staging_e2e(
     await finish_execution(db, log)
 
 
-async def current_user(request: Request) -> dict:
-    session = request.cookies.get(SESSION_COOKIE, "")
-    if not session.startswith("id:"):
-        raise _http_error(401, "Missing session")
-    token = session.removeprefix("id:")
-    if token.startswith("staging:"):
-        token = token.removeprefix("staging:")
-    user = await _verify_id_token(token)
-    fixed_stage = _fixed_staging_origin(request)
-    # A staging session cannot be replayed at the production hostname or a
-    # spoofed/untagged Cloud Run host, even with a valid Google ID token.
-    if session.startswith("id:staging:") and not fixed_stage:
-        raise _http_error(403, "Invalid staging session origin")
-    # A generic production cookie must not be accepted as a staging login for
-    # non-Owners. Staging's login flow issues the id:staging: provenance prefix.
-    if fixed_stage and not session.startswith("id:staging:"):
-        owner = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().casefold()
-        if not (owner and str(user.get("email", "")).strip().casefold() == owner):
-            raise _http_error(403, "Staging login required")
-    _enforce_account_access(user, staging=(
-        session.startswith("id:staging:") and fixed_stage
+async def _create_persistent_session(
+    db: AsyncSession, user: dict, *, staging: bool,
+) -> str:
+    """Only the SHA256 of a cryptographically random bearer is persisted."""
+    bearer = secrets.token_urlsafe(48)
+    now = datetime.now(timezone.utc)
+    db.add(LifeLoginSession(
+        token_sha256=hashlib.sha256(bearer.encode("ascii")).hexdigest(),
+        user_sub=user["sub"],
+        email=str(user["email"])[:320],
+        display_name=str(user.get("name") or "")[:320],
+        audience="staging" if staging else "production",
+        expires_at=now + timedelta(seconds=SESSION_SECONDS),
     ))
+    await db.commit()
+    return bearer
+
+
+async def _read_persistent_session(
+    db: AsyncSession, cookie: str, *, staging: bool,
+) -> dict:
+    """Validate DB-backed expiry, revocation and the exact environment binding."""
+    prefix = "se:staging:" if staging else "se:production:"
+    if not cookie.startswith(prefix):
+        raise _http_error(403, "Invalid session origin")
+    bearer = cookie.removeprefix(prefix)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{64}", bearer):
+        raise _http_error(401, "Invalid session")
+    record = await db.get(
+        LifeLoginSession, hashlib.sha256(bearer.encode("ascii")).hexdigest()
+    )
+    now = datetime.now(timezone.utc)
+    if (record is None or record.revoked_at is not None
+            or record.expires_at <= now
+            or record.audience != ("staging" if staging else "production")):
+        raise _http_error(401, "Session expired or revoked")
+    return {
+        "sub": record.user_sub,
+        "email": record.email,
+        "name": record.display_name,
+    }
+
+
+async def current_user(
+    request: Request, db: AsyncSession = Depends(get_db),
+) -> dict:
+    session = request.cookies.get(SESSION_COOKIE, "")
+    fixed_stage = _fixed_staging_origin(request)
+    if session.startswith("se:"):
+        user = await _read_persistent_session(db, session, staging=fixed_stage)
+    else:
+        # Backward compatibility until previously issued one-hour Google ID
+        # tokens expire. Never issue new ID-token cookies after this change.
+        if not session.startswith("id:"):
+            raise _http_error(401, "Missing session")
+        token = session.removeprefix("id:")
+        if token.startswith("staging:"):
+            token = token.removeprefix("staging:")
+        user = await _verify_id_token(token)
+        if session.startswith("id:staging:") and not fixed_stage:
+            raise _http_error(403, "Invalid staging session origin")
+        if fixed_stage and not session.startswith("id:staging:"):
+            owner = os.environ.get("ALLOWED_GOOGLE_EMAIL", "").strip().casefold()
+            if not (owner and str(user.get("email", "")).strip().casefold() == owner):
+                raise _http_error(403, "Staging login required")
+    _enforce_account_access(user, staging=fixed_stage)
     _enforce_general_user_route(request, user)
     return user
 
@@ -360,13 +409,13 @@ async def callback(
         id_token, user = await _complete_login(code, callback_uri)
         _enforce_account_access(user, staging=is_staging)
         await _audit_staging_e2e(db, request, user, "staging_google_callback")
-        max_age = max(1, min(3600, int(user["exp"]) - int(time.time())))
+        bearer = await _create_persistent_session(db, user, staging=is_staging)
         frontend_url = frontend_for_request(request) + "/"
         response = RedirectResponse(frontend_url)
         response.set_cookie(
             SESSION_COOKIE,
-            f"id:staging:{id_token}" if is_staging else f"id:{id_token}",
-            max_age=max_age,
+            ("se:staging:" if is_staging else "se:production:") + bearer,
+            max_age=SESSION_SECONDS,
             httponly=True,
             secure=True,
             samesite="lax",
@@ -392,7 +441,7 @@ async def me(
     # A verified fixed-staging login should produce its session-side OAuth
     # evidence on the ordinary /auth/me request, without a hidden query flag.
     # _audit_staging_e2e still checks the real Google owner + K_REVISION.
-    if staging_e2e or request.cookies.get(SESSION_COOKIE, "").startswith("id:staging:"):
+    if staging_e2e or request.cookies.get(SESSION_COOKIE, "").startswith(("id:staging:", "se:staging:")):
         await _audit_staging_e2e(db, request, user, "staging_google_session")
     return {
         "email": user["email"],
@@ -401,6 +450,18 @@ async def me(
 
 
 @router.post("/logout")
-async def logout(response: Response):
-    response.delete_cookie(SESSION_COOKIE, path="/")
+async def logout(
+    request: Request, response: Response, db: AsyncSession = Depends(get_db),
+):
+    cookie = request.cookies.get(SESSION_COOKIE, "")
+    if cookie.startswith(("se:production:", "se:staging:")):
+        bearer = cookie.rsplit(":", 1)[-1]
+        if re.fullmatch(r"[A-Za-z0-9_-]{64}", bearer):
+            session = await db.get(
+                LifeLoginSession, hashlib.sha256(bearer.encode("ascii")).hexdigest()
+            )
+            if session is not None and session.revoked_at is None:
+                session.revoked_at = datetime.now(timezone.utc)
+                await db.commit()
+    response.delete_cookie(SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
     return {"status": "ok"}

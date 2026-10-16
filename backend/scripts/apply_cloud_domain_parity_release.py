@@ -31,6 +31,7 @@ from scripts.reconcile_projects_status_default import (
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 PREVIOUS_RELEASE_REVISION = "20261012_0018"
 LEGACY_DIRECT_RELEASE_REVISIONS = {
+    "20261016_0019",
     "20261010_0016",
     "20261010_0015",
     "20261009_0014",
@@ -43,7 +44,7 @@ LEGACY_DIRECT_RELEASE_REVISIONS = {
     "20261009_0012",
     "20261009_0013",
 }
-RELEASE_TARGET_REVISION = "20261016_0019"
+RELEASE_TARGET_REVISION = "20261016_0020"
 EXIT_RELEASE_REVISION = 60
 EXIT_RELEASE_ALEMBIC = 61
 EXIT_RELEASE_MISSING_TABLES = 62
@@ -97,6 +98,8 @@ RELEASE_REQUIRED_TABLES = {
     "user_ui_preferences",
     "life_ai_policy",
     "life_login_sessions",
+    "gmail_radar_items",
+    "gmail_radar_scan_states",
 }
 RELEASE_REQUIRED_TASK_COLUMNS = {"source_type", "source_ref", "completed_at", "deleted_at", "user_sub"}
 RELEASE_REQUIRED_OWNERSHIP_TABLES = ("notes", "projects", "habits", "shopping_lists")

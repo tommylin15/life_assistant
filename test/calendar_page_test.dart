@@ -107,6 +107,10 @@ Future<void> _pump(WidgetTester tester, _FakeCalendarApi api) async {
 Future<void> _pumpNested(WidgetTester tester, _FakeCalendarApi api) async {
   // MaterialApp owns the root navigator and the page lives inside another
   // Navigator, matching Flutter Web shells that nest navigation scopes.
+  tester.view.physicalSize = const Size(1000, 1600);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     ProviderScope(
       key: UniqueKey(),

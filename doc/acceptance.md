@@ -1,5 +1,12 @@
 # Life — Acceptance
 
+## 2026-10-16｜新版 Staging 使用者人工驗收：PASS（CI/CD 效能重構修復版）
+- **對應版本**：`2cfe1c9f1e4946bc2849a863f9891419f0db1c45`，四項 [CI #38886583192](https://github.com/tommylin15/life_assistant/actions/runs/38886583192) completed/success；[Staging Release #38886894486](https://github.com/tommylin15/life_assistant/actions/runs/38886894486) completed/success。固定 Hosting version `a1c3bd3ce0d7c6fc`，Staging SHA/API 401/OAuth redirect PASS，正式流量 unchanged。
+- **使用者驗收**：使用者本次明確表示「新版測試網址通過人工驗收」，故此版本的 Staging 人工操作 gate 記 **PASS（user-reported）**，不再要求為已通過的同版 Staging 重做人工操作。早前使用者亦曾回報 Gemini 文章摘要成功；保留該個別功能的真人成功回報。
+- **界線**：此證據不等於每項 Task／Shopping／Calendar／Life Inbox 收據與多帳號資料隔離逐案全部測過；未取得逐項矩陣時仍 **NOT VERIFIED**。Actions 的 `owner_login_e2e=NOT_VERIFIED` 指自動化 runner 未執行真人登入，與使用者的手動 PASS 分層紀錄。Production Promotion 尚未執行，非正式版發布證據。
+- **結論**：本輪 workflow 修復、四項 CI、固定 Staging 發布及整體人工操作 **PASS／DONE（驗收範圍內）**，Production 與未列明的細項另行 gate。
+
+
 ## 2026-10-16｜01～03 本批驗收結案：PASS／DONE
 - **01 定時匯入／資料一致性：PASS／DONE**。10/16 台灣時間 07:34:20 `life-assistant-free-events-ds4bq` Execution Completed=True；固定 Sheet 為 59 筆／58 ACKED／1 ERROR，07:34:15 五筆新 `CREATED`。以 [唯讀 #38825509671](https://github.com/tommylin15/life_assistant/actions/runs/38825509671) 的 `life-assistant-core-acceptance-xr6sq` 獨立比對該 5 筆 PostgreSQL 鍵、hash、來源版本與建立時間，Cloud Run Job 成功退出。正式固定 Job digest 已於 [V3 #38734655151](https://github.com/tommylin15/life_assistant/actions/runs/38734655151) readback PASS。未再次執行 importer。
 - **02 購物／待辦及 03 活動／Calendar：PASS／DONE**。使用者已於 10/15 明確確認兩項正式版人工驗收，詳見下方原始結案紀錄。

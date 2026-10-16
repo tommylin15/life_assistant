@@ -1,5 +1,13 @@
 # Life — Current state
 
+## 2026-10-16｜CI/CD 效能重構修復暨新版 Staging 真人驗收：PASS
+- **程式／流程證據**：已發布應用 SHA `2cfe1c9f1e4946bc2849a863f9891419f0db1c45`；經 `9d9fa33` 保留快取、共用 Action／Reusable Workflow 並恢復必要驗收，`eadc310` 修復精選池 Job live digest 與契約讀回，`2cfe1c9` 補共用 Workflow 觸發邊界測試，未刪減原本的安全驗收矩陣。[同 SHA CI #38886583192](https://github.com/tommylin15/life_assistant/actions/runs/38886583192) 四項成功。
+- **固定 Staging 與 runtime 自動證據：PASS**：[V3 Release #38886894486](https://github.com/tommylin15/life_assistant/actions/runs/38886894486) completed/success；`staging_live_readback=PASS`（Hosting SHA／pins/API 401）、`staging_live_ready=PASS`、`staging_google_redirect=PASS`；固定 Staging version `sites/life-assistant-v3-stage-tl15/versions/a1c3bd3ce0d7c6fc`，`staging_live=PASS sha=2cfe1c9... traffic_unchanged=true`。入口：https://life-assistant-v3-stage-tl15.web.app。
+- **真人操作：PASS（使用者回報）**：使用者明確回報「新版測試網址通過人工驗收」，驗收歸屬於上述最新成功發布的 Staging 版本。這是使用者實際操作的驗收證據，非 GitHub Runner 自動執行真人登入；GitHub release 原始記錄的 `owner_login_e2e=NOT_VERIFIED` 仍表示自動化沒有這段操作證據，不與使用者回報矛盾。
+- **本輪 CI/CD 修復／Staging 發布／使用者確認操作：DONE（各自 PASS）**。尚無逐項清單可證明 Life Inbox 的 Shopping／Calendar 寫入、重送、每種一般帳號權限流程全部 PASS；不可將「Staging 整體人工驗收」延伸為逐個業務 API 或 Production 正式版全功能驗收。此前使用者另已回報 Life Inbox Gemini 文章摘要成功，該特定能力可保留「真人回報 PASS」；尚未提供逐次模型呼叫日誌。
+- **Production 未切換**：本次為 staging-only，正式環境流量保持原狀；是否發行正式版屬下一個獨立發布及驗收 gate。此段為最新版本證據，覆蓋下方較早的 10/16 Staging 舊版快照，不抹除歷史。
+
+
 ## 2026-10-16｜生活收件匣 Gemini 啟用修復：最新 Staging #38877006034 PASS
 - **實作與同 SHA CI：PASS** — code SHA `2aa917663c037c57887defb6fa6c1d4c0ab82344`，Life Inbox 專用 Gemini `gemini_life_inbox_enabled=True`，經內部 `purpose=life_inbox` 呼叫 Gateway，保留通用 `/ai/text` 的獨立既有開關；網址摘要新增 Google share.google／公開 URL 安全轉址、失敗原因分類與中文提示、SSRF 保護，無任何用戶資料自動寫入。對應 [CI #38876663435](https://github.com/tommylin15/life_assistant/actions/runs/38876663435)：backend / flutter / free-events-postgres / deployment-scripts 四項 success。
 - **最新固定 Staging：PASS／該發布範圍 DONE** — [Release #38877006034](https://github.com/tommylin15/life_assistant/actions/runs/38877006034) `completed/success`，相同 `2aa9176` SHA，`staging_live_readback=PASS layer=hosting_version_and_static_sha`、`staging_live_readback=PASS layer=pins_and_api_401`、`staging_live_ready=PASS attempt=1`、`staging_google_redirect=PASS fixed_staging_callback`、`staging_live=PASS sha=2aa9176... version=sites/life-assistant-v3-stage-tl15/versions/1b45d60d34fbed2b oauth_redirect=PASS owner_login_e2e=NOT_VERIFIED traffic_unchanged=true`。固定入口：https://life-assistant-v3-stage-tl15.web.app。

@@ -161,6 +161,41 @@ class ArticleSafetyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.code, "article_unsafe_url")
         client.assert_called_once()
 
+    async def test_article_preview_uses_enabled_inbox_gemini_and_never_saves(self):
+        with (
+            patch.object(inbox_articles, "_note_gate", new_callable=AsyncMock),
+            patch.object(inbox_articles, "pinned_public_article",
+                         new=AsyncMock(return_value=(
+                             "https://example.com/article", "Example", "valid public article text"))),
+            patch.object(inbox_articles, "generate_text",
+                         new=AsyncMock(return_value={"text":
+                             '{"key_points":["一項重點"],"uncertainties":[]}'})) as ai,
+        ):
+            response = await inbox_articles.article_preview(
+                inbox_articles.ArticlePreviewInput(url="https://example.com/article"),
+                Response(), {"sub": "owner"}, AsyncMock())
+        self.assertEqual(response["status"], "ok")
+        self.assertFalse(response["saved"])
+        self.assertEqual(response["key_points"], ["一項重點"])
+        self.assertEqual(ai.await_args.kwargs["purpose"], "life_inbox")
+
+    async def test_article_gateway_disabled_has_distinct_safe_error_code(self):
+        with (
+            patch.object(inbox_articles, "_note_gate", new_callable=AsyncMock),
+            patch.object(inbox_articles, "pinned_public_article",
+                         new=AsyncMock(return_value=(
+                             "https://example.com/article", "Example", "valid public article text"))),
+            patch.object(inbox_articles, "generate_text",
+                         new=AsyncMock(side_effect=inbox_articles.GatewayTextError(
+                             "gemini_text_disabled", 503))),
+        ):
+            with self.assertRaises(inbox_articles.ApiError) as caught:
+                await inbox_articles.article_preview(
+                    inbox_articles.ArticlePreviewInput(url="https://example.com/article"),
+                    Response(), {"sub": "owner"}, AsyncMock())
+        self.assertEqual(caught.exception.status_code, 503)
+        self.assertEqual(caught.exception.code, "article_ai_gemini_text_disabled")
+
     async def test_article_summary_only_triggered_by_explicit_preview_endpoint(self):
         self.assertTrue(any(route.path == "/inbox/article-preview"
                             for route in inbox_articles.router.routes))

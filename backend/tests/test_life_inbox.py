@@ -2,7 +2,7 @@
 import os
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException, Response
 from pydantic import ValidationError
@@ -93,7 +93,9 @@ class InboxClassificationTests(unittest.IsolatedAsyncioTestCase):
             await feature_gate("life_inbox")(
                 user={"email": "owner@example.test", "sub": "owner"}, db=db)
 
-            db.execute.return_value.scalars.return_value.all.return_value = []
+            rows = MagicMock()
+            rows.scalars.return_value.all.return_value = []
+            db.execute.return_value = rows
             flags = await effective_features(
                 db, {"email": "user@example.test", "sub": "u"})
             match = next(x for x in flags if x["key"] == "life_inbox")

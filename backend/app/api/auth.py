@@ -4,7 +4,6 @@ import logging
 import os
 import re
 import secrets
-import time
 from urllib.parse import urlencode, urlsplit
 
 import httpx
@@ -406,7 +405,7 @@ async def callback(
             raise _http_error(400, "Invalid OAuth state")
 
         callback_uri = STAGING_REDIRECT_URI if is_staging else oauth_redirect_for_request(request)
-        id_token, user = await _complete_login(code, callback_uri)
+        _id_token, user = await _complete_login(code, callback_uri)
         _enforce_account_access(user, staging=is_staging)
         await _audit_staging_e2e(db, request, user, "staging_google_callback")
         bearer = await _create_persistent_session(db, user, staging=is_staging)

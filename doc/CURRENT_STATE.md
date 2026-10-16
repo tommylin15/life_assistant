@@ -1,5 +1,14 @@
 # Life — Current state
 
+## 2026-10-16｜生活收件匣 V1：同 SHA 四項 CI + Staging 完成（優先於下方歷史快照）
+- **實作來源：PASS**：`03295a0b8067d3046da2877c70a7874b06976a78`，新增 `life_inbox` owner-only 預設 rollout、分類候選、用戶明確確認的寫入、收據、文章預覽、Flutter 入口及筆記摘要提示；單元與 Flutter widget 測試在 CI 執行。詳細設計見 [V1 SPEC](life_inbox_quick_capture_spec.md) 及 [AI 工程指示](life_inbox_ai_developer_instructions.md)。
+- **CI：PASS**：[CI #38866256031](https://github.com/tommylin15/life_assistant/actions/runs/38866256031) 同 SHA backend、flutter、deployment-scripts、free-events-postgres 四項成功。
+- **Staging：PASS／該版發布 DONE**：[V3 Release #38866539155](https://github.com/tommylin15/life_assistant/actions/runs/38866539155) 2026-10-16 已 `completed/success`，`staging_live=PASS sha=03295a0...`、`staging_live_readback=PASS`（Hosting 靜態 SHA／pins／401）、`staging_google_redirect=PASS`；候選 revision `life-assistant-api-00324-ruf`；固定站 https://life-assistant-v3-stage-tl15.web.app。
+- **Production：NOT DEPLOYED FOR THIS SHA**：run inputs `promote=false`，`traffic_unchanged=true`；本輪並未將 Life Inbox 部署至正式 100% 流量。Release 中 Revision 維護獨立 `stage=DONE,status=PASS`，12→10、刪兩版、`live_unchanged=true`、未刪 Service/Job。
+- **功能 E2E 仍 PARTIAL**：該 workflow 明確 `owner_login_e2e=NOT_VERIFIED`；這次 staging infrastructure／auth redirect PASS 不等於已通過真正登入帳號使用新收件匣、Gemini 意圖拆解、URL 摘要、Shopping/Calendar 真實寫入與收據重送結果的所有測試。Admin `life_inbox` 預設 beta/owner，未確認設定 `enabled/all`，不得宣稱一般 user 已開放。下一步是同 SHA 的 owner／一般 user 權限與寫入讀回驗收，後續再受控正式部署。
+- **歷史狀態註記**：本文件下方 2026-10-16 月曆／登入的「尚未實作」屬該日期早期快照，須按該功能各自的後續 Actions/evidence 補正，不能拿來否定上述 Life Inbox 本版的實際 Staging PASS。
+
+
 ## 2026-10-16｜新 UI 改版來源提交，驗收待補（不改既有 01–03 正式結案）
 - **日曆／月曆 source 已提交 main**：`lib/web/calendar_page.dart` 改為七欄整月日期格、今日與點選標記、由既有事件文字分類的小圖示（會議／生日／帳單／旅行／交通／活動／提醒）與首筆短標題，底下只呈現選定日期的精簡行程；點入詳情才看描述、可信活動網址、編輯／刪除。保留原有 Google Calendar API 與 OAuth。
 - **活動統一 source 已提交 main**：`curated_events_page.dart` 以「全部活動／限時機會／已收藏」三模式查詢既有同一 PostgreSQL 活動池；`navigation_catalog.dart`／`personalize_page.dart`／`today_page.dart` 合併導覽與首頁偏好，保留 legacy 活動鍵與舊網址 API，新增 `test/web_activity_unification_test.dart` 檢查主活動分組及偏好映射。最後 UI 變動 commit [`dac1e17`](https://github.com/tommylin15/life_assistant/commit/dac1e17c085ba0e021b7cc9e6ab1090bf3004735)。

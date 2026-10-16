@@ -15,6 +15,7 @@ from app.api.google_integrations import (
 )
 from app.db.session import get_db
 from app.models.gmail_radar import GmailRadarItem, GmailRadarScanState, GmailRadarSeen
+from app.models.execution_log import ExecutionLog
 from app.models.google_integration import GoogleConnection
 from app.services.google_oauth import SERVICE_SCOPES
 
@@ -71,11 +72,31 @@ def gmail_urls(thread_id: str, email: str) -> dict[str, str]:
     }
 
 
+_TARGET_ROUTES = {
+    "task": "/tasks",
+    "note": "/more/notes",
+    "shopping": "/more/shopping",
+    "calendar": "/calendar",
+}
+
+
+def _target_route(target: str | None) -> str | None:
+    return _TARGET_ROUTES.get(target)
+
+
+def _handoff_action_id(item_id: str) -> str:
+    # Stable ID: repeat presses never create a second Life entity.
+    return "gmailradar-" + item_id.replace("-", "")
+
+
 def _serialize_item(item: GmailRadarItem, email: str) -> dict:
     return {
         "id": item.id, "category": item.category, "title": item.title,
         "summary": item.summary, "sender": item.sender, "status": item.status,
         "received_at": item.received_at, "created_at": item.created_at,
+        "linked_target": item.linked_target,
+        "linked_entity_id": item.linked_entity_id,
+        "linked_route": _target_route(item.linked_target) if item.linked_entity_id else None,
         **gmail_urls(item.gmail_thread_id, email),
     }
 
@@ -115,6 +136,67 @@ async def get_radar_items(
     connection = await db.get(GoogleConnection, user["sub"])
     email = connection.email if connection else str(user.get("email") or "")
     return {"items": [_serialize_item(item, email) for item in items], "returned": len(items)}
+
+
+@router.get("/items/{item_id}/handoff")
+async def get_item_for_life_inbox(
+    item_id: str,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Only owner-scoped source metadata; no Gmail body or token exposed."""
+    item = await db.scalar(select(GmailRadarItem).where(
+        GmailRadarItem.id == item_id, GmailRadarItem.user_sub == user["sub"],
+    ))
+    if item is None:
+        raise HTTPException(404, "Gmail radar item not found")
+    if item.linked_entity_id:
+        raise HTTPException(409, "Gmail radar item is already saved in Life")
+    connection = await db.get(GoogleConnection, user["sub"])
+    email = connection.email if connection else str(user.get("email") or "")
+    url = gmail_urls(item.gmail_thread_id, email)["gmail_url"]
+    # The existing Life Inbox takes free text (max 1200).
+    # AI is NOT called here: only the explicit classify button can trigger it.
+    input_text = ("Gmail 通知：" + item.title +
+                  ("\n摘要：" + item.summary if item.summary else "") +
+                  "\n原信連結：" + url)[:1200]
+    return {"id": item.id, "text": input_text,
+            "action_id": _handoff_action_id(item.id), "saved": False}
+
+
+@router.post("/items/{item_id}/confirm-life-link")
+async def confirm_gmail_life_inbox_link(
+    item_id: str,
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark completed ONLY after Life Inbox has committed a real target receipt."""
+    item = await db.scalar(select(GmailRadarItem).where(
+        GmailRadarItem.id == item_id, GmailRadarItem.user_sub == user["sub"],
+    ))
+    if item is None:
+        raise HTTPException(404, "Gmail radar item not found")
+    if item.linked_target and item.linked_entity_id:
+        return {"linked": True, "target": item.linked_target,
+                "entity_id": item.linked_entity_id,
+                "target_route": _target_route(item.linked_target)}
+    receipt = await db.scalar(select(ExecutionLog).where(
+        ExecutionLog.user_sub == user["sub"],
+        ExecutionLog.action_type == "inbox.create",
+        ExecutionLog.action_id == _handoff_action_id(item.id),
+        ExecutionLog.status == "success",
+    ))
+    if receipt is None or not receipt.entity_id:
+        raise HTTPException(409, "Life Inbox write not yet confirmed")
+    target = "calendar" if receipt.entity_type == "calendar_event" else receipt.entity_type
+    if target not in _TARGET_ROUTES:
+        raise HTTPException(409, "Life Inbox target is unsupported")
+    item.linked_target = target
+    item.linked_entity_id = receipt.entity_id
+    item.status = "completed"
+    await db.commit()
+    return {"linked": True, "target": target,
+            "entity_id": receipt.entity_id, "target_route": _target_route(target)}
 
 
 @router.get("/status")

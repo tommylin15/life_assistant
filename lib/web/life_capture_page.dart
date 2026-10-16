@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'platform_api.dart';
 import 'inbox_article_errors.dart';
@@ -7,13 +8,37 @@ import 'shopping_api.dart';
 
 /// Single, account-gated capture surface. Suggestions never persist until commit.
 class LifeCapturePage extends ConsumerStatefulWidget {
-  const LifeCapturePage({super.key});
+  const LifeCapturePage({super.key, this.gmailRadarItemId});
+
+  final String? gmailRadarItemId;
 
   @override
   ConsumerState<LifeCapturePage> createState() => _LifeCapturePageState();
 }
 
 class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.gmailRadarItemId != null) _loadGmailHandoff();
+  }
+
+  Future<void> _loadGmailHandoff() async {
+    try {
+      final data = await ref.read(platformApiProvider).get(
+        '/integrations/google/gmail/radar/items/' +
+            Uri.encodeComponent(widget.gmailRadarItemId!) + '/handoff');
+      if (!mounted) return;
+      setState(() {
+        _input.text = data['text']?.toString() ?? '';
+        _gmailActionId = data['action_id']?.toString();
+      });
+    } catch (_) {
+      if (mounted) setState(() => _gmailTransferError =
+          '無法取得這筆 Gmail 事項，或已成功存入其他功能；請返回 Gmail 雷達查看。');
+    }
+  }
+
   final _input = TextEditingController();
   bool _busy = false;
   String? _error;
@@ -21,6 +46,9 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
   List<Map<String, dynamic>> _candidates = [];
   List<Map<String, dynamic>> _lists = [];
   List<Map<String, dynamic>> _receipts = [];
+  String? _gmailActionId;
+  Map<String, dynamic>? _linkedResult;
+  String? _gmailTransferError;
 
   @override
   void dispose() {
@@ -54,11 +82,12 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
       final suggestions = <Map<String, dynamic>>[];
       for (var i = 0; i < raw.length; i++) {
         final candidate = raw[i];
+        if (_gmailActionId != null && i > 0) break;
         suggestions.add({
           ...candidate,
           'fields': Map<String, dynamic>.from(candidate['fields'] as Map),
           'selected': candidate['select_default'] == true,
-          'action_id': _newActionId(i),
+          'action_id': _gmailActionId ?? _newActionId(i),
           'done': false,
         });
       }
@@ -159,6 +188,22 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
           }
         }
       });
+      if (_gmailActionId != null && widget.gmailRadarItemId != null &&
+          receipts.any((receipt) =>
+            receipt['action_id'] == _gmailActionId &&
+            (receipt['status'] == 'CREATED' ||
+             receipt['status'] == 'ALREADY_APPLIED'))) {
+        try {
+          final linked = await ref.read(platformApiProvider).post(
+            '/integrations/google/gmail/radar/items/' +
+              Uri.encodeComponent(widget.gmailRadarItemId!) + '/confirm-life-link',
+            const {});
+          if (mounted) setState(() => _linkedResult = linked);
+        } catch (_) {
+          if (mounted) setState(() => _gmailTransferError =
+            '已儲存，但 Gmail 連結尚未確認。請不要再次建立項目，先回 Gmail 雷達重新查看。');
+        }
+      }
     } catch (error) {
       if (mounted) setState(() => _error =
           '無法確認新增結果，請先檢查各功能中的資料，避免重複提交（$error）');
@@ -284,6 +329,21 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
         alignment: Alignment.topCenter,
         child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 860),
           child: ListView(padding: const EdgeInsets.all(16), children: [
+            if (widget.gmailRadarItemId != null) ...[
+              const Text('來自 Gmail 快掃：僅轉入這筆事項，不會自動建立資料。'),
+              TextButton(onPressed: () => context.go('/more/gmail-radar'),
+                child: const Text('返回 Gmail 雷達')),
+              if (_gmailTransferError != null) Text(_gmailTransferError!),
+              if (_linkedResult != null) ...[
+                const Text('已完成：成功存入指定功能'),
+                TextButton.icon(
+                  onPressed: () => context.go(
+                    _linkedResult!['target_route']?.toString() ?? '/today'),
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('開啟已儲存的功能'),
+                ),
+              ],
+            ],
             const Text('輸入一段文字或網址，Life 會提出建議；只有確認後才會寫入。'),
             const SizedBox(height: 12),
             TextField(

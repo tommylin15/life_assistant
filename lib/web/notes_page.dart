@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'browser_navigation.dart';
 import 'note_api.dart';
+import 'platform_api.dart';
 import 'note_drive_relations.dart';
 import 'visual_system.dart';
 
@@ -380,7 +381,7 @@ class _NotesPageState extends ConsumerState<NotesPage> {
       .trim();
 }
 
-class _EditorDialog extends StatefulWidget {
+class _EditorDialog extends ConsumerStatefulWidget {
   const _EditorDialog({
     required this.note,
     required this.projects,
@@ -391,10 +392,10 @@ class _EditorDialog extends StatefulWidget {
   final List<String> initialTags;
 
   @override
-  State<_EditorDialog> createState() => _EditorDialogState();
+  ConsumerState<_EditorDialog> createState() => _EditorDialogState();
 }
 
-class _EditorDialogState extends State<_EditorDialog> {
+class _EditorDialogState extends ConsumerState<_EditorDialog> {
   final _form = GlobalKey<FormState>();
   late final TextEditingController _title;
   late final TextEditingController _body;
@@ -402,6 +403,42 @@ class _EditorDialogState extends State<_EditorDialog> {
   late final TextEditingController _category;
   String? _projectId;
   bool _preview = false;
+  bool _summarizing = false;
+
+  bool get _bodyIsUrl {
+    final value = _body.text.trim();
+    final parsed = Uri.tryParse(value);
+    return parsed != null && (parsed.scheme == 'https' || parsed.scheme == 'http') &&
+        parsed.host.isNotEmpty && !value.contains(RegExp(r'\s'));
+  }
+
+  Future<void> _summarizeUrl() async {
+    if (_summarizing || !_bodyIsUrl) return;
+    final source = _body.text.trim();
+    setState(() => _summarizing = true);
+    try {
+      final result = await ref.read(platformApiProvider).post(
+          '/inbox/article-preview', {'url': source});
+      if (!mounted) return;
+      final points = (result['key_points'] as List).map((item) => '- ' + item.toString()).join('\n');
+      final uncertain = (result['uncertainties'] as List? ?? [])
+          .map((item) => '- ' + item.toString()).join('\n');
+      setState(() {
+        if (_title.text.trim().isEmpty) {
+          _title.text = result['source_title']?.toString() ?? '';
+        }
+        _body.text = '原始網址：' + result['source_url'].toString() +
+            '\n\n## 文章摘要\n' + points +
+            (uncertain.isEmpty ? '' : '\n\n## 需要核對\n' + uncertain);
+      });
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('文章無法摘要，可以只保留網址儲存筆記')),
+      );
+    } finally {
+      if (mounted) setState(() => _summarizing = false);
+    }
+  }
 
   @override
   void initState() {
@@ -512,6 +549,17 @@ class _EditorDialogState extends State<_EditorDialog> {
                               ),
                             ),
                             const SizedBox(height: 12),
+                            if (ref.watch(effectiveFeaturesProvider).asData?.value?['life_inbox'] == true && _bodyIsUrl) ...[
+                              ListTile(
+                                key: const ValueKey('note-article-summary-offer'),
+                                leading: const Icon(Icons.auto_awesome),
+                                title: const Text('偵測到網址：是否擷取文章並生成摘要？'),
+                                subtitle: const Text('只有按下按鈕才會讀取網頁；摘要可編輯後再存入筆記'),
+                                trailing: _summarizing ? const SizedBox(width: 24, height: 24,
+                                    child: CircularProgressIndicator(strokeWidth: 2))
+                                  : TextButton(onPressed: _summarizeUrl, child: const Text('擷取摘要')),
+                              ),
+                            ],
                             TextFormField(
                               key: const ValueKey('note-body-field'),
                               controller: _body,

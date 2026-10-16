@@ -5,6 +5,7 @@ All writes start from an existing owner-scoped DriveDocument, never a
 caller-provided raw Google file ID.
 """
 from datetime import datetime, timezone
+import uuid
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,12 +15,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import current_user
 from app.api.google_integrations import _request_google
 from app.db.session import get_db
+from app.errors import current_request_id
+from app.models.execution_log import ExecutionLog
 from app.models.drive_schemas import DriveDocumentOut
 from app.services.drive_documents import get_document
 from app.services.google_oauth import SERVICE_SCOPES
 from app.services.google_drive_files import get_drive_file_metadata
 
 router = APIRouter(prefix="/drive/manager", tags=["drive-file-manager"])
+
+
+def _record_google_write(
+    db: AsyncSession, sub: str, action: str, file_id: str, result: str,
+) -> None:
+    # Only stable IDs and generic action metadata; no document content.
+    db.add(ExecutionLog(
+        id=str(uuid.uuid4()), request_id=current_request_id(),
+        user_sub=sub, action_type=action, entity_type="drive_file",
+        entity_id=file_id, provider="google_drive", status="success",
+        result=result, summary="Google Drive operation verified by readback",
+        finished_at=datetime.now(timezone.utc),
+    ))
 FILE_URL = "https://www.googleapis.com/drive/v3/files/{file_id}"
 
 
@@ -87,6 +103,7 @@ async def rename_registered_document(
     doc.modified_at = updated.modified_at
     doc.mime_type = updated.mime_type
     doc.web_view_link = updated.web_view_link
+    _record_google_write(db, user["sub"], "drive.file.rename", doc.google_file_id, "renamed")
     await db.commit()
     return doc
 
@@ -220,6 +237,8 @@ async def create_authorized_drive_folder(
     remote = await get_drive_file_metadata(db, user["sub"], str(item["id"]))
     if remote.mime_type != "application/vnd.google-apps.folder" or remote.name != body.name:
         raise HTTPException(502, "Drive folder creation verification failed")
+    _record_google_write(db, user["sub"], "drive.folder.create", remote.id, "created")
+    await db.commit()
     return {"id": remote.id, "name": remote.name, "parent_id": body.parent_id,
             "visibility": "app_authorized_only"}
 
@@ -290,6 +309,7 @@ async def move_registered_drive_document(
         raise HTTPException(502, "Drive move readback mismatch; inspect source")
     document.modified_at = datetime.fromisoformat(
         str(final["modifiedTime"]).replace("Z", "+00:00"))
+    _record_google_write(db, user["sub"], "drive.file.move", document.google_file_id, "moved")
     await db.commit()
     return {"id": document.id, "destination_folder_id": destination,
             "unchanged": False}

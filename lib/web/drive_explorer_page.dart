@@ -22,7 +22,6 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
   bool _loading = true;
   bool _working = false;
   String? _error;
-  String? _pageToken;
   String? _nextPageToken;
   String _query = '';
   final TextEditingController _search = TextEditingController();
@@ -62,7 +61,6 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
         _files = (data['files'] as List? ?? const [])
             .map((x) => Map<String, dynamic>.from(x as Map)).toList();
         _nextPageToken = data['next_page_token']?.toString();
-        _pageToken = token;
         if (data['incomplete_search'] == true) {
           _error = 'Google Drive 回報搜尋結果可能不完整，請縮小搜尋條件。';
         }

@@ -23,8 +23,19 @@ String inboxArticleErrorMessage(Object error) {
       description.contains('article_ai_service_identity_unavailable')) {
     return '文章已讀取，但 Gemini 服務尚未正確啟用或授權。請通知管理員檢查服務設定；可以先只存網址。';
   }
-  if (description.contains('article_ai_')) {
-    return '文章已讀取，但 Gemini 摘要暫時失敗。可以先只存網址，稍後再試。';
+  final aiCode = RegExp(r'article_ai_[a-z0-9_]+').firstMatch(description)?.group(0);
+  if (aiCode != null) {
+    if (aiCode == 'article_ai_invalid_response') {
+      return '文章已讀取，但 Gemini 回覆格式無法解析（$aiCode）。原網址保留，可稍後再試。';
+    }
+    if (aiCode == 'article_ai_gateway_busy' ||
+        aiCode == 'article_ai_gateway_upstream_unavailable') {
+      return '文章已讀取，但 Gemini 服務忙碌或暫時無法回應（$aiCode）。請稍後再試。';
+    }
+    if (aiCode == 'article_ai_gateway_timeout') {
+      return '文章已讀取，但 Gemini 等待逾時（$aiCode）。原網址仍保留。';
+    }
+    return '文章已讀取，但 Gemini 摘要未成功（$aiCode）。可先只存網址，請把此錯誤碼提供管理員。';
   }
   if (description.contains('article_dns_unavailable') ||
       description.contains('article_fetch_unavailable') ||

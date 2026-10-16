@@ -9,6 +9,13 @@ Updated 2026-10-16. **One active backlog only.** Prior 01–07 execution plan ha
 | P1-4 | Drive AI admin/per-user consent, provider failures, **real token/cost/accounting** if introducing budget enforcement; never fabricate spend. | Partial implementation, costs/budget **NOT VERIFIED** |
 | P2-2 | Audit dependency/action pinning, public-repository hygiene, access to operational docs, observability, backup restoration and scheduled-job dedupe. | Risk follow-up **NOT VERIFIED** |
 
+
+## Planned next feature — 設計完成，尚未開發（2026-10-16）
+
+| Priority | Work / exit gate | Status |
+| --- | --- | --- |
+| P2-3 | **Life 生活收件匣＋快速新增＋筆記網址摘要**：先完成已核准的架構／API Schema／Gemini developer prompt，後續才依 [單一規格](life_inbox_quick_capture_spec.md) 與 [工程 AI 指示](life_inbox_ai_developer_instructions.md) 實作；共用快速新增、待辦／購物／日曆／筆記多分類與原地勾選確認、選擇性安全文章摘要、per-item 去重及錯誤回復。後台 life_inbox 預設 beta/owner，僅 Admin 主動 enabled/all 才對一般帳號開放；所有新 API 需 server gate、登入及目的功能權限。 | **DESIGN READY / NOT STARTED**：本次只提交 docs，未改 application/schema/migration/tests/CI/deployment，不可標示已開放或上線。 |
+
 **02／03 使用者正式版人工驗收：PASS／DONE（2026-10-15）**。使用者明確回報「02,03驗收完畢」：02 購物清單／品項修改、刪除、批次新增、重載及待辦刪除不白畫面；03 活動跨日搜尋／分頁、收藏、個人待辦／追蹤及 Calendar 操作與讀回。已從 active backlog 移除 P1-2／P1-3；正式版操作是使用者回報，非自動化每條 API log。原有 CI/正式部署證據分開保留見 [acceptance.md](acceptance.md) 與 [CURRENT_STATE.md](CURRENT_STATE.md)。**01 已於 2026-10-16 由真實 Execution + Sheet／PG 版本比對 PASS 結案**。
 
 **01–03 本批全部 PASS／DONE（2026-10-16）**：01 匯入器 [Execution ds4bq](https://console.cloud.google.com/run/jobs/executions/details/us-central1/life-assistant-free-events-ds4bq?project=gen-lang-client-0593591102) 2026-10-16 07:34:20 台北時間成功，Sheet 59 筆／58 ACKED／1 ERROR；[PostgreSQL readback #38825509671](https://github.com/tommylin15/life_assistant/actions/runs/38825509671) 精確比對本輪 5 筆新 ACKED 版本全部 PASS；02／03 使用者正式版人工驗收 PASS。**01 已從 active backlog 移除**。Apps Script Trigger ID 未直接核證、來源單筆 ERROR 屬獨立可觀測性／資料品質追蹤，不作為本批功能結案的阻擋。

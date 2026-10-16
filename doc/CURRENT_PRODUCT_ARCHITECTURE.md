@@ -36,3 +36,9 @@ Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL。Life
 本節取代上節中「左側仍含首頁／更多」的舊描述；完整規格唯一入口：[導覽與個人化 V2](life_navigation_personalization_v2.md)。新版左側僅三種用途群組，首頁只留底部四快捷第一格，個人化固定側欄底部；Google 授權在個人化「服務連結」，Drive 智能整理仍是業務功能入口。「自訂首頁」按鈕、More 重複列表、手動導覽模式選項取消。兩款新增風格：動畫風格（不用日系動漫人物或外部插畫）與粉紅泡泡，合計五款；Drive AI 個人同意設定暫不開放，不代表自動同意文件 AI 分析。舊路由及 `more_order` 個人偏好保留相容。
 
 新 SHA 應分別通過 Flutter、CI、固定 staging 和 runtime readback，未完成不得自稱 DONE。
+
+## 2026-10-16｜規劃中：生活收件匣＋快速新增（非已實作）
+
+獨立核准的產品設計入口：[Life Inbox V1](life_inbox_quick_capture_spec.md) 和 [Life Inbox AI 工程指示](life_inbox_ai_developer_instructions.md)。對應 Firebase Hosting → Flutter → FastAPI → PostgreSQL，沿用既有 Notes/Task/Shopping/Google Calendar，結構化 AI 理解只經 Life → omniAgent Gateway → Gemini；Python 規則優先，明確確認後才寫入。筆記網址只提示可選擇文章擷取摘要，沒有點選不發出網頁擷取／摘要請求。
+
+管理端將沿用 FeatureRollout，新增 life_inbox 旗標，必須預設 beta/owner，後台可選是否 enabled/all 開放一般使用者；搭配 auth route allowlist、所有新 API 的 server-side gate、目的 API 的 ownership／Google scopes。此為**設計要求而非目前已上線功能**；目前實作／測試／CI／部署／runtime 均 NOT VERIFIED／NOT STARTED。其餘產品候選仍在 Drive「好點子」暫緩區，不混入本規格。

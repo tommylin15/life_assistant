@@ -11,6 +11,7 @@ Updated 2026-10-15 (Asia/Taipei). **GitHub main and runtime evidence govern impl
 | Where is the activity importer contract? | [curated_sheet_job_ingestion](curated_sheet_job_ingestion.md); [exploration/Life boundary](taiwan_free_events_discovery_plan.md) |
 | What do users see/do with activities? | [curated_activity_user_features](curated_activity_user_features.md) |
 | How are UI and personal settings designed? | [life_navigation_personalization_v2](life_navigation_personalization_v2.md), [ui_visual_system](ui_visual_system.md), [design_system](design_system.md) |
+| How will Life capture free-form text, classify and optionally summarize a URL? | **[Life Inbox / Quick Capture V1 design](life_inbox_quick_capture_spec.md)** and **[AI developer instructions](life_inbox_ai_developer_instructions.md)** — design only; implementation not started. |
 | How is V3 released? | [ci_cd_ghcr_release_policy](ci_cd_ghcr_release_policy.md), [deployment_runbook](deployment_runbook.md), [release_checklist](release_checklist.md) |
 | How to test/secure data? | [testing_strategy](testing_strategy.md), [security](security.md), [permissions](permissions.md), [migration_spec](migration_spec.md) |
 | Where are prior decisions/acceptances? | [archive](archive/README.md), [acceptance](acceptance.md) |

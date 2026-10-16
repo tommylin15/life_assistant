@@ -31,12 +31,13 @@ const lifeNavigationItems = <String, LifeNavItem>{
   'notes': LifeNavItem('notes', '筆記', '/more/notes', Icons.description_outlined, Icons.description),
   'projects': LifeNavItem('projects', '專案', '/projects', Icons.folder_outlined, Icons.folder),
   'drive': LifeNavItem('drive', 'Google Drive 智能整理', '/more/drive', Icons.cloud_outlined, Icons.cloud),
+  'gmail_radar': LifeNavItem('gmail_radar', 'Gmail 智慧事項', '/more/gmail-radar', Icons.mark_email_unread_outlined, Icons.mark_email_read),
   'explore': LifeNavItem('explore', '活動探索', '/more/explore', Icons.explore_outlined, Icons.explore),
 };
 
 const lifeNavigationGroups = <LifeNavGroup>[
   LifeNavGroup('daily', '日常生活', Icons.event_available_outlined,
-      <String>['tasks', 'calendar', 'habits', 'shopping']),
+      <String>['tasks', 'calendar', 'habits', 'shopping', 'gmail_radar']),
   LifeNavGroup('knowledge', '知識與計畫', Icons.folder_copy_outlined,
       <String>['notes', 'projects', 'drive']),
   LifeNavGroup('activities', '活動與機會', Icons.explore_outlined,

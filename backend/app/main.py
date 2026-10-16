@@ -58,7 +58,7 @@ async def request_context(request: Request, call_next):
     token = set_request_id(request_id)
     try:
         requirement = confirmation_requirement(request.method, request.url.path)
-        authenticated_session = request.cookies.get(SESSION_COOKIE, "").startswith("id:")
+        authenticated_session = request.cookies.get(SESSION_COOKIE, "").startswith(("id:", "se:"))
         if (
             requirement is not None
             and authenticated_session

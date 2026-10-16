@@ -159,16 +159,17 @@ class _DrivePageState extends ConsumerState<DrivePage> {
       }
       return;
     }
-    final controller = TextEditingController(text: name);
+    var renamedValue = name;
     final nextName = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('重新命名 Drive 原始檔案'),
         content: TextField(
-          controller: controller,
+          onChanged: (value) => renamedValue = value,
           maxLength: 500,
           autofocus: true,
-          decoration: const InputDecoration(labelText: '檔案名稱'),
+          key: const ValueKey('drive-rename-name'),
+          decoration: InputDecoration(labelText: '檔案名稱', hintText: name),
         ),
         actions: [
           TextButton(
@@ -177,13 +178,12 @@ class _DrivePageState extends ConsumerState<DrivePage> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext)
-                .pop(controller.text.trim()),
+                .pop(renamedValue.trim()),
             child: const Text('確認修改'),
           ),
         ],
       ),
     );
-    controller.dispose();
     if (!mounted || nextName == null || nextName.isEmpty ||
         nextName == name) return;
     setState(() => _renamingDocuments.add(id));

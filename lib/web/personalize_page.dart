@@ -11,7 +11,6 @@ import 'visual_system.dart';
 const _homeLabels = <String, String>{
   'tasks': '今日待辦',
   'calendar': '下一個行程',
-  'attention': '需要關注',
   'habits': '今日習慣',
   'explore': '活動探索',
   'projects': '進行中專案',
@@ -20,11 +19,12 @@ const _homeLabels = <String, String>{
   'drive': 'Google Drive',
 };
 List<String> _unifiedHomeCards(Iterable<String> saved) => saved
-    .map((key) => (key == 'events' || key == 'opportunities') ? 'explore' : key)
+    .map((key) => (key == 'events' || key == 'opportunities') ? 'explore'
+        : key == 'attention' ? 'tasks' : key)
     .where(_homeLabels.containsKey).toSet().toList();
 
 const _defaultHome = <String>[
-  'tasks', 'calendar', 'attention', 'habits', 'explore', 'projects',
+  'tasks', 'calendar', 'habits', 'explore', 'projects',
 ];
 
 class PersonalizePage extends ConsumerStatefulWidget {

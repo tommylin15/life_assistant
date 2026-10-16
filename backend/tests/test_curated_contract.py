@@ -10,7 +10,8 @@ from app.main import app
 from app.api.auth import current_user
 from app.db.session import get_db
 from app.api.curated import CuratedBatchIn, normalize_url, identity
-from app.api.ui_policies import UIPreferencesWrite, AIPolicyWrite, FEATURES, _default_rollout
+from app.api.ui_policies import (UIPreferencesWrite, AIPolicyWrite, FEATURES,
+                                 DEFAULT_HOME, HOME_KEYS, _default_prefs, _default_rollout)
 
 
 class CuratedContractTests(unittest.TestCase):
@@ -77,6 +78,16 @@ class CuratedContractTests(unittest.TestCase):
                 self.assertEqual(client.get("/api/v1/admin/ai/providers").status_code, 403)
                 self.assertEqual(client.get("/api/v1/admin/feature-rollouts").status_code, 403)
                 self.assertEqual(client.post("/api/v1/admin/ai/probe/gemini").status_code, 403)
+
+    def test_merged_home_defaults_keep_legacy_attention_write_compatible(self):
+        self.assertNotIn("attention", DEFAULT_HOME)
+        self.assertNotIn("attention", _default_prefs()["home_cards"])
+        self.assertIn("attention", HOME_KEYS)
+        legacy = UIPreferencesWrite.model_validate({
+            "expected_revision": 0, "pinned": [], "more_order": [],
+            "home_cards": ["attention", "tasks"],
+        })
+        self.assertEqual(legacy.home_cards, ["attention", "tasks"])
 
     def test_owner_prefs_and_ai_allowlists_cannot_be_forged(self):
         for body in (

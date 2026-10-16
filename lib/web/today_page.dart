@@ -10,7 +10,8 @@ import 'session_identity.dart';
 import 'visual_system.dart';
 
 List<String> _visibleHomeCards(List<String> cards) => cards
-    .map((k) => (k == 'events' || k == 'opportunities') ? 'explore' : k)
+    .map((k) => (k == 'events' || k == 'opportunities') ? 'explore'
+        : k == 'attention' ? 'tasks' : k)
     .toSet().toList();
 
 final _todayDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
@@ -22,7 +23,7 @@ final _todayDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   // request another account's legacy, not-yet-tenant-scoped resources.
   final prefs = ref.watch(uiPreferencesProvider).asData?.value;
   final chosen = _visibleHomeCards((prefs?['home_cards'] as List?)?.cast<String>() ??
-      const ['tasks', 'calendar', 'attention', 'habits', 'explore', 'projects']);
+      const ['tasks', 'calendar', 'habits', 'explore', 'projects']);
   final flags = ref.watch(effectiveFeaturesProvider).asData?.value;
   final now = DateTime.now();
   final tomorrow = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
@@ -67,7 +68,7 @@ class TodayPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final prefs = ref.watch(uiPreferencesProvider).asData?.value;
     final cards = _visibleHomeCards((prefs?['home_cards'] as List?)?.cast<String>() ??
-        ['tasks', 'calendar', 'attention', 'habits', 'explore', 'projects']);
+        ['tasks', 'calendar', 'habits', 'explore', 'projects']);
     final flags = ref.watch(effectiveFeaturesProvider).asData?.value;
     final data = ref.watch(_todayDataProvider);
     return Scaffold(
@@ -103,22 +104,13 @@ class TodayPage extends ConsumerWidget {
   Widget _card(BuildContext context, WidgetRef ref, String key, Map<String, dynamic> data) {
     final tasks = (data['tasks'] as List).cast<Map<String, dynamic>>();
     final projects = (data['projects'] as List?)?.cast<Map<String, dynamic>>();
-    final filtered = tasks.where((t) {
-      if (t['status'] == 'completed' || t['status'] == 'cancelled') return false;
-      final due = DateTime.tryParse(t['due_at']?.toString() ?? '')?.toLocal();
-      if (due == null) return false;
-      final end = DateTime.now();
-      return due.isBefore(DateTime(end.year, end.month, end.day + 1));
-    }).take(5).toList();
     final eventItems = (data['events']?['items'] as List? ?? const [])
         .whereType<Map<String, dynamic>>().toList();
     final events = groupActivities(eventItems)
         .take(3).map((group) => group.first).toList();
     switch (key) {
       case 'tasks':
-        return _tile(context, '待辦（今天及逾期）', filtered.isEmpty
-            ? '沒有已確認的今日到期待辦'
-            : filtered.map((t) => t['title'].toString()).join(' · '), '/tasks');
+        return _taskCard(context, tasks);
       case 'calendar':
         final cal = data['calendar'];
         final entries = (cal is Map<String, dynamic> ? cal['events'] as List? : null) ?? [];
@@ -144,16 +136,6 @@ class TodayPage extends ConsumerWidget {
             ? '專案資料目前無法取得'
             : projects.where((p) => p['status'] == 'active')
                 .take(3).map((p) => p['name']).join(' · '), '/projects');
-      case 'attention':
-        final now = DateTime.now();
-        final overdue = tasks.where((task) {
-          if (task['status'] == 'completed' || task['status'] == 'cancelled') return false;
-          final due = DateTime.tryParse(task['due_at']?.toString() ?? '')?.toLocal();
-          return due != null && due.isBefore(DateTime(now.year, now.month, now.day));
-        }).length;
-        return _tile(context, '需要關注', overdue == 0
-            ? '目前沒有逾期待辦'
-            : '有 $overdue 筆實際逾期的待辦', '/tasks');
       case 'habits':
         final habits = data['habits'] as List<Map<String, dynamic>>?;
         if (habits == null) {
@@ -197,6 +179,33 @@ class TodayPage extends ConsumerWidget {
         return _tile(context, 'Google Drive', '查看個人已授權的雲端文件', '/more/drive');
       default: return const SizedBox.shrink();
     }
+  }
+
+  Widget _taskCard(BuildContext context, List<Map<String, dynamic>> tasks) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
+    final active = tasks.where((task) =>
+        task['status'] != 'completed' && task['status'] != 'cancelled').toList();
+    DateTime? dueAt(Map<String, dynamic> task) =>
+        DateTime.tryParse(task['due_at']?.toString() ?? '')?.toLocal();
+    final overdue = active.where((task) {
+      final due = dueAt(task);
+      return due != null && due.isBefore(today);
+    }).toList();
+    final dueToday = active.where((task) {
+      final due = dueAt(task);
+      return due != null && !due.isBefore(today) && due.isBefore(tomorrow);
+    }).toList();
+    final priority = [...overdue, ...dueToday]
+      ..sort((a, b) => dueAt(a)!.compareTo(dueAt(b)!));
+    final preview = priority.take(3).map((task) =>
+        task['title']?.toString() ?? '未命名待辦').join(' · ');
+    final counts = '逾期 ${overdue.length}｜今日到期 ${dueToday.length}｜待完成 ${active.length}';
+    return _tile(context, '待辦事項',
+        '$counts\n${preview.isNotEmpty ? preview
+            : active.isEmpty ? '目前沒有待完成事項' : '沒有今天到期或逾期的待辦'}',
+        '/tasks');
   }
 
   Widget _tile(BuildContext context, String title, String summary, String route) {

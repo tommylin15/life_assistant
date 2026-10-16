@@ -39,8 +39,10 @@ FEATURES = {
 }
 DEFAULT_PINNED = ["tasks", "calendar", "projects"]
 DEFAULT_MORE = ["notes", "habits", "events", "opportunities", "explore", "shopping", "drive", "integrations"]
-DEFAULT_HOME = ["tasks", "calendar", "attention", "habits", "events", "projects"]
-HOME_KEYS = set(DEFAULT_HOME) | {"notes", "shopping", "drive", "opportunities", "explore"}
+DEFAULT_HOME = ["tasks", "calendar", "habits", "explore", "projects"]
+# Keep legacy "attention" valid for old clients and stored layouts; the Web UI
+# merges it into "tasks" without mutating tenant preferences or introducing DDL.
+HOME_KEYS = set(DEFAULT_HOME) | {"notes", "shopping", "drive", "attention", "events", "opportunities"}
 AI_PROVIDERS = ["gemini", "gemini_lite", "groq", "openrouter", "openai", "codex"]
 
 def _default_rollout(key: str) -> tuple[str, str]:

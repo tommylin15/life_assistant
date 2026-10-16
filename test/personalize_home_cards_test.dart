@@ -61,4 +61,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.lastBody?['home_cards'], ['tasks', 'explore']);
   });
+  testWidgets('legacy attention and tasks prefs render one configurable task card',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final api = _FakePreferencesApi();
+    await tester.pumpWidget(ProviderScope(overrides: [
+      authProvider.overrideWith(_FakeAuth.new),
+      platformApiProvider.overrideWithValue(api),
+      uiPreferencesProvider.overrideWith((ref) async => {
+        'revision': 0, 'nav_mode': 'auto',
+        'pinned': ['tasks', 'calendar', 'projects'],
+        'more_order': ['notes'],
+        'home_cards': ['attention', 'tasks', 'calendar'],
+      }),
+      effectiveFeaturesProvider.overrideWith((ref) async =>
+        {'tasks': true, 'calendar': true}),
+    ], child: const MaterialApp(home: PersonalizePage())));
+    await tester.pumpAndSettle();
+    final tasks = find.byKey(const ValueKey('home-card-tasks'));
+    expect(find.byKey(const ValueKey('home-card-attention')), findsNothing);
+    expect(tasks, findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(tasks).value, true);
+    final save = find.text('儲存偏好');
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(api.lastBody?['home_cards'], ['tasks', 'calendar']);
+  });
+
 }

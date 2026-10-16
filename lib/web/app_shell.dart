@@ -144,6 +144,15 @@ class _AppShellState extends ConsumerState<AppShell> {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 48,
+        actions: [
+          if (flags?['life_inbox'] == true)
+            IconButton(
+              key: const ValueKey('global-life-capture'),
+              tooltip: '快速新增',
+              onPressed: () => widget.onNavigate('/capture'),
+              icon: const Icon(Icons.add_circle_outline),
+            ),
+        ],
         title: const Text('Life Assistant'),
         leading: desktop
             ? IconButton(

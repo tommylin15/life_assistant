@@ -47,7 +47,7 @@ class MorePage extends ConsumerWidget {
       ),
       'drive': ListTile(
         leading: const Icon(Icons.cloud_outlined),
-        title: const Text('Google Drive'),
+        title: const Text('Google Drive 檔案總管'),
         subtitle: const Text('瀏覽已授權檔案、Google Picker 選取與檔案管理'),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => context.go('/more/drive'),

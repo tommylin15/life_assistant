@@ -299,7 +299,9 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
 
   Widget _calendarInputs(Map<String, dynamic> candidate, int index, bool editable) {
     final fields = candidate['fields'] as Map<String, dynamic>;
-    final isTimed = fields['start'] != null || fields['end'] != null;
+    final isTimed = candidate['calendar_timed'] == true ||
+        (candidate['calendar_timed'] == null &&
+            (fields['start'] != null || fields['end'] != null));
     final startDay = _parseDay(fields['start_date']);
     final endExclusive = _parseDay(fields['end_date']);
     final lastDay = endExclusive?.subtract(const Duration(days: 1));
@@ -315,6 +317,7 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
           fields.remove('end');
           fields.remove('start_date');
           fields.remove('end_date');
+          candidate['calendar_timed'] = !allDay;
           if (allDay) _applyDateHint(candidate);
           candidate['selected'] = false;
         }),
@@ -501,13 +504,38 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
           ] else if (target == 'task') ...[
             _field(fields, 'title', '待辦事項'),
             _field(fields, 'note', '備註（可選）'),
-            _field(fields, 'due_at', '期限 ISO8601（不確定可留白）'),
+            _dateButton(
+              keyValue: 'capture-task-due-$index',
+              label: '截止日期',
+              display: fields['due_at'] == null
+                  ? '未設定（點選萬年曆）'
+                  : (_tpeWallTime(fields['due_at']) == null
+                      ? '請重新選擇'
+                      : _ymd(_tpeWallTime(fields['due_at'])!) + ' ' +
+                        _tpeWallTime(fields['due_at'])!.hour.toString().padLeft(2, '0') +
+                        ':' + _tpeWallTime(fields['due_at'])!.minute.toString().padLeft(2, '0')),
+              onPressed: !editable || _busy ? null : () => _chooseTaskDate(candidate)),
+            if (fields['due_at'] != null) ...[
+              const Text('未指定時間時，日期型待辦預設當天 23:59 截止（台灣時間）；不自動提醒。',
+                  style: TextStyle(fontSize: 12)),
+              TextButton.icon(
+                key: ValueKey('capture-task-time-$index'),
+                onPressed: !editable || _busy ? null :
+                    () => _chooseTaskDate(candidate, timeOnly: true),
+                icon: const Icon(Icons.schedule),
+                label: const Text('調整截止時間'),
+              ),
+              TextButton(
+                onPressed: !editable || _busy ? null : () => setState(() {
+                  fields.remove('due_at');
+                  candidate['selected'] = false;
+                }),
+                child: const Text('清除截止日期'),
+              ),
+            ],
           ] else if (target == 'calendar') ...[
             _field(fields, 'summary', '行程名稱'),
-            _field(fields, 'start', '開始時間（ISO8601 含時區）'),
-            _field(fields, 'end', '結束時間（ISO8601 含時區）'),
-            _field(fields, 'start_date', '或全日開始日期 YYYY-MM-DD'),
-            _field(fields, 'end_date', '或全日結束日期（exclusive）'),
+            _calendarInputs(candidate, index, editable),
           ] else ...[
             TextFormField(
               initialValue: (fields['items'] as List? ?? [])
@@ -536,6 +564,13 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
                 }),
               ),
           ],
+          if ((target == 'task' || target == 'calendar') &&
+              _hintText(candidate) != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 7),
+              child: Text(_hintText(candidate)!,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+            ),
           for (final warning in (candidate['ambiguities'] as List? ?? []))
             Padding(padding: const EdgeInsets.only(top: 4),
                 child: Text(warning.toString(),
@@ -571,6 +606,8 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
               ],
             ],
             const Text('輸入一段文字或網址，Life 會提出建議；只有確認後才會寫入。'),
+            const Text('待辦／行程日期可用萬年曆快速選擇；只有年月或月日會提示補選，無需輸入 ISO8601。',
+                style: TextStyle(fontSize: 12)),
             const SizedBox(height: 12),
             TextField(
               key: const ValueKey('capture-input'),

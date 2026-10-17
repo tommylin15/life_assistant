@@ -162,10 +162,14 @@ def oauth_redirect_for_request(request: Request) -> str:
     Never derive a redirect from an arbitrary forwarded host: an attacker may
     supply X-Forwarded-Host through an unauthenticated Cloud Run request.
     """
-    # OAuth flow provenance survives Firebase's opaque proxy headers. Only a
-    # successfully verified stage session or a stage-login state may select the
-    # fixed, allowlisted staging callback; never use an arbitrary URL supplied
-    # by a request parameter.
+    # The pinned Firebase Staging rewrite uses a v3-<SHA> Cloud Run tag,
+    # not the ordinary service host. Reuse the same exact-origin classifier
+    # as current_user() so incremental Gmail/Calendar/Drive consent always
+    # returns to the Staging session that initiated it.
+    if _fixed_staging_origin(request):
+        return STAGING_REDIRECT_URI
+    # A stage-login state can choose the fixed callback without trusting
+    # arbitrary browser-supplied Host or redirect URL parameters.
     session = request.cookies.get(SESSION_COOKIE, "")
     if session.startswith(("oauth:staging:", "id:staging:", "se:staging:")):
         return STAGING_REDIRECT_URI
@@ -425,7 +429,10 @@ async def callback(
 
     # Incremental Gmail/Calendar/Drive authorization keeps the authenticated
     # session cookie intact and stores its one-time state server-side.
-    user = await current_user(request)
+    # Calling a FastAPI dependency as an ordinary Python function does not
+    # inject Depends(get_db). Pass this request's AsyncSession explicitly;
+    # DB-backed se: sessions otherwise raise AttributeError and return HTTP 500.
+    user = await current_user(request, db=db)
     services = await complete_authorization(db, state, code, user, oauth_redirect_for_request(request))
     query = urlencode({"google": "connected", "services": ",".join(services)})
     return RedirectResponse(f"{frontend_for_request(request)}/integrations?{query}")

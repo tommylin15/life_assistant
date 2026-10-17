@@ -121,6 +121,8 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
             Text('Gmail 智慧事項雷達',
                 style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700)),
             Text('只有按下快掃才會檢查自己的 Gmail。'),
+            Text('安全或費用類警告僅依文字初篩，並非確認真偽；請從官方網站或 App 查證。',
+                style: TextStyle(fontSize: 12)),
           ]),
           FilledButton.icon(
             key: const ValueKey('gmail-radar-quick-scan'),
@@ -217,6 +219,17 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
     const targetLabels = {
       'task': '待辦', 'note': '筆記', 'shopping': '購物清單', 'calendar': '日曆',
     };
+    const categoryLabels = {
+      'billing': '帳單與繳費',
+      'pickup': '包裹取貨',
+      'booking': '預約與訂位',
+      'travel': '交通與航班',
+      'deadline': '期限與待辦',
+      'security': '帳號／交易安全警告',
+      'account': '帳號／訂閱費用警告',
+      'refund': '退款／訂單異常',
+      'administrative': '行政／學校／工作待辦',
+    };
 
     return Card(key: ValueKey('gmail-radar-item-' + id),
       margin: const EdgeInsets.only(bottom: 10),
@@ -233,7 +246,8 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
           Text(item['summary']?.toString() ?? '', maxLines: 3,
               overflow: TextOverflow.ellipsis),
           const SizedBox(height: 6),
-          Text('分類：' + (item['category']?.toString() ?? '') +
+          Text('分類：' + (categoryLabels[item['category']] ??
+                  (item['category']?.toString() ?? '未知')) +
               '　郵件時間：' + _date(item['received_at']),
               style: Theme.of(context).textTheme.bodySmall),
           if (linkedTarget != null)

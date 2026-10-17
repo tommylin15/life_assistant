@@ -33,6 +33,14 @@ Life 不複製 Gmail 全信箱，不做郵件用戶端。使用者在 Life「Gma
 - **仍只在按下「立即快掃」或「三天補檢」時辨識**，無 Gemini、無排程、無推播。所有已成功掃描的郵件 ID 會去重；**新版規則不會自動重新檢查此前已掃描並略過的郵件**。新郵件／首次掃到的尚未查郵件適用新版；不要冒充歷史已全數回填。
 - 不變更 Gmail OAuth scope、不存正文／附件、不另建通知功能與 AI 模型成本。規則誤判回歸測試、四項 CI、固定 Staging、真人 Gmail 帳號 readback 分層驗收，唯一工項仍為 `doc/todo.md` P1-G1。
 
+## 2026-10-17｜補正已掃過與授權通知（P1-G1，不另建系統）
+
+- **Gmail 已讀不影響 Life**：Gmail 和其他應用程式的已讀／掃描紀錄不是 Life 來源篩選條件。影響快掃重複判讀的是 Life 自己的 `(user_sub, gmail_message_id)` 去重紀錄；原本被規則排除的信會保持已查狀態。
+- **新增「重新檢查近三天」手動按鈕**：每次以最新 40 封為上限，包括 Life 以前已檢查但當時未命中的郵件；不修改或刪除 `gmail_radar_seen` 既有鍵、已完成／忽略的 `gmail_radar_items`、Life Inbox 成功回執。新命中的提醒新增一次，不會清空或覆寫。
+- **正常授權與值得確認分開**：Google 驗證碼、一般成功登入、自己剛完成的 OAuth 授權及廣告不直接標示有風險；第三方 App 新取得帳號存取權、授權範圍／應用權限變更可列 `authorization`「第三方應用程式授權／權限變更」供自行至官網查證。只比對 Subject／Snippet，非身份真偽驗證；沒有命中不等於沒有風險。
+- 與既有「三天補檢」差異：補檢只補 40 封**尚未檢查**的 ID；重新判讀則允許重新檢查最新 40 封**已檢查**的 ID，兩者不可混稱。掃描狀態顯示 `recheck`；不得以 `added=0` 偽稱 Gmail 空信箱。維持手動、無排程、無 AI、無推播。當次錯誤不可將上次掃描的成功計數冒充本次完成。
+- 驗收：分類正／反案例、Life 去重＋重判、Flutter 按鈕、四 CI、固定 Staging 發布、真人 Gmail 最新三天 38 封可見／實際授權郵件能否命中、不同帳號隔離個別驗收。需取得全部必要證據後才能標 DONE。
+
 ## V1 技術與授權
 1. Flutter Web/PWA → FastAPI `POST /integrations/google/gmail/radar/quick-scan` → Google Gmail API `gmail.readonly` → PostgreSQL。API **不接受其他人的 user_id / email**，使用 `current_user.sub` 授權。
 2. 首版限定近期窗口（預設最近 7 天）和封數上限（最新 20 封（每輪三天補檢最多 40 封未查郵件）），使用 bounded Gmail `messages.list` 與 `messages.get(format=metadata)`。先用 deterministic 規則辨識明確通知與高價值候選；**未取得本人獨立 AI 同意時，不讀全文傳 Gemini**。未使用 Gemini 的狀態必須如實標「規則辨識」，不能標 AI 已分析。

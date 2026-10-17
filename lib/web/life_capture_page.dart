@@ -207,6 +207,8 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
       firstDate: DateTime(1900),
       lastDate: DateTime(2100),
       helpText: '選擇日期（可切換年份與月份）',
+      cancelText: '取消',
+      confirmText: '確認',
     );
   }
 

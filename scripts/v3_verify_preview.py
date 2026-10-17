@@ -36,7 +36,7 @@ def verify(
     delay: float = 5,
     fetch=None,
     sleep=None,
-) -> None:
+) -> str:
     if not re.fullmatch(r"[0-9a-f]{40}", release_sha):
         raise ValueError("invalid release SHA")
     # Never verify or fetch arbitrary hosts from CLI output.
@@ -52,23 +52,36 @@ def verify(
 
     get = fetch or _fetch
     pause = sleep or time.sleep
-    base = preview_url.rstrip("/")
+    primary = preview_url.rstrip("/")
+    # Firebase Hosting documents two channel domains backed by the SAME
+    # release. Some edge locations can return 404 on web.app while its
+    # firebaseapp.com sibling is ready. Derive the second URL from the
+    # already validated immutable channel hostname, never from remote input.
+    alternate = primary[:-len(".web.app")] + ".firebaseapp.com"
     for iteration in range(1, attempts + 1):
-        sha_status, sha_value = get(f"{base}/release.txt")
-        if sha_status == 200:
-            if sha_value.strip() != release_sha:
-                raise RuntimeError("preview release SHA mismatch")
-            api_status, _ = get(f"{base}/api/v1/tasks")
-            if api_status == 401:
-                print(f"preview=PASS release_sha={release_sha} api_unauthenticated=401", flush=True)
-                return
-            if api_status not in TRANSIENT:
-                raise RuntimeError(f"preview API unauthorized access gate FAIL status={api_status}")
-            print(f"preview_api=RETRY iteration={iteration} status={api_status}", flush=True)
-        elif sha_status in TRANSIENT:
-            print(f"preview_static=RETRY iteration={iteration} status={sha_status}", flush=True)
-        else:
-            raise RuntimeError(f"preview static failed non-transient HTTP={sha_status}")
+        for domain, base in (("web.app", primary), ("firebaseapp.com", alternate)):
+            sha_status, sha_value = get(f"{base}/release.txt")
+            if sha_status == 200:
+                if sha_value.strip() != release_sha:
+                    raise RuntimeError("preview release SHA mismatch")
+                api_status, _ = get(f"{base}/api/v1/tasks")
+                if api_status == 401:
+                    print(f"preview=PASS release_sha={release_sha} "
+                          f"api_unauthenticated=401 domain={domain}", flush=True)
+                    return base
+                if api_status not in TRANSIENT:
+                    raise RuntimeError(
+                        f"preview API unauthorized access gate FAIL status={api_status}"
+                    )
+                print(f"preview_api=RETRY iteration={iteration} domain={domain} "
+                      f"status={api_status}", flush=True)
+            elif sha_status in TRANSIENT:
+                print(f"preview_static=RETRY iteration={iteration} domain={domain} "
+                      f"status={sha_status}", flush=True)
+            else:
+                raise RuntimeError(
+                    f"preview static failed non-transient HTTP={sha_status}"
+                )
         if iteration < attempts:
             pause(delay)
 
@@ -77,7 +90,10 @@ def verify(
 
 def main() -> None:
     try:
-        verify(os.environ["PREVIEW_URL"], os.environ["RELEASE_SHA"])
+        verified = verify(os.environ["PREVIEW_URL"], os.environ["RELEASE_SHA"])
+        # Emitted only after exact SHA + protected 401 gates have passed.
+        # The GitHub workflow must use this URL for its OAuth preview gate.
+        print(f"preview_selected_url={verified}", flush=True)
     except (KeyError, ValueError, RuntimeError) as exc:
         print(f"preview_readiness=FAIL reason={exc}", file=sys.stderr, flush=True)
         raise SystemExit(1) from None

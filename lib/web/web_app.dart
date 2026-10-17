@@ -8,7 +8,6 @@ import 'calendar_page.dart';
 import 'app_shell.dart';
 import 'auth_state.dart';
 import 'browser_navigation.dart';
-import 'drive_page.dart';
 import 'drive_explorer_page.dart';
 import 'gmail_radar_page.dart';
 import 'habits_page.dart';
@@ -62,11 +61,11 @@ final _router = GoRouter(
           path: '/more/drive/settings',
           redirect: (_, __) => '/more/drive',
         ),
-        GoRoute(path: '/more/drive/files',
-          builder: (_, __) => const FeatureAccess(feature: 'drive', child: DriveExplorerPage())),
+        // Keep former explorer URLs working; the old AI manager page is retired.
+        GoRoute(path: '/more/drive/files', redirect: (_, __) => '/more/drive'),
         GoRoute(
           path: '/more/drive',
-          builder: (_, __) => const FeatureAccess(feature: 'drive', child: DrivePage()),
+          builder: (_, __) => const FeatureAccess(feature: 'drive', child: DriveExplorerPage()),
         ),
         GoRoute(path: '/more/gmail-radar',
           builder: (_, __) => const FeatureAccess(feature: 'gmail_radar', child: GmailRadarPage())),

@@ -232,45 +232,68 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
           if (linkedTarget != null)
             Text('已完成 · 已存入' + (targetLabels[linkedTarget] ?? 'Life'),
                 style: Theme.of(context).textTheme.bodySmall),
-          Wrap(spacing: 8, children: [
-            if (linkedTarget == null && pending)
-              TextButton.icon(
-                key: ValueKey('gmail-radar-send-inbox-' + id),
-                onPressed: () => context.go(
-                    '/capture?gmail_item=' + Uri.encodeComponent(id)),
-                icon: const Icon(Icons.move_to_inbox_outlined),
-                label: const Text('送到生活收件匣'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (linkedTarget == null && pending)
+                TextButton.icon(
+                  key: ValueKey('gmail-radar-send-inbox-' + id),
+                  onPressed: () => context.go(
+                      '/capture?gmail_item=' + Uri.encodeComponent(id)),
+                  icon: const Icon(Icons.move_to_inbox_outlined),
+                  label: const Text('送到生活收件匣'),
+                ),
+              if (linkedTarget != null && linkedRoute != null)
+                TextButton.icon(
+                  key: ValueKey('gmail-radar-linked-' + id),
+                  onPressed: () => context.go(linkedRoute),
+                  icon: const Icon(Icons.open_in_new),
+                  label: Text('開啟' + (targetLabels[linkedTarget] ?? '已儲存功能')),
+                ),
+              if (url.startsWith('https://mail.google.com/'))
+                TextButton.icon(
+                  key: ValueKey('gmail-radar-open-source-' + id),
+                  onPressed: () => openExternalBrowser(url),
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('開啟 Gmail 原信'),
+                ),
+              PopupMenuButton<String>(
+                key: ValueKey('gmail-radar-more-' + id),
+                tooltip: '更多 Gmail 操作',
+                icon: const Icon(Icons.more_horiz),
+                onSelected: (action) {
+                  if (action == 'mailbox' &&
+                      fallback.startsWith('https://mail.google.com/')) {
+                    openExternalBrowser(fallback);
+                  } else if (action == 'complete' || action == 'restore') {
+                    _updateItem(id, action == 'complete' ? 'completed' : 'pending');
+                  } else if (action == 'ignore') {
+                    _updateItem(id, 'ignored');
+                  }
+                },
+                itemBuilder: (_) => [
+                  if (fallback.startsWith('https://mail.google.com/'))
+                    const PopupMenuItem(
+                      value: 'mailbox',
+                      child: Text('Gmail 信箱備援'),
+                    ),
+                  if (linkedTarget == null && !_updating.contains(id)) ...[
+                    PopupMenuItem(
+                      value: pending ? 'complete' : 'restore',
+                      child: Text(pending ? '手動標示完成' : '恢復待處理'),
+                    ),
+                    if (pending)
+                      const PopupMenuItem(
+                        value: 'ignore',
+                        child: Text('忽略'),
+                      ),
+                  ],
+                ],
               ),
-            if (linkedTarget != null && linkedRoute != null)
-              TextButton.icon(
-                key: ValueKey('gmail-radar-linked-' + id),
-                onPressed: () => context.go(linkedRoute),
-                icon: const Icon(Icons.open_in_new),
-                label: Text('開啟' + (targetLabels[linkedTarget] ?? '已儲存功能')),
-              ),
-            if (url.startsWith('https://mail.google.com/'))
-              TextButton.icon(
-                onPressed: () => openExternalBrowser(url),
-                icon: const Icon(Icons.open_in_new),
-                label: const Text('開啟 Gmail 原信'),
-              ),
-            if (fallback.startsWith('https://mail.google.com/'))
-              TextButton(
-                onPressed: () => openExternalBrowser(fallback),
-                child: const Text('Gmail 信箱備援'),
-              ),
-            if (linkedTarget == null)
-              TextButton(
-                onPressed: _updating.contains(id) ? null :
-                    () => _updateItem(id, pending ? 'completed' : 'pending'),
-                child: Text(pending ? '標示完成' : '恢復待處理'),
-              ),
-            if (pending) TextButton(
-              onPressed: _updating.contains(id) ? null :
-                  () => _updateItem(id, 'ignored'),
-              child: const Text('忽略'),
-            ),
-          ]),
+            ],
+          ),
         ]),
       ),
     );

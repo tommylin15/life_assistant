@@ -74,8 +74,10 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       await _load();
     } catch (_) {
-      if (mounted) setState(() =>
-          _error = 'Gmail 掃描未完成。請稍後重試；若持續失敗，請提供發生時間以查詢紀錄。';
+      if (mounted) {
+        setState(() => _error =
+            'Gmail 掃描未完成。請稍後重試；若持續失敗，請提供發生時間以查詢紀錄。');
+      }
     } finally {
       if (mounted) setState(() {
         _scanning = false;

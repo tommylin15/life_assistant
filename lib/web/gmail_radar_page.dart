@@ -16,6 +16,7 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
   bool _loading = true;
   bool _scanning = false;
   bool _backfilling = false;
+  bool _rechecking = false;
   String? _error;
   String _filter = 'pending';
   Map<String, dynamic> _status = const {};
@@ -45,20 +46,27 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
     }
   }
 
-  Future<void> _scan({bool backfill = false}) async {
+  Future<void> _scan({bool backfill = false, bool recheck = false}) async {
     if (_scanning || _status['gmail_authorized'] != true) return;
-    setState(() { _scanning = true; _backfilling = backfill; _error = null; });
+    setState(() {
+      _scanning = true;
+      _backfilling = backfill;
+      _rechecking = recheck;
+      _error = null;
+    });
     try {
       final r = await ref.read(platformApiProvider).post(
-        backfill
-            ? '/integrations/google/gmail/radar/backfill-three-days'
-            : '/integrations/google/gmail/radar/quick-scan', const {});
+        recheck
+            ? '/integrations/google/gmail/radar/recheck-three-days'
+            : backfill
+                ? '/integrations/google/gmail/radar/backfill-three-days'
+                : '/integrations/google/gmail/radar/quick-scan', const {});
       if (!mounted) return;
       final count = r['three_day_count'] ?? '未知';
       final remaining = r['three_day_remaining'] ?? '未知';
       final countText = r['three_day_count_capped'] == true
           ? '至少$count' : '$count';
-      final message = (backfill ? '三天補檢' : '快掃') +
+      final message = (recheck ? '重新判讀' : backfill ? '三天補檢' : '快掃') +
         '：近三天 $countText 封，本次檢查 ' + (r['checked'] ?? 0).toString() +
         ' 封，新增事項 ' + (r['added'] ?? 0).toString() +
         ' 筆，未檢查 ' + remaining.toString() +
@@ -67,9 +75,13 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
       await _load();
     } catch (_) {
       if (mounted) setState(() =>
-          _error = '快掃未完成。請確認 Gmail 授權、網路連線，以及是否有其他快掃正在進行。');
+          _error = 'Gmail 掃描未完成。請稍後重試；若持續失敗，請提供發生時間以查詢紀錄。';
     } finally {
-      if (mounted) setState(() { _scanning = false; _backfilling = false; });
+      if (mounted) setState(() {
+        _scanning = false;
+        _backfilling = false;
+        _rechecking = false;
+      });
     }
   }
 
@@ -140,6 +152,14 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
               icon: const Icon(Icons.manage_search),
               label: Text(_scanning && _backfilling ? '補檢中' : '三天補檢'),
             ),
+          if (granted && !_loading)
+            OutlinedButton.icon(
+              key: const ValueKey('gmail-radar-three-day-recheck'),
+              onPressed: _scanning ? null : () => _scan(recheck: true),
+              icon: const Icon(Icons.refresh),
+              label: Text(_scanning && _rechecking
+                  ? '重新判讀中' : '重新檢查近三天'),
+            ),
         ]),
         const SizedBox(height: 12),
         if (!granted && !_loading) Card(child: ListTile(
@@ -162,7 +182,9 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
                               ? '${threeDayCount} 封' : '至少 ${threeDayCount} 封')),
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
-                  Text('本次' + (_status['scan_kind'] == 'backfill' ? '補檢' : '快掃') +
+                  Text('本次' + (_status['scan_kind'] == 'recheck'
+                      ? '重新判讀' : _status['scan_kind'] == 'backfill'
+                          ? '補檢' : '快掃') +
                       '檢查 ${_status['checked'] ?? 0} 封，新增事項 ' +
                       '${_status['added'] ?? 0} 筆，失敗 ${_status['failed'] ?? 0} 封'),
                   Text(threeDayComplete
@@ -202,7 +224,8 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
         else for (final item in _items) _itemCard(item),
         const SizedBox(height: 12),
         Text('快掃檢查最近 7 天最新最多 20 封；三天補檢每次補查 40 封未檢查郵件。'
-          '結果保留已處理 ID 去重，可隨時重按，不設一小時限制；'
+          '結果保留已處理 ID 去重；「重新檢查近三天」每次最多重新判讀最新 40 封，'
+          '包括 Life 過去略過的郵件，不會刪除已完成事項；'
           '未使用 Gemini，不執行背景排程或推播。原信若無法定位，可改由 Gmail 開啟。',
           style: Theme.of(context).textTheme.bodySmall),
       ]),
@@ -229,6 +252,7 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
       'account': '帳號／訂閱費用警告',
       'refund': '退款／訂單異常',
       'administrative': '行政／學校／工作待辦',
+      'authorization': '第三方應用程式授權／權限變更',
     };
 
     return Card(key: ValueKey('gmail-radar-item-' + id),

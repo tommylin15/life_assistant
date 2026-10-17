@@ -30,6 +30,42 @@ class InboxRuleTests(unittest.TestCase):
         self.assertFalse(item["select_default"])
         self.assertIn("請選擇購物清單", item["ambiguities"])
 
+    def test_calendar_date_hints_keep_partial_precision_and_roc_year(self):
+        now = "2026-10-17T12:00:00+08:00"
+        cases = [
+            ("2026-11-05", "day", "2026-11-05"),
+            ("2026年11月5日", "day", "2026-11-05"),
+            ("2026/11/05", "day", "2026-11-05"),
+            ("2026.11.05", "day", "2026-11-05"),
+            ("民國115年11月5日", "day", "2026-11-05"),
+            ("115年11月5日", "day", "2026-11-05"),
+            ("2026年11月", "year_month", None),
+            ("2026/11", "year_month", None),
+            ("11/05", "month_day", None),
+            ("11月5日", "month_day", None),
+            ("今天", "day", "2026-10-17"),
+            ("明天", "day", "2026-10-18"),
+            ("後天", "day", "2026-10-19"),
+        ]
+        for label, precision, date in cases:
+            with self.subTest(label=label):
+                hint = inbox._inbox_date_hint("報名日期 " + label, now)
+                self.assertEqual(hint["precision"], precision)
+                self.assertEqual(hint.get("date"), date)
+        self.assertIsNone(inbox._inbox_date_hint("不含日期的備忘", now))
+
+    def test_invalid_or_multiple_dates_cannot_auto_fill(self):
+        now = "2026-10-17T12:00:00+08:00"
+        for label, precision in [
+            ("2026/02/30", "invalid"),
+            ("2026/11/5 到 2026/11/6", "ambiguous"),
+            ("13月32日", "invalid"),
+        ]:
+            with self.subTest(label=label):
+                hint = inbox._inbox_date_hint(label, now)
+                self.assertEqual(hint["precision"], precision)
+                self.assertNotIn("date", hint)
+
     def test_schema_rejects_untrusted_target_or_extra_fields(self):
         with self.assertRaises(ValidationError):
             inbox.Proposal(target="delete_db", fields={"anything": "x"})
@@ -71,6 +107,43 @@ class InboxClassificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["candidates"][0]["target"], "task")
         self.assertFalse(result["saved"])
         ai.assert_awaited_once()
+
+    async def test_partial_month_or_day_cannot_be_fabricated_by_model(self):
+        candidates = [
+            ("請在 11月5日 參加活動", "month_day"),
+            ("2026年11月 報名活動", "year_month"),
+        ]
+        for source, precision in candidates:
+            reply = ('{"candidates":[{"target":"calendar",'
+                     '"fields":{"summary":"報名活動",'
+                     '"start_date":"2026-11-05","end_date":"2026-11-06"},'
+                     '"evidence_spans":[],"ambiguities":[],'
+                     '"select_default":true}]}')
+            with self.subTest(source=source), patch.object(
+                    inbox, "generate_text", new=AsyncMock(return_value={"text": reply})):
+                result = await inbox.interpret(
+                    inbox.InterpretInput(text=source), Response(),
+                    user={"sub": "u"})
+            self.assertEqual(result["date_hint"]["precision"], precision)
+            proposal = result["candidates"][0]
+            self.assertEqual(proposal["target"], "calendar")
+            self.assertNotIn("start_date", proposal["fields"])
+            self.assertNotIn("end_date", proposal["fields"])
+            self.assertFalse(proposal["select_default"])
+            self.assertIn("請使用萬年曆", "、".join(proposal["ambiguities"]))
+
+    async def test_partial_task_due_at_is_removed_before_persistable_proposal(self):
+        reply = ('{"candidates":[{"target":"task","fields":'
+                 '{"title":"備份文件","due_at":"2026-11-05T09:00:00+08:00"},'
+                 '"evidence_spans":[],"ambiguities":[],"select_default":true}]}')
+        with patch.object(inbox, "generate_text", new=AsyncMock(return_value={"text": reply})):
+            result = await inbox.interpret(
+                inbox.InterpretInput(text="11月5日備份文件"), Response(),
+                user={"sub": "u"})
+        candidate = result["candidates"][0]
+        self.assertEqual(candidate["target"], "task")
+        self.assertNotIn("due_at", candidate["fields"])
+        self.assertFalse(candidate["select_default"])
 
     async def test_broken_json_falls_back_to_manual_note(self):
         with patch.object(inbox, "generate_text", new=AsyncMock(

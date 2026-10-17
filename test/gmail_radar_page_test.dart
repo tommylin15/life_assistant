@@ -182,6 +182,10 @@ void main() {
 
   testWidgets('manual recheck can revisit Gmail messages already checked by Life',
       (tester) async {
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final api = _FakeRadarApi(authorized: true);
     await tester.pumpWidget(ProviderScope(
       overrides: [platformApiProvider.overrideWithValue(api)],

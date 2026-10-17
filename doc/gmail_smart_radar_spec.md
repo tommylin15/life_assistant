@@ -15,9 +15,18 @@ Life 不複製 Gmail 全信箱，不做郵件用戶端。使用者在 Life「Gma
 - 事項卡：分類、簡短標題／摘要、來源寄件者與日期（有證據才顯示）、原始 Gmail 連結、待處理／已完成／已忽略。盡量少保存敏感資訊。
 - 先實作「原信查看、完成、忽略」；後續沿用既有手動 Gmail→Task/Calendar 操作（需個人確認），不另外做自動寫入。
 
+## 2026-10-17｜Gmail 快掃、補檢與輕量收件匣整合（較舊 V1 數字以此節為準）
+
+- **卡片只保留主要動作**：待處理顯示「送到生活收件匣」與「開啟 Gmail 原信」；有成功儲存回執後改顯示「開啟已儲存功能」和「開啟 Gmail 原信」。Gmail 信箱備援及手動完成／忽略／恢復移到「⋯ 更多」。備援是開啟所有郵件而非備份；原信路由不能保證手機／多帳號一定直達。
+- **手動快掃**：最近 7 天最新 20 封；額外分頁列出最近 3 天的 ID（最多 2,000 個），提供已列出封數、本輪檢查、新事項、尚待補檢、失敗數。超過上限只能顯示已列出至少數，不得假報全部掃完。
+- **三天補檢**：使用者自行按，一次最多補查 40 封尚未查過的 ID；可重按以處理剩餘，掃描進行時防止同人併發，不設一小時冷卻。掃過含規則未命中的信僅記錄 owner+message ID 去重；不保存正文、不呼叫 Gemini。
+- **送到生活收件匣**：只帶入該封標題、snippet、原信 URL，使用者仍須明確按「智慧辨識」（這一步可能使用 Gemini）並親自確認儲存。後端核對本人 inbox.create 成功回執，才能把 Gmail 項目標示完成、保存目標類型與 ID；單純開啟頁面／智慧分類／UNKNOWN 不標完成，不建立第二套 Inbox。
+- **功能連結限制**：目前連至待辦／筆記等功能入口，未保證直接開啟某一筆 item；各功能 ID deep link 需要獨立 UI/驗收，不造假。
+- 不加入 Scheduler／推播／自動 AI。工程、四 CI、Staging 與 Gmail/目標 DB 真實讀回分別驗證，統一在 doc/todo.md P1-G1 追蹤。
+
 ## V1 技術與授權
 1. Flutter Web/PWA → FastAPI `POST /integrations/google/gmail/radar/quick-scan` → Google Gmail API `gmail.readonly` → PostgreSQL。API **不接受其他人的 user_id / email**，使用 `current_user.sub` 授權。
-2. 首版限定近期窗口（預設最近 7 天）和封數上限（最多 50），使用 bounded Gmail `messages.list` 與 `messages.get(format=metadata)`。先用 deterministic 規則辨識明確通知與高價值候選；**未取得本人獨立 AI 同意時，不讀全文傳 Gemini**。未使用 Gemini 的狀態必須如實標「規則辨識」，不能標 AI 已分析。
+2. 首版限定近期窗口（預設最近 7 天）和封數上限（最新 20 封（每輪三天補檢最多 40 封未查郵件）），使用 bounded Gmail `messages.list` 與 `messages.get(format=metadata)`。先用 deterministic 規則辨識明確通知與高價值候選；**未取得本人獨立 AI 同意時，不讀全文傳 Gemini**。未使用 Gemini 的狀態必須如實標「規則辨識」，不能標 AI 已分析。
 3. 每人獨立資料與唯一約束 `(user_sub, gmail_message_id)`；相同郵件重掃不重建、不覆蓋已完成/忽略。必要資料：message ID、thread ID、分類、簡短說明、時間、狀態、最後掃描時間；不保存原信、附件、完整正文或 token。
 4. 同使用者後端操作採有界互斥／資料庫 advisory lock 或 durable lease，不能只靠前端 disabled。快掃可以採有上限同步執行並返回實際結果；若工作超過 Cloud Run 請求可靠時間，應另採可靠 queue/Job 方案，不用無保證背景任務。
 5. 在 Gmail 原信上有 Web/Android 連結；注意多帳號情境及 Gmail API messageId 不一定等同前端可直接定位的 thread route，若無法可靠直達則明確 fallback 至 Gmail 搜尋/收件匣；不假造保證。

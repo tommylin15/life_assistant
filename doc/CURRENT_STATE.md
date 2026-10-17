@@ -144,3 +144,9 @@ At audit time the source baseline was `fc800b280be59f44f485dfc170fe45a14fc9c981`
 
 - [V3 #39040660665](https://github.com/tommylin15/life_assistant/actions/runs/39040660665) 同 SHA `802e106` 四 CI **PASS**；Preview channel `v3-802e10649f-r39040660665a1` 已由官方 metadata 宣稱 PUBLISHED，但 Firebase 公開 URL 實際只包含截短的 `v3-802e10649f-r390406606`，`scripts/v3_verify_preview.py` 的精確 channel gate 因此 **FAIL**，尚未執行網站 SHA/API 讀回。
 - 根因已由 Actions 的 `PREVIEW_CHANNEL` 和 `PREVIEW_URL` 直接對照確認：Preview channel 不能超過 Firebase 公開 hostname 可完整表示的長度。改用 GitHub run ID **完整 base36**（此輪 7 字元）加 attempt，並在 CLI/API 驗證及固定 Staging promotion 前限制 channel ≤ 24 字元；跨版 SHA、候選 revision pin、OAuth/API 401、正式流量不變等門檻保留。新 SHA 的 CI／Staging／實機驗收不可沿用失敗版的證據。
+
+
+### 2026-10-18｜YAML 格式回歸與修復
+
+- [CI #39048784160](https://github.com/tommylin15/life_assistant/actions/runs/39048784160) 與 [workflow 載入失敗 #39048783013](https://github.com/tommylin15/life_assistant/actions/runs/39048783013) 暴露：Preview channel Base36 計算的內嵌 Python heredoc 沒有保持 YAML `run: |` 縮排，導致 GitHub Actions workflow 直接無法解析（0 jobs）；程式碼 CI 不能取代 workflow YAML 格式檢查。
+- 修正 heredoc YAML 縮排，並在 deployment-scripts CI 新增 PyYAML 的 **所有 .github/workflows/*.yml** 結構載入驗證；正式 staging/production 仍以新的同 SHA workflow/runtime readback 判定，不沿用之前的綠燈。

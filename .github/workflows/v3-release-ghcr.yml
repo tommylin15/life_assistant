@@ -74,17 +74,17 @@ jobs:
           # beyond its 24-character prefix; validate before deploying.
           # Base36 preserves the complete GitHub run ID without collisions.
           RUN_KEY="$(python - "$GITHUB_RUN_ID" <<'PY'
-import sys
-n=int(sys.argv[1])
-assert n > 0
-alphabet="0123456789abcdefghijklmnopqrstuvwxyz"
-value=""
-while n:
-    value=alphabet[n%36]+value
-    n//=36
-print(value)
-PY
-)"
+          import sys
+          n=int(sys.argv[1])
+          assert n > 0
+          alphabet="0123456789abcdefghijklmnopqrstuvwxyz"
+          value=""
+          while n:
+              value=alphabet[n%36]+value
+              n//=36
+          print(value)
+          PY
+          )"
           CHANNEL="v3-${RELEASE_SHA:0:10}-${RUN_KEY}a${GITHUB_RUN_ATTEMPT}"
           [[ ${#CHANNEL} -le 24 ]]
           echo "PREVIEW_CHANNEL=$CHANNEL" >> "$GITHUB_ENV"

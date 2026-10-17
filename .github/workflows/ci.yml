@@ -180,6 +180,19 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Validate GitHub Actions YAML
+        run: |
+          python -m pip install --disable-pip-version-check "PyYAML==6.0.2"
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          for path in sorted(Path(".github/workflows").glob("*.yml")):
+              data=yaml.safe_load(path.read_text(encoding="utf-8"))
+              assert isinstance(data, dict) and "jobs" in data, path
+              assert isinstance(data["jobs"], dict) and data["jobs"], path
+          print("workflow_yaml_syntax=PASS")
+          PY
+
       - name: Validate script syntax
         run: |
           # Shell scripts

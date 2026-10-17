@@ -16,6 +16,13 @@
 - `docs/superpowers/` 已從當前工作樹清除（保留 Git history），不得把其草稿當作現行流程、Source of Truth 或必要輸入，也不得因舊文件存在而重新啟用 Superpowers skill。
 - 除非使用者日後明確修改本條規則，所有代理人與開發工作都必須遵守本禁令。
 
+## 2026-10-17｜Google Drive 使用者功能收斂
+
+- **最新版優先：移除 Google Drive 智能整理／AI 文件管理使用者入口與管理後台 UI，只保留 Google Drive 檔案總管。** 現有 Google Picker + `drive.file` 逐檔授權不擴大；原檔、筆記／專案關聯與既有 DB 紀錄保留，舊 API 暫留相容且不可再由使用者頁面觸發 Gemini。
+- `lib/web/web_app.dart` 的唯一正式 `/more/drive` 頁面是 `DriveExplorerPage`，歷史 `/more/drive/files` 和 `/more/drive/settings` 轉址到這一頁；所有導航／個人化要顯示「Google Drive 檔案總管」。
+- `drive.file` 的文件／資料夾可見範圍受個別 Picker 選取或應用程式建立限制，**選資料夾不保證能列出其全部子檔**。不得為了顯示完整樹而自動擴大敏感或 restricted Drive scopes。
+- 上述決策只取消 Drive 的 AI 智能整理功能，**不取消 Life 生活收件匣 AI、omniAgent 或其他已核准 AI 能力**。本節取代 2026-10-10 早期「Drive AI Provider 管理」之產品方向；資料模型／舊相容程式的清理需相依分析及獨立驗收。
+
 ## 目前架構基準
 
 目前正式目標架構改為：

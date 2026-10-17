@@ -1,33 +1,34 @@
-# Google Drive 檔案總管 V1｜Life Assistant
-日期：2026-10-16（Asia/Taipei）
-狀態：APPROVED DIRECTION / IMPLEMENTATION NOT VERIFIED。正式實作與驗收以 GitHub main 和 runtime 為準。
+# Google Drive 檔案總管｜Life Assistant（唯一現行規格）
 
-## 產品定位
-重整現有 Google Drive 智能整理成真正的檔案總管：可在 Life 以手機/桌面瀏覽資料夾、搜尋、預覽、開啟、修改與移動檔案。Google Drive 仍是原檔 source of truth；Life PostgreSQL 只保存授權、明確關聯的最小 metadata、設定和必要稽核。不可建立另一套完整文件副本或全文索引。
+更新：2026-10-17（Asia/Taipei）
 
-## 既有實作（盤點基準，未驗證 live）
-- Flutter `lib/web/drive_page.dart`：Google Picker 明確選取、登錄文件、筆記關聯、AI 標籤/相關筆記建議。
-- API `backend/app/api/drive.py`：workspaces、picker-config、documents、project link、enrichment/refresh。
-- OAuth `backend/app/services/google_oauth.py` 使用 `drive.file`；不能假設能直接瀏覽使用者雲端硬碟的所有既有檔案。
-- 既有 Drive→Notes 一次性匯入、Project 關聯、AI 同意／快取要保留，不要重建。
-- Drive 2026-09-30 舊討論偏「逐檔 Picker」。本輪新需求明確要求檔案總管；舊文件仍為歷史設計、**不再單獨代表全檔案總管的核准功能範圍**。
+## 產品決策
 
-## V1 預期操作
-1. 左側／手機抽屜：我的雲端硬碟、最近使用、已加星號、資料夾樹或麵包屑；列表／網格切換、排序與分頁。
-2. 搜尋：檔名、檔案類型、日期、目前位置；內容搜尋僅在 scope 與來源正式支援時啟用。
-3. 預覽與開啟：圖片、PDF、TXT/Markdown 安全可讀預覽；Docs/Sheets/Slides 使用 Google 官方編輯器、保留來源連結。不能假稱 Life 已有 Google Docs 全格式編輯器。
-4. 編輯：V1 可在 Life 直接編輯安全的純文字類型並寫回；Google 原生文件優先從 Life 開啟原生編輯器。進階原生內容修改應另走 Google Docs/Sheets/Slides API、檢查 revision/ETag 與寫入權限。
-5. 檔案管理：新建資料夾、上傳、重新命名、複製、移動、移至垃圾桶、下載；每個操作需使用者明確觸發，與讀取/寫入 scope 適配，批次危險操作需確認與部分失敗回報。第一階段不做永久刪除。
-6. 與原有專案、筆記、AI 標籤共存；移動或重新命名原檔時，用 Google File ID 保持關聯穩定。
+- **取消「Google Drive 智能整理／AI 標籤／AI 文件管理」的使用者功能與操作入口。** 左側導覽／個人化統一顯示「Google Drive 檔案總管」。
+- 唯一入口 `/more/drive` → Flutter `DriveExplorerPage`；舊網址 `/more/drive/files`、`/more/drive/settings` 轉址至此，不能跳回原智能管理。
+- **原 Drive 檔案與既有 Life 筆記／專案關聯不可刪除。** 舊 AI 相關儲存資料、資料表與後端相容 API 先保持不變但不在新檔案總管觸發，避免破壞歷史資料與其他功能；待依相依證據評估移除。這不表示 AI 功能仍被產品保留。
+- 不額外使用 Gemini、不自動分析全文、不建立夜間同步，也不主動擴張 Google OAuth 權限。
 
-## 關鍵風險及選擇
-- **OAuth：** `drive.file` 是以使用者選擇的檔案為基礎。若要原生全 Drive 階層管理，須先確認 `drive.metadata.readonly` / `drive.readonly` / `drive` 等 scope 能力與 Google restricted scope 審查／安全成本；不應為了做 UI 就自動擴大正式 OAuth scopes。
-- 建議兩階段：A 保留目前 `drive.file`＋Picker，在已明確授權的範圍做可用檔案管理；B 若真的要「整個 Drive」檔案總管，先完成合規方案和全帳號權限測試才引入更廣 scope。 UI 應誠實顯示「已選取文件」與「完整雲端硬碟」模式差異。
-- **讀寫安全：** 使用者 Google ID/Scopes 與 Life Session 對應；Cross-tenant 401/403、Google revoke 與刷新失效測試；寫入前比對修改版本、衝突提示，不默默覆蓋外部修改。
-- **檔案安全：** 防止無限制大檔預覽、惡意內容/XSS、意外敏感外洩；來源原文不預設送 Gemini，需個人 consent。
-- **效能：** Google server-side pageToken 搜尋/分頁、依需預覽、短期快取；不做夜間全 Drive 同步或無限制掃描。
+## 目前連線為何只看得到部分檔案
 
-## 單一工程工項與驗收
-工作追蹤位於 `doc/todo.md` P1-G2，不另外建立重複 active TODO。
-完成要分開驗證：Backend/Flutter implementation；權限與檔案操作 tests；四項 CI；Staging；真實授權帳號的「瀏覽→預覽→開啟→修改→原 Drive 讀回→移動→再讀回」；原有 Picker／AI／筆記／專案回歸；正式部署與 runtime。
-全程 PASS / FAIL / NOT VERIFIED，未完成不可標 DONE。
+1. 登入 Life 的使用者在「個人化 → Google 服務連結」授權自己的 Google 帳號；Drive scope 維持 `https://www.googleapis.com/auth/drive.file`，是**逐檔授權**，並非全帳號唯讀或全帳號修改。
+2. 從檔案總管「選取更多檔案」開啟 **Google Picker**。Google Picker 可在本人 Google Drive 中挑選，但只有被 Picker 選取／Life 建立的檔案才進入 Life 可讀取範圍。選取某資料夾**不保證自動授權其所有已存在／未來新增的子檔案**；要在 Life 看子檔，仍須逐檔選取。
+3. Life 前端 `GET /api/v1/drive/manager/files` 使用本人受保護的 Google OAuth token，透過 Google Drive `files.list` 列出**該應用程式可見**的檔案，50 筆一頁，有更多資料時用 pageToken 接續；搜尋只涵蓋此可見範圍。
+4. 使用「在 Google Drive 查看全部檔案」會跳至官方 Drive 網頁，能看 Google 帳號本身允許的全部檔案。這**不會自動擴大 Life 存取權**。
+5. 若要 Life 內直接**原生瀏覽整個 Google Drive**（包含從未由 Picker 選取的檔案），須另行評估 Google `drive.metadata.readonly`／`drive.readonly`／`drive` 等較廣（可能 restricted）的 scopes、驗證及安全成本；在使用者選擇前不得逕行變更正式 Google OAuth scope。
+
+## 現有檔案總管動作
+
+- 目前已授權清單、麵包屑資料夾導航、搜尋與分頁。
+- Picker 逐檔選取／選取資料夾、Life 建立新資料夾、開啟 Google 原始檔案、重新命名及移動（受授權及來源版本驗證限制）。
+- TXT／Markdown／CSV／JSON 的小型文字預覽與明確儲存（64KiB 限制，版本／內容比較及讀回），Google Docs／Sheets／Slides 仍以官方編輯器處理。
+- 上傳／複製／完整 Drive 全資料夾瀏覽／完整單筆深連結未宣稱已完成；不可把已選取文件等同整個 Drive。
+
+## 驗收門檻
+
+- 同一 main SHA 完成 4 CI；確認舊「智能整理」不再出現在導航及新版檔案總管 UI，不觸發 AI。
+- 確認 Picker 選取檔案與資料夾後由 Google 授權與本人的 API 讀回；選取資料夾不誤顯示未授權子檔案。
+- 使用者 A/B Google scope、資料隔離、原檔修改與衝突防護、手機端選取與讀回、舊筆記／專案關聯不變。
+- 固定 Staging 與正式發布須各有真實 CI/GitHub release/runtime 證據；尚未驗證為 NOT VERIFIED，整體 PARTIAL。
+
+唯一工作追蹤：`doc/todo.md` P1-G2。

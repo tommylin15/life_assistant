@@ -98,8 +98,8 @@ def verify_snapshot(
     require(bool(SHA_PATTERN.fullmatch(expected_sha)), "Expected full source SHA")
     base = f"v3-{expected_sha[:10]}"
     channel = preview_channel or base
-    require(bool(re.fullmatch(re.escape(base) + r"(-r[1-9][0-9]*a[1-9][0-9]*)?", channel)),
-            "Preview channel does not belong to this SHA")
+    require(bool(re.fullmatch(re.escape(base) + r"(-[0-9a-z]{1,8}a[1-9][0-9]*)?", channel))
+            and len(channel) <= 24, "Preview channel does not belong to this SHA or exceeds Firebase hostname limit")
     preview_id = release_version(preview_releases, STAGE_SITE, channel)
     require(preview_version.get("name") == preview_id, "Preview version readback mismatch")
     require(preview_visible_sha.strip() == expected_sha, "Preview public SHA mismatch")

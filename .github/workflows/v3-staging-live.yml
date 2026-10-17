@@ -101,7 +101,8 @@ jobs:
           TOKEN="$(gcloud auth print-access-token)"
           API="https://firebasehosting.googleapis.com/v1beta1"
           CHANNEL="${PREVIEW_CHANNEL:-v3-${RELEASE_SHA:0:10}}"
-          [[ "$CHANNEL" =~ ^v3-${RELEASE_SHA:0:10}(-r[1-9][0-9]*a[1-9][0-9]*)?$ ]]
+          [[ ${#CHANNEL} -le 24 ]]
+          [[ "$CHANNEL" =~ ^v3-${RELEASE_SHA:0:10}(-[0-9a-z]{1,8}a[1-9][0-9]*)?$ ]]
           get_json() {
             curl --fail --silent --show-error --retry 3 --header "Authorization: Bearer $TOKEN" "$API/$1" -o "$2"
           }
@@ -126,7 +127,8 @@ jobs:
         run: |
           set -euo pipefail
           CHANNEL="${PREVIEW_CHANNEL:-v3-${RELEASE_SHA:0:10}}"
-          [[ "$CHANNEL" =~ ^v3-${RELEASE_SHA:0:10}(-r[1-9][0-9]*a[1-9][0-9]*)?$ ]]
+          [[ ${#CHANNEL} -le 24 ]]
+          [[ "$CHANNEL" =~ ^v3-${RELEASE_SHA:0:10}(-[0-9a-z]{1,8}a[1-9][0-9]*)?$ ]]
           # Hosting random preview host must come from provider channel metadata.
           TOKEN="$(gcloud auth print-access-token)"
           curl -fsS -H "Authorization: Bearer $TOKEN" "https://firebasehosting.googleapis.com/v1beta1/sites/$STAGE_SITE/channels/$CHANNEL" > "$RUNNER_TEMP/channel.json"

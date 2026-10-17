@@ -46,10 +46,12 @@ def verify(
     expected_base = "v3-" + release_sha[:10]
     expected_channel = channel or expected_base
     if expected_channel != expected_base and not re.fullmatch(
-        re.escape(expected_base) + r"-r[1-9][0-9]*a[1-9][0-9]*",
+        re.escape(expected_base) + r"-[0-9a-z]{1,8}a[1-9][0-9]*",
         expected_channel,
     ):
         raise ValueError("preview channel does not belong to this SHA/attempt")
+    if len(expected_channel) > 24:
+        raise ValueError("Firebase Preview channel exceeds public hostname limit")
     # Never verify or fetch arbitrary hosts from CLI output.
     host_pattern = (
         r"https://life-assistant-v3-stage-tl15--"

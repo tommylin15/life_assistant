@@ -138,3 +138,9 @@ At audit time the source baseline was `fc800b280be59f44f485dfc170fe45a14fc9c981`
 - SHA `b4894f056a79199b5d39e9b11639727a282fad4b`：CI [#39034846342](https://github.com/tommylin15/life_assistant/actions/runs/39034846342) 四項 PASS；V3 [#39035036060](https://github.com/tommylin15/life_assistant/actions/runs/39035036060) 第一次及第二次均 **FAIL** 在 `Verify pinned Preview API and static release`。Firebase Hosting API channel/version 顯示 PUBLISHED，但 `web.app` 與 `firebaseapp.com` 公開 Preview `release.txt` 均持續 HTTP 404、24 次有界驗證後失敗；不能把 API PUBLISHED 視作網站可用。
 - 候選 0%／DB/auth 完成，不代表固定 staging 更新；先前固定 Staging `2e91c017` 仍為最後已證實版本，production 沒有變動。
 - 對策：每個 Release `GITHUB_RUN_ID` + `GITHUB_RUN_ATTEMPT` 使用隔離且可追溯的 Preview channel，避免同 SHA 重跑一直復用一個失效的公開 Host；所有網址、版本、SHA 與被動 API 401 gate 都維持 fail-closed。這是針對持續 404 的受控修復假設，尚非 root cause 已證實，也不能先標 PASS。
+
+
+## 2026-10-18｜Preview isolated-channel hostname truncation 實際失敗
+
+- [V3 #39040660665](https://github.com/tommylin15/life_assistant/actions/runs/39040660665) 同 SHA `802e106` 四 CI **PASS**；Preview channel `v3-802e10649f-r39040660665a1` 已由官方 metadata 宣稱 PUBLISHED，但 Firebase 公開 URL 實際只包含截短的 `v3-802e10649f-r390406606`，`scripts/v3_verify_preview.py` 的精確 channel gate 因此 **FAIL**，尚未執行網站 SHA/API 讀回。
+- 根因已由 Actions 的 `PREVIEW_CHANNEL` 和 `PREVIEW_URL` 直接對照確認：Preview channel 不能超過 Firebase 公開 hostname 可完整表示的長度。改用 GitHub run ID **完整 base36**（此輪 7 字元）加 attempt，並在 CLI/API 驗證及固定 Staging promotion 前限制 channel ≤ 24 字元；跨版 SHA、候選 revision pin、OAuth/API 401、正式流量不變等門檻保留。新 SHA 的 CI／Staging／實機驗收不可沿用失敗版的證據。

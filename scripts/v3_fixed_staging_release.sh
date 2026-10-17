@@ -24,7 +24,8 @@ fi
 STAGE_URL="https://${STAGING_HOSTING_SITE}.web.app"
 BASE="https://firebasehosting.googleapis.com/v1beta1/sites/${STAGING_HOSTING_SITE}"
 CHANNEL="${PREVIEW_CHANNEL:-v3-${RELEASE_SHA:0:10}}"
-if [[ ! "$CHANNEL" =~ ^v3-${RELEASE_SHA:0:10}(-r[1-9][0-9]*a[1-9][0-9]*)?$ ]]; then
+if (( ${#CHANNEL} > 24 )) ||
+   [[ ! "$CHANNEL" =~ ^v3-${RELEASE_SHA:0:10}(-[0-9a-z]{1,8}a[1-9][0-9]*)?$ ]]; then
   echo "staging_preflight=FAIL mismatched_preview_channel" >&2
   exit 1
 fi

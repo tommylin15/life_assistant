@@ -99,7 +99,7 @@ class VerifyPreviewReadinessTests(unittest.TestCase):
                     verify(url, SHA, fetch=lambda _: self.fail("unexpected fetch"))
 
     def test_release_attempt_isolated_channel_and_mismatch(self):
-        channel = "v3-ffffffffff-r39035036060a3"
+        channel = "v3-ffffffffff-hxn1abc" + "a3"
         url = "https://life-assistant-v3-stage-tl15--" + channel + "-freshxyz.web.app"
         def good_get(address):
             if address.endswith("/release.txt"):
@@ -113,11 +113,16 @@ class VerifyPreviewReadinessTests(unittest.TestCase):
             verify(URL, SHA, channel=channel,
                    fetch=lambda _: self.fail("must not fetch wrong channel"))
         with self.assertRaises(ValueError):
-            verify(url, SHA, channel="v3-eeeeeeeeee-r39035036060a3",
+            verify(url, SHA, channel="v3-eeeeeeeeee-hxn1abca3",
                    fetch=lambda _: self.fail("must not fetch wrong SHA"))
         with self.assertRaises(ValueError):
-            verify(url, SHA, channel="v3-ffffffffff-r0a3",
-                   fetch=lambda _: self.fail("must not fetch invalid run id"))
+            verify(url, SHA, channel="v3-ffffffffff-hxn1abcaa0",
+                   fetch=lambda _: self.fail("must not fetch invalid attempt"))
+        # Firebase truncates a long channel to a different public hostname;
+        # reject it before any network call or future live promotion.
+        with self.assertRaisesRegex(ValueError, "hostname limit"):
+            verify(url, SHA, channel="v3-ffffffffff-abcdefgha123",
+                   fetch=lambda _: self.fail("must not fetch truncated host"))
 
     def test_invalid_limit_rejected(self):
         with self.assertRaises(ValueError):

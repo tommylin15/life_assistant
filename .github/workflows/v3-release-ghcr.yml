@@ -70,7 +70,23 @@ jobs:
           set -euo pipefail
           [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
-          CHANNEL="v3-${RELEASE_SHA:0:10}-r${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
+          # Firebase's public channel hostname truncates channel identifiers
+          # beyond its 24-character prefix; validate before deploying.
+          # Base36 preserves the complete GitHub run ID without collisions.
+          RUN_KEY="$(python - "$GITHUB_RUN_ID" <<'PY'
+import sys
+n=int(sys.argv[1])
+assert n > 0
+alphabet="0123456789abcdefghijklmnopqrstuvwxyz"
+value=""
+while n:
+    value=alphabet[n%36]+value
+    n//=36
+print(value)
+PY
+)"
+          CHANNEL="v3-${RELEASE_SHA:0:10}-${RUN_KEY}a${GITHUB_RUN_ATTEMPT}"
+          [[ ${#CHANNEL} -le 24 ]]
           echo "PREVIEW_CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
           echo "preview_channel=$CHANNEL isolated_attempt=true" >> "$GITHUB_STEP_SUMMARY"
 
@@ -392,7 +408,8 @@ jobs:
           site=os.environ["STAGING_HOSTING_SITE"]
           sha=os.environ["RELEASE_SHA"]
           channel=os.environ["PREVIEW_CHANNEL"]
-          assert re.fullmatch(r"v3-"+re.escape(sha[:10])+r"-r[1-9][0-9]*a[1-9][0-9]*", channel)
+          assert re.fullmatch(r"v3-"+re.escape(sha[:10])+r"-[0-9a-z]{1,8}a[1-9][0-9]*", channel)
+          assert len(channel) <= 24
           assert doc.get("name")==f"sites/{site}/channels/{channel}"
           url=doc.get("url","")
           assert url==os.environ["PREVIEW_URL"].rstrip("/")

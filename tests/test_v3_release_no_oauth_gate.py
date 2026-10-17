@@ -45,12 +45,17 @@ class ReleaseWithoutOAuthGate(unittest.TestCase):
             "google_host_callback_or_state",
             'params.get("redirect_uri") == [expected]',
             'params.get("state", [""])[0]',
+            'expected = "https://life-assistant-v3-stage-tl15.web.app/auth/callback"',
             'target.hostname == "accounts.google.com"',
         ):
             self.assertIn(required, candidate)
         # No bearer/cookie/OAuth token leaks; login headers are temp-only.
         self.assertNotIn('cat "$RUNNER_TEMP/v3-candidate-oauth.headers"', candidate)
         self.assertNotIn('echo "$location"', candidate)
+        self.assertNotIn(
+            'expected = "https://gen-lang-client-0593591102.web.app/auth/callback"',
+            candidate,
+        )
         # 401/403 unauthorized failures must never be retried as transient.
         self.assertNotIn('"$code" == 401', candidate)
         self.assertNotIn('"$code" == 403', candidate)

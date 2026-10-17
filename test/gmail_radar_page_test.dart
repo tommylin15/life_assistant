@@ -131,4 +131,41 @@ void main() {
     expect(find.text('手動標示完成'), findsNothing);
   });
 
+  testWidgets('risk and fee category labels stay readable and warn about phishing',
+      (tester) async {
+    final api = _FakeRadarApi(authorized: true);
+    for (final row in const [
+      ['security', '帳號／交易安全警告'],
+      ['account', '帳號／訂閱費用警告'],
+      ['refund', '退款／訂單異常'],
+      ['administrative', '行政／學校／工作待辦'],
+    ]) {
+      api.items.add({
+        'id': 'test-' + row[0],
+        'title': '需要確認的通知',
+        'summary': '請前往官方網站確認',
+        'sender': 'example@example.com',
+        'category': row[0],
+        'status': 'pending',
+        'received_at': '2026-10-17T08:00:00Z',
+        'gmail_url': 'https://mail.google.com/mail/#all/thread-1',
+        'gmail_fallback_url': 'https://mail.google.com/mail/#all',
+      });
+    }
+    await tester.pumpWidget(ProviderScope(
+      overrides: [platformApiProvider.overrideWithValue(api)],
+      child: const MaterialApp(home: GmailRadarPage()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('並非確認真偽'), findsOneWidget);
+    for (final label in const [
+      '帳號／交易安全警告',
+      '帳號／訂閱費用警告',
+      '退款／訂單異常',
+      '行政／學校／工作待辦',
+    ]) {
+      expect(find.textContaining('分類：' + label), findsOneWidget);
+    }
+  });
+
 }

@@ -32,13 +32,13 @@ QUICK_QUERY = "newer_than:7d -in:spam -in:trash"
 # Conservative, deterministic metadata-only classification. Categories are
 # user actions to REVIEW, never a judgment that the sender or the alert is real.
 #
-# Priority: promotional subject suppression -> security -> account/fees ->
-# refund/order exceptions -> administrative follow-ups -> original five classes.
+# Priority: promotional subject suppression -> security -> refund/order ->
+# account/fees -> administrative follow-ups -> original five classes.
 # Do not classify generic OTPs, order confirmations, newsletters or happy-path
 # refund status as risk requiring a new Life task.
 _PROMOTION = re.compile(
     r"(?i)(unsubscribe|取消訂閱|電子報|廣告\\s*EDM|促銷|優惠券|優惠碼|折扣碼|"
-    r"限時優惠|限時特惠|限時折扣|特賣|買一送一|會員優惠|好康|"
+    r"優惠|特惠|限時折扣|特賣|特價|買一送一|好康|"
     r"black friday|newsletter|promo code|coupon code|special offer|"
     r"flash sale|limited.time offer|discount code|save \\d+%|"
     r"upgrade offer)"
@@ -89,7 +89,7 @@ _ACCOUNT_SNIPPET = (
     "your subscription will renew",
 )
 _REFUND_TITLE = (
-    "退款失敗", "退費失敗", "退款遭拒", "退費遭拒", "退款延遲",
+    "退款失敗", "退費失敗", "退款遭拒", "退款申請遭拒", "退費遭拒", "退款延遲",
     "退款尚未入帳", "退款申請待補件", "退款需要補件",
     "退款期限", "退款申請截止", "退貨逾期", "退貨申請待處理",
     "訂單取消", "訂單異常", "訂單未成立", "訂單付款失敗",
@@ -156,8 +156,8 @@ def classify_message(subject: str, snippet: str) -> str | None:
 
     for category, title_phrases, snippet_phrases in (
         ("security", _SECURITY_TITLE, _SECURITY_SNIPPET),
-        ("account", _ACCOUNT_TITLE, _ACCOUNT_SNIPPET),
         ("refund", _REFUND_TITLE, _REFUND_SNIPPET),
+        ("account", _ACCOUNT_TITLE, _ACCOUNT_SNIPPET),
         ("administrative", _ADMIN_TITLE, _ADMIN_SNIPPET),
     ):
         if _matches(title, title_phrases) or _matches(preview, snippet_phrases):

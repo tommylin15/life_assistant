@@ -65,7 +65,10 @@ def _fixed_staging_origin(request: Request) -> bool:
     forwarded = request.headers.get("x-forwarded-host", "").strip().lower()
     allowed_forwarded = (STAGING_HOST, f"https://{STAGING_HOST}")
     if forwarded in allowed_forwarded:
-        return True
+        # An ordinary Cloud Run service may be called directly by a client
+        # spoofing X-Forwarded-Host. Unlike a SHA-pinned staging revision,
+        # it needs an explicit verified HTTPS proxy hop to select Staging.
+        return tagged_candidate or proto == "https"
     if forwarded and (".web.app" in forwarded or ".firebaseapp.com" in forwarded):
         return False
 

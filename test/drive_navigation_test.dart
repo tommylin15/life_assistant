@@ -67,7 +67,7 @@ void main() {
 
     await _pumpMore(tester, router);
 
-    await tester.tap(find.text('Google Drive'));
+    await tester.tap(find.text('Google Drive 檔案總管'));
     await tester.pumpAndSettle();
 
     expect(find.text('DRIVE_DESTINATION'), findsOneWidget);

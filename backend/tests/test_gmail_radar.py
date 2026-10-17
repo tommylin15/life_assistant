@@ -52,6 +52,31 @@ class GmailRadarRulesTests(unittest.TestCase):
             with self.subTest(subject=subject, snippet=snippet):
                 self.assertEqual(classify_message(subject, snippet), expected)
 
+    def test_real_project_freeze_notice_is_actionable(self):
+        # 2026-10-17 regression from a real sender's subject, no body needed.
+        actionable = (
+            "Your paused Supabase project is being permanently frozen soon",
+            "Your project will be permanently frozen",
+            "Your project has been paused",
+            "您的專案即將永久凍結",
+        )
+        for subject in actionable:
+            with self.subTest(subject=subject):
+                self.assertEqual(classify_message(subject, ""), "account")
+
+        harmless = (
+            ("Supa Update October 2026", "Everything we announced this month"),
+            ("Your project report is ready", "Your team paused during a sprint"),
+            ("Newsletter: Your project will be permanently frozen", "Tips and news"),
+            ("您與「dynadot.com」分享了部分 Google 帳戶資料",
+             "您曾使用 Google 帳戶登入，您目前不必採取任何行動"),
+            ("已成功取回您的 Google 帳戶", "您已成功取回帳戶"),
+            ("Google 驗證碼", "請使用此驗證碼"),
+        )
+        for subject, snippet in harmless:
+            with self.subTest(subject=subject):
+                self.assertIsNone(classify_message(subject, snippet))
+
     def test_ads_and_normal_account_messages_do_not_create_false_alerts(self):
         harmless = [
             ("限時優惠！升級帳號保障交易安全", "異常登入防護限時特惠"),

@@ -80,6 +80,13 @@ _ACCOUNT_TITLE = (
     "account suspension", "account suspended", "service suspension",
     "storage almost full", "subscription price increase",
     "billing issue", "renewal charge",
+    # Non-billing product data can be lost when a paused project is frozen.
+    # Require explicit project/service freeze wording; a plain "paused" in
+    # account activity or a routine product newsletter is not enough.
+    "project is being permanently frozen", "project will be permanently frozen",
+    "project permanently frozen", "project about to be frozen",
+    "your project has been paused", "your project is paused",
+    "專案即將永久凍結", "專案將被永久凍結", "專案即將凍結", "專案已暫停",
 )
 _ACCOUNT_SNIPPET = (
     "您的付款失敗", "扣款失敗", "付款方式已失效",

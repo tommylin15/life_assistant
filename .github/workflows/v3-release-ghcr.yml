@@ -217,7 +217,10 @@ jobs:
                            if line.lower().startswith("location:")), "")
           target = urlsplit(location)
           params = parse_qs(target.query)
-          expected = "https://gen-lang-client-0593591102.web.app/auth/callback"
+          # Candidate is a SHA-pinned Cloud Run tag (the same origin used by
+          # fixed Staging Hosting). Never require its Google redirect to point
+          # at the production session domain.
+          expected = "https://life-assistant-v3-stage-tl15.web.app/auth/callback"
           if not (target.scheme == "https" and target.hostname == "accounts.google.com"
                   and target.path == "/o/oauth2/v2/auth"
                   and params.get("redirect_uri") == [expected]

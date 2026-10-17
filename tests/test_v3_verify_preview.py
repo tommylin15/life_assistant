@@ -33,6 +33,39 @@ class VerifyPreviewReadinessTests(unittest.TestCase):
             verify(URL, SHA, attempts=3, delay=0,
                    fetch=lambda _: (404, ""), sleep=lambda _: None)
 
+    def test_official_firebaseapp_domain_can_recover_web_app_404(self):
+        secondary = URL.replace(".web.app", ".firebaseapp.com")
+        calls = []
+        def fetch(url):
+            calls.append(url)
+            if url == URL + "/release.txt":
+                return (404, "")
+            if url == secondary + "/release.txt":
+                return (200, SHA)
+            if url == secondary + "/api/v1/tasks":
+                return (401, "")
+            self.fail("unexpected domain or resource")
+        chosen = verify(URL, SHA, attempts=1, delay=0,
+                        fetch=fetch, sleep=lambda _: None)
+        self.assertEqual(chosen, secondary)
+        self.assertEqual(len(calls), 3)
+
+    def test_alternate_domain_wrong_sha_cannot_bypass_gate(self):
+        responses = iter([(404, ""), (200, "0" * 40)])
+        with self.assertRaisesRegex(RuntimeError, "SHA mismatch"):
+            verify(URL, SHA, attempts=3, delay=0,
+                   fetch=lambda _: next(responses), sleep=lambda _: None)
+
+    def test_both_preview_domains_stay_fail_closed_on_404(self):
+        calls = []
+        def fetch(url):
+            calls.append(url)
+            return (404, "")
+        with self.assertRaisesRegex(RuntimeError, "bounded"):
+            verify(URL, SHA, attempts=2, delay=0, fetch=fetch,
+                   sleep=lambda _: None)
+        self.assertEqual(len(calls), 4)
+
     def test_wrong_sha_fails_immediately_even_if_status_200(self):
         seen = []
         def wrong(url):

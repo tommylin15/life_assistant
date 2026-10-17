@@ -447,10 +447,10 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
           const SizedBox(height: 8),
           const Text('目前採 Google drive.file 逐檔授權：只顯示你透過「選取更多檔案」'
               '選過，或由 Life 建立的檔案。選取資料夾不會自動開放其所有子檔案。'
-              '要查看全部雲端硬碟，請使用 Google Drive 官方網站。'),
+              '要查看全部雲端硬碟，請使用 Google Drive 官方網站，並確認與 Life 連線的是同一個 Google 帳號。'),
           TextButton.icon(
             key: const ValueKey('drive-explorer-open-google-drive'),
-            onPressed: () => openExternalBrowser('https://drive.google.com/drive/u/0/my-drive'),
+            onPressed: () => openExternalBrowser('https://drive.google.com/drive/my-drive'),
             icon: const Icon(Icons.open_in_new),
             label: const Text('在 Google Drive 查看全部檔案'),
           ),

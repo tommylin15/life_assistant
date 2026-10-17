@@ -37,10 +37,10 @@ QUICK_QUERY = "newer_than:7d -in:spam -in:trash"
 # Do not classify generic OTPs, order confirmations, newsletters or happy-path
 # refund status as risk requiring a new Life task.
 _PROMOTION = re.compile(
-    r"(?i)(unsubscribe|取消訂閱|電子報|廣告\\s*EDM|促銷|優惠券|優惠碼|折扣碼|"
+    r"(?i)(unsubscribe|取消訂閱|電子報|廣告\s*EDM|促銷|優惠券|優惠碼|折扣碼|"
     r"優惠|特惠|限時折扣|特賣|特價|買一送一|好康|"
     r"black friday|newsletter|promo code|coupon code|special offer|"
-    r"flash sale|limited.time offer|discount code|save \\d+%|"
+    r"flash sale|limited.time offer|discount code|save \d+%|"
     r"upgrade offer)"
 )
 

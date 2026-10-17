@@ -9,6 +9,8 @@ class _CaptureApi extends PlatformApi {
   int articlesFetched = 0;
   int committed = 0;
   final writes = <Map<String, dynamic>>[];
+  Map<String, dynamic>? fakeCandidate;
+  Map<String, dynamic>? fakeDateHint;
 
   @override
   Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
@@ -17,8 +19,9 @@ class _CaptureApi extends PlatformApi {
       return {
         'classification_source': 'rules',
         'saved': false,
+        'date_hint': fakeDateHint,
         'candidates': [
-          {
+          fakeCandidate ?? {
             'proposal_id': 'p1', 'target': 'note',
             'fields': {'body': body['text'], 'title': ''},
             'select_default': true, 'ambiguities': [],
@@ -100,4 +103,115 @@ void main() {
     expect(api.articlesFetched, 1);
     expect(api.committed, 0);
   });
+  testWidgets('complete date fills task deadline without ISO typing', (tester) async {
+    final api = _CaptureApi()
+      ..fakeDateHint = {
+        'precision': 'day', 'raw': '2026/11/05',
+        'date': '2026-11-05', 'year': 2026, 'month': 11, 'day': 5,
+      }
+      ..fakeCandidate = {
+        'proposal_id': 'p1', 'target': 'task',
+        'fields': {'title': '寄回文件'},
+        'select_default': true, 'ambiguities': [],
+      };
+    await mount(tester, api);
+    await tester.enterText(find.byKey(const ValueKey('capture-input')),
+        '2026/11/05 寄回文件');
+    await tester.tap(find.text('智慧辨識'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('capture-task-due-0')), findsOneWidget);
+    expect(find.textContaining('2026-11-05 23:59'), findsOneWidget);
+    expect(find.textContaining('ISO8601（'), findsNothing);
+    await tester.ensureVisible(find.textContaining('確認新增所選 1 項'));
+    await tester.tap(find.textContaining('確認新增所選 1 項'));
+    await tester.pumpAndSettle();
+    final row = (api.writes.single['items'] as List).single as Map;
+    expect((row['fields'] as Map)['due_at'], '2026-11-05T23:59:00+08:00');
+  });
+
+  testWidgets('month and day only requires calendar picker and no guessed year',
+      (tester) async {
+    final api = _CaptureApi()
+      ..fakeDateHint = {
+        'precision': 'month_day', 'raw': '11月5日', 'month': 11, 'day': 5,
+      }
+      ..fakeCandidate = {
+        'proposal_id': 'p1', 'target': 'task',
+        'fields': {'title': '準備資料'},
+        'select_default': false, 'ambiguities': ['日期不完整，請確認'],
+      };
+    await mount(tester, api);
+    await tester.enterText(find.byKey(const ValueKey('capture-input')),
+        '11月5日準備資料');
+    await tester.tap(find.text('智慧辨識'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('缺少年份'), findsOneWidget);
+    expect(find.textContaining('未設定（點選萬年曆）'), findsOneWidget);
+    expect(api.committed, 0);
+    await tester.ensureVisible(find.byKey(const ValueKey('capture-task-due-0')));
+    await tester.tap(find.byKey(const ValueKey('capture-task-due-0')));
+    await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(api.committed, 0);
+  });
+
+  testWidgets('complete calendar date auto-fills exclusive end but shows inclusive',
+      (tester) async {
+    final api = _CaptureApi()
+      ..fakeDateHint = {
+        'precision': 'day', 'raw': '2026年12月31日',
+        'date': '2026-12-31', 'year': 2026, 'month': 12, 'day': 31,
+      }
+      ..fakeCandidate = {
+        'proposal_id': 'p1', 'target': 'calendar',
+        'fields': {'summary': '參加活動'},
+        'select_default': true, 'ambiguities': [],
+      };
+    await mount(tester, api);
+    await tester.enterText(find.byKey(const ValueKey('capture-input')),
+        '2026年12月31日參加活動');
+    await tester.tap(find.text('智慧辨識'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('capture-calendar-start-date-0')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('capture-calendar-end-date-0')),
+        findsOneWidget);
+    expect(find.textContaining('2026-12-31'), findsNWidgets(2));
+    await tester.ensureVisible(find.textContaining('確認新增所選 1 項'));
+    await tester.tap(find.textContaining('確認新增所選 1 項'));
+    await tester.pumpAndSettle();
+    final row = (api.writes.single['items'] as List).single as Map;
+    final fields = row['fields'] as Map;
+    expect(fields['start_date'], '2026-12-31');
+    expect(fields['end_date'], '2027-01-01');
+    expect(fields.containsKey('start'), false);
+  });
+
+  testWidgets('timed calendar uses date and time selection controls',
+      (tester) async {
+    final api = _CaptureApi()
+      ..fakeCandidate = {
+        'proposal_id': 'p1', 'target': 'calendar',
+        'fields': {
+          'summary': '開會',
+          'start': '2026-10-21T10:00:00+08:00',
+          'end': '2026-10-21T11:00:00+08:00',
+        },
+        'select_default': true, 'ambiguities': [],
+      };
+    await mount(tester, api);
+    await tester.enterText(find.byKey(const ValueKey('capture-input')),
+        '10月21日 10點開會');
+    await tester.tap(find.text('智慧辨識'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('capture-calendar-start-time-0')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('capture-calendar-end-time-0')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('capture-calendar-start-date-0')),
+        findsNothing);
+  });
+
 }

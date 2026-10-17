@@ -8,6 +8,7 @@ class _FakeRadarApi extends PlatformApi {
   _FakeRadarApi({required this.authorized});
   final bool authorized;
   int scans = 0;
+  int rechecks = 0;
   final List<Map<String, dynamic>> items = [];
 
   @override
@@ -30,6 +31,13 @@ class _FakeRadarApi extends PlatformApi {
   @override
   Future<Map<String, dynamic>> post(
       String path, Map<String, dynamic> body) async {
+    if (path.endsWith('/recheck-three-days')) {
+      rechecks++;
+      scans++;
+      return {'status': 'succeeded', 'scan_kind': 'recheck',
+              'checked': 2, 'added': 0, 'skipped': 2, 'failed': 0,
+              'three_day_count': 2, 'three_day_remaining': 0};
+    }
     if (path.endsWith('/quick-scan')) {
       scans++;
       items.add({
@@ -171,5 +179,24 @@ void main() {
       expect(find.textContaining('分類：' + label), findsOneWidget);
     }
   });
+
+  testWidgets('manual recheck can revisit Gmail messages already checked by Life',
+      (tester) async {
+    final api = _FakeRadarApi(authorized: true);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [platformApiProvider.overrideWithValue(api)],
+      child: const MaterialApp(home: GmailRadarPage()),
+    ));
+    await tester.pumpAndSettle();
+    final button = find.byKey(const ValueKey('gmail-radar-three-day-recheck'));
+    expect(button, findsOneWidget);
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(api.rechecks, 1);
+    expect(find.textContaining('本次重新判讀'), findsOneWidget);
+    expect(find.textContaining('重新判讀最新 40 封'), findsOneWidget);
+  });
+
 
 }

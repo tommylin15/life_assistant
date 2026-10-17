@@ -83,13 +83,16 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
       for (var i = 0; i < raw.length; i++) {
         final candidate = raw[i];
         if (_gmailActionId != null && i > 0) break;
-        suggestions.add({
+        final suggestion = <String, dynamic>{
           ...candidate,
+          'date_hint': parsed['date_hint'],
           'fields': Map<String, dynamic>.from(candidate['fields'] as Map),
           'selected': candidate['select_default'] == true,
           'action_id': _gmailActionId ?? _newActionId(i),
           'done': false,
-        });
+        };
+        _applyDateHint(suggestion);
+        suggestions.add(suggestion);
       }
       final needsShopping = suggestions.any((c) => c['target'] == 'shopping');
       final lists = needsShopping
@@ -119,7 +122,230 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
         'shopping' => <String, dynamic>{'items': <Map<String, dynamic>>[{'name': original}]},
         _ => <String, dynamic>{'summary': original},
       };
+      _applyDateHint(candidate);
     });
+  }
+
+  // Store dates in the Life application's fixed Asia/Taipei timezone. The
+  // browser's local timezone may differ; never use toLocal() for date evidence.
+  String _ymd(DateTime day) => day.year.toString().padLeft(4, '0') + '-' +
+      day.month.toString().padLeft(2, '0') + '-' +
+      day.day.toString().padLeft(2, '0');
+
+  String _tpeDateTime(DateTime day, TimeOfDay time) =>
+      _ymd(day) + 'T' + time.hour.toString().padLeft(2, '0') + ':' +
+      time.minute.toString().padLeft(2, '0') + ':00+08:00';
+
+  DateTime? _parseDay(dynamic raw) {
+    final value = raw?.toString();
+    if (value == null || value.length < 10) return null;
+    final day = DateTime.tryParse(value.substring(0, 10));
+    if (day == null || _ymd(day) != value.substring(0, 10)) return null;
+    return day;
+  }
+
+  DateTime? _tpeWallTime(dynamic raw) {
+    final parsed = DateTime.tryParse(raw?.toString() ?? '');
+    if (parsed == null) return null;
+    final wall = parsed.toUtc().add(const Duration(hours: 8));
+    return DateTime(wall.year, wall.month, wall.day, wall.hour, wall.minute);
+  }
+
+  DateTime? _dateFromHint(Map<String, dynamic> candidate) {
+    final hint = candidate['date_hint'];
+    if (hint is! Map) return null;
+    final precision = hint['precision']?.toString();
+    if (precision == 'day') return _parseDay(hint['date']);
+    final y = hint['year'] as int? ?? DateTime.now().year;
+    final m = hint['month'] as int?;
+    final d = hint['day'] as int? ?? 1;
+    if (m == null || m < 1 || m > 12) return null;
+    final result = DateTime(y, m, d);
+    // e.g. Feb 29 without year: let the user choose a valid year in picker.
+    return result.month == m && result.day == d ? result : DateTime(y, m, 1);
+  }
+
+  String? _hintText(Map<String, dynamic> candidate) {
+    final hint = candidate['date_hint'];
+    if (hint is! Map) return null;
+    final source = hint['raw']?.toString() ?? '';
+    return switch (hint['precision']) {
+      'day' => '已辨識日期：$source（可點日期修改）',
+      'year_month' => '原文只有「$source」，缺少日期，請從萬年曆選一天',
+      'month_day' => '原文只有「$source」，缺少年份，請在萬年曆確認年份',
+      'ambiguous' => '原文有多個日期「$source」，請自行確認要使用的日期',
+      'invalid' => '無效日期「$source」，請在萬年曆選擇正確日期',
+      _ => null,
+    };
+  }
+
+  void _applyDateHint(Map<String, dynamic> candidate) {
+    final hint = candidate['date_hint'];
+    if (hint is! Map || hint['precision'] != 'day') return;
+    final day = _dateFromHint(candidate);
+    if (day == null) return;
+    final fields = candidate['fields'] as Map<String, dynamic>;
+    if (candidate['target'] == 'task' && fields['due_at'] == null) {
+      // A date-only deadline is displayed explicitly as end-of-day, not as
+      // a source-provided time. No reminder is created.
+      fields['due_at'] = _tpeDateTime(day, const TimeOfDay(hour: 23, minute: 59));
+    } else if (candidate['target'] == 'calendar' &&
+        fields['start'] == null && fields['end'] == null &&
+        fields['start_date'] == null && fields['end_date'] == null) {
+      fields['start_date'] = _ymd(day);
+      fields['end_date'] = _ymd(day.add(const Duration(days: 1)));
+      // AI may have warned about a missing end; a user can now view/edit
+      // the proposed one-day all-day event before consenting to create it.
+    }
+  }
+
+  Future<DateTime?> _pickDay(Map<String, dynamic> candidate, DateTime? existing) {
+    final preferred = existing ?? _dateFromHint(candidate) ?? DateTime.now();
+    return showDatePicker(
+      context: context,
+      initialDate: preferred,
+      firstDate: DateTime(1900),
+      lastDate: DateTime(2100),
+      helpText: '選擇日期（可切換年份與月份）',
+    );
+  }
+
+  Future<void> _chooseTaskDate(Map<String, dynamic> candidate, {bool timeOnly = false}) async {
+    final fields = candidate['fields'] as Map<String, dynamic>;
+    final previous = _tpeWallTime(fields['due_at']);
+    final day = timeOnly ? previous :
+        await _pickDay(candidate, previous);
+    if (!mounted || day == null) return;
+    var time = previous == null
+        ? const TimeOfDay(hour: 23, minute: 59)
+        : TimeOfDay(hour: previous.hour, minute: previous.minute);
+    if (timeOnly) {
+      final chosen = await showTimePicker(context: context,
+          initialTime: time, helpText: '選擇待辦截止時間');
+      if (!mounted || chosen == null) return;
+      time = chosen;
+    }
+    setState(() {
+      fields['due_at'] = _tpeDateTime(day, time);
+      candidate['selected'] = true;
+    });
+  }
+
+  Future<void> _chooseCalendarDate(
+      Map<String, dynamic> candidate, {required bool end}) async {
+    final fields = candidate['fields'] as Map<String, dynamic>;
+    final start = _parseDay(fields['start_date']);
+    final currentEnd = _parseDay(fields['end_date']);
+    final inclusiveEnd = currentEnd?.subtract(const Duration(days: 1));
+    final day = await _pickDay(candidate, end ? inclusiveEnd : start);
+    if (!mounted || day == null) return;
+    setState(() {
+      if (end) {
+        fields['end_date'] = _ymd(day.add(const Duration(days: 1)));
+      } else {
+        fields['start_date'] = _ymd(day);
+        if (currentEnd == null || !currentEnd.isAfter(day)) {
+          fields['end_date'] = _ymd(day.add(const Duration(days: 1)));
+        }
+      }
+      candidate['selected'] = _parseDay(fields['start_date']) != null &&
+          (_parseDay(fields['end_date'])?.isAfter(
+              _parseDay(fields['start_date'])!) ?? false);
+    });
+  }
+
+  Future<void> _chooseCalendarTime(
+      Map<String, dynamic> candidate, {required bool end}) async {
+    final fields = candidate['fields'] as Map<String, dynamic>;
+    final key = end ? 'end' : 'start';
+    final previous = _tpeWallTime(fields[key]);
+    final date = await _pickDay(candidate, previous);
+    if (!mounted || date == null) return;
+    final chosen = await showTimePicker(
+      context: context,
+      helpText: end ? '選擇結束時間' : '選擇開始時間',
+      initialTime: previous != null
+          ? TimeOfDay(hour: previous.hour, minute: previous.minute)
+          : TimeOfDay(hour: end ? 10 : 9, minute: 0),
+    );
+    if (!mounted || chosen == null) return;
+    setState(() {
+      fields[key] = _tpeDateTime(date, chosen);
+      candidate['selected'] = _calendarTimedValid(fields);
+    });
+  }
+
+  bool _calendarTimedValid(Map<String, dynamic> fields) {
+    final start = DateTime.tryParse(fields['start']?.toString() ?? '');
+    final end = DateTime.tryParse(fields['end']?.toString() ?? '');
+    return start != null && end != null && end.isAfter(start);
+  }
+
+  Widget _dateButton({
+    required String keyValue, required String label,
+    required String display, required VoidCallback? onPressed,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: OutlinedButton.icon(
+        key: ValueKey(keyValue),
+        onPressed: onPressed,
+        icon: const Icon(Icons.calendar_month),
+        label: Align(alignment: Alignment.centerLeft,
+          child: Text('$label：$display', textAlign: TextAlign.left)),
+      ),
+    );
+  }
+
+  Widget _calendarInputs(Map<String, dynamic> candidate, int index, bool editable) {
+    final fields = candidate['fields'] as Map<String, dynamic>;
+    final isTimed = fields['start'] != null || fields['end'] != null;
+    final startDay = _parseDay(fields['start_date']);
+    final endExclusive = _parseDay(fields['end_date']);
+    final lastDay = endExclusive?.subtract(const Duration(days: 1));
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SwitchListTile(
+        key: ValueKey('capture-calendar-all-day-$index'),
+        contentPadding: EdgeInsets.zero,
+        title: const Text('全日行程'),
+        subtitle: const Text('只有日期、不指定時間時使用；不用計算結束日'),
+        value: !isTimed,
+        onChanged: !editable || _busy ? null : (allDay) => setState(() {
+          fields.remove('start');
+          fields.remove('end');
+          fields.remove('start_date');
+          fields.remove('end_date');
+          if (allDay) _applyDateHint(candidate);
+          candidate['selected'] = false;
+        }),
+      ),
+      if (!isTimed) ...[
+        _dateButton(keyValue: 'capture-calendar-start-date-$index',
+          label: '開始日期', display: startDay == null ? '點選萬年曆' : _ymd(startDay),
+          onPressed: !editable || _busy ? null :
+              () => _chooseCalendarDate(candidate, end: false)),
+        _dateButton(keyValue: 'capture-calendar-end-date-$index',
+          label: '結束日期（含當天）',
+          display: lastDay == null ? '選填；預設當天' : _ymd(lastDay),
+          onPressed: !editable || _busy ? null :
+              () => _chooseCalendarDate(candidate, end: true)),
+      ] else ...[
+        _dateButton(keyValue: 'capture-calendar-start-time-$index',
+          label: '開始日期與時間',
+          display: fields['start']?.toString() ?? '點選萬年曆及時間',
+          onPressed: !editable || _busy ? null :
+              () => _chooseCalendarTime(candidate, end: false)),
+        _dateButton(keyValue: 'capture-calendar-end-time-$index',
+          label: '結束日期與時間',
+          display: fields['end']?.toString() ?? '點選萬年曆及時間',
+          onPressed: !editable || _busy ? null :
+              () => _chooseCalendarTime(candidate, end: true)),
+        if (fields['start'] != null && fields['end'] != null &&
+            !_calendarTimedValid(fields))
+          const Text('結束時間必須晚於開始時間',
+              style: TextStyle(color: Colors.red)),
+      ],
+    ]);
   }
 
   Future<void> _summarize(Map<String, dynamic> candidate) async {

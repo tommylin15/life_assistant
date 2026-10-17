@@ -157,6 +157,66 @@ void main() {
     expect(api.committed, 0);
   });
 
+  testWidgets('picker confirmation supplies missing year before creating task',
+      (tester) async {
+    final api = _CaptureApi()
+      ..fakeDateHint = {
+        'precision': 'month_day', 'raw': '11月5日', 'month': 11, 'day': 5,
+      }
+      ..fakeCandidate = {
+        'proposal_id': 'p1', 'target': 'task',
+        'fields': {'title': '交報告'},
+        'select_default': false, 'ambiguities': ['缺少年份'],
+      };
+    await mount(tester, api);
+    await tester.enterText(find.byKey(const ValueKey('capture-input')),
+        '11月5日交報告');
+    await tester.tap(find.text('智慧辨識'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('確認新增所選 0 項'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('capture-task-due-0')));
+    await tester.tap(find.byKey(const ValueKey('capture-task-due-0')));
+    await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+    await tester.tap(find.text('確認'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('確認新增所選 1 項'), findsOneWidget);
+    await tester.ensureVisible(find.textContaining('確認新增所選 1 項'));
+    await tester.tap(find.textContaining('確認新增所選 1 項'));
+    await tester.pumpAndSettle();
+    final fields = ((api.writes.single['items'] as List).single as Map)['fields'] as Map;
+    expect(fields['due_at'], '${DateTime.now().year}-11-05T23:59:00+08:00');
+  });
+
+  testWidgets('calendar missing end stays disabled until picker supplies date',
+      (tester) async {
+    final api = _CaptureApi()
+      ..fakeCandidate = {
+        'proposal_id': 'p1', 'target': 'calendar',
+        'fields': {'summary': '活動'},
+        'select_default': true, 'ambiguities': ['請補齊行程開始與結束時間或全日日期'],
+      };
+    await mount(tester, api);
+    await tester.enterText(find.byKey(const ValueKey('capture-input')), '活動安排');
+    await tester.tap(find.text('智慧辨識'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('確認新增所選 0 項'), findsOneWidget);
+    expect(find.textContaining('請使用萬年曆補齊有效日期'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('capture-calendar-start-date-0')));
+    await tester.tap(find.byKey(const ValueKey('capture-calendar-start-date-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('確認'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('確認新增所選 1 項'), findsOneWidget);
+    await tester.ensureVisible(find.textContaining('確認新增所選 1 項'));
+    await tester.tap(find.textContaining('確認新增所選 1 項'));
+    await tester.pumpAndSettle();
+    final fields = ((api.writes.single['items'] as List).single as Map)['fields'] as Map;
+    expect(fields['end_date'],
+        DateTime.parse(fields['start_date'] as String)
+            .add(const Duration(days: 1)).toIso8601String().substring(0, 10));
+  });
+
   testWidgets('complete calendar date auto-fills exclusive end but shows inclusive',
       (tester) async {
     final api = _CaptureApi()

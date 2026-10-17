@@ -277,6 +277,32 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
     });
   }
 
+  bool _calendarReady(Map<String, dynamic> candidate) {
+    if (candidate['target'] != 'calendar') return true;
+    final fields = candidate['fields'] as Map<String, dynamic>;
+    final timed = fields['start'] != null || fields['end'] != null ||
+        candidate['calendar_timed'] == true;
+    if (timed) {
+      return fields['start_date'] == null && fields['end_date'] == null &&
+          _calendarTimedValid(fields);
+    }
+    final start = _parseDay(fields['start_date']);
+    final end = _parseDay(fields['end_date']);
+    return start != null && end != null && end.isAfter(start);
+  }
+
+  bool _dateWarningResolved(Map<String, dynamic> candidate, String warning) {
+    final target = candidate['target'];
+    if (target != 'calendar' && target != 'task') return false;
+    final fields = candidate['fields'] as Map<String, dynamic>;
+    final ready = target == 'calendar'
+        ? _calendarReady(candidate) : fields['due_at'] != null;
+    return ready &&
+        (warning.contains('日期') || warning.contains('萬年曆') ||
+         warning.contains('開始與結束時間') || warning.contains('缺少年份') ||
+         warning.contains('補齊行程'));
+  }
+
   bool _calendarTimedValid(Map<String, dynamic> fields) {
     final start = DateTime.tryParse(fields['start']?.toString() ?? '');
     final end = DateTime.tryParse(fields['end']?.toString() ?? '');
@@ -387,7 +413,7 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
   Future<void> _commit() async {
     if (_busy) return;
     final selected = _candidates.where((c) =>
-        c['selected'] == true && c['done'] != true).toList();
+        c['selected'] == true && c['done'] != true && _calendarReady(c)).toList();
     if (selected.isEmpty) return;
     setState(() {
       _busy = true;
@@ -477,8 +503,10 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
                 'calendar' => '日曆', _ => '筆記',
               }),
               subtitle: Text(editable ? '確認後才會新增' : '已處理，避免重複送出'),
-              value: candidate['selected'] == true && editable,
-              onChanged: !editable ? null : (v) => setState(() => candidate['selected'] = v == true),
+              value: candidate['selected'] == true && editable &&
+                  _calendarReady(candidate),
+              onChanged: !editable || !_calendarReady(candidate) ? null :
+                  (v) => setState(() => candidate['selected'] = v == true),
             )),
             DropdownButton<String>(
               value: target,
@@ -573,10 +601,17 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
               child: Text(_hintText(candidate)!,
                 style: TextStyle(color: Theme.of(context).colorScheme.primary)),
             ),
+          if (target == 'calendar' && !_calendarReady(candidate))
+            const Padding(
+              padding: EdgeInsets.only(top: 5),
+              child: Text('請使用萬年曆補齊有效日期；有時間的行程需同時設定開始與結束。',
+                  style: TextStyle(color: Colors.deepOrange)),
+            ),
           for (final warning in (candidate['ambiguities'] as List? ?? []))
-            Padding(padding: const EdgeInsets.only(top: 4),
-                child: Text(warning.toString(),
-                    style: TextStyle(color: Theme.of(context).colorScheme.error))),
+            if (!_dateWarningResolved(candidate, warning.toString()))
+              Padding(padding: const EdgeInsets.only(top: 4),
+                  child: Text(warning.toString(),
+                      style: TextStyle(color: Theme.of(context).colorScheme.error))),
         ]),
       ),
     );
@@ -585,7 +620,7 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
   @override
   Widget build(BuildContext context) {
     final selected = _candidates.where((c) =>
-        c['selected'] == true && c['done'] != true).length;
+        c['selected'] == true && c['done'] != true && _calendarReady(c)).length;
     return Scaffold(
       appBar: AppBar(title: const Text('生活收件匣 · 快速新增')),
       body: Align(

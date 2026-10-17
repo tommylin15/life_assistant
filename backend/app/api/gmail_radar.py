@@ -154,17 +154,27 @@ def classify_message(subject: str, snippet: str) -> str | None:
     if not title or _PROMOTION.search(title):
         return None
 
-    for category, title_phrases, snippet_phrases in (
+    additional = (
         ("security", _SECURITY_TITLE, _SECURITY_SNIPPET),
         ("refund", _REFUND_TITLE, _REFUND_SNIPPET),
         ("account", _ACCOUNT_TITLE, _ACCOUNT_SNIPPET),
         ("administrative", _ADMIN_TITLE, _ADMIN_SNIPPET),
-    ):
-        if _matches(title, title_phrases) or _matches(preview, snippet_phrases):
+    )
+    # Subject intent takes priority over a footnote, quoted message, or
+    # secondary event mentioned in Gmail's weaker preview snippet.
+    for category, title_phrases, _ in additional:
+        if _matches(title, title_phrases):
             return category
-
     for category, phrases in _RULES:
         if _matches(title, phrases):
+            return category
+
+    # A generic title with promotional snippet must not be escalated just
+    # because the advertisement describes a hypothetical risk or fee.
+    if _PROMOTION.search(preview):
+        return None
+    for category, _, snippet_phrases in additional:
+        if _matches(preview, snippet_phrases):
             return category
     for category, phrases in _RULES:
         # Snippets are weaker evidence; require the narrow, existing examples.

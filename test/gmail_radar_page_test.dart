@@ -133,6 +133,10 @@ void main() {
 
   testWidgets('risk and fee category labels stay readable and warn about phishing',
       (tester) async {
+    tester.view.physicalSize = const Size(1200, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final api = _FakeRadarApi(authorized: true);
     for (final row in const [
       ['security', '帳號／交易安全警告'],

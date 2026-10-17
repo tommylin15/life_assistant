@@ -80,9 +80,55 @@ void main() {
     expect(api.scans, 1);
     expect(find.text('繳費通知'), findsOneWidget);
     expect(find.text('開啟 Gmail 原信'), findsOneWidget);
-    await tester.tap(find.text('標示完成'));
+    expect(find.text('送到生活收件匣'), findsOneWidget);
+    // Fallback is intentionally not a third primary button.
+    expect(find.text('Gmail 信箱備援'), findsNothing);
+    final more = find.byKey(const ValueKey('gmail-radar-more-item-1'));
+    expect(more, findsOneWidget);
+    await tester.ensureVisible(more);
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+    expect(find.text('Gmail 信箱備援'), findsOneWidget);
+    expect(find.text('手動標示完成'), findsOneWidget);
+    await tester.tap(find.text('手動標示完成'));
     await tester.pumpAndSettle();
     expect(api.items.first['status'], 'completed');
     expect(find.text('繳費通知'), findsNothing);
   });
+  testWidgets('linked item replaces Life Inbox action with saved feature link',
+      (tester) async {
+    final api = _FakeRadarApi(authorized: true);
+    api.items.add({
+      'id': 'item-linked',
+      'title': '訂房確認',
+      'summary': '已記錄',
+      'sender': 'hotel@example.com',
+      'status': 'completed',
+      'category': 'booking',
+      'received_at': '2026-10-16T08:00:00Z',
+      'linked_target': 'task',
+      'linked_route': '/tasks',
+      'linked_entity_id': 'task-1',
+      'gmail_url': 'https://mail.google.com/mail/#all/thread-2',
+      'gmail_fallback_url': 'https://mail.google.com/mail/#all',
+    });
+    await tester.pumpWidget(ProviderScope(
+      overrides: [platformApiProvider.overrideWithValue(api)],
+      child: const MaterialApp(home: GmailRadarPage()),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('已完成'));
+    await tester.pumpAndSettle();
+    expect(find.text('已完成 · 已存入待辦'), findsOneWidget);
+    expect(find.text('開啟待辦'), findsOneWidget);
+    expect(find.text('送到生活收件匣'), findsNothing);
+    expect(find.text('Gmail 信箱備援'), findsNothing);
+    final more = find.byKey(const ValueKey('gmail-radar-more-item-linked'));
+    await tester.ensureVisible(more);
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+    expect(find.text('Gmail 信箱備援'), findsOneWidget);
+    expect(find.text('手動標示完成'), findsNothing);
+  });
+
 }

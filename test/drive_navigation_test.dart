@@ -44,7 +44,7 @@ void main() {
 
     await _pumpMore(tester, router);
 
-    expect(find.text('Google Drive'), findsOneWidget);
+    expect(find.text('Google Drive 檔案總管'), findsOneWidget);
   });
 
   testWidgets('More renders file manager subtitle', (tester) async {

@@ -98,6 +98,27 @@ class VerifyPreviewReadinessTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     verify(url, SHA, fetch=lambda _: self.fail("unexpected fetch"))
 
+    def test_release_attempt_isolated_channel_and_mismatch(self):
+        channel = "v3-ffffffffff-r39035036060a3"
+        url = "https://life-assistant-v3-stage-tl15--" + channel + "-freshxyz.web.app"
+        def good_get(address):
+            if address.endswith("/release.txt"):
+                return (200, SHA)
+            if address.endswith("/api/v1/tasks"):
+                return (401, "")
+            self.fail("unexpected URL")
+        self.assertEqual(verify(url, SHA, channel=channel, attempts=1, delay=0,
+                                fetch=good_get), url)
+        with self.assertRaises(ValueError):
+            verify(URL, SHA, channel=channel,
+                   fetch=lambda _: self.fail("must not fetch wrong channel"))
+        with self.assertRaises(ValueError):
+            verify(url, SHA, channel="v3-eeeeeeeeee-r39035036060a3",
+                   fetch=lambda _: self.fail("must not fetch wrong SHA"))
+        with self.assertRaises(ValueError):
+            verify(url, SHA, channel="v3-ffffffffff-r0a3",
+                   fetch=lambda _: self.fail("must not fetch invalid run id"))
+
     def test_invalid_limit_rejected(self):
         with self.assertRaises(ValueError):
             verify(URL, SHA, attempts=100)

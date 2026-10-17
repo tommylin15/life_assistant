@@ -93,9 +93,14 @@ def verify_snapshot(
     preview_releases: dict, preview_version: dict, stage_releases: dict,
     stage_version: dict, cloud_run: dict, expected_sha: str, candidate_revision: str,
     preview_visible_sha: str, stage_visible_sha: str,
+    preview_channel: str | None = None,
 ) -> dict:
     require(bool(SHA_PATTERN.fullmatch(expected_sha)), "Expected full source SHA")
-    preview_id = release_version(preview_releases, STAGE_SITE, f"v3-{expected_sha[:10]}")
+    base = f"v3-{expected_sha[:10]}"
+    channel = preview_channel or base
+    require(bool(re.fullmatch(re.escape(base) + r"(-r[1-9][0-9]*a[1-9][0-9]*)?", channel)),
+            "Preview channel does not belong to this SHA")
+    preview_id = release_version(preview_releases, STAGE_SITE, channel)
     require(preview_version.get("name") == preview_id, "Preview version readback mismatch")
     require(preview_visible_sha.strip() == expected_sha, "Preview public SHA mismatch")
     candidate_routes = pinned_routes(preview_version, cloud_run, candidate_revision)
@@ -125,6 +130,7 @@ def main() -> None:
     parser.add_argument("--sha", required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--preview-sha", required=True)
+    parser.add_argument("--preview-channel", default=None)
     parser.add_argument("--stage-sha", required=True)
     args = parser.parse_args()
     def load(file: Path) -> dict:
@@ -134,6 +140,7 @@ def main() -> None:
             load(args.preview_releases), load(args.preview_version),
             load(args.stage_releases), load(args.stage_version),
             load(args.cloud_run), args.sha, args.revision, args.preview_sha, args.stage_sha,
+            preview_channel=args.preview_channel,
         )
     except (ValueError, KeyError, TypeError, OSError, json.JSONDecodeError) as exc:
         print(json.dumps({"status": "FAIL", "reason": str(exc)[:160]}))

@@ -131,3 +131,10 @@ At audit time the source baseline was `fc800b280be59f44f485dfc170fe45a14fc9c981`
 - `PASS / FAIL / NOT VERIFIED` apply **per** implementation, tests, CI, deployment, runtime, integration; aggregate DONE only with required evidence. Otherwise PARTIAL.
 - The user's decision removed **manual Owner Google OAuth E2E as a blocking release step**, not automated OAuth/session/redirect/401 checks. 只有未執行的真人 OAuth E2E 才記 NOT VERIFIED；2026-10-15 已由使用者明確回報正式版真人驗收 PASS。
 - This snapshot is superseded by later matching-SHA actions or GCP runtime evidence, not by documentation alone. Prior detailed history remains in Git history and [the archived pre-cleanup snapshot](archive/CURRENT_STATE_through_2026-10-14.md).
+
+
+## 2026-10-17｜Gmail 分類修復版的 Firebase Preview 404 連續失敗（保留失敗證據）
+
+- SHA `b4894f056a79199b5d39e9b11639727a282fad4b`：CI [#39034846342](https://github.com/tommylin15/life_assistant/actions/runs/39034846342) 四項 PASS；V3 [#39035036060](https://github.com/tommylin15/life_assistant/actions/runs/39035036060) 第一次及第二次均 **FAIL** 在 `Verify pinned Preview API and static release`。Firebase Hosting API channel/version 顯示 PUBLISHED，但 `web.app` 與 `firebaseapp.com` 公開 Preview `release.txt` 均持續 HTTP 404、24 次有界驗證後失敗；不能把 API PUBLISHED 視作網站可用。
+- 候選 0%／DB/auth 完成，不代表固定 staging 更新；先前固定 Staging `2e91c017` 仍為最後已證實版本，production 沒有變動。
+- 對策：每個 Release `GITHUB_RUN_ID` + `GITHUB_RUN_ATTEMPT` 使用隔離且可追溯的 Preview channel，避免同 SHA 重跑一直復用一個失效的公開 Host；所有網址、版本、SHA 與被動 API 401 gate 都維持 fail-closed。這是針對持續 404 的受控修復假設，尚非 root cause 已證實，也不能先標 PASS。

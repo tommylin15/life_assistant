@@ -64,6 +64,16 @@ jobs:
             '
           echo "source=PASS sha=$RELEASE_SHA; required-ci=PASS" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Create isolated immutable Preview channel for this attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          CHANNEL="v3-${RELEASE_SHA:0:10}-r${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}"
+          echo "PREVIEW_CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
+          echo "preview_channel=$CHANNEL isolated_attempt=true" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Require fixed-staging acceptance for production promotion
         if: ${{ inputs.promote && !inputs.publish_staging }}
         run: |
@@ -329,7 +339,7 @@ jobs:
         run: |
           set -euo pipefail
           npm install --global firebase-tools
-          CHANNEL="v3-$(printf '%s' "$RELEASE_SHA" | cut -c1-10)"
+          CHANNEL="$PREVIEW_CHANNEL"
           set +e
           firebase hosting:channel:deploy "$CHANNEL" \
             --expires 1d --project "$GCP_PROJECT_ID" --no-authorized-domains --json \
@@ -356,7 +366,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          CHANNEL="v3-${RELEASE_SHA:0:10}"
+          CHANNEL="$PREVIEW_CHANNEL"
           TOKEN="$(gcloud auth print-access-token)"
           URL="https://firebasehosting.googleapis.com/v1beta1/sites/$STAGING_HOSTING_SITE/channels/$CHANNEL"
           CODE=""
@@ -377,11 +387,12 @@ jobs:
             exit 1
           fi
           python - "$RUNNER_TEMP/v3-channel-release.json" <<'PY'
-          import json,os,sys
+          import json,os,re,sys
           doc=json.load(open(sys.argv[1]))
           site=os.environ["STAGING_HOSTING_SITE"]
           sha=os.environ["RELEASE_SHA"]
-          channel="v3-"+sha[:10]
+          channel=os.environ["PREVIEW_CHANNEL"]
+          assert re.fullmatch(r"v3-"+re.escape(sha[:10])+r"-r[1-9][0-9]*a[1-9][0-9]*", channel)
           assert doc.get("name")==f"sites/{site}/channels/{channel}"
           url=doc.get("url","")
           assert url==os.environ["PREVIEW_URL"].rstrip("/")

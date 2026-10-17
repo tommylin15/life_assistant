@@ -53,6 +53,19 @@ class StagingVersionGateTest(unittest.TestCase):
         self.assertEqual(result["candidate_routes"]["/api/**"]["revision"], REV)
         self.assertEqual(result["previous_live_version"], self.old["name"])
 
+    def test_isolated_attempt_channel_preserves_pin_validation(self):
+        channel = "v3-aaaaaaaaaa-r39035036060a3"
+        result = self.check(
+            preview_releases=release(channel, self.new),
+            preview_channel=channel,
+        )
+        self.assertEqual(result["candidate_routes"]["/auth/**"]["revision"], REV)
+        with self.assertRaisesRegex(ValueError, "channel"):
+            self.check(
+                preview_releases=release(channel, self.new),
+                preview_channel="v3-bbbbbbbbbb-r39035036060a3",
+            )
+
     def test_unsafe_absent_live_baseline_fails(self):
         with self.assertRaises(ValueError):
             self.check(stage_releases={"releases": []})

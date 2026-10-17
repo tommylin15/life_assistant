@@ -7,6 +7,11 @@ on:
         required: true
         description: Exact 40-character source SHA already verified in V3
         type: string
+      preview_channel:
+        required: false
+        description: Exact isolated Preview channel from V3 Release summary (required for recent releases)
+        default: ""
+        type: string
       candidate_revision:
         required: true
         description: Exact Cloud Run revision for the already-verified Preview
@@ -41,6 +46,7 @@ jobs:
       PROD_SITE: gen-lang-client-0593591102
       RELEASE_SHA: ${{ inputs.release_sha }}
       EXPECTED_REVISION: ${{ inputs.candidate_revision }}
+      PREVIEW_CHANNEL: ${{ inputs.preview_channel }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -94,7 +100,8 @@ jobs:
           set -euo pipefail
           TOKEN="$(gcloud auth print-access-token)"
           API="https://firebasehosting.googleapis.com/v1beta1"
-          CHANNEL="v3-$(printf '%s' "$RELEASE_SHA" | cut -c1-10)"
+          CHANNEL="${PREVIEW_CHANNEL:-v3-${RELEASE_SHA:0:10}}"
+          [[ "$CHANNEL" =~ ^v3-${RELEASE_SHA:0:10}(-r[1-9][0-9]*a[1-9][0-9]*)?$ ]]
           get_json() {
             curl --fail --silent --show-error --retry 3 --header "Authorization: Bearer $TOKEN" "$API/$1" -o "$2"
           }
@@ -118,7 +125,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          CHANNEL="v3-$(printf '%s' "$RELEASE_SHA" | cut -c1-10)"
+          CHANNEL="${PREVIEW_CHANNEL:-v3-${RELEASE_SHA:0:10}}"
+          [[ "$CHANNEL" =~ ^v3-${RELEASE_SHA:0:10}(-r[1-9][0-9]*a[1-9][0-9]*)?$ ]]
           # Hosting random preview host must come from provider channel metadata.
           TOKEN="$(gcloud auth print-access-token)"
           curl -fsS -H "Authorization: Bearer $TOKEN" "https://firebasehosting.googleapis.com/v1beta1/sites/$STAGE_SITE/channels/$CHANNEL" > "$RUNNER_TEMP/channel.json"
@@ -126,7 +134,7 @@ jobs:
           [[ "$PREVIEW_URL" == https://"$STAGE_SITE"--*.web.app ]]
           PREVIEW_SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "$PREVIEW_URL/release.txt")"
           STAGE_SHA="$(curl -fsSL -H 'Cache-Control: no-cache' "https://$STAGE_SITE.web.app/release.txt")"
-          python .github/scripts/v3_staging_gate.py --preview-releases "$RUNNER_TEMP/preview-releases.json"             --preview-version "$RUNNER_TEMP/preview-version.json"             --stage-releases "$RUNNER_TEMP/stage-releases.json"             --stage-version "$RUNNER_TEMP/stage-version.json"             --cloud-run "$RUNNER_TEMP/run-before.json" --sha "$RELEASE_SHA"             --revision "$EXPECTED_REVISION" --preview-sha "$PREVIEW_SHA" --stage-sha "$STAGE_SHA" > "$RUNNER_TEMP/gate.json"
+          python .github/scripts/v3_staging_gate.py --preview-releases "$RUNNER_TEMP/preview-releases.json"             --preview-version "$RUNNER_TEMP/preview-version.json"             --stage-releases "$RUNNER_TEMP/stage-releases.json"             --stage-version "$RUNNER_TEMP/stage-version.json"             --cloud-run "$RUNNER_TEMP/run-before.json" --sha "$RELEASE_SHA"             --revision "$EXPECTED_REVISION" --preview-channel "$CHANNEL" --preview-sha "$PREVIEW_SHA" --stage-sha "$STAGE_SHA" > "$RUNNER_TEMP/gate.json"
           jq -e '.status=="PASS"' "$RUNNER_TEMP/gate.json"
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL/api/v1/free-events")" = 401
           test "$(curl -sS -o /dev/null -w '%{http_code}' "$PREVIEW_URL/auth/me")" = 401

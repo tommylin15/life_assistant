@@ -23,7 +23,11 @@ fi
 
 STAGE_URL="https://${STAGING_HOSTING_SITE}.web.app"
 BASE="https://firebasehosting.googleapis.com/v1beta1/sites/${STAGING_HOSTING_SITE}"
-CHANNEL="v3-${RELEASE_SHA:0:10}"
+CHANNEL="${PREVIEW_CHANNEL:-v3-${RELEASE_SHA:0:10}}"
+if [[ ! "$CHANNEL" =~ ^v3-${RELEASE_SHA:0:10}(-r[1-9][0-9]*a[1-9][0-9]*)?$ ]]; then
+  echo "staging_preflight=FAIL mismatched_preview_channel" >&2
+  exit 1
+fi
 WORK="$(mktemp -d)"
 TOKEN="$(gcloud auth print-access-token)"
 ATTEMPTED=0
@@ -209,6 +213,7 @@ python .github/scripts/v3_staging_gate.py \
   --stage-version "${WORK}/stage-before-version.json" \
   --cloud-run "${WORK}/cloud-before.json" \
   --sha "$RELEASE_SHA" --revision "$CANDIDATE_REVISION" \
+  --preview-channel "$CHANNEL" \
   --preview-sha "$(cat "${WORK}/preview-sha")" \
   --stage-sha "$(cat "${WORK}/prior-live-sha")" \
   > "${WORK}/preflight.json"

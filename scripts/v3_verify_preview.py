@@ -36,13 +36,24 @@ def verify(
     delay: float = 5,
     fetch=None,
     sleep=None,
+    channel: str | None = None,
 ) -> str:
     if not re.fullmatch(r"[0-9a-f]{40}", release_sha):
         raise ValueError("invalid release SHA")
+    # Each release attempt has its own Firebase channel to avoid reusing a
+    # stale/broken CDN hostname. Legacy callers without a channel retain the
+    # original SHA-only validation.
+    expected_base = "v3-" + release_sha[:10]
+    expected_channel = channel or expected_base
+    if expected_channel != expected_base and not re.fullmatch(
+        re.escape(expected_base) + r"-r[1-9][0-9]*a[1-9][0-9]*",
+        expected_channel,
+    ):
+        raise ValueError("preview channel does not belong to this SHA/attempt")
     # Never verify or fetch arbitrary hosts from CLI output.
     host_pattern = (
-        r"https://life-assistant-v3-stage-tl15--v3-"
-        + re.escape(release_sha[:10])
+        r"https://life-assistant-v3-stage-tl15--"
+        + re.escape(expected_channel)
         + r"-[a-z0-9]+[.]web[.]app/?"
     )
     if not re.fullmatch(host_pattern, preview_url):
@@ -90,7 +101,10 @@ def verify(
 
 def main() -> None:
     try:
-        verified = verify(os.environ["PREVIEW_URL"], os.environ["RELEASE_SHA"])
+        verified = verify(
+            os.environ["PREVIEW_URL"], os.environ["RELEASE_SHA"],
+            channel=os.environ.get("PREVIEW_CHANNEL"),
+        )
         # Emitted only after exact SHA + protected 401 gates have passed.
         # The GitHub workflow must use this URL for its OAuth preview gate.
         print(f"preview_selected_url={verified}", flush=True)

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import 'browser_navigation.dart';
 import 'drive_api.dart';
@@ -21,6 +20,7 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
   List<({String id, String name})> _path = const [];
   bool _loading = true;
   bool _working = false;
+  bool _selecting = false;
   String? _error;
   String? _nextPageToken;
   String _query = '';
@@ -216,6 +216,45 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
     }
   }
 
+  Future<void> _selectFromDrive({required bool folders}) async {
+    if (_selecting || _working) return;
+    setState(() => _selecting = true);
+    try {
+      // Picker lets the person browse their entire Google Drive. Only files
+      // explicitly picked (or created by Life) become visible to Life's API.
+      final api = ref.read(drivePickerApiProvider);
+      final config = PickerConfig.fromJson(await api.getPickerConfig());
+      final selected = await ref.read(googleDrivePickerProvider).pick(
+        config, folders: folders, multiSelect: !folders,
+      );
+      if (selected.isEmpty) return;
+      final registered = await api.registerDocuments(selected);
+      if (registered.length != selected.length) {
+        throw StateError('Selected Drive items were not all registered');
+      }
+      if (!mounted) return;
+      // The landing view shows app-authorized files irrespective of their
+      // parent path; prevent a newly picked file being hidden by an old query.
+      setState(() {
+        _path = [];
+        _query = '';
+        _search.clear();
+      });
+      await _read();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('已加入 ${registered.length} 個已授權' +
+            (folders ? '資料夾' : '檔案') +
+            '。資料夾內其他原有檔案仍需個別授權。'),
+      ));
+    } catch (_) {
+      if (mounted) setState(() => _error =
+        'Google Picker 選取或授權未完成。請確認 Google 連線及帳號後重試；原有檔案不受影響。');
+    } finally {
+      if (mounted) setState(() => _selecting = false);
+    }
+  }
+
   Future<void> _createFolder() async {
     if (_working) return;
     var enteredName = '';
@@ -325,27 +364,43 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
           Wrap(spacing: 12, runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              OutlinedButton.icon(onPressed: () => context.go('/more/drive'),
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Drive 智能整理')),
               Text('Google Drive 檔案總管',
                 style: Theme.of(context).textTheme.headlineSmall),
               FilledButton.icon(
+                key: const ValueKey('drive-explorer-select-files'),
+                onPressed: _loading || _working || _selecting
+                    ? null : () => _selectFromDrive(folders: false),
+                icon: const Icon(Icons.add_to_drive_outlined),
+                label: Text(_selecting ? '選取中' : '選取更多檔案')),
+              OutlinedButton.icon(
+                key: const ValueKey('drive-explorer-select-folder'),
+                onPressed: _loading || _working || _selecting
+                    ? null : () => _selectFromDrive(folders: true),
+                icon: const Icon(Icons.folder_shared_outlined),
+                label: const Text('選取資料夾')),
+              OutlinedButton.icon(
                 key: const ValueKey('drive-explorer-new-folder'),
-                onPressed: _loading || _working ? null : _createFolder,
+                onPressed: _loading || _working || _selecting ? null : _createFolder,
                 icon: const Icon(Icons.create_new_folder_outlined),
                 label: const Text('新建資料夾')),
             ],
           ),
           const SizedBox(height: 8),
-          const Text('顯示 Life 已獲授權的檔案及資料夾，不代表全部 Google Drive。'
-              '編輯 Google Docs／Sheets／Slides 請按「原檔開啟」。'),
+          const Text('目前採 Google drive.file 逐檔授權：只顯示你透過「選取更多檔案」'
+              '選過，或由 Life 建立的檔案。選取資料夾不會自動開放其所有子檔案。'
+              '要查看全部雲端硬碟，請使用 Google Drive 官方網站。'),
+          TextButton.icon(
+            key: const ValueKey('drive-explorer-open-google-drive'),
+            onPressed: () => openExternalBrowser('https://drive.google.com/drive/u/0/my-drive'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('在 Google Drive 查看全部檔案'),
+          ),
           const SizedBox(height: 12),
           Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               ActionChip(
                 avatar: const Icon(Icons.folder_open, size: 18),
-                label: const Text('已授權檔案'),
+                label: const Text('Life 已授權'),
                 onPressed: _loading ? null : () => _goToIndex(-1)),
               for (var i = 0; i < _path.length; i++)
                 ActionChip(
@@ -383,7 +438,7 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
           else if (_files.isEmpty)
             const Card(child: Padding(
               padding: EdgeInsets.all(18),
-              child: Text('這個範圍沒有可使用的檔案。可以從 Drive 智能整理使用 Google Picker 加入檔案。')))
+              child: Text('這裡尚無可存取的檔案。請按「選取更多檔案」使用 Google Picker，授權想在 Life 管理的檔案。')))
           else for (final file in _files)
             Card(key: ValueKey('drive-file-' + (file['id']?.toString() ?? '')),
               child: ListTile(

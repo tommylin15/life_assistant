@@ -30,6 +30,31 @@ class ReleaseWithoutOAuthGate(unittest.TestCase):
         self.assertIn("redirect_uri=https%3A%2F%2Flife-assistant-v3-stage-tl15.web.app", alt)
         self.assertIn("hosting_check=auth_redirect:PASS", hosting)
 
+    def test_candidate_gate_retries_only_transient_and_keeps_security_checks(self):
+        release = RELEASE.read_text(encoding="utf-8")
+        candidate = release.split(
+            "      - name: Candidate health, database readiness, auth and authorization", 1
+        )[1].split("      - name: Pin migration job", 1)[0]
+        for required in (
+            "probe health /health 200",
+            "probe ready /ready 200",
+            "probe unauthorized /api/v1/tasks 401",
+            "probe oauth /auth/login 307",
+            "candidate_$label=FAIL http=$code",
+            "candidate_$label=RETRY http=$code",
+            "google_host_callback_or_state",
+            'params.get("redirect_uri") == [expected]',
+            'params.get("state", [""])[0]',
+            'target.hostname == "accounts.google.com"',
+        ):
+            self.assertIn(required, candidate)
+        # No bearer/cookie/OAuth token leaks; login headers are temp-only.
+        self.assertNotIn('cat "$RUNNER_TEMP/v3-candidate-oauth.headers"', candidate)
+        self.assertNotIn('echo "$location"', candidate)
+        # 401/403 unauthorized failures must never be retried as transient.
+        self.assertNotIn('"$code" == 401', candidate)
+        self.assertNotIn('"$code" == 403', candidate)
+
     def test_candidate_sha_staging_401_rollback_and_production_hosting_still_gated(self):
         r, s, h = (f.read_text(encoding="utf-8") for f in
                    (RELEASE, STAGE, HOSTING))

@@ -11,6 +11,7 @@ class _CaptureApi extends PlatformApi {
   final writes = <Map<String, dynamic>>[];
   Map<String, dynamic>? fakeCandidate;
   Map<String, dynamic>? fakeDateHint;
+  String fakeCommitStatus = 'CREATED';
 
   @override
   Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
@@ -41,12 +42,12 @@ class _CaptureApi extends PlatformApi {
       committed++;
       writes.add(body);
       return {
-        'status': 'COMPLETE',
+        'status': fakeCommitStatus == 'CREATED' ? 'COMPLETE' : 'PARTIAL',
         'results': [
           for (final entry in body['items'] as List)
             {
               'action_id': (entry as Map)['action_id'],
-              'target': entry['target'], 'status': 'CREATED',
+              'target': entry['target'], 'status': fakeCommitStatus,
               'entity_id': 'sample-id',
             }
         ],
@@ -87,6 +88,40 @@ void main() {
     expect(api.writes.single['items'], hasLength(1));
     expect(find.textContaining('CREATED'), findsOneWidget);
     expect(find.textContaining('確認新增所選 0 項'), findsOneWidget);
+  });
+
+  testWidgets('FAILED inbox write stays editable; UNKNOWN remains locked', (tester) async {
+    for (final outcome in ['FAILED', 'UNKNOWN']) {
+      final api = _CaptureApi()..fakeCommitStatus = outcome;
+      await mount(tester, api);
+      await tester.enterText(find.byKey(const ValueKey('capture-input')),
+          '買牛奶的備忘');
+      await tester.tap(find.text('智慧辨識'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.textContaining('確認新增所選 1 項'));
+      await tester.tap(find.textContaining('確認新增所選 1 項'));
+      await tester.pumpAndSettle();
+      expect(api.committed, 1);
+      expect(find.textContaining(outcome), findsOneWidget);
+      if (outcome == 'FAILED') {
+        expect(find.textContaining('部分項目未建立'), findsOneWidget);
+        expect(find.text('確認後才會新增'), findsOneWidget);
+        api.fakeCommitStatus = 'CREATED';
+        final checkbox = find.byType(CheckboxListTile).first;
+        await tester.ensureVisible(checkbox);
+        await tester.tap(checkbox);
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.textContaining('確認新增所選 1 項'));
+        await tester.tap(find.textContaining('確認新增所選 1 項'));
+        await tester.pumpAndSettle();
+        expect(api.committed, 2);
+      } else {
+        expect(find.text('已處理，避免重複送出'), findsOneWidget);
+        expect(find.textContaining('確認新增所選 0 項'), findsOneWidget);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
   });
 
   testWidgets('web fetch is opt-in and does not save a note automatically', (tester) async {

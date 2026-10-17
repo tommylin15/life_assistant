@@ -1,5 +1,11 @@
 # Life — Current state
 
+## 2026-10-17｜Gmail／Drive／Life Inbox／Session／月曆合併交付：全功能一次驗收
+- 使用者要求上述已核准能力合併開發完成後執行**單次整合驗收**，不逐項要求人工確認。驗收 gate 與範圍集中在 [todo.md](todo.md) 首節，保持唯一 active backlog。
+- `main` 已有可撤銷 30 天 PostgreSQL Session（`life_login_sessions`）、Gmail 重新判讀與 OAuth callback 修正、Drive Picker、日期萬年曆及月曆；歷史 TODO 的「Session 尚未實作」不再適用。本次新增：Life Inbox 對確定 FAILED 允許修正後重送，對 UNKNOWN 仍阻止盲目重送，補 Flutter 回歸測試；Gmail 重新判讀期間不誤顯快掃 spinner。
+- 先前 [CI #39025948853](https://github.com/tommylin15/life_assistant/actions/runs/39025948853) 及 [Staging #39026104477](https://github.com/tommylin15/life_assistant/actions/runs/39026104477) 成功，SHA `9fda2f7`，但這是**本批整合 commit 之前**的證據；不能繼承為更新後同 SHA PASS。該 V3 有 `promote=false`，正式流量切換、live/rollback 與正式 Hosting 未執行。
+- 新整合版的 CI、Staging、真實 Gmail/Drive/Calendar E2E、正式部署及實際讀回仍須依新 SHA 各別核實：**PARTIAL**；不可先行宣稱 DONE。
+
 ## 2026-10-16｜正式 Hosting 自動派送修復：source submitted; runtime gate open
 - 原先正式 V3 由 GITHUB_TOKEN 發起 workflow_dispatch，後續 workflow_run 不會建立，因此自動 Hosting 沒有 Run。修正為 V3 同一 workflow 的最終步驟直接使用 workflow_dispatch。
 - 僅在 promotion、fixed staging、postdeploy live、rollback drill、revision retention 與 curated importer 對齊皆 PASS 時允許派送。實際派送前重新核對 main SHA、四項 CI、100% live revision 和 immutable GHCR digest；同 SHA 已存在 Hosting Run 時跳過。

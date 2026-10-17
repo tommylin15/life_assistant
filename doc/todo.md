@@ -12,6 +12,21 @@ Updated 2026-10-16. **One active backlog only.** Prior 01–07 execution plan ha
 | P2-2 | Audit dependency/action pinning, public-repository hygiene, access to operational docs, observability, backup restoration and scheduled-job dedupe. | Risk follow-up **NOT VERIFIED** |
 
 
+## 2026-10-17｜本輪合併交付及一次整合驗收（唯一驗收矩陣）
+
+使用者決定：P1-G1 Gmail、P1-G2 Drive 檔案總管、P1-5 30 天登入、P1-6 月曆／活動整合、P2-3 生活收件匣及日期萬年曆 **同版完成後一次驗收**；不逐項邀請真人重驗、不提前開啟 Gmail/Drive AI 自動排程、不為取消的 Drive AI 再增加新功能。已通過的既有 01–03 正式版驗收不重做。
+
+| Gate | 同一 main SHA 的整合驗收範圍 | 判定 |
+| --- | --- | --- |
+| 1 Implementation / Tests | Gmail 九類及第三方授權警示／快掃／三天補檢與重判／Inbox 轉存與 receipt；Drive Picker＋檔案讀寫／逐檔 scope；登入 Session 30 天／登出撤銷；月曆＋活動入口；生活收件匣日期解析、萬年曆與 FAILED/UNKNOWN 分流；四項 CI | **待本次整合 commit CI 讀回** |
+| 2 Staging | 完整同 SHA CI、候選 0%／遷移／獨立固定 Staging Flutter+API SHA/readback、Google OAuth redirect、資料庫與權限 smoke | **待同 SHA V3 readback** |
+| 3 真實外部整合 | Owner 與一般帳號 Gmail 重新授權、近三天郵件快掃／40 封重判／原信／Life 轉存；Google Drive Picker 檔案與資料夾、編輯版本讀回；生活收件匣複合項目→Task/Shopping/Note/Google Calendar 真實寫入、PG／Calendar 讀回與重試；跨帳號拒絕；瀏覽器關閉重開的 30 天 Session／登出 | **NOT VERIFIED（需要實際帳號與 Google 授權）** |
+| 4 Production | 通過固定 Staging 後受控 V3 promote、postdeploy live gate、rollback、Job digest、Hosting 同 SHA 發布與正式讀回 | **NOT VERIFIED；不能以 staging success 代替** |
+
+嚴格以 PASS / FAIL / NOT VERIFIED 標示；只有 1–4 所需證據完整才標 DONE。Drive 上傳／複製／全雲端硬碟存取、Gmail 自動排程與安全事件真偽保證**不在核准的本批範圍**。單筆 entity deep link 尚未實作時，按鈕僅宣稱「開啟功能」，不能宣稱「開啟該筆」。
+
+**P1-5 舊狀態更正**：最新 `backend/app/api/auth.py` 已實作 `LifeLoginSession` DB 雜湊 bearer、30 天 Session、Staging/Production 來源隔離、logout 伺服器撤銷；原表「尚未實作」為歷史快照。`backend/tests/test_life_login_session.py` 與 `backend/tests/test_auth.py` 已涵蓋核心流程，仍須同 SHA CI、真實登入與正式發布驗收，不得將 source PASS 等同產品 DONE。
+
 ## P2-3｜生活收件匣 V1 已開發、CI 與 Staging 通過（2026-10-16）
 
 | Priority | Work / exit gate | Status |

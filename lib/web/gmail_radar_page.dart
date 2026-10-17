@@ -145,7 +145,8 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
                 ? const SizedBox.square(dimension: 18,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.radar),
-            label: Text(_scanning && !_backfilling ? '掃描中' : '立即快掃'),
+            label: Text(_scanning && !_backfilling && !_rechecking
+                ? '掃描中' : '立即快掃'),
           ),
           if (needBackfill)
             OutlinedButton.icon(
@@ -157,7 +158,8 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
           if (granted && !_loading)
             OutlinedButton.icon(
               key: const ValueKey('gmail-radar-three-day-recheck'),
-              onPressed: _scanning ? null : () => _scan(recheck: true),
+              onPressed: _loading || _scanning || !granted
+                  ? null : () => _scan(recheck: true),
               icon: const Icon(Icons.refresh),
               label: Text(_scanning && _rechecking
                   ? '重新判讀中' : '重新檢查近三天'),

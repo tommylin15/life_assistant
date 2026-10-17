@@ -446,13 +446,22 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
         for (final receipt in receipts) {
           for (final candidate in _candidates) {
             if (candidate['action_id'] == receipt['action_id']) {
-              // An UNKNOWN result must never be silently retried by the UI.
-              candidate['done'] = true;
+              // A definite FAILED result was not reserved by the backend:
+              // keep the proposal editable so a person can correct/retry it.
+              // UNKNOWN must remain locked pending receipt reconciliation to
+              // prevent a duplicate write after a network/Google timeout.
+              if (receipt['status'] != 'FAILED') {
+                candidate['done'] = true;
+              }
               candidate['selected'] = false;
             }
           }
         }
       });
+      if (receipts.any((receipt) => receipt['status'] == 'FAILED')) {
+        setState(() => _error =
+            '部分項目未建立。請修正候選欄位後重新勾選再提交；結果不明的項目請先查收據，勿直接重送。');
+      }
       if (_gmailActionId != null && widget.gmailRadarItemId != null &&
           receipts.any((receipt) =>
             receipt['action_id'] == _gmailActionId &&

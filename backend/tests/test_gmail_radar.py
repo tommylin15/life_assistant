@@ -61,6 +61,8 @@ class GmailRadarRulesTests(unittest.TestCase):
             ("Newsletter: government action required", "read more"),
             ("特賣：帳單繳費通知優惠", "請參閱活動"),
             ("本週優惠", "您的退款失敗？教你領優惠碼"),
+            ("重要通知", "您是否擔心異常登入？優惠方案立即購買"),
+            ("Service update", "Unusual sign-in detected? Special offer this week"),
             ("登入驗證碼：123456", "這是您的驗證碼"),
             ("新的登入通知", "您剛剛已登入"),
             ("訂單成立通知", "訂單已付款成功"),
@@ -73,6 +75,12 @@ class GmailRadarRulesTests(unittest.TestCase):
         for subject, snippet in harmless:
             with self.subTest(subject=subject, snippet=snippet):
                 self.assertIsNone(classify_message(subject, snippet))
+
+    def test_strong_security_subject_survives_generic_promo_footer(self):
+        self.assertEqual(
+            classify_message("Security alert: unusual sign-in", "unsubscribe from updates"),
+            "security",
+        )
 
     def test_fraud_or_fee_alert_is_not_downgraded_to_generic_notice(self):
         self.assertEqual(

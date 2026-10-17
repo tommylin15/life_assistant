@@ -47,19 +47,19 @@ void main() {
     expect(find.text('Google Drive'), findsOneWidget);
   });
 
-  testWidgets('More renders intelligent organization subtitle', (tester) async {
+  testWidgets('More renders file manager subtitle', (tester) async {
     final router = _router();
     addTearDown(router.dispose);
 
     await _pumpMore(tester, router);
 
     expect(
-      find.text('檢視智能整理結果、相關筆記建議與 AI 同意設定'),
+      find.text('瀏覽已授權檔案、Google Picker 選取與檔案管理'),
       findsOneWidget,
     );
   });
 
-  testWidgets('More navigates to Google Drive intelligent organization', (
+  testWidgets('More navigates to Google Drive file manager', (
     tester,
   ) async {
     final router = _router();

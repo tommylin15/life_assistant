@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:life_assistant/web/drive_explorer_page.dart';
 import 'package:life_assistant/web/drive_api.dart';
+import 'package:life_assistant/web/google_drive_picker.dart';
 import 'package:life_assistant/web/platform_api.dart';
 
 class _FakeDriveExplorerApi extends PlatformApi {
@@ -61,13 +62,32 @@ class _FakeDriveExplorerApi extends PlatformApi {
 }
 
 class _FakePickerDriveApi implements DrivePickerApi {
+  List<String> registered = [];
   @override
-  Future<Map<String, dynamic>> getPickerConfig() async => const {};
+  Future<Map<String, dynamic>> getPickerConfig() async => {
+    'client_id': 'fake-client', 'developer_key': 'fake-key',
+    'app_id': 'fake-app', 'scope': driveFileScope,
+  };
   @override
   Future<List<Map<String, dynamic>>> registerDocuments(
-      List<String> googleFileIds, {String? workspaceId}) async => [
-    {'id': 'doc-1', 'google_file_id': googleFileIds.single},
-  ];
+      List<String> googleFileIds, {String? workspaceId}) async {
+    registered = googleFileIds;
+    return [
+      for (final id in googleFileIds)
+        {'id': 'doc-' + id, 'google_file_id': id},
+    ];
+  }
+}
+
+class _FakeGooglePicker implements GoogleDrivePicker {
+  final List<bool> folderChoices = [];
+  @override
+  Future<List<String>> pick(PickerConfig config, {
+    required bool folders, bool multiSelect = true,
+  }) async {
+    folderChoices.add(folders);
+    return [folders ? 'folder-selected' : 'file-selected'];
+  }
 }
 
 void main() {
@@ -79,7 +99,7 @@ void main() {
       child: const MaterialApp(home: DriveExplorerPage()),
     ));
     await tester.pumpAndSettle();
-    expect(find.textContaining('已獲授權'), findsOneWidget);
+    expect(find.textContaining('逐檔授權'), findsOneWidget);
     expect(find.text('Folder A'), findsOneWidget);
     await tester.tap(find.text('Folder A'));
     await tester.pumpAndSettle();
@@ -140,6 +160,37 @@ void main() {
     expect(api.textSaves.first['text'], 'Edited note');
     expect(api.textSaves.first['expected_version'], '12');
     expect(api.textSaves.first['expected_sha256'], isNotEmpty);
+  });
+
+  testWidgets('Drive file manager grants additional files through Google Picker',
+      (tester) async {
+    final api = _FakeDriveExplorerApi();
+    final pickerApi = _FakePickerDriveApi();
+    final picker = _FakeGooglePicker();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        platformApiProvider.overrideWithValue(api),
+        drivePickerApiProvider.overrideWithValue(pickerApi),
+        googleDrivePickerProvider.overrideWithValue(picker),
+      ],
+      child: const MaterialApp(home: DriveExplorerPage()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Google Drive 檔案總管'), findsOneWidget);
+    expect(find.text('選取更多檔案'), findsOneWidget);
+    expect(find.text('在 Google Drive 查看全部檔案'), findsOneWidget);
+    expect(find.text('Drive 智能整理'), findsNothing);
+    await tester.tap(find.byKey(
+        const ValueKey('drive-explorer-select-files')));
+    await tester.pumpAndSettle();
+    expect(picker.folderChoices, [false]);
+    expect(pickerApi.registered, ['file-selected']);
+
+    await tester.tap(find.byKey(
+        const ValueKey('drive-explorer-select-folder')));
+    await tester.pumpAndSettle();
+    expect(picker.folderChoices, [false, true]);
+    expect(pickerApi.registered, ['folder-selected']);
   });
 
 }

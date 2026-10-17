@@ -137,6 +137,15 @@ Admin 中途關閉／權限被撤銷 → 立即停止下一步新分析／寫入
 
 完成判定：**implementation / tests / four CI jobs / staged deployment / OAuth + private-tenant E2E / approved rollout transition / production deployment / runtime Google Calendar readback** 分別回報 PASS/FAIL/NOT VERIFIED；缺任何必要證據時總狀態 PARTIAL，只有全部適用 gate PASS 才 DONE。生產一般使用者的 enabled/all 只在相同 SHA 正式驗收通過後由 Owner 在 Admin 主動開啟，不因發版自動開放。
 
+## 2026-10-17｜日期輸入簡化（實作與驗收分離）
+
+- **使用者介面不再要求輸入 ISO8601**：待辦期限改日期萬年曆及可選時間調整；日曆支援全日／非全日切換、日期萬年曆與時間選擇。所有 UI 選擇均在按下「確認新增」前僅存在候選欄位，不寫入 DB 或 Google Calendar。
+- 支援辨識完整公曆 `2026-11-05`／`2026/11/05`／`2026.11.05`／`2026年11月5日`、明確民國 `民國115年11月5日` 或 `115年11月5日`、相對 `今天／明天／後天`；以解譯當下 Asia/Taipei 時間為基準。
+- **只有年月**（`2026年11月`）與**只有月日**（`11月5日`）保留原始片段與 precision，不能把缺失的日／年自動寫入 Task 或 Calendar。使用者從萬年曆補齊；多個互異日期與無效日期不自動帶成單一日期。後端在 Gemini 回傳精度高於原文時先移除該時間／日期欄位，保留目標候選供補選。
+- 完整的純日期待辦只在候選顯示明確的「當天 23:59（Asia/Taipei）為截止」介面預設；可點選調整時間／清除，不視為來源提供的精確時間，亦不自動建立 Reminder。
+- 日曆只有日期時先呈現可編輯的**全日事件**；UI 顯示的結束日期為**含當天**，確認後才轉成 Google Calendar 要求的 exclusive `end_date`（隔日）；若要設定時段須在「非全日」模式明確選擇開始、結束時間，依原 API 驗證 `end > start`。
+- 日期 UI 於本次 PR/GitHub main 修改；需另以 backend unit、Flutter widgets、4 CI、固定 Staging、真人日曆 OAuth/readback 驗收。**此段規格不是上線證據**。
+
 ## 10. 決策與範圍紀錄
 
 - 2026-10-16 使用者指示：先設計架構、正式規格及 AI 開發指示，**只回寫文件，之後才進行程式開發**；Admin 要可決定一般使用者是否使用。

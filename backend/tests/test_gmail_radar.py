@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from app.api.gmail_radar import (
     classify_message, gmail_urls, manual_quick_scan, manual_three_day_backfill,
+    manual_three_day_recheck,
 )
 from app.models.google_integration import GoogleConnection
 
@@ -95,6 +96,32 @@ class GmailRadarRulesTests(unittest.TestCase):
             classify_message("訂單取消：退款失敗", ""),
             "refund",
         )
+
+    def test_third_party_access_or_changed_permissions_are_review_items(self):
+        examples = (
+            "第三方應用程式已取得您帳號的存取權限",
+            "新的第三方應用程式授權通知",
+            "您的應用程式權限已變更",
+            "New app has access to your Google account",
+            "App permissions changed",
+            "Third-party app access granted",
+        )
+        for subject in examples:
+            with self.subTest(subject=subject):
+                self.assertEqual(classify_message(subject, ""), "authorization")
+
+    def test_normal_authorization_and_ads_do_not_escalate(self):
+        examples = (
+            ("您的 Gmail 授權已完成", "登入正常"),
+            ("登入驗證碼 123456", "請勿提供驗證碼"),
+            ("您已成功登入", "Google 帳號登入成功"),
+            ("Google 官方應用服務電子報", "新的第三方應用程式授權通知"),
+            ("會員優惠：第三方應用程式存取安全服務", "現正促銷"),
+            ("本週好康", "New app has access to your Google account! Save 30%"),
+        )
+        for subject, snippet in examples:
+            with self.subTest(subject=subject):
+                self.assertIsNone(classify_message(subject, snippet))
 
     def test_gmail_link_has_mailbox_fallback(self):
         links = gmail_urls("threadId123", "somebody@example.com")
@@ -221,6 +248,42 @@ class GmailRadarOwnershipTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(google.await_count, 13)
         self.assertEqual(google.await_args_list[0].kwargs["params"]["q"],
                          "newer_than:3d -in:spam -in:trash")
+
+    async def test_explicit_recheck_reclassifies_seen_ids_without_deleting_cache(self):
+        db = self.fake_db(seen=["msg1"])
+        with patch("app.api.gmail_radar._request_google", new_callable=AsyncMock) as google:
+            google.side_effect = [
+                self.fake_list(["msg1"]), self.fake_metadata("msg1"),
+            ]
+            result = await manual_three_day_recheck(
+                user={"sub": "user-a"}, db=db)
+        self.assertEqual(result["checked"], 1)
+        self.assertEqual(result["added"], 1)
+        self.assertEqual(result["scan_kind"], "recheck")
+        self.assertEqual(result["three_day_remaining"], 0)
+        self.assertEqual(google.await_count, 2)
+        self.assertFalse(any(
+            isinstance(call.args[0], __import__("app.models.gmail_radar", fromlist=["GmailRadarSeen"]).GmailRadarSeen)
+            for call in db.add.call_args_list
+        ))
+        db.commit.assert_awaited_once()
+
+    async def test_recheck_keeps_existing_life_item_and_status(self):
+        db = self.fake_db(seen=["msg1"])
+        existing = object()
+        db.scalar = AsyncMock(return_value=existing)
+        with patch("app.api.gmail_radar._request_google", new_callable=AsyncMock) as google:
+            google.side_effect = [self.fake_list(["msg1"])]
+            result = await manual_three_day_recheck(
+                user={"sub": "user-a"}, db=db)
+        self.assertEqual(result["added"], 0)
+        self.assertEqual(result["skipped"], 1)
+        self.assertEqual(google.await_count, 1)
+        from app.models.gmail_radar import GmailRadarItem, GmailRadarSeen
+        self.assertFalse(any(
+            isinstance(call.args[0], (GmailRadarItem, GmailRadarSeen))
+            for call in db.add.call_args_list
+        ))
 
     async def test_repeated_quick_scan_avoids_existing_metadata_calls(self):
         ids = ["msg1", "msg2"]

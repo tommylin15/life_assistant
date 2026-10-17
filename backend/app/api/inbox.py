@@ -3,7 +3,7 @@ import json
 import re
 import uuid
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -166,6 +166,91 @@ def _fallback(value: str) -> dict:
                                 ambiguities=["請確認目的地"])], "fallback")
 
 
+# Date evidence is UI metadata only. Partial dates MUST NOT become Calendar
+# or Task timestamps until a user chooses the missing components in a picker.
+_DATE_FULL = re.compile(
+    r"(?<![0-9])(?P<roc>民國\s*)?(?P<year>[0-9]{3,4})\s*"
+    r"(?:年|[./-])\s*(?P<month>[0-9]{1,2})\s*"
+    r"(?:月|[./-])\s*(?P<day>[0-9]{1,2})\s*日?(?![0-9])"
+)
+_DATE_YEAR_MONTH = re.compile(
+    r"(?<![0-9])(?P<roc>民國\s*)?(?P<year>[0-9]{3,4})\s*"
+    r"(?:年|[./-])\s*(?P<month>[0-9]{1,2})\s*月?(?![0-9/.-])"
+)
+_DATE_MONTH_DAY = re.compile(
+    r"(?<![0-9])(?P<month>[0-9]{1,2})\s*(?:月|[/-])\s*"
+    r"(?P<day>[0-9]{1,2})\s*日?(?![0-9])"
+)
+
+
+def _inbox_date_hint(value: str, now: str) -> dict | None:
+    """Locate one verifiable calendar date; retain its precision and evidence.
+
+    Never guess missing year/day. Reject ambiguous and impossible dates.
+    """
+    def normalized_year(match: re.Match) -> int | None:
+        year = int(match.group("year"))
+        if match.group("roc"):
+            return year + 1911 if 1 <= year <= 300 else None
+        return year if 1900 <= year <= 2100 else None
+
+    full = list(_DATE_FULL.finditer(value))
+    # Multi-date input (e.g. a range) must be selected explicitly.
+    if len(full) > 1:
+        return {"precision": "ambiguous", "raw": "、".join(x.group() for x in full[:2])}
+    if full:
+        match = full[0]
+        year, month, day = normalized_year(match), int(match.group("month")), int(match.group("day"))
+        try:
+            if year is None:
+                raise ValueError("year")
+            date_value = datetime(year, month, day).date()
+        except ValueError:
+            return {"precision": "invalid", "raw": match.group()}
+        return {"precision": "day", "raw": match.group(),
+                "year": year, "month": month, "day": day,
+                "date": date_value.isoformat()}
+
+    year_month = list(_DATE_YEAR_MONTH.finditer(value))
+    if len(year_month) > 1:
+        return {"precision": "ambiguous", "raw": "、".join(x.group() for x in year_month[:2])}
+    if year_month:
+        match = year_month[0]
+        year, month = normalized_year(match), int(match.group("month"))
+        if year is None or not 1 <= month <= 12:
+            return {"precision": "invalid", "raw": match.group()}
+        return {"precision": "year_month", "raw": match.group(),
+                "year": year, "month": month}
+
+    # Partial month/day forms deliberately have no inferred year.
+    month_day = list(_DATE_MONTH_DAY.finditer(value))
+    if len(month_day) > 1:
+        return {"precision": "ambiguous", "raw": "、".join(x.group() for x in month_day[:2])}
+    if month_day:
+        match = month_day[0]
+        month, day = int(match.group("month")), int(match.group("day"))
+        # Leap day without a year is valid evidence; picker chooses leap year.
+        try:
+            datetime(2024, month, day)
+        except ValueError:
+            return {"precision": "invalid", "raw": match.group()}
+        return {"precision": "month_day", "raw": match.group(),
+                "month": month, "day": day}
+
+    relative = re.search(r"(?<!前)(今天|今日|明天|後天)", value)
+    if relative:
+        try:
+            local = datetime.fromisoformat(now)
+        except ValueError:
+            return None
+        days = {"今天": 0, "今日": 0, "明天": 1, "後天": 2}
+        date_value = (local + timedelta(days=days[relative.group()])).date()
+        return {"precision": "day", "raw": relative.group(),
+                "year": date_value.year, "month": date_value.month,
+                "day": date_value.day, "date": date_value.isoformat()}
+    return None
+
+
 def build_prompt(value: str, now: str) -> str:
     return (
         "You are a side-effect-free Life Assistant zh-TW classification function. "
@@ -175,6 +260,8 @@ def build_prompt(value: str, now: str) -> str:
         "Note fields: title and body. Task: title, optional note/due_at ISO8601 with offset. "
         "Shopping: items array of {name,category}; NEVER choose shopping_list_id. "
         "Calendar: summary, start/end with timezone offsets OR start_date/end_date ISO strings. "
+        "For year-month or month-day-only dates, OMIT due_at/start/start_date; "
+        "put missing year/day in ambiguities, never guess partial date values. "
         "Do not invent prices, quantities, dates, time zones or Calendar event duration. "
         "Cancel/negation/ambiguity: propose a note with select_default false. "
         "No tool use, no writes, no user_sub, no permission decisions. "
@@ -195,9 +282,10 @@ async def interpret(body: InterpretInput, response: Response,
         now = datetime.now(ZoneInfo(body.timezone)).isoformat()
     except (ValueError, ZoneInfoNotFoundError):
         raise HTTPException(422, "Invalid timezone")
+    hint = _inbox_date_hint(value, now)
     fixed = rule_candidates(value)
     if fixed:
-        return fixed
+        return {**fixed, "date_hint": hint}
     try:
         output = await generate_text(build_prompt(value, now), user_sub=user["sub"], purpose="life_inbox")
         raw = output["text"].strip()
@@ -206,9 +294,9 @@ async def interpret(body: InterpretInput, response: Response,
             raw = re.sub(r"^" + re.escape(fence) + r"(?:json)?\s*", "", raw)
             raw = re.sub(r"\s*" + re.escape(fence) + r"$", "", raw)
         items = ModelOutput.model_validate(json.loads(raw))
-        return _proposals(items.candidates, "gemini")
+        return {**_proposals(items.candidates, "gemini"), "date_hint": hint}
     except (GatewayTextError, ValidationError, ValueError, TypeError, KeyError):
-        return _fallback(value)
+        return {**_fallback(value), "date_hint": hint}
 
 
 async def _verify_target(target: str, db: AsyncSession, user: dict):

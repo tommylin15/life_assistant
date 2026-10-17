@@ -1,5 +1,8 @@
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import AsyncMock, patch
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+import hashlib
+from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -109,6 +112,63 @@ class AuthApiTests(IsolatedAsyncioTestCase):
         self.assertEqual(logged_in["email"], user["email"])
         self.assertEqual(auth.oauth_redirect_for_request(session_request),
                          auth.STAGING_REDIRECT_URI)
+
+    async def test_incremental_gmail_callback_reuses_persistent_session_and_db(self):
+        # Regression: direct current_user(request) used FastAPI's unresolved
+        # Depends(get_db) as an actual DB, returning 500 for 30-day cookies.
+        for staging in (False, True):
+            with self.subTest(staging=staging):
+                bearer = "A" * 64
+                prefix = "se:staging:" if staging else "se:production:"
+                host = ("v3-2580992aed---life-assistant-api-2oo7qbkd5q-uc.a.run.app"
+                        if staging else "life-assistant-api-2oo7qbkd5q-uc.a.run.app")
+                audience = "staging" if staging else "production"
+                user = {"sub": "test-sub", "email": "tester@example.test", "name": "Tester"}
+                session = SimpleNamespace(
+                    user_sub=user["sub"], email=user["email"],
+                    display_name=user["name"], audience=audience,
+                    revoked_at=None, expires_at=datetime.now(timezone.utc) + timedelta(days=10),
+                )
+                db = SimpleNamespace(get=AsyncMock(return_value=session))
+                request = Request({"type": "http", "path": "/auth/callback", "headers": [
+                    (b"host", host.encode()),
+                    (b"cookie", ("__session=" + prefix + bearer).encode()),
+                ]})
+                with patch("app.api.auth.complete_authorization",
+                           new=AsyncMock(return_value=("gmail",))) as authorize:
+                    response = await auth.callback("google-code", "opaque-state", request, db)
+                db.get.assert_awaited_once_with(
+                    auth.LifeLoginSession, hashlib.sha256(bearer.encode("ascii")).hexdigest())
+                expected_redirect = (auth.STAGING_REDIRECT_URI
+                                     if staging else auth.settings.google_redirect_uri)
+                authorize.assert_awaited_once_with(
+                    db, "opaque-state", "google-code", user, expected_redirect)
+                expected_frontend = ("https://" + auth.STAGING_HOST
+                                     if staging else auth.settings.frontend_url.rstrip("/"))
+                self.assertEqual(
+                    response.headers["location"],
+                    expected_frontend + "/integrations?google=connected&services=gmail")
+                # Incremental consent must never replace or reset the Life login.
+                self.assertNotIn("set-cookie", response.headers)
+
+    async def test_pinned_staging_oauth_origin_is_exact_and_not_forwarded_host_spoof(self):
+        candidate = "v3-2580992aed---life-assistant-api-2oo7qbkd5q-uc.a.run.app"
+        request = Request({"type": "http", "path": "/api/v1/integrations/google/authorize",
+                           "headers": [(b"host", candidate.encode())]})
+        self.assertEqual(auth.oauth_redirect_for_request(request), auth.STAGING_REDIRECT_URI)
+        self.assertEqual(auth.frontend_for_request(request),
+                         "https://" + auth.STAGING_HOST)
+        for forwarded, proto in (("malicious.example", "https"),
+                                 ("gen-lang-client-0593591102.web.app", "https"),
+                                 ("", "http")):
+            with self.subTest(forwarded=forwarded, proto=proto):
+                request = Request({"type": "http", "headers": [
+                    (b"host", candidate.encode()),
+                    (b"x-forwarded-host", forwarded.encode()),
+                    (b"x-forwarded-proto", proto.encode()),
+                ]})
+                self.assertEqual(auth.oauth_redirect_for_request(request),
+                                 auth.settings.google_redirect_uri)
 
     async def test_me_auto_records_verified_staging_session_without_query_flag(self):
         stage = Request({"type": "http", "headers": [

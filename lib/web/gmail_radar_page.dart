@@ -88,6 +88,13 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
     }
   }
 
+  bool _safeGmailUrl(String url) {
+    final uri = Uri.tryParse(url);
+    return uri != null && uri.scheme == 'https' &&
+        uri.host == 'mail.google.com' &&
+        uri.userInfo.isEmpty && uri.port == 443;
+  }
+
   String _date(dynamic value) {
     final date = DateTime.tryParse(value?.toString() ?? '');
     if (date == null) return '未提供';
@@ -252,7 +259,7 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
                   icon: const Icon(Icons.open_in_new),
                   label: Text('開啟' + (targetLabels[linkedTarget] ?? '已儲存功能')),
                 ),
-              if (url.startsWith('https://mail.google.com/'))
+              if (_safeGmailUrl(url))
                 TextButton.icon(
                   key: ValueKey('gmail-radar-open-source-' + id),
                   onPressed: () => openExternalBrowser(url),
@@ -265,7 +272,7 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
                 icon: const Icon(Icons.more_horiz),
                 onSelected: (action) {
                   if (action == 'mailbox' &&
-                      fallback.startsWith('https://mail.google.com/')) {
+                      _safeGmailUrl(fallback)) {
                     openExternalBrowser(fallback);
                   } else if (action == 'complete' || action == 'restore') {
                     _updateItem(id, action == 'complete' ? 'completed' : 'pending');
@@ -274,7 +281,7 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
                   }
                 },
                 itemBuilder: (_) => [
-                  if (fallback.startsWith('https://mail.google.com/'))
+                  if (_safeGmailUrl(fallback))
                     const PopupMenuItem(
                       value: 'mailbox',
                       child: Text('Gmail 信箱備援'),

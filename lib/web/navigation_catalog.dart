@@ -30,7 +30,7 @@ const lifeNavigationItems = <String, LifeNavItem>{
   'shopping': LifeNavItem('shopping', '購物清單', '/more/shopping', Icons.shopping_cart_outlined, Icons.shopping_cart),
   'notes': LifeNavItem('notes', '筆記', '/more/notes', Icons.description_outlined, Icons.description),
   'projects': LifeNavItem('projects', '專案', '/projects', Icons.folder_outlined, Icons.folder),
-  'drive': LifeNavItem('drive', 'Google Drive 智能整理', '/more/drive', Icons.cloud_outlined, Icons.cloud),
+  'drive': LifeNavItem('drive', 'Google Drive 檔案總管', '/more/drive', Icons.cloud_outlined, Icons.cloud),
   'gmail_radar': LifeNavItem('gmail_radar', 'Gmail 智慧事項', '/more/gmail-radar', Icons.mark_email_unread_outlined, Icons.mark_email_read),
   'explore': LifeNavItem('explore', '活動探索', '/more/explore', Icons.explore_outlined, Icons.explore),
 };

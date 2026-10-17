@@ -24,6 +24,15 @@ Life 不複製 Gmail 全信箱，不做郵件用戶端。使用者在 Life「Gma
 - **功能連結限制**：目前連至待辦／筆記等功能入口，未保證直接開啟某一筆 item；各功能 ID deep link 需要獨立 UI/驗收，不造假。
 - 不加入 Scheduler／推播／自動 AI。工程、四 CI、Staging 與 Gmail/目標 DB 真實讀回分別驗證，統一在 doc/todo.md P1-G1 追蹤。
 
+## 2026-10-17｜手動雷達擴充：帳號風險、費用及待辦通知
+
+- 保留原本 5 類（繳費、取貨、預約、航班、期限）；新增 4 個明確類別：`security`（帳號異常登入、非本人交易、密碼／雙重驗證變更及疑似盜刷）、`account`（付款失敗、扣款／續訂費用警示、帳號停權風險、儲存空間將用完）、`refund`（退款失敗／遭拒／延遲、訂單取消／支付異常／需要回覆）、`administrative`（政府補件、學校待回覆／同意書、工作簽核／文件期限）。
+- **廣告先排除**：標題有促銷、優惠、折扣碼、電子報等明確商業文案即不列提醒。主旨能明確表示異常／應處理事件時優先採信主旨，不因頁尾「取消訂閱」誤排除；主旨模糊、只有摘要有警告詞時，若摘要出現促銷內容則拒絕升級提醒。
+- **一般正常通知不升級成風險**：純驗證碼、普通新登入成功、退款成功、訂單成立、政府新聞、學校公告等不因此建立待辦。不能宣稱已完整防漏：語言、寫法、轉寄或模糊措辭均可能漏檢／誤判。
+- 這是 **metadata subject/snippet 的規則初篩**，不是 Gmail 寄件者身份／SPF、DKIM、DMARC 真偽認證，更不代表銀行扣款或安全事件已被 Life 證實。UI 明確提醒使用者透過官方 App 或自行輸入網址查證，不引導點擊信內付款／登入連結。
+- **仍只在按下「立即快掃」或「三天補檢」時辨識**，無 Gemini、無排程、無推播。所有已成功掃描的郵件 ID 會去重；**新版規則不會自動重新檢查此前已掃描並略過的郵件**。新郵件／首次掃到的尚未查郵件適用新版；不要冒充歷史已全數回填。
+- 不變更 Gmail OAuth scope、不存正文／附件、不另建通知功能與 AI 模型成本。規則誤判回歸測試、四項 CI、固定 Staging、真人 Gmail 帳號 readback 分層驗收，唯一工項仍為 `doc/todo.md` P1-G1。
+
 ## V1 技術與授權
 1. Flutter Web/PWA → FastAPI `POST /integrations/google/gmail/radar/quick-scan` → Google Gmail API `gmail.readonly` → PostgreSQL。API **不接受其他人的 user_id / email**，使用 `current_user.sub` 授權。
 2. 首版限定近期窗口（預設最近 7 天）和封數上限（最新 20 封（每輪三天補檢最多 40 封未查郵件）），使用 bounded Gmail `messages.list` 與 `messages.get(format=metadata)`。先用 deterministic 規則辨識明確通知與高價值候選；**未取得本人獨立 AI 同意時，不讀全文傳 Gemini**。未使用 Gemini 的狀態必須如實標「規則辨識」，不能標 AI 已分析。

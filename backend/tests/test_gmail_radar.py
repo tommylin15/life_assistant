@@ -24,6 +24,70 @@ class GmailRadarRulesTests(unittest.TestCase):
         self.assertIsNone(classify_message("我們的電子報", "新產品發表"))
         self.assertIsNone(classify_message("", "繳款通知"))
 
+    def test_new_actionable_account_security_alerts(self):
+        examples = [
+            ("偵測到異常登入：您的帳號", "", "security"),
+            ("非本人交易警報：疑似盜刷", "", "security"),
+            ("Security alert: unusual sign-in", "", "security"),
+            ("您的帳號通知", "偵測到可疑活動，請至官方服務確認", "security"),
+            ("Two-factor authentication disabled", "", "security"),
+            ("密碼已變更", "", "security"),
+            ("本期帳號通知", "Your payment was declined", "account"),
+            ("訂閱即將續費：下月收取費用", "", "account"),
+            ("帳號即將停用：付款失敗", "", "account"),
+            ("Storage almost full", "", "account"),
+            ("網路服務續訂費用調整", "", "account"),
+            ("退款申請遭拒", "", "refund"),
+            ("訂單付款失敗，請重新確認", "", "refund"),
+            ("退款進度", "退款需要補件，請登入官方平台", "refund"),
+            ("Your refund was denied", "", "refund"),
+            ("政府案件待補件通知", "", "administrative"),
+            ("學校請回覆：戶外教學同意書", "", "administrative"),
+            ("公司待簽核：採購單", "", "administrative"),
+            ("學校最新通知", "請繳交同意書", "administrative"),
+            ("School action required", "", "administrative"),
+        ]
+        for subject, snippet, expected in examples:
+            with self.subTest(subject=subject, snippet=snippet):
+                self.assertEqual(classify_message(subject, snippet), expected)
+
+    def test_ads_and_normal_account_messages_do_not_create_false_alerts(self):
+        harmless = [
+            ("限時優惠！升級帳號保障交易安全", "異常登入防護限時特惠"),
+            ("會員優惠：付款提醒的實用攻略", "付款失敗時該怎麼辦"),
+            ("電子報：安全警報與防詐技巧", "偵測到異常登入？立即買課"),
+            ("優惠券：訂閱費用減半", "訂閱即將續費，領折扣碼"),
+            ("Flash sale: suspicious sign-in protection", "Save 50%"),
+            ("Newsletter: government action required", "read more"),
+            ("特賣：帳單繳費通知優惠", "請參閱活動"),
+            ("本週優惠", "您的退款失敗？教你領優惠碼"),
+            ("登入驗證碼：123456", "這是您的驗證碼"),
+            ("新的登入通知", "您剛剛已登入"),
+            ("訂單成立通知", "訂單已付款成功"),
+            ("退款成功通知", "退費已完成"),
+            ("學校活動公告", "活動照片與課程回顧"),
+            ("政府最新政策公告", "本期電子報內容"),
+            ("帳號安全小提醒", "定期更新密碼以保護帳號"),
+            ("訂閱成功", "歡迎使用我們的服務"),
+        ]
+        for subject, snippet in harmless:
+            with self.subTest(subject=subject, snippet=snippet):
+                self.assertIsNone(classify_message(subject, snippet))
+
+    def test_fraud_or_fee_alert_is_not_downgraded_to_generic_notice(self):
+        self.assertEqual(
+            classify_message("付款失敗：請更新您的帳號付款方式", ""),
+            "account",
+        )
+        self.assertEqual(
+            classify_message("信用卡異常交易：非本人交易", ""),
+            "security",
+        )
+        self.assertEqual(
+            classify_message("訂單取消：退款失敗", ""),
+            "refund",
+        )
+
     def test_gmail_link_has_mailbox_fallback(self):
         links = gmail_urls("threadId123", "somebody@example.com")
         self.assertIn("threadId123", links["gmail_url"])

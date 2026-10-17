@@ -151,6 +151,14 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
     return DateTime(wall.year, wall.month, wall.day, wall.hour, wall.minute);
   }
 
+  String _displayTpeDateTime(dynamic raw) {
+    final wall = _tpeWallTime(raw);
+    if (wall == null) return '點選萬年曆及時間';
+    return _ymd(wall) + ' ' +
+        wall.hour.toString().padLeft(2, '0') + ':' +
+        wall.minute.toString().padLeft(2, '0');
+  }
+
   DateTime? _dateFromHint(Map<String, dynamic> candidate) {
     final hint = candidate['date_hint'];
     if (hint is! Map) return null;
@@ -363,12 +371,12 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
       ] else ...[
         _dateButton(keyValue: 'capture-calendar-start-time-$index',
           label: '開始日期與時間',
-          display: fields['start']?.toString() ?? '點選萬年曆及時間',
+          display: _displayTpeDateTime(fields['start']),
           onPressed: !editable || _busy ? null :
               () => _chooseCalendarTime(candidate, end: false)),
         _dateButton(keyValue: 'capture-calendar-end-time-$index',
           label: '結束日期與時間',
-          display: fields['end']?.toString() ?? '點選萬年曆及時間',
+          display: _displayTpeDateTime(fields['end']),
           onPressed: !editable || _busy ? null :
               () => _chooseCalendarTime(candidate, end: true)),
         if (fields['start'] != null && fields['end'] != null &&
@@ -539,11 +547,7 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
               label: '截止日期',
               display: fields['due_at'] == null
                   ? '未設定（點選萬年曆）'
-                  : (_tpeWallTime(fields['due_at']) == null
-                      ? '請重新選擇'
-                      : _ymd(_tpeWallTime(fields['due_at'])!) + ' ' +
-                        _tpeWallTime(fields['due_at'])!.hour.toString().padLeft(2, '0') +
-                        ':' + _tpeWallTime(fields['due_at'])!.minute.toString().padLeft(2, '0')),
+                  : _displayTpeDateTime(fields['due_at']),
               onPressed: !editable || _busy ? null : () => _chooseTaskDate(candidate)),
             if (fields['due_at'] != null) ...[
               const Text('未指定時間時，日期型待辦預設當天 23:59 截止（台灣時間）；不自動提醒。',

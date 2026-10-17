@@ -219,9 +219,14 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
         const SizedBox(height: 10),
         if (_loading) const Center(child: Padding(
           padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
-        else if (_items.isEmpty) const Card(child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('目前沒有符合條件的 Gmail 事項。第一次使用請按「立即快掃」。',
+        else if (_items.isEmpty) Card(child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(_status['last_finished_at'] == null
+              ? '尚未掃描 Gmail。請先按「立即快掃」。'
+              : '目前沒有符合規則的待處理事項。這不代表 Gmail 沒有郵件；'
+                'Life 只顯示命中的警告或待辦。'
+                '如有舊信曾被略過，請按「重新檢查近三天」；'
+                '還有未查郵件則可按「三天補檢」。',
               textAlign: TextAlign.center)))
         else for (final item in _items) _itemCard(item),
         const SizedBox(height: 12),

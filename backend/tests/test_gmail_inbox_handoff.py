@@ -61,7 +61,7 @@ class GmailLifeLinkTests(unittest.IsolatedAsyncioTestCase):
     async def test_only_verified_receipt_links_and_completes(self):
         receipt = SimpleNamespace(
             entity_type="task", entity_id="task-42", status="success")
-        self.db.scalar = AsyncMock(side_effect=[self.item, receipt])
+        self.db.scalar = AsyncMock(side_effect=[self.item, receipt, self.item])
         data = await confirm_gmail_life_inbox_link(
             item_id=self.item.id, user={"sub": "account-a"}, db=self.db)
         self.assertEqual(self.item.status, "completed")

@@ -156,7 +156,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.textSaves, hasLength(1));
     expect(api.textSaves.first['path'],
-        '/drive/manager/documents/doc-1/text');
+        '/drive/manager/documents/doc-file-one/text');
     expect(api.textSaves.first['text'], 'Edited note');
     expect(api.textSaves.first['expected_version'], '12');
     expect(api.textSaves.first['expected_sha256'], isNotEmpty);

@@ -295,6 +295,65 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
     }
   }
 
+  Future<void> _rename(Map<String, dynamic> file) async {
+    if (_working || _selecting || file['can_edit'] != true) return;
+    final sourceId = file['id']?.toString() ?? '';
+    final previousName = file['name']?.toString() ?? '';
+    final version = file['modified_at']?.toString() ?? '';
+    if (sourceId.isEmpty || previousName.isEmpty || version.isEmpty) {
+      setState(() => _error = '無法取得修改版本；請先重新整理。');
+      return;
+    }
+    var nextName = previousName;
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重新命名 Google Drive 原檔'),
+        content: TextFormField(
+          key: const ValueKey('drive-explorer-rename-input'),
+          initialValue: previousName,
+          autofocus: true,
+          maxLength: 500,
+          onChanged: (v) => nextName = v.trim(),
+          decoration: const InputDecoration(labelText: '新名稱'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, nextName),
+            child: const Text('確認改名')),
+        ],
+      ),
+    );
+    if (!mounted || chosen == null || chosen.isEmpty ||
+        chosen == previousName) return;
+    setState(() => _working = true);
+    try {
+      final docs = await ref.read(drivePickerApiProvider)
+          .registerDocuments([sourceId]);
+      if (docs.length != 1) throw StateError('Drive registration mismatch');
+      final docId = docs.first['id']?.toString() ?? '';
+      if (docId.isEmpty) throw StateError('Missing registered ID');
+      final result = await ref.read(platformApiProvider).patch(
+        '/drive/manager/documents/' + Uri.encodeComponent(docId) + '/rename',
+        {'name': chosen, 'expected_modified_at': version},
+      );
+      if (result['name'] != chosen) {
+        throw StateError('Drive rename readback is incomplete');
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google Drive 原檔已重新命名並確認。')));
+      await _read();
+    } catch (_) {
+      if (mounted) setState(() => _error =
+          '改名未確認成功，或 Google Drive 原檔已變更；請重新整理來源後再操作。');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
   Future<void> _move(Map<String, dynamic> file) async {
     if (_working || file['is_folder'] == true) return;
     final sourceId = file['id']?.toString() ?? '';
@@ -450,25 +509,31 @@ class _DriveExplorerPageState extends ConsumerState<DriveExplorerPage> {
                   maxLines: 1),
                 onTap: file['is_folder'] == true
                   ? () => _enterFolder(file) : () => _open(file),
-                trailing: file['is_folder'] == true
-                  ? const Icon(Icons.chevron_right)
-                  : PopupMenuButton<String>(
-                    onSelected: (choice) {
-                      if (choice == 'open') _open(file);
-                      if (choice == 'preview') _previewText(file);
-                      if (choice == 'edit') _previewText(file, edit: true);
-                      if (choice == 'move') _move(file);
-                    },
-                    itemBuilder: (ctx) => [
+                trailing: PopupMenuButton<String>(
+                  key: ValueKey('drive-file-menu-' + (file['id']?.toString() ?? '')),
+                  onSelected: (choice) {
+                    if (choice == 'open') _open(file);
+                    if (choice == 'enter') _enterFolder(file);
+                    if (choice == 'preview') _previewText(file);
+                    if (choice == 'edit') _previewText(file, edit: true);
+                    if (choice == 'rename') _rename(file);
+                    if (choice == 'move') _move(file);
+                  },
+                  itemBuilder: (ctx) => [
+                    if (file['is_folder'] == true)
+                      const PopupMenuItem(value: 'enter', child: Text('進入資料夾'))
+                    else
                       const PopupMenuItem(value: 'open', child: Text('原檔開啟／預覽')),
-                      if (_canPreviewText(file))
-                        const PopupMenuItem(value: 'preview', child: Text('Life 內文字預覽')),
-                      if (_canPreviewText(file) && file['can_edit'] == true)
-                        const PopupMenuItem(value: 'edit', child: Text('在 Life 內編輯文字')),
-                      if (file['can_edit'] == true)
-                        const PopupMenuItem(value: 'move', child: Text('移動至資料夾')),
-                    ],
-                  ),
+                    if (_canPreviewText(file))
+                      const PopupMenuItem(value: 'preview', child: Text('Life 內文字預覽')),
+                    if (_canPreviewText(file) && file['can_edit'] == true)
+                      const PopupMenuItem(value: 'edit', child: Text('在 Life 內編輯文字')),
+                    if (file['can_edit'] == true)
+                      const PopupMenuItem(value: 'rename', child: Text('重新命名')),
+                    if (file['can_edit'] == true && file['is_folder'] != true)
+                      const PopupMenuItem(value: 'move', child: Text('移動至資料夾')),
+                  ],
+                ),
               ),
             ),
           if (!_loading) Align(

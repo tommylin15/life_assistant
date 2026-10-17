@@ -29,7 +29,103 @@ THREE_DAY_QUERY = "newer_than:3d -in:spam -in:trash"
 QUICK_QUERY = "newer_than:7d -in:spam -in:trash"
 
 
-# Precision-first rules: an ambiguous promotion must not become a pending item.
+# Conservative, deterministic metadata-only classification. Categories are
+# user actions to REVIEW, never a judgment that the sender or the alert is real.
+#
+# Priority: promotional subject suppression -> security -> account/fees ->
+# refund/order exceptions -> administrative follow-ups -> original five classes.
+# Do not classify generic OTPs, order confirmations, newsletters or happy-path
+# refund status as risk requiring a new Life task.
+_PROMOTION = re.compile(
+    r"(?i)(unsubscribe|取消訂閱|電子報|廣告\\s*EDM|促銷|優惠券|優惠碼|折扣碼|"
+    r"限時優惠|限時特惠|限時折扣|特賣|買一送一|會員優惠|好康|"
+    r"black friday|newsletter|promo code|coupon code|special offer|"
+    r"flash sale|limited.time offer|discount code|save \\d+%|"
+    r"upgrade offer)"
+)
+
+# Titles are strong evidence; snippets require narrower, explicit exception
+# phrases because ordinary emails contain legal footers and ad copy.
+_SECURITY_TITLE = (
+    "異常登入", "可疑登入", "非本人登入", "不明裝置登入", "陌生裝置登入",
+    "新裝置登入警告", "帳戶遭入侵", "帳號遭入侵", "帳戶被盜", "帳號被盜",
+    "帳戶遭鎖定", "帳號遭鎖定", "密碼遭變更", "密碼已變更",
+    "密碼重設要求", "非本人操作", "疑似盜刷", "可疑交易", "異常交易",
+    "非本人交易", "未授權交易", "安全性警告", "安全警報",
+    "雙重驗證已停用", "兩步驟驗證已停用", "復原信箱已變更",
+    "unusual sign-in", "suspicious sign-in", "unrecognized sign-in",
+    "unknown device sign-in", "new device sign-in", "account compromised",
+    "account locked", "account breached", "password changed",
+    "password reset requested", "security alert", "fraud alert",
+    "suspicious transaction", "unauthorized transaction",
+    "unauthorized access", "two-factor authentication disabled",
+)
+_SECURITY_SNIPPET = (
+    "偵測到異常登入", "發現可疑登入", "發現未授權交易", "非本人登入",
+    "偵測到可疑活動", "您的帳號可能遭入侵", "疑似盜刷",
+    "unusual sign-in detected", "suspicious sign-in detected",
+    "unauthorized access detected", "unauthorized transaction detected",
+    "fraudulent charge detected",
+)
+_ACCOUNT_TITLE = (
+    "付款失敗", "扣款失敗", "自動扣款失敗", "付款方式失效",
+    "請更新付款方式", "訂閱即將續費", "即將自動續訂", "訂閱到期提醒",
+    "會員資格即將到期", "帳戶即將停用", "帳號即將停用",
+    "帳戶已停用", "帳號已停用", "服務即將停用", "服務將被暫停",
+    "訂閱費用調整", "訂閱價格調整", "續訂費用", "扣款通知",
+    "儲存空間即將用盡", "帳戶儲存空間不足",
+    "payment failed", "payment declined", "payment method declined",
+    "update your payment method", "subscription renewal notice",
+    "upcoming subscription renewal", "subscription expires",
+    "account suspension", "account suspended", "service suspension",
+    "storage almost full", "subscription price increase",
+    "billing issue", "renewal charge",
+)
+_ACCOUNT_SNIPPET = (
+    "您的付款失敗", "扣款失敗", "付款方式已失效",
+    "帳戶即將停用", "訂閱將自動續費", "續訂費用",
+    "your payment failed", "your payment was declined",
+    "update your payment method", "your account will be suspended",
+    "your subscription will renew",
+)
+_REFUND_TITLE = (
+    "退款失敗", "退費失敗", "退款遭拒", "退費遭拒", "退款延遲",
+    "退款尚未入帳", "退款申請待補件", "退款需要補件",
+    "退款期限", "退款申請截止", "退貨逾期", "退貨申請待處理",
+    "訂單取消", "訂單異常", "訂單未成立", "訂單付款失敗",
+    "訂單需要處理", "賣家取消訂單", "商品未收到", "爭議款",
+    "refund failed", "refund denied", "refund rejected", "refund delayed",
+    "refund not received", "refund requires action",
+    "return request requires action", "order cancelled", "order canceled",
+    "order failed", "order payment failed", "order issue",
+    "order requires action",
+)
+_REFUND_SNIPPET = (
+    "退款申請遭拒", "退款失敗", "退款需要補件", "訂單已取消",
+    "訂單付款失敗", "賣家已取消訂單",
+    "your refund was denied", "your refund failed",
+    "your order was canceled", "your order was cancelled",
+    "payment for your order failed",
+)
+_ADMIN_TITLE = (
+    "公文請回覆", "公文待回覆", "政府補件", "政府案件待補件",
+    "戶政補件", "稅務補件", "申請案請補件", "學校請回覆",
+    "學校補件", "學籍資料補件", "同意書繳交期限",
+    "家長同意書待繳", "選課截止", "報到期限",
+    "公司待簽核", "工作待回覆", "主管請回覆",
+    "請於期限內回覆", "審核待補件", "文件繳交期限",
+    "government action required", "government document required",
+    "official response required", "school action required",
+    "school consent form due", "approval requires your action",
+    "response deadline", "document submission deadline",
+)
+_ADMIN_SNIPPET = (
+    "請於期限內回覆", "請於期限內補件", "請在截止日前繳交",
+    "需您簽核", "請家長回覆", "請繳交同意書",
+    "government action required", "school action required",
+    "please submit the required documents",
+    "your response is required by",
+)
 _RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("billing", ("繳費期限", "繳費通知", "繳款通知", "繳款截止", "付款期限", "付款提醒",
                  "帳單到期", "payment due", "bill due", "statement due")),
@@ -41,23 +137,38 @@ _RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("deadline", ("報名截止", "補件通知", "請於期限內", "申請期限", "registration deadline",
                   "action required", "response required")),
 )
-_PROMOTION = re.compile(r"(?i)(unsubscribe|取消訂閱|特賣|限時優惠|促銷|折扣碼|廣告 EDM)")
+
+
+def _matches(text_value: str, phrases: tuple[str, ...]) -> bool:
+    return any(phrase in text_value for phrase in phrases)
 
 
 def classify_message(subject: str, snippet: str) -> str | None:
-    """Only surface explicit, actionable intent, not every incoming email."""
-    title = " ".join(subject.lower().split())
-    preview = " ".join(snippet.lower().split())[:500]
-    if not title:
+    """Classify a high-confidence actionable EMAIL, not a verified security fact.
+
+    Restricts to metadata (subject and bounded snippet). Deliberately
+    undershoots recall when a benign ad and important message are ambiguous.
+    """
+    title = " ".join(subject.casefold().split())
+    preview = " ".join(snippet.casefold().split())[:500]
+    if not title or _PROMOTION.search(title):
         return None
-    for category, phrases in _RULES:
-        if any(phrase.lower() in title for phrase in phrases):
+
+    for category, title_phrases, snippet_phrases in (
+        ("security", _SECURITY_TITLE, _SECURITY_SNIPPET),
+        ("account", _ACCOUNT_TITLE, _ACCOUNT_SNIPPET),
+        ("refund", _REFUND_TITLE, _REFUND_SNIPPET),
+        ("administrative", _ADMIN_TITLE, _ADMIN_SNIPPET),
+    ):
+        if _matches(title, title_phrases) or _matches(preview, snippet_phrases):
             return category
-    if _PROMOTION.search(title):
-        return None
-    # Snippets are weaker evidence; require a precise actionable phrase.
+
     for category, phrases in _RULES:
-        if any(phrase.lower() in preview for phrase in phrases[:3]):
+        if _matches(title, phrases):
+            return category
+    for category, phrases in _RULES:
+        # Snippets are weaker evidence; require the narrow, existing examples.
+        if _matches(preview, phrases[:3]):
             return category
     return None
 

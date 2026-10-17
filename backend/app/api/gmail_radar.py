@@ -128,6 +128,28 @@ _ADMIN_SNIPPET = (
     "please submit the required documents",
     "your response is required by",
 )
+# Third-party authorization is a *review item*, not a confirmed attack.
+# Require explicit new app access or permission-change phrasing, not a generic
+# one-time password, successful Google sign-in, or ordinary OAuth confirmation.
+_ACCESS_REVIEW = re.compile(
+    r"(?i)(第三方.{0,18}(?:應用|程式|app).{0,24}(?:權限|存取|授權)|"
+    r"(?:應用程式|第三方程式|第三方應用).{0,26}(?:已取得|獲得|已授予|已變更).{0,20}(?:存取權|權限)|"
+    r"(?:已授予|已允許).{0,36}(?:應用程式|第三方).{0,20}(?:存取|授權)|"
+    r"(?:授權範圍|應用程式權限|帳戶存取權).{0,14}(?:變更|擴大|新增)|"
+    r"new app (?:has|was granted) access|"
+    r"(?:an? )?app has access to your (?:google|microsoft|apple) account|"
+    r"granted access to your (?:google|microsoft|apple) account|"
+    r"third.party (?:app )?access (?:granted|changed)|"
+    r"(?:app|application) permissions? (?:granted|changed|expanded))"
+)
+
+_ACCESS_SNIPPET = re.compile(
+    r"(?i)(第三方應用程式.{0,26}(?:已取得|取得了|獲得|存取權限|存取權)|"
+    r"(?:新|其他)應用程式.{0,26}(?:存取您的|存取你的|取得).{0,15}(?:帳號|帳戶|資料)|"
+    r"new app has access to your (?:google|microsoft|apple) account|"
+    r"you granted.{0,55}access to your (?:google|microsoft|apple) account)"
+)
+
 _RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("billing", ("繳費期限", "繳費通知", "繳款通知", "繳款截止", "付款期限", "付款提醒",
                  "帳單到期", "payment due", "bill due", "statement due")),
@@ -167,6 +189,8 @@ def classify_message(subject: str, snippet: str) -> str | None:
     for category, title_phrases, _ in additional:
         if _matches(title, title_phrases):
             return category
+    if _ACCESS_REVIEW.search(title):
+        return "authorization"
     for category, phrases in _RULES:
         if _matches(title, phrases):
             return category
@@ -178,6 +202,8 @@ def classify_message(subject: str, snippet: str) -> str | None:
     for category, _, snippet_phrases in additional:
         if _matches(preview, snippet_phrases):
             return category
+    if _ACCESS_SNIPPET.search(preview):
+        return "authorization"
     for category, phrases in _RULES:
         # Snippets are weaker evidence; require the narrow, existing examples.
         if _matches(preview, phrases[:3]):
@@ -389,7 +415,7 @@ async def _list_three_day_ids(db: AsyncSession, sub: str, scope: str):
     return found, complete
 
 
-async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "backfill"]):
+async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "backfill", "recheck"]):
     sub = user["sub"]
     locked = (await db.execute(
         text("SELECT pg_try_advisory_xact_lock(5623, hashtext(:sub))"),
@@ -435,11 +461,15 @@ async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "bac
         # thus progresses through three days rather than wasting requests.
         selected = [message_id for message_id in three_day_ids
                     if message_id not in seen_ids][:BACKFILL_BATCH]
+    elif kind == "recheck":
+        # Explicit and bounded: revisit up to 40 recent IDs, including ones
+        # excluded by old classifier rules, WITHOUT deleting existing receipts.
+        selected = three_day_ids[:BACKFILL_BATCH]
     checked, added, skipped, failed = 0, 0, 0, 0
     newly_seen: set[str] = set()
     for message_id in selected:
         checked += 1
-        if message_id in seen_ids or message_id in newly_seen:
+        if (kind != "recheck" and message_id in seen_ids) or message_id in newly_seen:
             skipped += 1
             continue
         existing = await db.scalar(select(GmailRadarItem.id).where(
@@ -448,9 +478,10 @@ async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "bac
         ))
         if existing:
             skipped += 1
-            db.add(GmailRadarSeen(user_sub=sub, gmail_message_id=message_id,
-                                 checked_at=now))
-            newly_seen.add(message_id)
+            if message_id not in seen_ids:
+                db.add(GmailRadarSeen(user_sub=sub, gmail_message_id=message_id,
+                                     checked_at=now))
+                newly_seen.add(message_id)
             continue
         try:
             response = await _request_google(
@@ -487,9 +518,10 @@ async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "bac
                 added += 1
             else:
                 skipped += 1
-            db.add(GmailRadarSeen(user_sub=sub, gmail_message_id=message_id,
-                                 checked_at=now))
-            newly_seen.add(message_id)
+            if message_id not in seen_ids:
+                db.add(GmailRadarSeen(user_sub=sub, gmail_message_id=message_id,
+                                     checked_at=now))
+                newly_seen.add(message_id)
         except HTTPException as exc:
             if exc.status_code in (401, 403, 409):
                 raise
@@ -536,3 +568,15 @@ async def manual_three_day_backfill(
 ):
     """Explicit per-user button only; bounded 40 unseen IDs per request."""
     return await _run_scan(user, db, kind="backfill")
+
+
+@router.post("/recheck-three-days")
+async def manual_three_day_recheck(
+    user: dict = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-evaluate 40 most recent three-day messages on explicit request only.
+
+    Does not delete prior seen IDs or change completed/ignored Life receipts.
+    """
+    return await _run_scan(user, db, kind="recheck")

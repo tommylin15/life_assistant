@@ -17,6 +17,7 @@ class _FakeRadarApi extends PlatformApi {
       return {
         'gmail_authorized': authorized,
         'status': scans == 0 ? 'never_scanned' : 'succeeded',
+        'scan_kind': rechecks > 0 ? 'recheck' : 'quick',
         'last_finished_at': scans == 0 ? null : '2026-10-16T08:00:00Z',
         'checked': scans == 0 ? 0 : 1, 'added': scans == 0 ? 0 : 1,
       };

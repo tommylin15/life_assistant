@@ -192,6 +192,8 @@ def _inbox_date_hint(value: str, now: str) -> dict | None:
         year = int(match.group("year"))
         if match.group("roc"):
             return year + 1911 if 1 <= year <= 300 else None
+        if 1 <= year <= 200 and "年" in match.group():
+            return year + 1911
         return year if 1900 <= year <= 2100 else None
 
     full = list(_DATE_FULL.finditer(value))
@@ -293,7 +295,31 @@ async def interpret(body: InterpretInput, response: Response,
         if raw.startswith(fence):
             raw = re.sub(r"^" + re.escape(fence) + r"(?:json)?\s*", "", raw)
             raw = re.sub(r"\s*" + re.escape(fence) + r"$", "", raw)
-        items = ModelOutput.model_validate(json.loads(raw))
+        decoded = json.loads(raw)
+        # An AI may turn "11/5" or "2026/11" into an unsupported exact
+        # timestamp. Remove such invented precision BEFORE schema validation
+        # so the proper Task/Calendar candidate can still reach the picker.
+        if isinstance(decoded, dict) and isinstance(decoded.get("candidates"), list):
+            for proposed in decoded["candidates"]:
+                if not isinstance(proposed, dict):
+                    continue
+                target = proposed.get("target")
+                fields = proposed.get("fields")
+                if not isinstance(fields, dict):
+                    continue
+                if hint and hint["precision"] in ("year_month", "month_day", "ambiguous", "invalid"):
+                    keys = ("due_at",) if target == "task" else (
+                        "start", "end", "start_date", "end_date") if target == "calendar" else ()
+                    for key in keys:
+                        fields.pop(key, None)
+                    if keys:
+                        proposed["select_default"] = False
+                        warnings = proposed.get("ambiguities")
+                        if not isinstance(warnings, list):
+                            warnings = []
+                            proposed["ambiguities"] = warnings
+                        warnings.append("日期不完整或有歧義，請使用萬年曆確認")
+        items = ModelOutput.model_validate(decoded)
         return {**_proposals(items.candidates, "gemini"), "date_hint": hint}
     except (GatewayTextError, ValidationError, ValueError, TypeError, KeyError):
         return {**_fallback(value), "date_hint": hint}

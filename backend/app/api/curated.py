@@ -189,6 +189,28 @@ def _registration_open_date():
 def _taipei_deadline_date():
     return cast(func.timezone("Asia/Taipei", CuratedActivity.registration_deadline), Date)
 
+def _active_activity_predicate(today: date, entry: str):
+    """Hide expired events from all views, including saved and grouped offers.
+
+    A missing end date does not prove an older event continues today. Fully
+    undated entries stay visible until verified. No row is deleted.
+    """
+    start, end = CuratedActivity.starts_on, CuratedActivity.ends_on
+    current_date = or_(
+        end >= today,
+        and_(end.is_(None), or_(start.is_(None), start >= today)),
+    )
+    current_status = CuratedActivity.registration_status.notin_(
+        ["cancelled", "canceled"]
+    )
+    if entry == "opportunities":
+        deadline = _taipei_deadline_date()
+        return and_(current_date, current_status,
+                    CuratedActivity.registration_status.notin_(["closed", "full"]),
+                    or_(deadline.is_(None), deadline >= today))
+    return and_(current_date, current_status)
+
+
 def _activity_filters(statement, *, entry, quick, keyword, region, city, district,
                       category, fee_kind, starts_from, today, saved_only, user_sub):
     start = CuratedActivity.starts_on
@@ -198,21 +220,8 @@ def _activity_filters(statement, *, entry, quick, keyword, region, city, distric
     if entry == "opportunities":
         statement = statement.where(or_(CuratedActivity.registration_required.is_(True),
                                          CuratedActivity.limited_offer.is_(True)))
-    if not saved_only:
-        # Cancelled activities are excluded from both ordinary entries, but
-        # personal bookmarks remain retrievable with an explicit status.
-        statement = statement.where(CuratedActivity.registration_status.notin_(
-            ["cancelled", "canceled"]
-        ))
-        if entry == "opportunities":
-            statement = statement.where(CuratedActivity.registration_status.notin_(
-                ["closed", "full"]
-            ))
-            # A known past registration deadline cannot be presented as
-            # something the user can still act on.
-            statement = statement.where(or_(deadline.is_(None), deadline >= today))
-        # Ends_on is authoritative only when present. Unknown end is not expired.
-        statement = statement.where(or_(end.is_(None), end >= today))
+    # A bookmark does not reintroduce expired or cancelled content.
+    statement = statement.where(_active_activity_predicate(today, entry))
     if keyword:
         normalized = re.sub(r"\s+", " ", keyword).strip()
         if normalized:
@@ -386,9 +395,11 @@ async def list_curated(
     rows = []
     if keys:
         rows = (await db.execute(
-            select(CuratedActivity).where(_group_key().in_(keys),
-                CuratedActivity.created_at <= snapshot)
-            .order_by(CuratedActivity.created_at, CuratedActivity.identity_key)
+            select(CuratedActivity).where(
+                _group_key().in_(keys),
+                CuratedActivity.created_at <= snapshot,
+                _active_activity_predicate(today, entry),
+            ).order_by(CuratedActivity.created_at, CuratedActivity.identity_key)
         )).scalars().all()
     lookup = {key: idx for idx, key in enumerate(keys)}
     rows.sort(key=lambda item: (lookup.get(

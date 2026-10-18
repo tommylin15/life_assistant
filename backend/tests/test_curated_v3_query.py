@@ -84,12 +84,24 @@ class CuratedV3UnitTest(unittest.TestCase):
         # fields even when the saved-only filters correctly omit them).
         ordinary = str(ordinary_query.whereclause.compile(dialect=postgresql.dialect()))
         saved = str(saved_query.whereclause.compile(dialect=postgresql.dialect()))
-        # Normal opportunities respect a known deadline and cancellation;
-        # saved history remains accessible after its action window expires.
-        self.assertIn("registration_deadline", ordinary)
-        self.assertIn("registration_status", ordinary)
-        self.assertNotIn("registration_deadline", saved)
-        self.assertNotIn("registration_status", saved)
+        # Bookmarks are not archives: saved and normal feeds use the same
+        # event-end and registration-deadline predicates.
+        for sql in (ordinary, saved):
+            self.assertIn("registration_deadline", sql)
+            self.assertIn("registration_status", sql)
+            self.assertIn("ends_on", sql)
+            self.assertIn("starts_on", sql)
+
+    def test_saved_explore_filters_expired_single_day_events(self):
+        sql = str(_activity_filters(
+            select(CuratedActivity), entry="explore", quick="latest",
+            keyword=None, region=None, city=None, district=None,
+            category=None, fee_kind=None, starts_from=None,
+            today=date(2026, 10, 18), saved_only=True, user_sub="owner",
+        ).whereclause.compile(dialect=postgresql.dialect()))
+        self.assertIn("ends_on", sql)
+        self.assertIn("starts_on", sql)
+        self.assertIn("registration_status", sql)
 
     def test_calendar_source_url_and_transparent_exclusive_end(self):
         item = SimpleNamespace(

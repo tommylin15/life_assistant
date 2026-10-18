@@ -88,8 +88,28 @@ class PreMigrationFeatureGateTests(unittest.IsolatedAsyncioTestCase):
     async def test_admin_enabled_activity_entries_allow_normal_account(self):
         db = AsyncMock(spec=AsyncSession)
         db.get.return_value = type("Policy", (), {"status": "enabled", "audience": "all"})()
-        for key in ("events", "opportunities", "explore"):
+        for key in ("opportunities", "explore", "gmail_radar"):
             await feature_gate(key)(user={"sub": "ordinary", "email": "person@example.org"}, db=db)
+        # Legacy events and Drive stay private regardless of rollout UI.
+        for key in ("events", "drive"):
+            with self.assertRaises(HTTPException):
+                await feature_gate(key)(user={"sub": "ordinary", "email": "person@example.org"}, db=db)
+
+    async def test_gmail_radar_public_policy_matches_backend_gate(self):
+        db = AsyncMock(spec=AsyncSession)
+        db.execute.return_value.scalars.return_value.all.return_value = []
+        user = {"sub": "ordinary", "email": "person@example.org"}
+        catalog = {x["key"]: x for x in await effective_features(db, user)}
+        self.assertTrue(catalog["gmail_radar"]["available"])
+        self.assertFalse(catalog["drive"]["available"])
+        self.assertFalse(catalog["events"]["available"])
+        db.get.return_value = None
+        await feature_gate("gmail_radar")(user=user, db=db)
+        db.get.return_value = type("Policy", (), {
+            "status": "hidden", "audience": "all",
+        })()
+        with self.assertRaises(HTTPException):
+            await feature_gate("gmail_radar")(user=user, db=db)
 
     def test_normal_account_cannot_change_ai_management(self):
         from app.api.ui_policies import owner_only

@@ -46,10 +46,29 @@ DEFAULT_HOME = ["tasks", "calendar", "habits", "explore", "projects"]
 # merges it into "tasks" without mutating tenant preferences or introducing DDL.
 HOME_KEYS = set(DEFAULT_HOME) | {"notes", "shopping", "drive", "attention", "events", "opportunities"}
 AI_PROVIDERS = ["gemini", "gemini_lite", "groq", "openrouter", "openai", "codex"]
+# Keep public-facing switches consistent with account-level route permissions.
+# Drive and the retired events entry remain Owner-only even if a legacy DB
+# rollout row incorrectly says enabled/all.
+GENERAL_ACCOUNT_FEATURES = frozenset({
+    "today", "tasks", "calendar", "integrations", "projects", "notes",
+    "habits", "shopping", "opportunities", "explore", "life_inbox",
+    "gmail_radar",
+})
+OWNER_ONLY_FEATURES = frozenset(FEATURES) - GENERAL_ACCOUNT_FEATURES
+
+
+def _permitted_for_account(key: str, user: dict, status: str, audience: str) -> bool:
+    return (
+        status not in ("hidden", "maintenance")
+        and (audience == "all" or is_owner(user))
+        and (status != "beta" or is_owner(user))
+        and (is_owner(user) or key in GENERAL_ACCOUNT_FEATURES)
+    )
+
 
 def _default_rollout(key: str) -> tuple[str, str]:
     # New curated feature stays owner-only until actual V3 E2E release.
-    return ("beta", "owner") if key in ("events", "opportunities", "explore", "life_inbox") else ("enabled", "all")
+    return ("beta", "owner") if key in ("events", "opportunities", "explore", "life_inbox") else ("enabled", "owner" if key in OWNER_ONLY_FEATURES else "all")
 
 
 
@@ -122,16 +141,7 @@ async def effective_features(db: AsyncSession, user: dict) -> list[dict]:
             ("hidden", "owner") if (pre_0015 and key in ("events", "opportunities", "explore", "life_inbox")) else
             _default_rollout(key)
         )
-        permitted = status not in ("hidden", "maintenance") and (
-            audience == "all" or is_owner(user)
-        ) and (status != "beta" or is_owner(user))
-        if not is_owner(user) and key not in {
-            "today", "tasks", "calendar", "integrations",
-            "projects", "notes", "habits", "shopping", "opportunities", "explore", "life_inbox",
-        }:
-            # Private Drive and other unaudited legacy features stay hidden
-            # from all non-Owner accounts, including on production.
-            permitted = False
+        permitted = _permitted_for_account(key, user, status, audience)
         result.append({"key": key, "path": path, "title": title, "available": permitted,
                        "status": status, "audience": audience})
     return result
@@ -151,11 +161,8 @@ def feature_gate(key: str):
             if key in ("events", "opportunities", "explore", "life_inbox"):
                 raise HTTPException(503, "Curated feature requires verified migration") from exc
             return
-        if row is None:
-            if key in ("events", "opportunities", "explore", "life_inbox") and not is_owner(user):
-                raise HTTPException(403, "Feature requires verified rollout")
-            return
-        if row.status in ("hidden", "maintenance") or row.audience == "owner" and not is_owner(user) or row.status == "beta" and not is_owner(user):
+        status, audience = (row.status, row.audience) if row else _default_rollout(key)
+        if not _permitted_for_account(key, user, status, audience):
             raise HTTPException(403, "Feature is not available")
     return check
 
@@ -248,7 +255,8 @@ async def get_rollouts(
     return {"features": [
         {"key": key, "title": title, "status": policies[key].status if key in policies else _default_rollout(key)[0],
          "audience": policies[key].audience if key in policies else _default_rollout(key)[1],
-         "revision": policies[key].revision if key in policies else 0}
+         "revision": policies[key].revision if key in policies else 0,
+         "public_capable": key in GENERAL_ACCOUNT_FEATURES}
         for key, (_, title) in FEATURES.items()
     ]}
 

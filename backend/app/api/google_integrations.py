@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user, oauth_redirect_for_request
+from app.api.ui_policies import feature_gate
 from app.db.session import get_db
 from app.models.google_integration import GoogleConnection
 from app.models.task import Task, TaskPriority
@@ -454,7 +455,7 @@ def _calendar_create_payload(
     return payload
 
 
-@router.get("/calendar/events")
+@router.get("/calendar/events", dependencies=[Depends(feature_gate("calendar"))])
 async def list_calendar_events(
     time_min: datetime,
     time_max: datetime,
@@ -482,7 +483,7 @@ async def list_calendar_events(
     return {"events": items, "returned": len(items)}
 
 
-@router.post("/calendar/events", status_code=201)
+@router.post("/calendar/events", status_code=201, dependencies=[Depends(feature_gate("calendar"))])
 async def create_calendar_event(
     body: CalendarEventCreate,
     user: dict = Depends(current_user),
@@ -527,7 +528,7 @@ async def create_calendar_event(
     return event
 
 
-@router.patch("/calendar/events/{event_id}")
+@router.patch("/calendar/events/{event_id}", dependencies=[Depends(feature_gate("calendar"))])
 async def update_calendar_event(
     event_id: str,
     body: CalendarEventUpdate,
@@ -580,7 +581,7 @@ async def update_calendar_event(
     return event
 
 
-@router.delete("/calendar/events/{event_id}", status_code=204)
+@router.delete("/calendar/events/{event_id}", status_code=204, dependencies=[Depends(feature_gate("calendar"))])
 async def delete_calendar_event(
     event_id: str,
     user: dict = Depends(current_user),

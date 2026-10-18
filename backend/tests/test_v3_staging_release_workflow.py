@@ -26,13 +26,14 @@ class FixedStagingWorkflowTests(unittest.TestCase):
         order = [
             "Apply additive 0018 schema before staging or production cutover",
             "Read-only fixed staging preview and rollback baseline preflight",
-            "Rollback-only curated pool migration and personal UI runtime acceptance",
             "Promote exact Preview to independent fixed staging live",
             "Reconfirm source SHA and live traffic, then promote",
         ]
         positions = [r.index(x) for x in order]
         self.assertEqual(positions, sorted(positions))
         self.assertIn("inputs.promote || inputs.publish_staging", r)
+        self.assertNotIn("life-assistant-core-acceptance", r)
+        self.assertNotIn("life-assistant-postdeploy-acceptance", r)
 
     def test_staging_fails_closed_uses_exact_versions_and_restores_old_live(self):
         s = self.staging

@@ -23,18 +23,16 @@ class CuratedV3ReleaseGateTests(unittest.TestCase):
         self.assertIn("unique | length == 4", gate)
         self.assertIn("test \"$MAIN_SHA\" = \"$RELEASE_SHA\"", gate)
 
-    def test_0018_migration_runs_before_drive_ai_and_live_traffic(self):
+    def test_0018_migration_runs_before_live_traffic_without_retired_job(self):
         workflow = self.workflow
         migration = workflow.index("- name: Apply additive 0018 schema before staging or production cutover")
-        readback = workflow.index("- name: Rollback-only curated pool migration")
-        drive = workflow.index("- name: Pre-promotion Drive AI consent")
+        staging = workflow.index("- name: Promote exact Preview to independent fixed staging live")
         promotion = workflow.index("- name: Reconfirm source SHA and live traffic, then promote")
-        self.assertLess(migration, workflow.index("- name: Run real database/auth acceptance"))
-        self.assertLess(migration, readback)
-        self.assertLess(readback, drive)
-        self.assertLess(drive, promotion)
+        self.assertLess(migration, staging)
+        self.assertLess(staging, promotion)
         self.assertIn("curated_schema_migration=PASS alembic=20261012_0018", workflow)
-        self.assertIn("--args=-m,scripts.run_curated_pool_runtime_acceptance", workflow)
+        self.assertNotIn("scripts.run_curated_pool_runtime_acceptance", workflow)
+        self.assertIn("Controlled rollback rehearsal and restore promoted live traffic", workflow)
 
     def test_runtime_acceptance_has_no_persistent_synthetic_writes(self):
         self.assertIn("await db.rollback()", self.script)
@@ -43,9 +41,9 @@ class CuratedV3ReleaseGateTests(unittest.TestCase):
         self.assertIn("UserUIPreference", self.script)
         self.assertNotIn("await db.commit()", self.script)
 
-    def test_promotion_remains_opt_in_with_automated_google_fixture(self):
+    def test_promotion_remains_opt_in_without_retired_google_fixture_job(self):
         self.assertIn("default: false", self.workflow)
-        self.assertIn("DRIVE_ACCEPTANCE_GOOGLE_FILE_ID", self.workflow)
+        self.assertNotIn("DRIVE_ACCEPTANCE_GOOGLE_FILE_ID", self.workflow)
         self.assertNotIn("verify_staging_google_e2e", self.workflow)
         self.assertIn("inputs.promote && !inputs.publish_staging", self.workflow)
         self.assertIn("PROMOTION=NOT REQUESTED", self.workflow)

@@ -74,7 +74,7 @@ class IdempotencyContractTests(unittest.TestCase):
         self.assertIn("uq_execution_logs_user_action_type_action_id", source)
         self.assertIn('postgresql_where=sa.text("action_id IS NOT NULL")', source)
 
-    def test_runtime_gate_is_wired_after_cloud_domain_acceptance(self):
+    def test_runtime_script_kept_for_diagnostics_but_not_a_release_job(self):
         runner = RUNTIME.read_text(encoding="utf-8")
         compile(runner, str(RUNTIME), "exec")
         for marker in (
@@ -86,19 +86,11 @@ class IdempotencyContractTests(unittest.TestCase):
             "idempotency_cleanup",
         ):
             self.assertIn(marker, runner)
-
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn(
-            "CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance",
-            workflow,
-        )
-        self.assertIn('gcloud run jobs execute "$CORE_ACCEPTANCE_JOB"', workflow)
-        self.assertIn("Run action-id idempotency runtime acceptance", workflow)
-        self.assertIn("--args=-m,scripts.run_idempotency_acceptance", workflow)
-        self.assertLess(
-            workflow.index("Run authenticated cloud-domain acceptance"),
-            workflow.index("Run action-id idempotency runtime acceptance"),
-        )
+        self.assertNotIn("CORE_ACCEPTANCE_JOB", workflow)
+        self.assertNotIn("Run action-id idempotency runtime acceptance", workflow)
+        self.assertIn("Verify unauthenticated API is application-protected", workflow)
+
 
 
 class IdempotencyReservationTests(unittest.IsolatedAsyncioTestCase):

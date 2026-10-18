@@ -1,6 +1,6 @@
 """Candidate compatibility on old 0014: preserve legacy routes, fail closed elsewhere."""
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from fastapi import HTTPException
 from sqlalchemy.exc import ProgrammingError
@@ -97,6 +97,7 @@ class PreMigrationFeatureGateTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_gmail_radar_public_policy_matches_backend_gate(self):
         db = AsyncMock(spec=AsyncSession)
+        db.execute.return_value = MagicMock()
         db.execute.return_value.scalars.return_value.all.return_value = []
         user = {"sub": "ordinary", "email": "person@example.org"}
         catalog = {x["key"]: x for x in await effective_features(db, user)}

@@ -1,3 +1,9 @@
+## 2026-10-18｜台灣活動探索 Life 匯入器收尾（當日最後讀回）
+- **正式技術 Job：PASS。** [#39100289293](https://github.com/tommylin15/life_assistant/actions/runs/39100289293) 為第一輪真實 importer 成功；修正上游不合規的 SHA256 後，[#39101120210](https://github.com/tommylin15/life_assistant/actions/runs/39101120210) 在 CI 四 gate、live revision `life-assistant-api-00365-haf`、Job digest/contract preflight 均 PASS 後，真實執行一次，`Completed=True, failed_tasks=0`。另一條舊 exact-SHA [#39101120348](https://github.com/tommylin15/life_assistant/actions/runs/39101120348) 只因祖先 SHA 不吻合而在 preflight FAIL，**沒有**執行 Job，不能當作 production importer 新故障。
+- **2026-10-18 14:00 後人工讀回固定 `交接資料` Sheet：PASS（Sheet 層）。** 實際表頭 31 欄，62 個不同 `event_key`、64 字元小寫 SHA256 hash 全部有值、62 ACKED／0 READY／0 ERROR；其中 `beclass:305283a6ab273a8df4a8:20261019:wangchuan` 保留 `verification_status=pending_review`，13:23:02 +08:00 得到 ACK。原 `Wild Wild` 為同鍵 UPDATED/ACKED，沒有殘留重複列。61 個歷史 AE 空白是 **unknown**，不是 verified。探索精選原表 78 個不同 event_key（不是宣稱新發現 78 筆）。
+- **尚不能結案整條使用者流程。** 目前這輪未單獨取得 PostgreSQL 中 BeClass 同鍵、新 hash、`handoff_details.verification_status` 的具體 readback，也未由正式 Flutter 一般登入者確認「可報名資訊待核」篩選/標籤、資訊來源連結和報名連結；A7+B10 自然/手動最新 01→05 同輪完整來源讀取、四視圖逐筆對帳、GAS 07:30 trigger ID 仍 **NOT VERIFIED**。來源有界備援遵守 Drive 正式 01～05；不得讓 Life importer 重新實作探索，亦不得將 ACKED 自動解讀成核實。
+- **一次性 workflow 治理：** 當日用過的特殊 `life-curated-{promotion,import,hash-retry}-once-20261018.yml` 在成功/失敗證據留存 GitHub Actions 後從 main 移除，避免未來所有 CI 繼續生成過期 exact-SHA check、錯誤紅燈或再次匯入；日常 `curated-handoff-daily.yml` 手動備援與正常 V3 release gate 保留。
+
 # Life — Current state
 
 ## 2026-10-17｜Gmail／Drive／Life Inbox／Session／月曆合併交付：全功能一次驗收

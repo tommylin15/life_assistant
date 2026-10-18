@@ -1,5 +1,7 @@
 # 台灣活動｜獨立 Drive 交接資料 → Life 每日匯入契約
 
+> **2026-10-18 最後讀回（替代下方歷史匯入狀態）：** [真實 hash 修復重跑 #39101120210](https://github.com/tommylin15/life_assistant/actions/runs/39101120210) CI/live/job preflight PASS，Execution 完成且 0 failed；固定交接 Sheet 31 欄、62 不同鍵、62 ACKED、0 ERROR/READY，BeClass pending_review 同鍵成功回執。這是 **Job + Sheet PASS**，不是 PostgreSQL 同鍵新 hash/UI 實機或本日完整探索 A7/B10 PASS；尚需個別 readback。舊 exact-SHA [#39101120348](https://github.com/tommylin15/life_assistant/actions/runs/39101120348) 在匯入前被 gate 擋下，不構成新 Job 故障。正式 07:30 GAS trigger 證據仍待確認。
+
 > **2026-10-18 新增：可報名、未充分核證的活動**。保留既有 A:AD 30 欄及 Z/AB:AD 回執位置，僅於 AE 追加可選 `verification_status`：`pending_review`（報名入口存在但活動／資格等未充分核實）、`verified`（已由具名主辦／授權報名頁核實）、`unknown`（舊資料，不能無證據自動升級）。交換池最小追溯門檻不變，不能有假主辦、虛假日期、過期或未經許可網址。BeClass 由具名主辦直接建立且可追溯的合法授權報名表本身足以作為主辦來源，不強制一定還有第二個政府官網。星等與報名分類保持獨立；在 Life 前台提供驗證狀態篩選和醒目標籤，不保證有現貨、已報名或已通過審查。後續有可靠主辦新證據時，**同一 event_key、同一 parent_event_key**，更新 evidence/url、`verification_status=verified` 與完整業務 `content_hash`，現有 PostgreSQL 列更新為 UPDATED，保留使用者收藏和操作。新版本 importer 相容舊 30 欄與新 31 欄（缺少 AE 默認 unknown）；不可將舊有核證時間是否為空單獨當作已核實或未核實的證據。若新版尚未完成 CI、部署、runtime，標 PARTIAL，不宣稱 UI 已正式顯示。
 
 

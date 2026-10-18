@@ -1,5 +1,14 @@
 # Life — Active engineering TODO
-Updated 2026-10-16. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
+Updated 2026-10-18. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
+
+## 2026-10-18｜台灣活動探索尚未關閉的整合證據（不重做已完成的 Job）
+
+| 優先序 | 內容 | 最新狀態／出口 |
+| --- | --- | --- |
+| P0 | 對帳 `life-assistant-free-events` 與交接表版本、必要 PostgreSQL readback | **Job PASS、Sheet PASS**：#39101120210 新 Execution Completed／0 failed；62 ACKED／0 ERROR／0 READY、無重複鍵；**PG 同鍵 BeClass AE 新版回讀 NOT VERIFIED**；不可反覆執行 Job 只為更新 ACK 時間 |
+| P1 | BeClass／EventGo 等尚待核活動與前台區分 | 31 欄 `verification_status` 已存在，BeClass 一筆 pending_review 於交接表 ACK；同鍵升級流程和 Flutter source/registration 雙連結在 main 有實作與測試；**正式一般用戶 UI 顯示/篩選及 PG 業務資料讀回 NOT VERIFIED**，未核不應變已核實 |
+| P1 | Drive 正式每日來源探索與品質 | README + 01～05 的 A7（含 eventgo.tw、Citytalk/TDX 停用）、B10、本輪來源逐站、快照、新候選與修復、原池 78 鍵及四視圖讀回，需另由當次探索 run_id 記錄；**同輪完整驗收 NOT VERIFIED**。不得用前輪覆蓋或讓 Life DB Job 代掃網站 |
+| P2 | 定期觸發與跨系統驗收 | GAS 每日 07:30 觸發器及下一次自然 Job Execution／Sheet/PG readback **NOT VERIFIED**；保持目前單一 importer，不加 cron/第二寫入者，並按需以正常 V3 + Hosting 同 SHA 產品 E2E gate 驗收 |
 
 | Priority | Work / exit gate | Status |
 | --- | --- | --- |

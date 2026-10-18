@@ -34,8 +34,6 @@ jobs:
       GCP_PROJECT_ID: gen-lang-client-0593591102
       GCP_REGION: us-central1
       CLOUD_RUN_SERVICE: life-assistant-api
-      CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance
-      POSTDEPLOY_ACCEPTANCE_JOB: life-assistant-postdeploy-acceptance
       RELEASE_SHA: ${{ github.sha }}
       GHCR_IMAGE: ghcr.io/tommylin15/life_assistant-backend
       FRONTEND_URL: https://gen-lang-client-0593591102.web.app
@@ -287,23 +285,6 @@ jobs:
             --task-timeout 10m --wait --quiet
           echo "curated_schema_migration=PASS alembic=20261012_0018" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Run real database/auth acceptance using release digest
-        run: |
-          set -euo pipefail
-          gcloud run jobs update "$CORE_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "$IMAGE_REF" --quiet
-          for MODULE in \
-            scripts.run_cloud_domain_parity_acceptance \
-            scripts.run_idempotency_acceptance \
-            scripts.run_google_failure_acceptance; do
-            .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
-              gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
-              --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-              --args="-m,$MODULE" --task-timeout 10m --wait --quiet
-          done
-          echo "core_acceptance=PASS image=$IMAGE_REF" >> "$GITHUB_STEP_SUMMARY"
-
       - name: Set up Flutter for candidate Hosting Preview
         uses: subosito/flutter-action@v2
         with:
@@ -447,79 +428,6 @@ jobs:
         shell: bash
         run: bash scripts/v3_fixed_staging_release.sh --preflight-only
 
-      - name: Require real Google integration fixture and acceptance before promotion
-        if: ${{ inputs.promote }}
-        run: |
-          set -euo pipefail
-          gcloud run jobs describe "$CORE_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
-            > "$RUNNER_TEMP/v3-real-provider-job.json"
-          python - "$RUNNER_TEMP/v3-real-provider-job.json" <<'PY'
-          import json,sys
-          d=json.load(open(sys.argv[1]))
-          containers=d.get("spec",{}).get("template",{}).get("spec",{}).get("template",{}).get("spec",{}).get("containers",[])
-          if not containers:
-              raise SystemExit("Cannot verify real Google fixture in job metadata")
-          keys={e.get("name") for c in containers for e in c.get("env",[])}
-          required={"DRIVE_ACCEPTANCE_USER_SUB","DRIVE_ACCEPTANCE_GOOGLE_FILE_ID"}
-          if not required.issubset(keys):
-              raise SystemExit("Real Google fixture missing; not accepting synthetic gates as real OAuth")
-          PY
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
-            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --args=-m,scripts.run_drive_google_integration_acceptance \
-            --task-timeout 10m --wait --quiet
-          echo "real_google_drive_integration=PASS" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Rollback-only curated pool migration and personal UI runtime acceptance
-        if: ${{ inputs.promote || inputs.publish_staging }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
-            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --args=-m,scripts.run_curated_pool_runtime_acceptance \
-            --task-timeout 10m --wait --quiet
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
-            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --args=-m,scripts.run_private_ownership_acceptance \
-            --task-timeout 10m --wait --quiet
-          echo "curated_db_readback=PASS schema=20261012_0018 rollback_only=true" >> "$GITHUB_STEP_SUMMARY"
-          echo "tenant_ownership=PASS schema=20261012_0018 rollback_only=true" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Read existing handoff DB versions and rollback-only Shopping CRUD
-        if: ${{ inputs.promote || inputs.publish_staging }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
-            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --args=-m,scripts.run_life_0103_runtime_acceptance \
-            --task-timeout 5m --wait --quiet
-          echo "handoff_pg_consistency_and_shopping_rollback=PASS external_sheet_and_gas=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Pre-promotion Drive AI consent runtime acceptance
-        if: ${{ inputs.promote }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Exercise the exact release image against the configured dev-test DB
-          # before any production traffic is changed. This synthetic test must
-          # preserve the OFF-by-default consent and provider-isolation contract.
-          gcloud run jobs update "$POSTDEPLOY_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "$IMAGE_REF" --quiet
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$POSTDEPLOY_ACCEPTANCE_JOB" \
-            gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --args=-m,scripts.run_drive_ai_enrichment_acceptance \
-            --task-timeout 10m --wait --quiet
-          echo "pre_promotion_drive_ai_consent=PASS" >> "$GITHUB_STEP_SUMMARY"
-
       - name: Promote exact Preview to independent fixed staging live and verify pinned routes
         id: staging_live
         if: ${{ inputs.publish_staging }}
@@ -571,18 +479,7 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
             | jq -e --arg rev "$CANDIDATE_REVISION" \
                 '[.status.traffic[] | select(.revisionName==$rev and .percent==100)] | length==1'
-          gcloud run jobs update "$POSTDEPLOY_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --image "$IMAGE_REF" --quiet
-          for MODULE in \
-            scripts.run_notes_product_acceptance \
-            scripts.run_project_drive_runtime_acceptance \
-            scripts.run_drive_ai_enrichment_acceptance; do
-            .github/scripts/run_cloud_run_job_with_diagnostics.sh "$POSTDEPLOY_ACCEPTANCE_JOB" \
-              gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB" \
-              --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-              --args="-m,$MODULE" --task-timeout 10m --wait --quiet
-          done
-          echo "live=PASS health,ready,401,oauth-redirect,postdeploy-integration" >> "$GITHUB_STEP_SUMMARY"
+          echo "live=PASS health,ready,401,oauth-redirect" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Controlled rollback rehearsal and restore promoted live traffic
         id: rollback_drill

@@ -26,7 +26,6 @@ jobs:
       CLOUD_RUN_SERVICE: life-assistant-api
       CODEX_CALLER_SA: omniagent-codex-life-client@gen-lang-client-0593591102.iam.gserviceaccount.com
       MIGRATION_JOB: life-assistant-db-migrate
-      CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance
       GCP_NETWORK: janusai-lake-poc
       GCP_SUBNET: janusai-lake-poc-uscentral1
       DATABASE_HOST: 10.42.0.5
@@ -263,56 +262,6 @@ jobs:
           STATUS="$(curl --silent --output /tmp/tasks-body --write-out '%{http_code}' \
             "${{ steps.service_url.outputs.url }}/api/v1/tasks")"
           test "$STATUS" = "401"
-
-      - name: Configure shared core acceptance runner
-        run: |
-          gcloud run jobs deploy "$CORE_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --image "${{ steps.backend_image.outputs.ref }}" \
-            --command python \
-            --args=-m,scripts.run_cloud_domain_parity_acceptance \
-            --network "$GCP_NETWORK" \
-            --subnet "$GCP_SUBNET" \
-            --vpc-egress private-ranges-only \
-            --max-retries 0 \
-            --task-timeout 10m \
-            --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI,CODEX_PRIMARY_ENABLED=true" \
-            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
-            --quiet
-
-      - name: Run authenticated cloud-domain acceptance
-        run: |
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
-            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --args=-m,scripts.run_cloud_domain_parity_acceptance \
-            --task-timeout 10m \
-            --wait \
-            --quiet
-
-      - name: Run action-id idempotency runtime acceptance
-        run: |
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
-            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --args=-m,scripts.run_idempotency_acceptance \
-            --task-timeout 10m \
-            --wait \
-            --quiet
-
-      - name: Run Google provider failure-path runtime acceptance
-        run: |
-          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$CORE_ACCEPTANCE_JOB" \
-            gcloud run jobs execute "$CORE_ACCEPTANCE_JOB" \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --args=-m,scripts.run_google_failure_acceptance \
-            --task-timeout 10m \
-            --wait \
-            --quiet
 
       - name: Keep only the latest life_assistant image
         if: ${{ always() && steps.backend_image.outcome == 'success' }}

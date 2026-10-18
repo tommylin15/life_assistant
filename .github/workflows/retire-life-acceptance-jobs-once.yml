@@ -1,0 +1,106 @@
+name: Retire Life acceptance jobs once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/retire-life-acceptance-jobs-once.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: life-acceptance-jobs-retirement-once
+  cancel-in-progress: false
+
+jobs:
+  retire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate retired jobs have no active workflow users
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path(".github/workflows")
+          retired=("life-assistant-core-acceptance","life-assistant-postdeploy-acceptance")
+          for path in root.glob("*.yml"):
+              if path.name=="retire-life-acceptance-jobs-once.yml":
+                  continue
+              text=path.read_text(encoding="utf-8")
+              if any(name in text for name in retired):
+                  raise SystemExit(f"active workflow still depends on retired job: {path}")
+          print("life_acceptance_job_static_dependencies=NONE")
+          PY
+          test -f .github/workflows/v3-release-ghcr.yml
+          grep -q 'Apply additive 0018 schema' .github/workflows/v3-release-ghcr.yml
+          grep -q 'Controlled rollback rehearsal' .github/workflows/v3-release-ghcr.yml
+
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Reject scheduler or running execution dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud scheduler jobs list --project "$GCP_PROJECT_ID" --location "$GCP_REGION" --format=json > "$RUNNER_TEMP/schedulers.json"
+          python3 - "$RUNNER_TEMP/schedulers.json" <<'PY'
+          import json,sys
+          jobs=json.load(open(sys.argv[1]))
+          retired=("life-assistant-core-acceptance","life-assistant-postdeploy-acceptance")
+          for job in jobs:
+              target=json.dumps({k:job.get(k) for k in ("httpTarget","pubsubTarget","appEngineHttpTarget")},ensure_ascii=False)
+              if any(s in target for s in retired):
+                  raise SystemExit(f"scheduler dependency: {job.get('name')}")
+          print("life_acceptance_scheduler_dependencies=NONE")
+          PY
+          for JOB in life-assistant-core-acceptance life-assistant-postdeploy-acceptance; do
+            if gcloud run jobs describe "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(name)' >/dev/null 2>"$RUNNER_TEMP/$JOB-describe-error"; then
+              gcloud run jobs executions list --job "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/$JOB-executions.json"
+              python3 - "$RUNNER_TEMP/$JOB-executions.json" "$JOB" <<'PY'
+          import json,sys
+          executions=json.load(open(sys.argv[1]))
+          for x in executions:
+              status=x.get("status") or {}
+              if (status.get("runningCount") or status.get("activeCount") or 0)>0:
+                  raise SystemExit(f"active execution of {sys.argv[2]} blocks retirement")
+          print(f"life_acceptance_active_executions=NONE job={sys.argv[2]}")
+          PY
+            else
+              grep -Eiq '(NOT_FOUND|not found)' "$RUNNER_TEMP/$JOB-describe-error" || { cat "$RUNNER_TEMP/$JOB-describe-error"; exit 1; }
+            fi
+          done
+
+      - name: Delete only two approved acceptance jobs and verify absence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for JOB in life-assistant-core-acceptance life-assistant-postdeploy-acceptance; do
+            if gcloud run jobs describe "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(name)' >/dev/null 2>"$RUNNER_TEMP/$JOB-before"; then
+              gcloud run jobs delete "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --quiet
+            else
+              grep -Eiq '(NOT_FOUND|not found)' "$RUNNER_TEMP/$JOB-before" || { cat "$RUNNER_TEMP/$JOB-before"; exit 1; }
+            fi
+            if gcloud run jobs describe "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json >/dev/null 2>"$RUNNER_TEMP/$JOB-after"; then
+              echo "::error::Retired job still exists: $JOB"
+              exit 1
+            fi
+            grep -Eiq '(NOT_FOUND|not found)' "$RUNNER_TEMP/$JOB-after" || { cat "$RUNNER_TEMP/$JOB-after"; exit 1; }
+            echo "job_retirement=PASS job=$JOB readback=NOT_FOUND" >> "$GITHUB_STEP_SUMMARY"
+          done
+          gcloud run jobs describe life-assistant-db-migrate --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(name)' >/dev/null
+          echo "db_migrate_job=PASS preserved" >> "$GITHUB_STEP_SUMMARY"

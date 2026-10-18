@@ -87,6 +87,11 @@ jobs:
             echo "auto_staging=SKIP one_shot_import_acceptance" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          # Single rerun after an audited malformed hash correction, not a release.
+          if jq -e 'any(.files[]; .filename==".github/workflows/life-curated-hash-retry-once-20261018.yml")' <<< "$CHANGED" > /dev/null; then
+            echo "auto_staging=SKIP one_shot_hash_repair_job" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           # Do not start a second same-SHA release for CI re-runs, including
           # releases already dispatched manually. The V3 release has its own
           # immutable SHA guard and shared release concurrency lock.

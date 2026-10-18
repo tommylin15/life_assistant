@@ -270,6 +270,25 @@ class CloudBuildV2Tests(unittest.TestCase):
                                   'gcloud run services update-traffic',
                                   'add-iam-policy-binding', '--raw-field promote=true'):
                     self.assertNotIn(forbidden, source)
+            elif workflow.name == 'life-curated-hash-retry-once-20261018.yml':
+                # One exact SHA re-import following the corrected SHA-256
+                # hash; the previously promoted service and Job are not changed.
+                self.assertIn('workflow_run:', source)
+                self.assertIn('workflows: ["CI"]', source)
+                self.assertIn("workflow_run.event == 'push'", source)
+                self.assertIn("workflow_run.conclusion == 'success'", source)
+                self.assertIn('6b77fa57e0fa8a065c69feed87e640837ea822ac', source)
+                self.assertIn('39100289293', source)
+                self.assertIn('39099363389', source)
+                self.assertIn('39099726879', source)
+                self.assertIn('life-assistant-api-00365-haf', source)
+                self.assertIn('v3_curated_handoff_alignment.py', source)
+                self.assertIn('gcloud run jobs execute "$JOB"', source)
+                self.assertIn('GITHUB_RUN_ATTEMPT', source)
+                for forbidden in ('schedule:', 'gcloud run jobs update',
+                                  'gcloud run services update-traffic',
+                                  'add-iam-policy-binding', '--raw-field promote=true'):
+                    self.assertNotIn(forbidden, source)
             else:
                 self.assertIn('workflow_dispatch:', source)
                 self.assertNotIn('workflow_run:', source)

@@ -1,0 +1,99 @@
+# Exactly one user-authorized continuation of 2026-10-18 curated importer
+# deployment. This does not enable general automatic production promotion.
+# V3 Release owns SHA-pinned candidate, Preview, staging, live, rollback and
+# Firebase Hosting gates. NO direct Cloud Run Job execution here.
+name: Life Curated One-Time Production Promotion
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: life-curated-promotion-once-20261018
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      CI_RUN_ID: ${{ github.event.workflow_run.id }}
+      BASE_SHA: a2f7e3eb6c17ffc772b5759fe4f6a1967071a132
+    steps:
+      - name: Verify exact one-shot commit, successful four CI gates and accepted staging baseline
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'dispatch=false' >> "$GITHUB_OUTPUT"
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          MAIN_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+          if [[ "$MAIN_SHA" != "$RELEASE_SHA" ]]; then
+            echo 'curated_prod=SKIP stale_sha' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA?per_page=100")"
+          jq -e --arg parent "$BASE_SHA" '
+            (.parents | length)==1 and .parents[0].sha==$parent and
+            ([.files[].filename] | sort) ==
+              ([".github/workflows/life-curated-promotion-once-20261018.yml",
+                ".github/workflows/v3-auto-staging-after-ci.yml"] | sort)
+          ' <<< "$COMMIT" >/dev/null || {
+            echo 'curated_prod=SKIP not_exact_one_shot_commit' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          }
+          CI="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID")"
+          jq -e --arg sha "$RELEASE_SHA" --arg repo "$GITHUB_REPOSITORY" '
+            .status=="completed" and .conclusion=="success" and
+            .head_sha==$sha and .event=="push" and
+            .head_branch=="main" and .head_repository.full_name==$repo
+          ' <<< "$CI" >/dev/null
+          JOBS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID/jobs?per_page=100")"
+          jq -e '
+            [.jobs[] | select(.conclusion=="success") | .name] | unique |
+              (index("backend")!=null and index("flutter")!=null and
+               index("free-events-postgres")!=null and
+               index("deployment-scripts")!=null)
+          ' <<< "$JOBS" >/dev/null
+
+          # Baseline already proved exact SHA in fixed staging with 401 and
+          # OAuth redirect on V3 run 39097991944; never inherit its PASS for
+          # the next SHA, which must independently re-pass all V3 gates.
+          BASE="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/39097991944")"
+          jq -e --arg sha "$BASE_SHA" '
+            .status=="completed" and .conclusion=="success" and
+            .head_sha==$sha and .event=="workflow_dispatch"
+          ' <<< "$BASE" >/dev/null
+          RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
+          if jq -e --arg sha "$RELEASE_SHA" '
+            any(.workflow_runs[]; .head_sha==$sha)
+          ' <<< "$RUNS" >/dev/null; then
+            echo 'curated_prod=SKIP already_dispatched' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo 'dispatch=true' >> "$GITHUB_OUTPUT"
+          echo "curated_prod=READY sha=$RELEASE_SHA four_ci=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dispatch normal V3 live promotion with full staging and rollback gates
+        if: ${{ steps.gate.outputs.dispatch == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
+          gh workflow run v3-release-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            --raw-field promote=true --raw-field publish_staging=true
+          echo "curated_prod=DISPATCHED sha=$RELEASE_SHA promote=true publish_staging=true" >> "$GITHUB_STEP_SUMMARY"
+          echo 'DISPATCHED does not equal PASS: require V3 live, rollback, Hosting, importer Job digest and Sheet/PG E2E readback.' >> "$GITHUB_STEP_SUMMARY"

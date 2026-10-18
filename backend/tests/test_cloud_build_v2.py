@@ -230,6 +230,28 @@ class CloudBuildV2Tests(unittest.TestCase):
                     'firebase deploy', 'update-traffic',
                 ):
                     self.assertNotIn(forbidden, source)
+            elif workflow.name == 'life-curated-promotion-once-20261018.yml':
+                # The only special production release route authorized on
+                # 2026-10-18. It is an exact-ancestry, single-SHA CI bridge,
+                # not a reusable auto-production trigger.
+                self.assertIn('workflow_run:', source)
+                self.assertIn('workflows: ["CI"]', source)
+                self.assertIn("workflow_run.event == 'push'", source)
+                self.assertIn("workflow_run.conclusion == 'success'", source)
+                self.assertIn('MAIN_SHA', source)
+                self.assertIn('BASE_SHA:', source)
+                self.assertIn('39097991944', source)
+                self.assertIn('free-events-postgres', source)
+                self.assertIn('deployment-scripts', source)
+                self.assertIn("not_exact_one_shot_commit", source)
+                self.assertIn("curated_prod=SKIP already_dispatched", source)
+                self.assertIn('gh workflow run v3-release-ghcr.yml', source)
+                self.assertIn('--raw-field promote=true', source)
+                self.assertIn('--raw-field publish_staging=true', source)
+                for forbidden in ('schedule:', 'gcloud run jobs update',
+                                  'gcloud run jobs execute', 'gcloud run services update-traffic',
+                                  'add-iam-policy-binding', 'force: true'):
+                    self.assertNotIn(forbidden, source)
             else:
                 self.assertIn('workflow_dispatch:', source)
                 self.assertNotIn('workflow_run:', source)

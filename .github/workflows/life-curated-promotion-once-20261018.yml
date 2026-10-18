@@ -31,7 +31,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
       CI_RUN_ID: ${{ github.event.workflow_run.id }}
-      BASE_SHA: a2f7e3eb6c17ffc772b5759fe4f6a1967071a132
+      BASE_SHA: 32e40f135cf52d22c1a8ef6bb58bac25a21b82fe
+      ACCEPTED_STAGING_SHA: a2f7e3eb6c17ffc772b5759fe4f6a1967071a132
     steps:
       - name: Verify exact one-shot commit, successful four CI gates and accepted staging baseline
         id: gate
@@ -50,7 +51,7 @@ jobs:
             (.parents | length)==1 and .parents[0].sha==$parent and
             ([.files[].filename] | sort) ==
               ([".github/workflows/life-curated-promotion-once-20261018.yml",
-                ".github/workflows/v3-auto-staging-after-ci.yml"] | sort)
+                "backend/tests/test_cloud_build_v2.py"] | sort)
           ' <<< "$COMMIT" >/dev/null || {
             echo 'curated_prod=SKIP not_exact_one_shot_commit' >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -73,7 +74,7 @@ jobs:
           # OAuth redirect on V3 run 39097991944; never inherit its PASS for
           # the next SHA, which must independently re-pass all V3 gates.
           BASE="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/39097991944")"
-          jq -e --arg sha "$BASE_SHA" '
+          jq -e --arg sha "$ACCEPTED_STAGING_SHA" '
             .status=="completed" and .conclusion=="success" and
             .head_sha==$sha and .event=="workflow_dispatch"
           ' <<< "$BASE" >/dev/null

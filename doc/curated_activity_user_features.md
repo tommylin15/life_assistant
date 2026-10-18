@@ -33,3 +33,10 @@
 - 全部業務 UI 沿用 Material 3 五風格、響應式版型。活動功能入口只展示一次；首頁不再為相同精選活動／限時機會內容堆疊重複卡片。個人首頁舊選擇值載入時去重；後端相容值暫留。
 - 驗收必須涵蓋：主子項分組與跨分頁去重、欄位缺值、Google `sub` 隔離、收藏／待辦／日曆舊資料、搜尋／期限／跨日、舊 URL、權限切換、行動／桌面顯示、可靠網址。
 - 以 **implementation／tests／CI／staging／production／runtime／integration** 分別回報 `PASS / FAIL / NOT VERIFIED`；完整證據前只可標 **PARTIAL**。上游交接規格唯一來源：[curated_sheet_job_ingestion](curated_sheet_job_ingestion.md)，不變更本次探索排程或 Sheet。
+
+
+## 2026-10-18｜活動卡片去除稽核資訊、統一所有來源連結
+- BeClass、EventGo（eventgo.tw）、ACCUPASS、KKTIX、小藝與其他公開主辦／活動來源，不依平台建立特別流程。保留 `source_url` 發現網址、`official_url` 主辦活動頁（未取得時可暫存平台具名活動原頁並明確標待核）、`registration_url` 報名表；前台顯示來源網域或平台標籤及可點的來源連結，報名按鈕仍開獨立報名 URL。
+- 未來有具名主辦官網時同一 `event_key`／`parent_event_key` 更新 `official_url`、核證狀態及內容版本，維持 `source_url`、`registration_url`、使用者收藏、待辦、日曆既有對應；不能因來源補核而新增重複活動。
+- 手機卡片不再顯示原始 `summary/evidence_summary` 的精選池、可信度、批次、索引或其他系統文字；預設只顯示活動名稱、易讀日期、地區、核證狀態、費用。詳情預設收合，列有據的主辦、地點、日期、報名條件、來源連結和既有個人操作。
+- 本輪僅修改 GitHub 原始碼、測試程式碼及規格，依使用者指示停在修改階段：tests/CI/deploy/runtime 均 NOT VERIFIED，合併另一塊改動後再驗收。

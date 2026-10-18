@@ -25,6 +25,36 @@ class _Api extends PlatformApi {
 }
 
 void main() {
+  test('source labeling uses the same rule for all platforms', () {
+    final samples = {
+      'https://www.beclass.com/rid=1234': 'BeClass',
+      'https://eventgo.tw/event/1234': 'EventGo',
+      'https://www.accupass.com/event/1234': 'ACCUPASS',
+      'https://abc.kktix.cc/events/test': 'KKTIX',
+      'https://yii.tw/events/1234': '小藝',
+      'https://www.organizer.org/event': 'organizer.org',
+    };
+    for (final x in samples.entries) {
+      expect(activitySourceName(Uri.parse(x.key)), x.value);
+    }
+    final source = {'official_url': 'https://eventgo.tw/event/1234',
+      'registration_url': 'https://www.beclass.com/rid=1234'};
+    final item = <String, dynamic>{'handoff_details': source};
+    expect(activityInfoUrl(item)?.toString(), 'https://eventgo.tw/event/1234');
+    expect(activityRegistrationUrl(item)?.toString(), 'https://www.beclass.com/rid=1234');
+    source['official_url'] = 'https://www.organizer.org/event';
+    expect(activityInfoUrl(item)?.toString(), 'https://www.organizer.org/event');
+    expect(activityRegistrationUrl(item)?.toString(), 'https://www.beclass.com/rid=1234');
+  });
+
+  test('dates display in Taipei time without invented hours', () {
+    expect(activityDisplayDate('2026-10-11'), '2026/10/11');
+    expect(activityDisplayDate('2026-10-11T09:00:00+08:00'), '2026/10/11 09:00');
+    expect(activityDisplayDate(null), isNull);
+    expect(activityDisplayDate('NOT VERIFIED'), isNull);
+  });
+
+
   test('legacy identity cannot collide with a handoff parent key', () {
     expect(groupActivities([
       {'identity_key': 'same'},
@@ -106,14 +136,14 @@ void main() {
       ]),
     )))));
     await tester.pumpAndSettle();
-    expect(find.textContaining('開報：2001-01-01'), findsOneWidget);
+    expect(find.textContaining('開報：2001/1/1'), findsOneWidget);
     // Both the compact date chip and detail text intentionally include the
     // same deadline; verify each exact label instead of ambiguous contains.
-    expect(find.text('截止：2001-01-07'), findsOneWidget);
-    expect(find.text('報名截止：2001-01-07'), findsNothing);
-    await tester.tap(find.text('詳情與個人操作'));
+    expect(find.text('截止：2001/1/7'), findsOneWidget);
+    expect(find.text('報名截止：2001/1/7'), findsNothing);
+    await tester.tap(find.text('查看詳情與操作'));
     await tester.pumpAndSettle();
-    expect(find.text('報名截止：2001-01-07'), findsOneWidget);
+    expect(find.text('報名截止：2001/1/7'), findsOneWidget);
     expect(find.text('已結束／截止'), findsOneWidget);
   });
 
@@ -133,11 +163,11 @@ void main() {
     )))));
     await tester.pumpAndSettle();
     expect(api.calls, isEmpty);
-    expect(find.text('詳情與個人操作'), findsOneWidget);
-    expect(find.text('前往網址'), findsNothing);
-    await tester.tap(find.text('詳情與個人操作'));
+    expect(find.text('查看詳情與操作'), findsOneWidget);
+    expect(find.text('查看活動'), findsNothing);
+    await tester.tap(find.text('查看詳情與操作'));
     await tester.pumpAndSettle();
-    expect(find.text('前往網址'), findsOneWidget);
+    expect(find.text('查看活動'), findsOneWidget);
     expect(find.text('測試活動'), findsWidgets);
     expect(find.textContaining('★'), findsNothing);
     await tester.tap(find.byTooltip('收藏'));

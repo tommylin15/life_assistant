@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'life_ui_environment.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -277,7 +278,7 @@ class _ProjectsPageState extends ConsumerState<ProjectsPage> {
   void _showError(Object error) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('操作失敗：$error')),
+      SnackBar(content: Text(lifeUserError('操作失敗', error))),
     );
   }
 }
@@ -765,7 +766,7 @@ class _ProjectErrorState extends StatelessWidget {
             const SizedBox(height: 12),
             Text('無法載入專案', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
-            Text('$error', textAlign: TextAlign.center),
+            Text(lifeUserError('', error), textAlign: TextAlign.center),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: onRetry,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'life_ui_environment.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -105,7 +106,7 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
         _lists = lists;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = '辨識失敗：請檢查連線或稍後再試（$error）');
+      if (mounted) setState(() => _error = lifeUserError('辨識失敗', error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'life_ui_environment.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -46,7 +47,7 @@ class _HabitsPageState extends ConsumerState<HabitsPage> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => AppStatePanel(
           title: '無法載入習慣',
-          message: '$error',
+          message: lifeUserError('', error),
           icon: const Icon(Icons.cloud_off_outlined),
           action: FilledButton.icon(
             onPressed: _reload,
@@ -149,7 +150,7 @@ class _HabitsPageState extends ConsumerState<HabitsPage> {
       if (!mounted) return;
       _message(habit == null ? '習慣已新增' : '習慣已更新');
     } catch (error) {
-      if (mounted) _message('操作失敗：$error');
+      if (mounted) _message(lifeUserError('操作失敗', error));
     }
   }
 
@@ -162,7 +163,7 @@ class _HabitsPageState extends ConsumerState<HabitsPage> {
       if (!mounted) return;
       _message('已記錄「${habit.title}」完成');
     } catch (error) {
-      if (mounted) _message('記錄完成失敗：$error');
+      if (mounted) _message(lifeUserError('記錄完成失敗', error));
     } finally {
       if (mounted) {
         setState(() => _completing.remove(habit.id));

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'life_ui_environment.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -362,7 +363,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('操作失敗：$error')),
+      SnackBar(content: Text(lifeUserError('操作失敗', error))),
     );
   }
 }
@@ -1084,7 +1085,7 @@ class _ChecklistSheetState extends ConsumerState<_ChecklistSheet> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('操作失敗：$error')),
+      SnackBar(content: Text(lifeUserError('操作失敗', error))),
     );
   }
 }
@@ -1108,7 +1109,7 @@ class _TaskErrorState extends StatelessWidget {
             const Text('待辦載入失敗'),
             const SizedBox(height: 4),
             Text(
-              '$error',
+              lifeUserError('', error),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),

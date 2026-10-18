@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'life_ui_environment.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app/design_system/app_components.dart';
@@ -35,7 +36,7 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => AppStatePanel(
           title: '無法載入購物清單',
-          message: '$error',
+          message: lifeUserError('', error),
           icon: const Icon(Icons.cloud_off_outlined),
           action: FilledButton.icon(
             onPressed: _reload,
@@ -132,7 +133,7 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
       _reload();
       if (mounted) _message('購物清單已新增');
     } catch (error) {
-      if (mounted) _message('新增清單失敗：$error');
+      if (mounted) _message(lifeUserError('新增清單失敗', error));
     }
   }
 
@@ -152,7 +153,7 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
       _reload();
       if (mounted) _message('已加入 ${items.length} 個品項至「${list.name}」');
     } catch (error) {
-      if (mounted) _message('新增品項失敗：$error');
+      if (mounted) _message(lifeUserError('新增品項失敗', error));
     } finally {
       if (mounted) setState(() => _mutatingLists.remove(list.id));
     }
@@ -173,7 +174,7 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
       _reload();
       if (mounted) _message('清單已修改');
     } catch (error) {
-      if (mounted) _message('修改清單失敗：$error');
+      if (mounted) _message(lifeUserError('修改清單失敗', error));
     } finally {
       if (mounted) setState(() => _mutatingLists.remove(list.id));
     }
@@ -212,7 +213,7 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
       _reload();
       if (mounted) _message('清單已刪除');
     } catch (error) {
-      if (mounted) _message('刪除清單失敗：$error');
+      if (mounted) _message(lifeUserError('刪除清單失敗', error));
     } finally {
       if (mounted) setState(() => _mutatingLists.remove(list.id));
     }
@@ -231,7 +232,7 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
       _reload();
       if (mounted) _message('品項已修改');
     } catch (error) {
-      if (mounted) _message('修改品項失敗：$error');
+      if (mounted) _message(lifeUserError('修改品項失敗', error));
     } finally {
       if (mounted) setState(() => _updatingItems.remove(item.id));
     }
@@ -249,7 +250,7 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
       _reload();
       if (mounted) _message('品項已刪除');
     } catch (error) {
-      if (mounted) _message('刪除品項失敗：$error');
+      if (mounted) _message(lifeUserError('刪除品項失敗', error));
     } finally {
       if (mounted) setState(() => _updatingItems.remove(item.id));
     }
@@ -265,7 +266,7 @@ class _ShoppingPageState extends ConsumerState<ShoppingPage> {
       _reload();
       if (mounted) _message(value ? '已完成「${item.name}」' : '已恢復「${item.name}」');
     } catch (error) {
-      if (mounted) _message('更新品項失敗：$error');
+      if (mounted) _message(lifeUserError('更新品項失敗', error));
     } finally {
       if (mounted) setState(() => _updatingItems.remove(item.id));
     }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'life_ui_environment.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -237,7 +238,7 @@ class _NotesPageState extends ConsumerState<NotesPage> {
       try {
         tags = await api.getNoteTags(note.id);
       } catch (error) {
-        if (mounted) _message('載入標籤失敗：$error');
+        if (mounted) _message(lifeUserError('載入標籤失敗', error));
       }
     }
     if (!mounted) return;
@@ -268,9 +269,9 @@ class _NotesPageState extends ConsumerState<NotesPage> {
       if (!mounted) return;
       _message(tagError == null
           ? (note == null ? '筆記已新增' : '筆記已更新')
-          : '筆記已儲存，但標籤更新失敗：$tagError');
+          : lifeUserError('筆記已儲存，但標籤更新失敗', tagError));
     } catch (error) {
-      _message('操作失敗：$error');
+      _message(lifeUserError('操作失敗', error));
     }
   }
 
@@ -331,7 +332,7 @@ class _NotesPageState extends ConsumerState<NotesPage> {
       _reload();
       if (mounted) _message('分類已更新');
     } catch (error) {
-      _message('更新分類失敗：$error');
+      _message(lifeUserError('更新分類失敗', error));
     }
   }
 
@@ -366,7 +367,7 @@ class _NotesPageState extends ConsumerState<NotesPage> {
       _reload();
       if (mounted) _message('筆記已刪除');
     } catch (error) {
-      _message('操作失敗：$error');
+      _message(lifeUserError('操作失敗', error));
     }
   }
 
@@ -806,7 +807,7 @@ class _ErrorState extends StatelessWidget {
           children: [
             const Text('筆記載入失敗'),
             const SizedBox(height: 8),
-            Text('$error', maxLines: 3, overflow: TextOverflow.ellipsis),
+            Text(lifeUserError('', error), maxLines: 3, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: onRetry,

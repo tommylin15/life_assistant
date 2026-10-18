@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'life_ui_environment.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -169,7 +170,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
       _reload();
       if (mounted) _notify(event == null ? '行程已新增' : '行程已更新');
     } catch (error) {
-      if (mounted) _notify('儲存行程失敗：$error');
+      if (mounted) _notify(lifeUserError('儲存行程失敗', error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -205,7 +206,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
       _reload();
       if (mounted) _notify('行程已刪除');
     } catch (error) {
-      if (mounted) _notify('刪除行程失敗：$error');
+      if (mounted) _notify(lifeUserError('刪除行程失敗', error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -229,7 +230,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => AppStatePanel(
           title: '無法載入日曆',
-          message: '$error',
+          message: lifeUserError('', error),
           icon: const Icon(Icons.cloud_off_outlined),
           action: FilledButton.icon(
             onPressed: _reload,

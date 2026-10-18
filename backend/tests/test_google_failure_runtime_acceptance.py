@@ -39,7 +39,7 @@ class GoogleFailureRuntimeAcceptanceContractTests(unittest.TestCase):
         google_failure_marker = (
             "Run Google provider failure-path runtime acceptance"
         )
-        sqlite_marker = "Run SQLite backfill runtime acceptance"
+        cleanup_marker = "Keep only the latest life_assistant image"
         self.assertIn(
             "CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance",
             workflow,
@@ -59,7 +59,7 @@ class GoogleFailureRuntimeAcceptanceContractTests(unittest.TestCase):
         )
         self.assertLess(
             workflow.index(google_failure_marker),
-            workflow.index(sqlite_marker),
+            workflow.index(cleanup_marker),
         )
 
 

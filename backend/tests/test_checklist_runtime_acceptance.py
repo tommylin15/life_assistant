@@ -35,18 +35,12 @@ class ChecklistRuntimeAcceptanceContractTests(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, source)
 
-    def test_deploy_workflow_runs_checklist_acceptance_after_cloud_domain_acceptance(self):
+    def test_retired_checklist_cloud_runner_is_not_in_deploy_workflow(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("Run checklist cloud runtime acceptance", workflow)
-        self.assertIn("--args=-m,scripts.run_checklist_cloud_acceptance", workflow)
-        self.assertLess(
-            workflow.index("Run authenticated cloud-domain acceptance"),
-            workflow.index("Run checklist cloud runtime acceptance"),
-        )
-        self.assertLess(
-            workflow.index("Run checklist cloud runtime acceptance"),
-            workflow.index("Run action-id idempotency runtime acceptance"),
-        )
+        self.assertNotIn("Run checklist cloud runtime acceptance", workflow)
+        self.assertNotIn("--args=-m,scripts.run_checklist_cloud_acceptance", workflow)
+        self.assertIn("Run action-id idempotency runtime acceptance", workflow)
+
 
 
 if __name__ == "__main__":

@@ -252,6 +252,24 @@ class CloudBuildV2Tests(unittest.TestCase):
                                   'gcloud run jobs execute', 'gcloud run services update-traffic',
                                   'add-iam-policy-binding', 'force: true'):
                     self.assertNotIn(forbidden, source)
+            elif workflow.name == 'life-curated-import-once-20261018.yml':
+                # A single exact-commit importer smoke: not an auto release.
+                self.assertIn('workflow_run:', source)
+                self.assertIn('workflows: ["CI"]', source)
+                self.assertIn("workflow_run.event == 'push'", source)
+                self.assertIn("workflow_run.conclusion == 'success'", source)
+                self.assertIn('79ebbb4b1724e5b3da28c77eadf969c28d061c00', source)
+                self.assertIn('39099363389', source)
+                self.assertIn('39099726879', source)
+                self.assertIn('39099185649', source)
+                self.assertIn('free-events-postgres', source)
+                self.assertIn('v3_curated_handoff_alignment.py', source)
+                self.assertIn('gcloud run jobs execute "$JOB"', source)
+                self.assertIn('GITHUB_RUN_ATTEMPT', source)
+                for forbidden in ('schedule:', 'gcloud run jobs update',
+                                  'gcloud run services update-traffic',
+                                  'add-iam-policy-binding', '--raw-field promote=true'):
+                    self.assertNotIn(forbidden, source)
             else:
                 self.assertIn('workflow_dispatch:', source)
                 self.assertNotIn('workflow_run:', source)

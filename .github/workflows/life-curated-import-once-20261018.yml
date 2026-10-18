@@ -1,0 +1,151 @@
+# Exact single-execution acceptance for the pinned production importer.
+# Does not change IAM, job definition, database schema, or production traffic.
+name: Life Curated One-Time Import Acceptance
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: life-assistant-v3-production-release
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: dev-test
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      CI_RUN_ID: ${{ github.event.workflow_run.id }}
+      BASE_SHA: 79ebbb4b1724e5b3da28c77eadf969c28d061c00
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      JOB: life-assistant-free-events
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Verify one-time commit, all CI gates and passed production baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$SOURCE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA?per_page=100" |
+            jq -e --arg parent "$BASE_SHA" '
+              (.parents|length)==1 and .parents[0].sha==$parent and
+              ([.files[].filename]|sort)==
+              ([".github/workflows/life-curated-import-once-20261018.yml",
+                ".github/workflows/v3-auto-staging-after-ci.yml",
+                "backend/tests/test_cloud_build_v2.py"]|sort)' >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID" |
+            jq -e --arg sha "$SOURCE_SHA" '
+              .status=="completed" and .conclusion=="success" and
+              .head_sha==$sha and .event=="push"' >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID/jobs?per_page=100" |
+            jq -e '[.jobs[]|select(.conclusion=="success")|.name]|unique|
+              (index("backend")!=null and index("flutter")!=null and
+               index("free-events-postgres")!=null and
+               index("deployment-scripts")!=null)' >/dev/null
+          for ID in 39099363389 39099726879 39099185649; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ID" |
+              jq -e --arg sha "$BASE_SHA" '
+                .status=="completed" and .conclusion=="success" and
+                .head_sha==$sha' >/dev/null
+          done
+          echo "one_shot_import_gate=PASS base=$BASE_SHA"
+
+      - uses: ./.github/actions/setup-gcp
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Verify immutable live service and importer Job images and contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe life-assistant-api \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/curated-live.json"
+          REV="$(jq -er '[.status.traffic[]|select((.percent//0)>0)]|
+            if length==1 and .[0].percent==100 then .[0].revisionName
+            else error("not sole 100-percent revision") end' "$RUNNER_TEMP/curated-live.json")"
+          gcloud run revisions describe "$REV" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/curated-revision.json"
+          IMAGE="$(python - "$RUNNER_TEMP/curated-revision.json" <<'PY'
+          import json,sys
+          sys.path.insert(0,".github/scripts")
+          from v3_image_identity import canonical
+          print(canonical(json.load(open(sys.argv[1]))["spec"]["containers"][0]["image"]))
+          PY
+          )"
+          python .github/scripts/v3_curated_handoff_alignment.py \
+            --mode live --json "$RUNNER_TEMP/curated-live.json" \
+            --revision-json "$RUNNER_TEMP/curated-revision.json" \
+            --expected-revision "$REV" --expected-image "$IMAGE"
+          gcloud run jobs describe "$JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/curated-job.json"
+          python .github/scripts/v3_curated_handoff_alignment.py \
+            --mode job --json "$RUNNER_TEMP/curated-job.json" \
+            --expected-image "$IMAGE"
+          gcloud run jobs executions list --job "$JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --limit 1 --format='value(metadata.name)' \
+            > "$RUNNER_TEMP/curated-exec-before"
+          echo "curated_import_preflight=PASS live_revision=$REV"
+
+      - name: Run importer once and await a verified new successful execution
+        shell: bash
+        run: |
+          set -uo pipefail
+          gcloud run jobs execute "$JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --wait --quiet --format=json \
+            > "$RUNNER_TEMP/curated-execute.json" \
+            2> "$RUNNER_TEMP/curated-execute-error.txt"
+          CODE=$?
+          AFTER="$(gcloud run jobs executions list --job "$JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --limit 1 --format='value(metadata.name)' 2>/dev/null || true)"
+          BEFORE="$(cat "$RUNNER_TEMP/curated-exec-before")"
+          if [ "$CODE" -ne 0 ] || [ -z "$AFTER" ] || [ "$AFTER" = "$BEFORE" ]; then
+            echo "::error::curated_import_job=FAIL; raw error retained only in runner"
+            echo "curated_import_job=FAIL" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          gcloud run jobs executions describe "$AFTER" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format=json > "$RUNNER_TEMP/curated-exec-after.json"
+          python - <<'PY'
+          import json,os,sys
+          obj=json.load(open(os.environ["RUNNER_TEMP"]+"/curated-exec-after.json"))
+          s=obj.get("status",{})
+          ok=any(c.get("type")=="Completed" and c.get("status") in ("True",True)
+                 for c in s.get("conditions",[]))
+          failures=int(s.get("failedCount") or 0)
+          print(f"curated_import_execution completed={ok} failed_tasks={failures}")
+          if not ok or failures:
+              sys.exit(1)
+          PY
+          RC=$?
+          echo "curated_import_job=$([ "$RC" = 0 ] && echo PASS || echo FAIL) execution=$AFTER" >> "$GITHUB_STEP_SUMMARY"
+          exit "$RC"

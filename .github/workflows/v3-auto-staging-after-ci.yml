@@ -82,6 +82,11 @@ jobs:
             echo "auto_staging=SKIP curated_one_shot_promotion_bridge" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          # One-shot importer execution verifies the existing promoted image.
+          if jq -e 'any(.files[]; .filename==".github/workflows/life-curated-import-once-20261018.yml")' <<< "$CHANGED" > /dev/null; then
+            echo "auto_staging=SKIP one_shot_import_acceptance" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           # Do not start a second same-SHA release for CI re-runs, including
           # releases already dispatched manually. The V3 release has its own
           # immutable SHA guard and shared release concurrency lock.

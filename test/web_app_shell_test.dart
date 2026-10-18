@@ -32,6 +32,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('日常生活'), findsWidgets);
     expect(find.text('知識與計畫'), findsWidgets);
+    // The additional persistent utility item makes the mobile drawer list
+    // scrollable; the final navigation group can be off-screen initially.
+    await tester.scrollUntilVisible(
+      find.text('活動與機會'),
+      120,
+      scrollable: find.descendant(
+        of: find.byType(Drawer),
+        matching: find.byType(Scrollable),
+      ).first,
+    );
     expect(find.text('活動與機會'), findsWidgets);
     expect(find.text('個人化'), findsWidgets);
     expect(find.text('最新消息'), findsWidgets);

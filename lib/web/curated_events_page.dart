@@ -66,9 +66,9 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
     'unknown_time': '時間待公布', 'latest': '最新收錄',
   };
   static const explorationChips = {
-    'ongoing': '正在進行', 'weekend': '本週末',
-    'next_7': '7 天內開始', 'next_30': '30 天內開始',
-    'free': '免費活動', 'latest': '最新收錄',
+    'latest': '最新收錄', 'ongoing': '正在進行',
+    'weekend': '本週末', 'next_7': '7 天內開始',
+    'next_30': '30 天內開始', 'free': '免費活動',
   };
   static const regions = {
     '': '全台', 'north': '北部', 'central': '中部',

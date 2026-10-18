@@ -325,7 +325,6 @@ async def list_curated(
     )
     if verification_status:
         # JSON metadata is additive: no table migration or v1 30-column break.
-        from sqlalchemy import literal
         stored_verification = func.coalesce(
             CuratedActivity.handoff_details["verification_status"].as_string(),
             literal("unknown"),

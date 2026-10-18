@@ -52,6 +52,47 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --limit 10 --format=json > "$RUNNER_TEMP/executions.json" 2>/dev/null || echo '[]' > "$RUNNER_TEMP/executions.json"
 
+      - name: Read recent importer error signatures (read only)
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "## Recent Cloud Run importer logs (read only)" >> "$GITHUB_STEP_SUMMARY"
+          # Never invoke the Job or display the raw payload. Only log stable,
+          # redacted error categories and sanitized return codes.
+          if ! gcloud logging read \
+              'resource.type="cloud_run_job" AND resource.labels.job_name="life-assistant-free-events"' \
+              --project "$GCP_PROJECT_ID" --freshness=72h --limit=150 \
+              --format='value(textPayload)' > "$RUNNER_TEMP/importer-logs.txt" 2>"$RUNNER_TEMP/importer-log-error.txt"; then
+            echo "- logging_read=NOT_VERIFIED (permission or API failure)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            python - <<'PY'
+          import collections, os
+          from pathlib import Path
+
+          log = Path(os.environ["RUNNER_TEMP"] + "/importer-logs.txt").read_text(errors="replace")
+          patterns = {
+              "invalid_handoff_record": "invalid_handoff_record",
+              "duplicate_event_key": "missing_or_duplicate_event_key",
+              "header_mismatch": "handoff_header_contract_mismatch",
+              "receipt_failure": "handoff_import_system_failure",
+              "concurrent_execution": "handoff_concurrent_execution",
+              "sheets_429": "sheets_http_429",
+              "sheets_403": "sheets_http_403",
+              "source_invalid": "life_handoff_invalid",
+              "import_summary": "life_handoff_import",
+              "schema_validation": "ValidationError",
+              "database_failure": "database_import_failed",
+          }
+          lines = log.splitlines()
+          counts = {name: sum(token in line for line in lines) for name, token in patterns.items()}
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              print(f"- log_lines={len(lines)} (last 72h, max 150 entries)", file=f)
+              for name, count in counts.items():
+                  print(f"- {name}={count}", file=f)
+              print("- Individual event payloads, access tokens and raw traces deliberately excluded.", file=f)
+          PY
+          fi
+
       - name: Generate summary
         run: |
           python - <<'PY'

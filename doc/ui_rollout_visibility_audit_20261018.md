@@ -25,12 +25,12 @@ Review based on current `main` implementation: `backend/app/api/ui_policies.py`,
 | gmail_radar | Gmail Radar | Gmail radar backend router; public allowlist was missing and is now aligned |
 | integrations | Google services | Shared Google Integration router gate; dependent Gmail and calendar consent must remain valid |
 | drive | Drive file manager | **Owner-only** due account-level route restrictions, regardless of rollout setting; Drive bridge mutation gated |
-| events | Old curated legacy entry | **Owner-only** legacy flag; legacy free-events endpoint gated, current navigation redirects to Explore |
+| events | Retired curated legacy entry | **Do not expose this ineffective switch in Admin.** Old free-events compatibility router retains its original authentication/Owner status rules and is not governed by the retired key; current navigation redirects to Explore |
 
 ## Candidate-only UI
 - Acceptance center is shown only to the authorized owner on fixed staging and Preview hosts; production direct navigation shows a neutral page. Server-side owner checks remain.
 - Gmail Radar keeps useful user outcomes on production; technical scan metadata and implementation explanations are shown only on candidate.
-- Admin feature statuses use user-oriented labels and distinguish Owner-only flags from public-capable switches.
+- Admin feature statuses use user-oriented labels, distinguish Owner-only flags from public-capable switches, and hide the retired `events` switch rather than pretending it controls all legacy compatibility endpoints.
 - Further candidates for reducing visual noise: repeated feature introductions, duplicate refresh actions, and long secondary explanations; remove only after a separate per-feature usability check.
 
 ## Evidence / completion

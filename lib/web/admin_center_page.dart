@@ -34,8 +34,10 @@ class AdminCenterPage extends ConsumerWidget {
         data: (data) => ListView(padding: const EdgeInsets.all(16), children: [
           Text('功能開放', style: Theme.of(context).textTheme.headlineSmall),
           const Text('調整各功能的使用範圍；未開放的功能不會出現在一般使用者畫面。'),
+          // Retired curated/events is a compatibility key, not a
+          // public feature users can reach through current navigation.
           for (final dynamic feature in (data['features'] as List))
-            ListTile(
+            if (feature['key'] != 'events') ListTile(
               title: Text(feature['title'].toString()),
               subtitle: Text(rolloutStatusText(Map<String, dynamic>.from(feature as Map))),
               trailing: PopupMenuButton<String>(

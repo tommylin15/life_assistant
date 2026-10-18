@@ -11,4 +11,6 @@
 **歷史狀態（2026-10-12；非當前終態）：** GAS GET/preflight 與 jobs.run 接受請求 PASS，當次 Cloud Run Execution FAIL；新版本 importer CI／部署、PostgreSQL readback、Sheet ACK 與每日 07:30 GAS trigger 仍未完成真實驗收。整體 PARTIAL。**
 
 
+**2026-10-18 後續設計提案（尚未切換）**：未來可由獨立 omniAgent 自主探索 Agent 取代 ChatGPT Work 上游，**不改** Drive 精選池／30 欄交接／Life importer／Flutter 契約；設計、服務身分、來源自動修復與文件核准界線見 [Life Agent 整合規劃](taiwan_activity_agent_integration.md) 及 [omniAgent Agent Worker 規劃](https://github.com/tommylin15/omniAgent/blob/main/docs/taiwan-activity-autonomous-agent.md)。目前仍以本文件現行 ChatGPT 探索→Drive 路徑為實作基準，直到 Shadow／正式讀回及唯一 writer 切換全部 PASS；不可因新增設計文件宣稱已運行 GCP Agent。
+
 **2026-10-15 最新 Life runtime 索引：** 2026-10-14 對應原始 SHA 的 [CI](https://github.com/tommylin15/life_assistant/actions/runs/38567184081)、[promoted release](https://github.com/tommylin15/life_assistant/actions/runs/38572432707) PASS；release 僅對既有 Job 進行相同 digest pin 和讀回，`execution=NOT_RUN`。最新 GAS 定期觸發、當輪 PG/Sheet ACK 仍 **NOT VERIFIED**；本文件的舊 2026-10-12 失敗事件不代表最新 Job 再次失敗。證據主入口 [CURRENT_STATE](CURRENT_STATE.md)。

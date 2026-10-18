@@ -59,3 +59,11 @@
 - GitHub 現有 importer 若仍讀舊 `精選活動`／`pool狀態=selected`、僅 Sheets readonly 或使用 URL identity，應標 **IMPLEMENTATION GAP**。需求須經現況程式盤點、tests、CI、staging、PG、Flutter、Drive ACK 實際驗收；文件更新不等於 Job 已改造、授權、排程或部署。
 
 **2026-10-12 接續**：使用者的 GAS 讀 Job 與正式 live GHCR digest preflight 回報 `READY`，`jobs.run` 回報 `ACCEPTED_NOT_COMPLETED`；Execution `life-assistant-free-events-zc4xr` 最終 `CONDITION_FAILED`（Exit 1）。交接表仍有待處理 READY/ERROR；使用者提供 stderr 可確認：Pydantic `HandoffItem` 有單一欄位驗證失敗（片段未包含欄位名稱，尚不能認定是哪一欄），舊版逐筆回執時發生 `sheets_http_429` 並使 Execution Exit 1。現行 GitHub `main` 已實作批次回執、429/暫時 5xx 有界退避重試與驗證錯誤欄名（不輸出值）診斷，回歸測試 Backend／free-events-postgres jobs PASS；尚未證明正式 Job 已部署或 E2E PASS。詳見 [CURRENT_STATE](CURRENT_STATE.md)。實際 Job 終態、PostgreSQL 及 Sheet ACK 仍須在修正版本部署後驗收。
+
+## 2026-10-18｜整批活動探索 P0–P2 與匯入 Job 合併收斂（待整體驗收）
+
+- **責任合併**：先完成 life_assistantGPT Drive 01～05 與正式來源／精選池、Life 前台核證狀態和來源連結、`life-assistant-free-events` 修復，再一次進入整合驗證／部署。探索來源備援改為網頁讀取 TinyFish → Tavily → Firecrawl；不是 DNS 專用，也不使用 Jina Reader，絕不繞過 403/429／登入／站方限制。
+- **執行異常證據（唯讀）**：2026-10-18 GitHub「Life Importer Evidence (read only)」列出最近 Execution `life-assistant-free-events-gpp8c` `status=False / failed_tasks=1 / reason=NonZeroExitCode`；尚未取得該次容器應用程式 traceback，不能斷言根因。當日曾有 Wild Wild 舊 ACKED 與新 READY **相同 event_key 雙列**，違反 importer `parse_rows` fail-closed 唯一鍵契約；此為高可信風險候選，不等同已證明本次 Exit 的原因。後續原鍵第60列保留新版 READY、重複第63列清空並讀回；必須正式重跑查證。
+- **來源品質**：第55列 `invalid_handoff_record` 為舊 ERROR，不能僅改 READY 或 ACKED 冒充復原。以新版本正式 `HandoffItem` 驗證及 Job `life_handoff_invalid fields=...`（僅欄名與錯誤類型）釐清後才依業務變動重算 `content_hash`。若新版本能合法重試既有 ERROR，允許 importer 在 DB commit 後自然寫回 ACKED。
+- **第31欄 rollout 嚴格順序**：目前正式 30 欄，最新版 GitHub main 新增可選 `verification_status`（`unknown/pending_review/verified`）及 `LEGACY_HEADERS` 30欄相容。**不能先改正式 Sheet 表頭成31欄，再讓舊版 Job 讀取**；先新 SHA 四項 CI／候選／固定 staging 通過，將具30/31欄相容的 Job image/args/env 依正常 V3 production promotion 對齊正式 API digest 並確認 readback；接著擴充正式 Sheet AE 表頭、回讀確認，舊活動 AE 留空視為 unknown、不可偽造已核實。新業務內容（含核證狀態）依版本 hash 更新相同 event_key，唯有改變實質業務時才更新 READY；最後執行 Job，核 PG 版本及 Sheet ACK、Flutter 核證標籤與來源/報名兩網址。對任何不一致 fail closed，保留原版可回滾。
+- **測試/部署 gate**：新程式 tests/CI、部署 digest、Cloud Run Job Execution、PostgreSQL `event_key + content_hash`、Sheet 實際 ACK、前台一般用戶 readback、Drive 當日唯一 Log 與 A7/B10 分面向 PASS/FAIL/NOT VERIFIED。完整 E2E 證據前標 PARTIAL，不因 CI 綠燈或文件修改稱 DONE。

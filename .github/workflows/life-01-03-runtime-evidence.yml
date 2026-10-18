@@ -124,5 +124,6 @@ jobs:
                   name = e.get("metadata", {}).get("name", "").split("/")[-1]
                   status = e.get("status", {}).get("conditions", [{}])[0].get("status", "?")
                   print(f"  - {name}: {status}", file=f)
-                  print(f"importer_execution name={name} status={status}")
+                  reasons = [str(c.get("reason") or c.get("type") or "unknown") for c in e.get("status", {}).get("conditions", []) if c.get("status") in (False, "False")]
+                  print(f"importer_execution name={name} status={status} failed_tasks={e.get('status', {}).get('failedCount', 0)} retries={e.get('status', {}).get('retriedCount', 0)} reasons={';'.join(reasons)[:180]}")
           PY

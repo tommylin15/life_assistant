@@ -85,6 +85,9 @@ jobs:
           }
           lines = log.splitlines()
           counts = {name: sum(token in line for line in lines) for name, token in patterns.items()}
+          for name, count in counts.items():
+              print(f"importer_log_signature {name}={count}")
+          print(f"importer_log_lines={len(lines)}")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
               print(f"- log_lines={len(lines)} (last 72h, max 150 entries)", file=f)
               for name, count in counts.items():
@@ -121,4 +124,5 @@ jobs:
                   name = e.get("metadata", {}).get("name", "").split("/")[-1]
                   status = e.get("status", {}).get("conditions", [{}])[0].get("status", "?")
                   print(f"  - {name}: {status}", file=f)
+                  print(f"importer_execution name={name} status={status}")
           PY

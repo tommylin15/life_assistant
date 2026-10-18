@@ -245,7 +245,8 @@ void main() {
     await _pumpHabitsPage(tester, api);
 
     expect(find.text('無法載入習慣'), findsOneWidget);
-    expect(find.textContaining('backend unavailable'), findsOneWidget);
+    expect(find.text('請稍後重試。'), findsOneWidget);
+    expect(find.textContaining('backend unavailable'), findsNothing);
     expect(find.widgetWithText(FilledButton, '重試'), findsOneWidget);
   });
 }

@@ -1,5 +1,12 @@
 # Life — Acceptance
 
+## 2026-10-18｜Core acceptance 精簡（主動取消三項部署門檻）
+- 依 Owner 決策，日常 Cloud Run 部署與 V3 Release 的 `life-assistant-core-acceptance` 不再執行：Checklist Cloud、SQLite→PostgreSQL Backfill、Backfill Failure-path 三項獨立驗收。
+- 常態保留 Cloud Domain Parity、Action-ID Idempotency、Google Failure-path 三項；其他既有真實 Google、活動池與個人資料隔離 gate 不變。
+- **僅取消重複驗收呼叫**；未刪除待辦／Checklist 產品功能、SQLite→PostgreSQL 遷移工具、已建立的資料庫 migration、任何 production 資料或歷史執行證據。該三項不再構成每次發布的必要 PASS 條件。
+- 本次實作及 CI／部署／runtime 證據依對應 commit 與 Actions 留存；文件更新本身不表示 CI、部署或 runtime 已 PASS。
+
+
 ## 2026-10-16｜新版 Staging 使用者人工驗收：PASS（CI/CD 效能重構修復版）
 - **對應版本**：`2cfe1c9f1e4946bc2849a863f9891419f0db1c45`，四項 [CI #38886583192](https://github.com/tommylin15/life_assistant/actions/runs/38886583192) completed/success；[Staging Release #38886894486](https://github.com/tommylin15/life_assistant/actions/runs/38886894486) completed/success。固定 Hosting version `a1c3bd3ce0d7c6fc`，Staging SHA/API 401/OAuth redirect PASS，正式流量 unchanged。
 - **使用者驗收**：使用者本次明確表示「新版測試網址通過人工驗收」，故此版本的 Staging 人工操作 gate 記 **PASS（user-reported）**，不再要求為已通過的同版 Staging 重做人工操作。早前使用者亦曾回報 Gemini 文章摘要成功；保留該個別功能的真人成功回報。

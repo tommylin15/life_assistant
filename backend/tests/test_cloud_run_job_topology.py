@@ -29,17 +29,29 @@ class CloudRunJobTopologyTests(unittest.TestCase):
         )
         self.assertEqual(
             workflow.count('gcloud run jobs execute "$CORE_ACCEPTANCE_JOB"'),
-            6,
+            3,
         )
         for acceptance_module in (
             "scripts.run_cloud_domain_parity_acceptance",
-            "scripts.run_checklist_cloud_acceptance",
             "scripts.run_idempotency_acceptance",
             "scripts.run_google_failure_acceptance",
+        ):
+            self.assertIn(acceptance_module, workflow)
+
+        v3_release = (WORKFLOWS / "v3-release-ghcr.yml").read_text(encoding="utf-8")
+        for removed_module in (
+            "scripts.run_checklist_cloud_acceptance",
             "scripts.run_sqlite_backfill_acceptance",
             "scripts.run_sqlite_backfill_failure_acceptance",
         ):
-            self.assertIn(acceptance_module, workflow)
+            self.assertNotIn(removed_module, workflow)
+            self.assertNotIn(removed_module, v3_release)
+        for kept_module in (
+            "scripts.run_cloud_domain_parity_acceptance",
+            "scripts.run_idempotency_acceptance",
+            "scripts.run_google_failure_acceptance",
+        ):
+            self.assertIn(kept_module, v3_release)
 
     def test_postdeploy_acceptance_uses_one_shared_runner(self):
         workflow_path = WORKFLOWS / "postdeploy-runtime-acceptance.yml"

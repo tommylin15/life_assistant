@@ -1,5 +1,5 @@
 # life_assistant — Documentation index
-Updated 2026-10-15 (Asia/Taipei). **GitHub main and runtime evidence govern implementation state; Drive-approved discovery specifications govern exploration design.** Historical documents and older dates never supersede current code/evidence.
+Updated 2026-10-18 (Asia/Taipei). **GitHub main and runtime evidence govern implementation state; Drive-approved discovery specifications govern exploration design.** Historical documents and older dates never supersede current code/evidence.
 
 | Question | Canonical current reference |
 | --- | --- |
@@ -9,6 +9,7 @@ Updated 2026-10-15 (Asia/Taipei). **GitHub main and runtime evidence govern impl
 | What could go wrong? | **[Risk register](RISK_REGISTER.md)** |
 | What are the product and account rules? | [CURRENT_PRODUCT_ARCHITECTURE](CURRENT_PRODUCT_ARCHITECTURE.md), [decisions](decisions.md), [spec](spec.md) |
 | Where is the activity importer contract? | [curated_sheet_job_ingestion](curated_sheet_job_ingestion.md); [exploration/Life boundary](taiwan_free_events_discovery_plan.md) |
+| How will the proposed omniAgent activity explorer integrate? | [Taiwan activity agent integration](taiwan_activity_agent_integration.md) — **design only**, preserves Drive exploration specs and Life importer |
 | What do users see/do with activities? | [curated_activity_user_features](curated_activity_user_features.md) |
 | How are UI and personal settings designed? | [life_navigation_personalization_v2](life_navigation_personalization_v2.md), [ui_visual_system](ui_visual_system.md), [design_system](design_system.md) |
 | How will Life capture free-form text, classify and optionally summarize a URL? | **[Life Inbox / Quick Capture V1 design](life_inbox_quick_capture_spec.md)** and **[AI developer instructions](life_inbox_ai_developer_instructions.md)** — implementation/acceptance status in [CURRENT_STATE](CURRENT_STATE.md). |

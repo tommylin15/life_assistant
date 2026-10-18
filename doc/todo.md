@@ -1,14 +1,15 @@
 # Life — Active engineering TODO
 Updated 2026-10-18. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
 
-## 2026-10-18｜台灣活動探索尚未關閉的整合證據（不重做已完成的 Job）
+## 2026-10-18｜台灣活動探索接續／唯一活躍缺口（15:54 更新）
 
-| 優先序 | 內容 | 最新狀態／出口 |
+| 優先序 | 項目 | 最新狀態／退出條件 |
 | --- | --- | --- |
-| P0 | 對帳 `life-assistant-free-events` 與交接表版本、必要 PostgreSQL readback | **Job PASS、Sheet PASS**：#39101120210 新 Execution Completed／0 failed；62 ACKED／0 ERROR／0 READY、無重複鍵；**PG 同鍵 BeClass AE 新版回讀 NOT VERIFIED**；不可反覆執行 Job 只為更新 ACK 時間 |
-| P1 | BeClass／EventGo 等尚待核活動與前台區分 | 31 欄 `verification_status` 已存在，BeClass 一筆 pending_review 於交接表 ACK；同鍵升級流程和 Flutter source/registration 雙連結在 main 有實作與測試；**正式一般用戶 UI 顯示/篩選及 PG 業務資料讀回 NOT VERIFIED**，未核不應變已核實 |
-| P1 | Drive 正式每日來源探索與品質 | README + 01～05 的 A7（含 eventgo.tw、Citytalk/TDX 停用）、B10、本輪來源逐站、快照、新候選與修復、原池 78 鍵及四視圖讀回，需另由當次探索 run_id 記錄；**同輪完整驗收 NOT VERIFIED**。不得用前輪覆蓋或讓 Life DB Job 代掃網站 |
-| P2 | 定期觸發與跨系統驗收 | GAS 每日 07:30 觸發器及下一次自然 Job Execution／Sheet/PG readback **NOT VERIFIED**；保持目前單一 importer，不加 cron/第二寫入者，並按需以正常 V3 + Hosting 同 SHA 產品 E2E gate 驗收 |
+| P0（關閉） | Life importer／交接 Sheet／PG 同版本 | **PASS／DONE（技術資料鏈）**：正式 Job 真實成功 [#39101120210](https://github.com/tommylin15/life_assistant/actions/runs/39101120210)；15:54 Sheet **65 ACKED、0 ERROR／READY**，3 筆新 BeClass 同鍵 CREATED；[只讀 PG 逐鍵版本＋核證狀態比對 #39110194986](https://github.com/tommylin15/life_assistant/actions/runs/39110194986) PASS。嚴禁為重複驗收再跑 importer。 |
+| P1 | Life 活動探索前台新版顯示／分類 | **PARTIAL**：`pending_review` 與 verified／unknown、來源與報名兩網址及搜尋功能 source/CI 已具備；但當前並行 Flutter UI commits 的同 SHA Staging／Production Hosting、登入後一般帳號可見新三筆、標籤與雙連結真實 E2E **NOT VERIFIED**。合併當輪 UI 工作一次驗收。 |
+| P1 | 人工 15:07 新版來源探索品質 | **PARTIAL**：A7＝7 已實查、B11＝11 distinct 實查／9 usable、快照 PASS、精選池 78→81、四視圖／交接讀回 PASS，唯一 10/18 Log PASS；B 月曆／Yii 新鮮度、原主辦額外證據及本輪跨日逐 ID 變更 **NOT VERIFIED**。不要把來源閱讀備援視作繞 403／429。 |
+| P2 | 次日自然排程／發布 | **NOT VERIFIED**：現有 06:00 探索排程保留唯一執行者，Life GAS 約 07:30 Trigger ID 與自然執行待次日真實證據；無新增 cron/Queue/第二寫入者。正常 UI 發布另依完整 V3/Hosting/rollback gate。 |
+
 
 | Priority | Work / exit gate | Status |
 | --- | --- | --- |

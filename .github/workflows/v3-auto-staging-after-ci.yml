@@ -68,6 +68,12 @@ jobs:
             exit 0
           fi
 
+          # The narrowly pinned activity-filter UI production continuation
+          # handles its own staged promotion. Avoid a second staging-only run.
+          if jq -e 'any(.files[]; .filename==".github/workflows/life-activity-filter-release-once-20261018.yml")' <<< "$CHANGED" > /dev/null; then
+            echo "auto_staging=SKIP activity_filter_one_shot_release" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           # Owner-approved 2026-10-16 single-purpose production bridge.
           # That bridge reruns staging and all live gates before promotion.
           # Do not dispatch a duplicate staging-only release for its commit.

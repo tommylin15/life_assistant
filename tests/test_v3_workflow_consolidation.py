@@ -30,14 +30,11 @@ class ConsolidatedV3Tests(unittest.TestCase):
         self.assertNotIn("gh workflow run life-gemini",release)
         self.assertIn("Controlled rollback rehearsal and restore promoted live traffic",release)
 
-    def test_gemini_manual_and_current_gateway(self):
-        smoke=(WF/"life-gemini-p0v-signed-smoke.yml").read_text()
-        self.assertIn("workflow_dispatch:",smoke)
-        self.assertNotIn("\n  push:",smoke)
-        self.assertNotIn("gemini-p0v-b03e5f55",smoke)
-        self.assertIn('get("url")',smoke)
-        self.assertIn("active[0]",smoke)
-        self.assertIn('gcloud run jobs execute "$JOB"',smoke)
+    def test_standalone_job_dependent_gemini_smoke_retired(self):
+        self.assertFalse((WF / "life-gemini-p0v-signed-smoke.yml").exists())
+        release = (WF / "v3-release-ghcr.yml").read_text(encoding="utf-8")
+        self.assertIn("gemini_signed_smoke=RETIRED", release)
+        self.assertIn("candidate_http=PASS health,ready,401,oauth-redirect", release)
 
     def test_staging_preflight_404_retry_is_bounded_and_identifiable(self):
         script=(ROOT/"scripts/v3_fixed_staging_release.sh").read_text()

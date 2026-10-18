@@ -647,7 +647,7 @@ jobs:
           elif [[ "${{ steps.retire_revisions.outcome }}" == "skipped" ]]; then
             echo "retirement=NOT_RUN" >> "$GITHUB_STEP_SUMMARY"
           fi
-          echo "gemini_signed_smoke=MANUAL_INDEPENDENT non_blocking" >> "$GITHUB_STEP_SUMMARY"
+          echo "gemini_signed_smoke=RETIRED manual_runner_removed" >> "$GITHUB_STEP_SUMMARY"
 
       # workflow_dispatch from GITHUB_TOKEN is the supported handoff;
       # workflow_run is not emitted for a token-originated V3 dispatch.

@@ -81,7 +81,7 @@ jobs:
           print(f"life_acceptance_active_executions=NONE job={sys.argv[2]}")
           PY
             else
-              grep -Eiq '(NOT_FOUND|not found)' "$RUNNER_TEMP/$JOB-describe-error" || { cat "$RUNNER_TEMP/$JOB-describe-error"; exit 1; }
+              grep -Eiq '(NOT_FOUND|not found|Cannot find job)' "$RUNNER_TEMP/$JOB-describe-error" || { cat "$RUNNER_TEMP/$JOB-describe-error"; exit 1; }
             fi
           done
 
@@ -93,13 +93,13 @@ jobs:
             if gcloud run jobs describe "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(name)' >/dev/null 2>"$RUNNER_TEMP/$JOB-before"; then
               gcloud run jobs delete "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --quiet
             else
-              grep -Eiq '(NOT_FOUND|not found)' "$RUNNER_TEMP/$JOB-before" || { cat "$RUNNER_TEMP/$JOB-before"; exit 1; }
+              grep -Eiq '(NOT_FOUND|not found|Cannot find job)' "$RUNNER_TEMP/$JOB-before" || { cat "$RUNNER_TEMP/$JOB-before"; exit 1; }
             fi
             if gcloud run jobs describe "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json >/dev/null 2>"$RUNNER_TEMP/$JOB-after"; then
               echo "::error::Retired job still exists: $JOB"
               exit 1
             fi
-            grep -Eiq '(NOT_FOUND|not found)' "$RUNNER_TEMP/$JOB-after" || { cat "$RUNNER_TEMP/$JOB-after"; exit 1; }
+            grep -Eiq '(NOT_FOUND|not found|Cannot find job)' "$RUNNER_TEMP/$JOB-after" || { cat "$RUNNER_TEMP/$JOB-after"; exit 1; }
             echo "job_retirement=PASS job=$JOB readback=NOT_FOUND" >> "$GITHUB_STEP_SUMMARY"
           done
           gcloud run jobs describe life-assistant-db-migrate --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(name)' >/dev/null

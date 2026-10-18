@@ -22,23 +22,12 @@ class ProjectDriveRuntimeAcceptanceContractTests(unittest.TestCase):
         self.assertNotIn("get_drive_file_metadata", source)
         self.assertNotIn("googleapis.com", source)
 
-    def test_workflow_runs_only_after_successful_cloud_run_release(self):
-        workflow = (
-            Path(__file__).parents[2]
-            / ".github/workflows/postdeploy-runtime-acceptance.yml"
-        ).read_text(encoding="utf-8")
-        self.assertNotIn("workflow_run:", workflow)
-        self.assertIn("workflow_dispatch:", workflow)
-        self.assertIn("github.event_name == 'workflow_dispatch'", workflow)
-        self.assertIn("github.event.workflow_run.head_sha", workflow)
-        self.assertIn(
-            "POSTDEPLOY_ACCEPTANCE_JOB: life-assistant-postdeploy-acceptance",
-            workflow,
-        )
-        self.assertIn("scripts.run_project_drive_runtime_acceptance", workflow)
-        self.assertIn('gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB"', workflow)
-        self.assertIn("--max-retries 0", workflow)
-        self.assertIn("--task-timeout 5m", workflow)
+    def test_postdeploy_runtime_job_workflow_is_retired(self):
+        workflow = Path(__file__).parents[2] / ".github/workflows/postdeploy-runtime-acceptance.yml"
+        self.assertFalse(workflow.exists())
+        release = (Path(__file__).parents[2] / ".github/workflows/v3-release-ghcr.yml").read_text(encoding="utf-8")
+        self.assertNotIn("scripts.run_project_drive_runtime_acceptance", release)
+        self.assertIn("Post-promotion live health, PostgreSQL and access gates", release)
 
     def test_acceptance_covers_relation_lifecycle_and_exact_cleanup(self):
         source = inspect.getsource(acceptance)

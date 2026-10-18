@@ -183,22 +183,20 @@ class DriveProductionIntegrationAcceptanceContractTests(unittest.TestCase):
         )
         self.assertEqual(encode("unknown", 124), 124)
 
-    def test_task9_workflow_executes_runtime_config_and_live_ai_gates(self):
+    def test_drive_knowledge_workflow_is_ui_only(self):
         self.assertTrue(self.workflow.is_file())
         source = self.workflow.read_text(encoding="utf-8")
         for expected in (
-            "scripts.run_drive_production_config_acceptance",
-            "scripts.run_drive_external_ai_acceptance",
-            "Run Drive production config acceptance",
-            "Run live external AI acceptance",
-            "steps.production_config.outcome",
-            "steps.external_ai.outcome",
+            "Drive Knowledge UI Acceptance",
+            "Verify production Hosting release SHA",
+            "Verify OAuth client redirect configuration",
+            "Verify Drive Knowledge browser UI",
+            "verify_drive_knowledge_production.mjs",
         ):
             self.assertIn(expected, source)
-        self.assertNotIn(
-            'drive_external_ai_integration=NOT_VERIFIED reason=production_provider_adapter_not_enabled',
-            source,
-        )
+        self.assertNotIn("gcloud run jobs execute", source)
+        self.assertNotIn("life-assistant-postdeploy-acceptance", source)
+        self.assertNotIn("Run live external AI acceptance", source)
 
     def test_drive_knowledge_ui_acceptance_waits_for_attached_flutter_root_with_diagnostics(self):
         source = self.ui_script.read_text(encoding="utf-8")
@@ -356,15 +354,15 @@ class DriveAIProviderScopedDiagnosticsTests(unittest.IsolatedAsyncioTestCase):
             await external_ai_acceptance.run_configured_providers(only_provider="openai")
         self.assertEqual(failure.exception.code, external_ai_acceptance.EXIT_NOT_CONFIGURED)
 
-    def test_workflow_runs_bounded_provider_scoped_diagnostics_only_on_failure(self):
+    def test_retired_workflow_does_not_invoke_external_provider_acceptance(self):
         workflow = (
             Path(__file__).parents[2] /
             ".github/workflows/drive-knowledge-runtime-acceptance.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("--only-provider=gemini", workflow)
-        self.assertIn("--only-provider=openrouter", workflow)
-        self.assertIn("if: steps.external_ai.outcome == 'failure'", workflow)
-        self.assertIn("continue-on-error: true", workflow)
+        self.assertNotIn("--only-provider=gemini", workflow)
+        self.assertNotIn("--only-provider=openrouter", workflow)
+        self.assertNotIn("gcloud run jobs execute", workflow)
+        self.assertIn("drive_backend_postdeploy_acceptance=RETIRED", workflow)
 
 
 if __name__ == "__main__":

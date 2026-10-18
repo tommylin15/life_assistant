@@ -68,22 +68,12 @@ class DriveAIEnrichmentRuntimeAcceptanceContractTests(unittest.TestCase):
         self.assertNotIn("OPENAI_API_KEY", source)
         self.assertNotIn("ANTHROPIC_API_KEY", source)
 
-    def test_workflow_runs_exact_release_image_after_successful_cloud_run_release(self):
-        self.assertTrue(self.workflow_path.is_file())
-        source = self.workflow_path.read_text(encoding="utf-8")
-        for expected in (
-            "workflow_dispatch:",
-            "github.event_name == 'workflow_dispatch'",
-            "github.event.workflow_run.head_sha || github.sha",
-            "life-assistant-backend",
-            "POSTDEPLOY_ACCEPTANCE_JOB: life-assistant-postdeploy-acceptance",
-            'echo "ref=${IMAGE_BASE}@${IMAGE_DIGEST}"',
-            '--image "${{ steps.image.outputs.ref }}"',
-            'gcloud run jobs execute "$POSTDEPLOY_ACCEPTANCE_JOB"',
-            "scripts.run_drive_ai_enrichment_acceptance",
-            "--update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest",
-        ):
-            self.assertIn(expected, source)
+    def test_retired_postdeploy_workflow_is_not_active(self):
+        self.assertFalse(self.workflow_path.exists())
+        release = (self.repo_root / ".github/workflows/v3-release-ghcr.yml").read_text(encoding="utf-8")
+        self.assertNotIn("life-assistant-postdeploy-acceptance", release)
+        self.assertNotIn("scripts.run_drive_ai_enrichment_acceptance", release)
+
 
 
 class DriveAIEnrichmentRolloutIsolationTests(unittest.IsolatedAsyncioTestCase):

@@ -80,6 +80,15 @@
         ]
       },
       {
+        "source": "/release.txt",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "/flutter_bootstrap.js",
         "headers": [
           {

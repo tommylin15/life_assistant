@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'auth_state.dart';
 import 'life_ui_environment.dart';
+import 'platform_api.dart';
 import 'release_info.dart';
 
 class ReleaseNotesPage extends ConsumerStatefulWidget {
@@ -13,21 +14,29 @@ class ReleaseNotesPage extends ConsumerStatefulWidget {
 }
 
 class _ReleaseNotesPageState extends ConsumerState<ReleaseNotesPage> {
-  @override
-  void initState() {
-    super.initState();
-    // Mark on opening the page, never simply because the user logged in.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      markReleaseNotesRead(ref.read(authProvider).asData?.value?['email']);
-    });
-  }
+  String? _markedToken;
 
   @override
   Widget build(BuildContext context) {
-    final notes = releaseNotesFor(lifeAppVersion);
-    final candidate = LifeUiEnvironment.isCandidate;
+    final featuresAsync = ref.watch(effectiveFeaturesProvider);
+    final backendAsync = ref.watch(backendReleaseNotesProvider);
+    final notes = releaseNotesFor(lifeAppVersion,
+      features: featuresAsync.asData?.value,
+      backendNotes: backendAsync.asData?.value ?? const []);
+    final email = ref.watch(authProvider).asData?.value?['email'];
+    final token = releaseReadToken(notes);
+    // Do not mark a partial feed as fully read during initial loading.
+    if (!featuresAsync.isLoading && !backendAsync.isLoading &&
+        token != null && token != _markedToken) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || token == _markedToken) return;
+        markReleaseNotesRead(email, notes);
+        _markedToken = token;
+        ref.read(releaseNotesReadRevisionProvider.notifier).state++;
+      });
+    }
 
+    final candidate = LifeUiEnvironment.isCandidate;
     return Scaffold(
       appBar: AppBar(title: const Text('最新消息')),
       body: ListView(
@@ -55,8 +64,13 @@ class _ReleaseNotesPageState extends ConsumerState<ReleaseNotesPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('v${note.version}  ${note.title}',
+                    Text('${note.version == null ? '維護更新' : 'v${note.version}'}  ${note.title}',
                         style: Theme.of(context).textTheme.titleMedium),
+                    if (note.publishedOn != null) ...[
+                      const SizedBox(height: 4),
+                      Text(note.publishedOn!,
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
                     const SizedBox(height: 12),
                     for (final change in note.changes)
                       Padding(

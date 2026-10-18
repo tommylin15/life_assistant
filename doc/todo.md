@@ -1,6 +1,11 @@
 # Life — Active engineering TODO
 Updated 2026-10-18. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
 
+## 2026-10-19｜版本公告接續驗證
+- GitHub main `6f3ddba` 的 CI 四項 [#39128817868](https://github.com/tommylin15/life_assistant/actions/runs/39128817868) PASS；同版 V3 [#39129015414](https://github.com/tommylin15/life_assistant/actions/runs/39129015414) 固定 staging PASS，但 production promotion 與 Hosting 步驟 skipped；不宣稱 0.2.0 已對一般使用者上線。
+- P0/P1 續作：新版 0.3.0+3 加入功能 rollout 公告隔離、已讀即時更新、Web 版本檢查提示、Backend-only 維護公告唯讀 API；目前無可發布的 Backend-only 實際修正，回傳空列表。
+- 本次需新 SHA Flutter/Backend/Deployment/Postgres CI、staging、正式 V3 promotion、Hosting same-SHA readback、手機與一般帳號 E2E；缺證據維持 PARTIAL／NOT VERIFIED。不自動跳過正式 promotion。
+
 ## 2026-10-18｜使用者版本更新中心
 
 - `v0.2.0+2` 為**下一個候選發布版本**，不是目前 production 已驗證版本。前端新增「最新消息」入口、輕量更新紀錄、每帳號每瀏覽器未讀標記；候選環境另顯示診斷用 SHA，正式介面不顯示。

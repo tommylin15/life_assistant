@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/theme/app_tokens.dart';
@@ -6,6 +8,8 @@ import 'platform_api.dart';
 import 'life_ui_environment.dart';
 import 'auth_state.dart';
 import 'release_info.dart';
+import 'release_update_checker.dart';
+import 'browser_navigation.dart';
 
 /// One navigation model; desktop uses a collapsible sidebar, mobile a drawer.
 /// Home is present only in the four-slot bottom bar.
@@ -21,7 +25,45 @@ class AppShell extends ConsumerStatefulWidget {
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> with WidgetsBindingObserver {
+  Timer? _releaseCheckTimer;
+  bool _hasNewFrontend = false;
+  bool _releaseChecking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (lifeReleaseSha.length == 40) {
+      WidgetsBinding.instance.addObserver(this);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkRelease());
+      _releaseCheckTimer = Timer.periodic(
+          const Duration(minutes: 15), (_) => _checkRelease());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkRelease();
+  }
+
+  Future<void> _checkRelease() async {
+    if (!mounted || _hasNewFrontend || _releaseChecking) return;
+    _releaseChecking = true;
+    try {
+      final newer = await checkFrontendRelease();
+      if (mounted && newer) setState(() => _hasNewFrontend = true);
+    } finally {
+      _releaseChecking = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _releaseCheckTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   bool _wideSidebar = true;
   final Set<String> _expandedGroups = {'daily', 'knowledge', 'activities'};
 
@@ -83,6 +125,11 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget _navigationPanel(BuildContext context, Map<String, bool>? flags,
       List<String> order, {required bool compact, required bool drawer}) {
     final isOwner = ref.watch(ownerAuthorizedProvider).asData?.value == true;
+    ref.watch(releaseNotesReadRevisionProvider);
+    final features = ref.watch(effectiveFeaturesProvider).asData?.value;
+    final backend = ref.watch(backendReleaseNotesProvider).asData?.value ?? const <LifeReleaseNote>[];
+    final visible = releaseNotesFor(lifeAppVersion,
+        features: features, backendNotes: backend);
     Widget utility(IconData icon, String title, String path, String key,
         {bool unread = false}) {
       final displayIcon = Badge(
@@ -112,7 +159,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         const Divider(height: 1),
         utility(Icons.campaign_outlined, '最新消息', '/more/updates', 'nav-updates',
             unread: hasUnreadReleaseNotes(
-                ref.watch(authProvider).asData?.value?['email'])),
+                ref.watch(authProvider).asData?.value?['email'], visible)),
         utility(Icons.tune_outlined, '個人化', '/more/personalize', 'nav-personalize'),
         if (isOwner) ...[
           utility(Icons.admin_panel_settings_outlined, '管理中心', '/more/admin', 'nav-admin'),
@@ -176,7 +223,23 @@ class _AppShellState extends ConsumerState<AppShell> {
         child: _navigationPanel(context, flags, order,
             compact: false, drawer: true),
       ),
-      body: desktop
+      body: Column(children: [
+        if (_hasNewFrontend)
+          MaterialBanner(
+            content: const Text('有新版可使用，重新整理後即可更新。'),
+            leading: const Icon(Icons.system_update_alt),
+            actions: [
+              TextButton(
+                onPressed: () => setState(() => _hasNewFrontend = false),
+                child: const Text('稍後'),
+              ),
+              TextButton(
+                onPressed: () => navigateBrowser(Uri.base.toString()),
+                child: const Text('重新整理'),
+              ),
+            ],
+          ),
+        Expanded(child: desktop
           ? Row(children: [
               SizedBox(
                 width: sidebarWidth,
@@ -186,7 +249,8 @@ class _AppShellState extends ConsumerState<AppShell> {
               const VerticalDivider(width: 1),
               Expanded(child: widget.child),
             ])
-          : widget.child,
+          : widget.child),
+      ]),
       bottomNavigationBar: SafeArea(
         top: false,
         child: NavigationBar(

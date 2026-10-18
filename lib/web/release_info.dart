@@ -1,32 +1,51 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'appearance_storage.dart';
 import 'life_ui_environment.dart';
+import 'platform_api.dart';
 
-/// Human-facing version is injected from pubspec.yaml by both V3 web builds.
-/// The Git SHA remains the immutable technical release identity.
+/// Friendly Flutter version and immutable SHA injected by both Web builds.
 const lifeAppVersion =
     String.fromEnvironment('LIFE_APP_VERSION', defaultValue: '開發版');
 const lifeReleaseSha = String.fromEnvironment('LIFE_RELEASE_SHA');
 
 class LifeReleaseNote {
   const LifeReleaseNote({
-    required this.version,
+    required this.id,
     required this.title,
     required this.changes,
+    this.version,
+    this.publishedOn,
+    this.featureKey,
   });
 
-  final String version;
+  final String id;
   final String title;
   final List<String> changes;
+  final String? version;
+  final String? publishedOn;
+  /// Feature-specific posts are hidden until effective, account-bound rollout
+  /// data explicitly allows the feature. Null means globally available.
+  final String? featureKey;
 }
 
-/// Only publish verified, user-facing changes here. Never summarize CI/SQL or
-/// unverified fixes as if they were live. Keep newest first.
+/// A bundled changelog is rolled out atomically with the Hosting build.
+/// Never claim unrelated / unverified candidate fixes are production releases.
 const lifeReleaseNotes = <LifeReleaseNote>[
   LifeReleaseNote(
+    id: 'web-0.3.0-release-visibility',
+    version: '0.3.0',
+    title: '版本提醒更清楚',
+    changes: <String>[
+      '新增新版可用提示，可選擇何時重新整理。',
+      '改善最新消息的未讀狀態與功能開放範圍。',
+    ],
+  ),
+  LifeReleaseNote(
+    id: 'web-0.2.0-release-center',
     version: '0.2.0',
     title: '最新消息上線',
     changes: <String>[
@@ -54,44 +73,99 @@ bool isReleaseAtLeast(String current, String release) {
   return true;
 }
 
-List<LifeReleaseNote> releaseNotesFor(String version) =>
-    lifeReleaseNotes.where((note) => isReleaseAtLeast(version, note.version)).toList();
+LifeReleaseNote? parseBackendReleaseNote(Object? value) {
+  if (value is! Map) return null;
+  final id = value['id'];
+  final title = value['title'];
+  final changes = value['changes'];
+  final date = value['published_on'];
+  final feature = value['feature_key'];
+  if (id is! String ||
+      !RegExp(r'^backend-[0-9]{8}-[a-z0-9-]+$').hasMatch(id) ||
+      title is! String || title.trim().isEmpty || title.length > 80 ||
+      date is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date) ||
+      changes is! List || changes.isEmpty || changes.length > 3 ||
+      changes.any((item) =>
+          item is! String || item.trim().isEmpty || item.length > 140) ||
+      (feature != null && (feature is! String ||
+          !RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(feature)))) {
+    return null;
+  }
+  return LifeReleaseNote(
+    id: id,
+    title: title,
+    changes: changes.cast<String>(),
+    publishedOn: date,
+    featureKey: feature as String?,
+  );
+}
+
+/// An API-only fix can be announced when its backend revision goes live.
+/// An unreachable API never blocks navigation or bundled release notes.
+final backendReleaseNotesProvider = FutureProvider<List<LifeReleaseNote>>((ref) async {
+  final payload = await ref.read(platformApiProvider).get('/release-notes');
+  final list = payload['notes'];
+  if (list is! List) return const <LifeReleaseNote>[];
+  return list.map(parseBackendReleaseNote)
+      .whereType<LifeReleaseNote>().take(30).toList();
+});
+
+List<LifeReleaseNote> releaseNotesFor(
+  String version, {
+  Map<String, bool>? features,
+  List<LifeReleaseNote> backendNotes = const [],
+}) {
+  final notes = <LifeReleaseNote>[
+    ...lifeReleaseNotes.where((note) =>
+        note.version != null && isReleaseAtLeast(version, note.version!)),
+    ...backendNotes,
+  ];
+  final seen = <String>{};
+  return notes.where((note) =>
+      seen.add(note.id) &&
+      (note.featureKey == null || features?[note.featureKey] == true)).toList();
+}
 
 String get lifeVersionLabel =>
     lifeAppVersion == '開發版' ? '開發版' : 'v$lifeAppVersion';
 
-String? get latestVisibleReleaseNote =>
-    releaseNotesFor(lifeAppVersion).firstOrNull?.version;
+/// Stable per-visible-content key: if a feature opens after an earlier read,
+/// its newly visible entry can still light the unread dot.
+String? releaseReadToken(List<LifeReleaseNote> visible) {
+  if (visible.isEmpty) return null;
+  final ids = visible.map((note) => note.id).toList()..sort();
+  return sha256.convert(utf8.encode(ids.join('|'))).toString();
+}
 
-// The badge is a convenience, not an important notification guarantee.
-// It is isolated per signed-in account, browser origin and environment.
 String releaseReadStorageKey(String email, {required bool candidate}) {
   final normalized = email.trim().toLowerCase();
   final accountHash = sha256.convert(utf8.encode(normalized)).toString();
   return 'life:release_notes_seen:${candidate ? 'candidate' : 'production'}:$accountHash';
 }
 
-bool hasUnreadReleaseNotes(String? email) {
-  final latest = latestVisibleReleaseNote;
-  if (latest == null || email == null || email.trim().isEmpty) return false;
+bool hasUnreadReleaseNotes(String? email, List<LifeReleaseNote> visible) {
+  final token = releaseReadToken(visible);
+  if (token == null || email == null || email.trim().isEmpty) return false;
   try {
     return getStoredAppearance(releaseReadStorageKey(
-          email, candidate: LifeUiEnvironment.isCandidate)) != latest;
+          email, candidate: LifeUiEnvironment.isCandidate)) != token;
   } catch (_) {
-    // Private-browsing storage restrictions should not block the app.
     return false;
   }
 }
 
-void markReleaseNotesRead(String? email) {
-  final latest = latestVisibleReleaseNote;
-  if (latest == null || email == null || email.trim().isEmpty) return;
+void markReleaseNotesRead(String? email, List<LifeReleaseNote> visible) {
+  final token = releaseReadToken(visible);
+  if (token == null || email == null || email.trim().isEmpty) return;
   try {
     setStoredAppearance(
       releaseReadStorageKey(email, candidate: LifeUiEnvironment.isCandidate),
-      latest,
+      token,
     );
   } catch (_) {
-    // Reading the changelog is always permitted even if storage is blocked.
+    // Storage restrictions must never block page access.
   }
 }
+
+/// Signals that the local unread indicator should rebuild immediately.
+final releaseNotesReadRevisionProvider = StateProvider<int>((_) => 0);

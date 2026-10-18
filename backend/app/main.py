@@ -23,6 +23,7 @@ from app.api.free_events import router as free_events_router
 from app.api.curated import router as curated_router
 from app.api.curated_actions import router as curated_actions_router
 from app.api.ui_policies import router as ui_policies_router, feature_gate
+from app.api.release_notes import router as release_notes_router
 from fastapi import Depends
 from app.api.habits import router as habits_router
 from app.api.notes import router as notes_router
@@ -165,3 +166,4 @@ app.include_router(free_events_router, prefix="/api/v1")
 app.include_router(curated_router, prefix="/api/v1")
 app.include_router(curated_actions_router, prefix="/api/v1")
 app.include_router(ui_policies_router, prefix="/api/v1")
+app.include_router(release_notes_router, prefix="/api/v1")

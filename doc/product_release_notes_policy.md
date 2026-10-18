@@ -2,7 +2,7 @@
 
 ## 目標與唯一來源
 - 版本記錄使用 Flutter `pubspec.yaml` 的 `MAJOR.MINOR.PATCH+build`；正式身份仍為 Git SHA（現有 `release.txt`）。
-- 首次採用者可見公告的**下一候選版本**：`0.2.0+2`。舊 `0.1.0+1` 只是既有 source 值，不代表已查證正式版顯示該號；禁止倒填歷史上線版本。
+- 首版候選 `0.2.0+2` 已完成 CI 與 staging；尚無已核證 production Hosting。當前下一候選版本為 `0.3.0+3`。舊 `0.1.0+1` 只是既有 source 值，不代表已查證正式版顯示該號；禁止倒填歷史上線版本。
 - 兩條 Web build（V3 staging/Preview 與 Production Hosting）從同一份 pubspec 注入 `LIFE_APP_VERSION` 和 `LIFE_RELEASE_SHA`；版本文字僅作友善顯示，安全與發布驗證仍以同 SHA／digest／正式 readback 為準。
 
 ## 使用者體驗
@@ -17,6 +17,13 @@
 - **候選 CI PASS 不等於已發布**。只有既有 V3 promotion、正式 Hosting 及相同 SHA／runtime gates PASS 後，才可將該版視為正式上線；公告隨該版前端一起交付，若回滾則跟著回滾。
 - 功能未對所有人開啟時，不得對所有使用者宣稱可用；只能在可見範圍一致時公告，或以對應 feature flag 控制公告。現行公告只描述全站的「最新消息」本身。
 - 絕不為補上版本號而大幅改寫現有 Cloud Run／Firebase 部署方式、授權或資料庫。
+
+## 2026-10-19 補強契約
+- P0：每則公告可指定 `featureKey`；未拿到該帳號 `effectiveFeatures` 或沒有開放時一律不顯示。未讀依可見公告 ID 集合計算，功能之後開放可再提示，同帳號同瀏覽器環境隔離，閱讀完成應即時消除小圓點。
+- P1：每十五分鐘、前端恢復前景時，GET 同站 `/release.txt`（no-cache，帶 query）；僅收到完整 40 位 SHA 且不同於內建 SHA 才顯示非阻擋重新整理提示，不能將 HTML fallback / API revision 或網路失敗當作更新。後台不啟動另一支 worker。
+- P1：只有 Backend 發布的使用者可感知修復由後端輕量唯讀 `GET /api/v1/release-notes` 提供，資料是 source-owned 的 `PUBLISHED_NOTES`，預設空列表，無新資料表、不需要定時任務。不為尚未經證據核實的修正事先填入公告。後端獨立部署不更改前端友善版本號，顯示為「維護更新」。
+- 高風險需強制重新登入或相容升級仍走獨立重要服務提示流程，不能讓一般更新卡取代。
+- `0.3.0+3` 新候選僅列這次功能，不能由 staging 的成功宣稱 production 已發布。
 
 ## 驗證與之後可補強
 - Flutter 測試：版本比較、舊版本不顯示未發布公告、不同帳號／候選正式標記隔離、桌面／手機有入口。

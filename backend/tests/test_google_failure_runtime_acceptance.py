@@ -33,34 +33,12 @@ class GoogleFailureRuntimeAcceptanceContractTests(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, source)
 
-    def test_deploy_workflow_runs_google_failure_gate_after_cloud_domain(self):
+    def test_google_failure_runner_no_longer_blocks_deploy(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        cloud_marker = "Run authenticated cloud-domain acceptance"
-        google_failure_marker = (
-            "Run Google provider failure-path runtime acceptance"
-        )
-        cleanup_marker = "Keep only the latest life_assistant image"
-        self.assertIn(
-            "CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance",
-            workflow,
-        )
-        self.assertIn(
-            'gcloud run jobs execute "$CORE_ACCEPTANCE_JOB"',
-            workflow,
-        )
-        self.assertIn(
-            "--args=-m,scripts.run_google_failure_acceptance",
-            workflow,
-        )
-        self.assertIn(google_failure_marker, workflow)
-        self.assertLess(
-            workflow.index(cloud_marker),
-            workflow.index(google_failure_marker),
-        )
-        self.assertLess(
-            workflow.index(google_failure_marker),
-            workflow.index(cleanup_marker),
-        )
+        self.assertNotIn("CORE_ACCEPTANCE_JOB", workflow)
+        self.assertNotIn("Run Google provider failure-path runtime acceptance", workflow)
+        self.assertNotIn("--args=-m,scripts.run_google_failure_acceptance", workflow)
+        self.assertIn("Verify unauthenticated API is application-protected", workflow)
 
 
 if __name__ == "__main__":

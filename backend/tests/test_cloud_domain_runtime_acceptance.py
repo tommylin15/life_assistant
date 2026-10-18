@@ -68,22 +68,15 @@ class CloudDomainRuntimeAcceptanceContractTests(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, source)
 
-    def test_deploy_workflow_runs_acceptance_after_runtime_health(self):
+    def test_deploy_retains_runtime_health_without_dedicated_acceptance_job(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance", workflow)
-        self.assertIn("Configure shared core acceptance runner", workflow)
-        self.assertIn("Run authenticated cloud-domain acceptance", workflow)
-        self.assertIn("--args=-m,scripts.run_cloud_domain_parity_acceptance", workflow)
-        self.assertIn('--image "${{ steps.backend_image.outputs.ref }}"', workflow)
-        self.assertIn('gcloud run jobs execute "$CORE_ACCEPTANCE_JOB"', workflow)
-        self.assertLess(
-            workflow.index("Verify unauthenticated API is application-protected"),
-            workflow.index("Configure shared core acceptance runner"),
-        )
-        self.assertLess(
-            workflow.index("Configure shared core acceptance runner"),
-            workflow.index("Run authenticated cloud-domain acceptance"),
-        )
+        self.assertNotIn("CORE_ACCEPTANCE_JOB", workflow)
+        self.assertNotIn("Configure shared core acceptance runner", workflow)
+        self.assertIn("Verify Cloud Run health", workflow)
+        self.assertIn("Verify Cloud Run database readiness", workflow)
+        self.assertIn("Verify unauthenticated API is application-protected", workflow)
+        self.assertIn("Apply verified database migration", workflow)
+
 
 
 class CloudDomainRolloutIsolationTests(unittest.IsolatedAsyncioTestCase):

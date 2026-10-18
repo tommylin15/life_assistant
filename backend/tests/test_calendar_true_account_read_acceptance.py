@@ -42,13 +42,11 @@ class CalendarTrueAccountAcceptanceContractTests(unittest.TestCase):
         self.assertIn("except SQLAlchemyError:", source)
         self.assertNotIn("print(exc)", source)
 
-    def test_independent_post_deploy_workflow_reuses_core_job(self):
-        workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertNotIn("workflow_run:", workflow)
-        self.assertIn("workflow_dispatch:", workflow)
-        self.assertIn("life-assistant-core-acceptance", workflow)
-        self.assertIn("--args=-m,scripts.run_calendar_true_account_read_acceptance", workflow)
-        self.assertIn("GCP_WORKLOAD_IDENTITY_PROVIDER", workflow)
+    def test_retired_independent_calendar_job_workflow_is_absent(self):
+        self.assertFalse(WORKFLOW.exists())
+        release = (REPO / ".github/workflows/v3-release-ghcr.yml").read_text(encoding="utf-8")
+        self.assertNotIn("life-assistant-core-acceptance", release)
+        self.assertIn("candidate_oauth_redirect=PASS", release)
 
 
 if __name__ == "__main__":

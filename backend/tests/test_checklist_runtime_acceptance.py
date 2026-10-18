@@ -39,7 +39,8 @@ class ChecklistRuntimeAcceptanceContractTests(unittest.TestCase):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertNotIn("Run checklist cloud runtime acceptance", workflow)
         self.assertNotIn("--args=-m,scripts.run_checklist_cloud_acceptance", workflow)
-        self.assertIn("Run action-id idempotency runtime acceptance", workflow)
+        self.assertNotIn("CORE_ACCEPTANCE_JOB", workflow)
+        self.assertIn("Verify Cloud Run database readiness", workflow)
 
 
 

@@ -47,13 +47,13 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         self.assertIn('gcloud builds describe "$BUILD_ID"', self.text)
         self.assertIn("BUILD_STATUS", self.text)
         self.assertNotIn("--source backend", self.text)
-        self.assertEqual(self.text.count(shared_image_ref), 3)
-        self.assertIn("CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance", self.text)
+        self.assertEqual(self.text.count(shared_image_ref), 2)
+        self.assertNotIn("CORE_ACCEPTANCE_JOB", self.text)
 
     def test_acceptance_jobs_collect_runtime_diagnostics_on_failure(self):
         wrapper_call = ".github/scripts/run_cloud_run_job_with_diagnostics.sh"
         self.assertTrue(DIAGNOSTIC_WRAPPER.is_file())
-        self.assertEqual(self.text.count(wrapper_call), 3)
+        self.assertEqual(self.text.count(wrapper_call), 0)
         wrapper = DIAGNOSTIC_WRAPPER.read_text(encoding="utf-8")
         self.assertIn("gcloud run jobs executions list", wrapper)
         self.assertIn("gcloud run jobs executions tasks list", wrapper)
@@ -82,7 +82,7 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
             ["life-assistant-backend"],
         )
         self.assertLess(
-            self.text.index("Run Google provider failure-path runtime acceptance"),
+            self.text.index("Verify unauthenticated API is application-protected"),
             self.text.index("Keep only the latest life_assistant image"),
         )
         self.assertIn(
@@ -126,18 +126,21 @@ class DeployCloudRunWorkflowContractTests(unittest.TestCase):
         self.assertIn("Verify Cloud Run database readiness", self.text)
         self.assertIn("Verify unauthenticated API is application-protected", self.text)
 
-    def test_retired_acceptance_modules_are_not_in_deploy_workflow(self):
-        self.assertIn("CORE_ACCEPTANCE_JOB: life-assistant-core-acceptance", self.text)
-        self.assertIn('gcloud run jobs execute "$CORE_ACCEPTANCE_JOB"', self.text)
-        for retired_module in (
+    def test_dedicated_acceptance_job_was_removed(self):
+        self.assertNotIn("CORE_ACCEPTANCE_JOB", self.text)
+        self.assertNotIn("life-assistant-postdeploy-acceptance", self.text)
+        self.assertNotIn('gcloud run jobs execute "$CORE_ACCEPTANCE_JOB"', self.text)
+        for old_module in (
+            "scripts.run_cloud_domain_parity_acceptance",
+            "scripts.run_idempotency_acceptance",
+            "scripts.run_google_failure_acceptance",
             "scripts.run_checklist_cloud_acceptance",
             "scripts.run_sqlite_backfill_acceptance",
             "scripts.run_sqlite_backfill_failure_acceptance",
         ):
-            self.assertNotIn(retired_module, self.text)
-        self.assertIn("--args=-m,scripts.run_cloud_domain_parity_acceptance", self.text)
-        self.assertIn("--args=-m,scripts.run_idempotency_acceptance", self.text)
-        self.assertIn("--args=-m,scripts.run_google_failure_acceptance", self.text)
+            self.assertNotIn("--args=-m," + old_module, self.text)
+        self.assertIn("Verify Cloud Run health", self.text)
+        self.assertIn("Verify Cloud Run database readiness", self.text)
 
 
 if __name__ == "__main__":

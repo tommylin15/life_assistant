@@ -111,6 +111,15 @@ class PreMigrationFeatureGateTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException):
             await feature_gate("gmail_radar")(user=user, db=db)
 
+    async def test_admin_rejects_public_enable_of_private_routes(self):
+        from app.api.ui_policies import FeatureWrite, put_rollout
+        for key in ("drive", "events"):
+            with self.subTest(key=key), self.assertRaises(HTTPException) as err:
+                await put_rollout(FeatureWrite(key=key, status="enabled",
+                    audience="all", expected_revision=0),
+                    user={"sub": "owner", "email": "owner@example.org"}, db=object())
+            self.assertEqual(err.exception.status_code, 422)
+
     def test_normal_account_cannot_change_ai_management(self):
         from app.api.ui_policies import owner_only
         with self.assertRaises(HTTPException) as exc:

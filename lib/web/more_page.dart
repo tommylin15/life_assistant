@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'platform_api.dart';
+import 'life_ui_environment.dart';
 
 class MorePage extends ConsumerWidget {
   const MorePage({super.key});
@@ -76,12 +77,14 @@ class MorePage extends ConsumerWidget {
             title: const Text('管理中心'),
             onTap: () => context.go('/more/admin'),
           ),
-        ListTile(
-          leading: const Icon(Icons.fact_check_outlined),
-          title: const Text('驗收中心'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => context.push('/acceptance'),
-        ),
+        if (LifeUiEnvironment.isCandidate &&
+            ref.watch(ownerAuthorizedProvider).asData?.value == true)
+          ListTile(
+            leading: const Icon(Icons.fact_check_outlined),
+            title: const Text('驗收中心'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/acceptance'),
+          ),
       ]),
     );
   }

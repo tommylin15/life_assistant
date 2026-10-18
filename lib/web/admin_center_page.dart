@@ -7,6 +7,19 @@ final _adminRollouts = FutureProvider<Map<String, dynamic>>(
 final _activityStatus = FutureProvider<Map<String, dynamic>>(
   (ref) => ref.read(platformApiProvider).get('/free-events/curated/status'));
 
+String rolloutStatusText(Map<String, dynamic> feature) {
+  final status = switch (feature['status']) {
+    'enabled' => '已啟用',
+    'beta' => '測試中',
+    'hidden' => '已隱藏',
+    'maintenance' => '維護中',
+    _ => '狀態未確認',
+  };
+  final audience = feature['public_capable'] == false || feature['audience'] == 'owner'
+      ? '僅管理員' : '所有使用者';
+  return '$status · $audience';
+}
+
 class AdminCenterPage extends ConsumerWidget {
   const AdminCenterPage({super.key});
 
@@ -20,11 +33,11 @@ class AdminCenterPage extends ConsumerWidget {
         error: (_, __) => const Center(child: Text('管理員授權不足或設定讀取失敗')),
         data: (data) => ListView(padding: const EdgeInsets.all(16), children: [
           Text('功能開放', style: Theme.of(context).textTheme.headlineSmall),
-          const Text('設定由後端管控；無法透過隱藏按鈕繞過權限。'),
+          const Text('調整各功能的使用範圍；未開放的功能不會出現在一般使用者畫面。'),
           for (final dynamic feature in (data['features'] as List))
             ListTile(
               title: Text(feature['title'].toString()),
-              subtitle: Text('目前：${feature['status']} / ${feature['audience']}'),
+              subtitle: Text(rolloutStatusText(Map<String, dynamic>.from(feature as Map))),
               trailing: PopupMenuButton<String>(
                 tooltip: '調整開放狀態',
                 onSelected: (selection) async {
@@ -46,8 +59,9 @@ class AdminCenterPage extends ConsumerWidget {
                     );
                   }
                 },
-                itemBuilder: (_) => const {
-                  'enabled/all': '開放給所有使用者',
+                itemBuilder: (_) => <String, String>{
+                  if (feature['public_capable'] != false)
+                    'enabled/all': '開放給所有使用者',
                   'enabled/owner': '開放給管理員',
                   'beta/owner': '測試（管理員）',
                   'hidden': '隱藏',

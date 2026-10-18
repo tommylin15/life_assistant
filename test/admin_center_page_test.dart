@@ -30,6 +30,11 @@ class _Api extends PlatformApi {
 }
 
 void main() {
+  test('restricted features never promise public access', () {
+    expect(rolloutStatusText({'status': 'enabled', 'audience': 'all',
+      'public_capable': false}), '已啟用 · 僅管理員');
+  });
+
   testWidgets('admin can open a beta activity to all and restore owner access', (tester) async {
     final api = _Api();
     await tester.pumpWidget(ProviderScope(overrides: [
@@ -45,6 +50,6 @@ void main() {
     }
     expect(api.writes.map((b) => [b['status'], b['audience']]).toList(),
       [['enabled', 'all'], ['enabled', 'owner'], ['beta', 'owner']]);
-    expect(find.text('目前：beta / owner'), findsOneWidget);
+    expect(find.text('測試中 · 僅管理員'), findsOneWidget);
   });
 }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'visual_system.dart';
 import 'acceptance_center_page.dart';
+import 'life_ui_environment.dart';
 import 'calendar_page.dart';
 import 'app_shell.dart';
 import 'auth_state.dart';
@@ -76,7 +77,9 @@ final _router = GoRouter(
         GoRoute(path: '/more/personalize', builder: (_, state) =>
             PersonalizePage(initialTab: state.uri.queryParameters['tab'] ?? 'home')),
         GoRoute(path: '/integrations', redirect: (_, __) => '/more/personalize?tab=google'),
-        GoRoute(path: '/acceptance', builder: (_, __) => const AdminAccess(child: AcceptanceCenterPage())),
+        GoRoute(path: '/acceptance', builder: (_, __) => LifeUiEnvironment.isCandidate
+            ? const AdminAccess(child: AcceptanceCenterPage())
+            : const Scaffold(body: Center(child: Text('此功能僅於候選環境提供')))),
         GoRoute(path: '/more/admin', builder: (_, __) => const AdminAccess(child: AdminCenterPage())),
         GoRoute(path: '/more', redirect: (_, __) => '/more/personalize'),
       ],

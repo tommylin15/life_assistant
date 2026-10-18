@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/theme/app_tokens.dart';
 import 'navigation_catalog.dart';
 import 'platform_api.dart';
+import 'life_ui_environment.dart';
 
 /// One navigation model; desktop uses a collapsible sidebar, mobile a drawer.
 /// Home is present only in the four-slot bottom bar.
@@ -107,7 +108,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         utility(Icons.tune_outlined, '個人化', '/more/personalize', 'nav-personalize'),
         if (isOwner) ...[
           utility(Icons.admin_panel_settings_outlined, '管理中心', '/more/admin', 'nav-admin'),
-          utility(Icons.fact_check_outlined, '驗收中心', '/acceptance', 'nav-acceptance'),
+          if (LifeUiEnvironment.isCandidate)
+            utility(Icons.fact_check_outlined, '驗收中心', '/acceptance', 'nav-acceptance'),
         ],
         const SizedBox(height: 8),
       ]),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'browser_navigation.dart';
 import 'platform_api.dart';
+import 'life_ui_environment.dart';
 
 /// One-user, manual-only Gmail radar. No background scheduling.
 class GmailRadarPage extends ConsumerStatefulWidget {
@@ -186,7 +187,8 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
                               ? '${threeDayCount} 封' : '至少 ${threeDayCount} 封')),
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
-                  Text('本次' + (_status['scan_kind'] == 'recheck'
+                  if (LifeUiEnvironment.isCandidate)
+                    Text('本次' + (_status['scan_kind'] == 'recheck'
                       ? '重新判讀' : _status['scan_kind'] == 'backfill'
                           ? '補檢' : '快掃') +
                       '檢查 ${_status['checked'] ?? 0} 封，新增事項 ' +
@@ -232,7 +234,8 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
               textAlign: TextAlign.center)))
         else for (final item in _items) _itemCard(item),
         const SizedBox(height: 12),
-        Text('快掃檢查最近 7 天最新最多 20 封；三天補檢每次補查 40 封未檢查郵件。'
+        if (LifeUiEnvironment.isCandidate)
+          Text('快掃檢查最近 7 天最新最多 20 封；三天補檢每次補查 40 封未檢查郵件。'
           '結果保留已處理 ID 去重；「重新檢查近三天」每次最多重新判讀最新 40 封，'
           '包括 Life 過去略過的郵件，不會刪除已完成事項；'
           '未使用 Gemini，不執行背景排程或推播。原信若無法定位，可改由 Gmail 開啟。',

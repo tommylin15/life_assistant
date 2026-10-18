@@ -276,6 +276,8 @@ async def put_rollout(
 ):
     if body.key not in FEATURES:
         raise HTTPException(422, "Unknown feature")
+    if body.key in OWNER_ONLY_FEATURES and body.audience == "all":
+        raise HTTPException(422, "This feature is restricted to Owner accounts")
     row = await db.get(FeatureRollout, body.key)
     revision = row.revision if row else 0
     if revision != body.expected_revision:

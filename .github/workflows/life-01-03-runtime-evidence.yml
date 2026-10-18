@@ -138,3 +138,93 @@ jobs:
                   reasons = [str(c.get("reason") or c.get("type") or "unknown") for c in e.get("status", {}).get("conditions", []) if c.get("status") in (False, "False")]
                   print(f"importer_execution name={name} status={status} failed_tasks={e.get('status', {}).get('failedCount', 0)} retries={e.get('status', {}).get('retriedCount', 0)} reasons={';'.join(reasons)[:180]}")
           PY
+
+      # Only a push to this evidence workflow triggers PostgreSQL inspection.
+      # The existing Cloud Run Job definition is never updated; the execution
+      # overrides args with Python -c and cannot invoke the normal importer.
+      - name: Read-only parity of accepted Sheet business versions in live PostgreSQL
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe life-assistant-api --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/curated-live.json"
+          REV="$(jq -er '[.status.traffic[] | select((.percent//0)>0)] |
+            if length==1 and .[0].percent==100 then .[0].revisionName else error("not sole live revision") end' "$RUNNER_TEMP/curated-live.json")"
+          gcloud run revisions describe "$REV" --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/curated-revision.json"
+          IMAGE="$(python - "$RUNNER_TEMP/curated-revision.json" <<'PY'
+          import json,sys
+          sys.path.insert(0,'.github/scripts')
+          from v3_image_identity import canonical
+          print(canonical(json.load(open(sys.argv[1]))['spec']['containers'][0]['image']))
+          PY
+          )"
+          python .github/scripts/v3_curated_handoff_alignment.py --mode live \
+            --json "$RUNNER_TEMP/curated-live.json" --revision-json "$RUNNER_TEMP/curated-revision.json" \
+            --expected-revision "$REV" --expected-image "$IMAGE"
+          gcloud run jobs describe "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format=json > "$RUNNER_TEMP/curated-job.json"
+          python .github/scripts/v3_curated_handoff_alignment.py --mode job \
+            --json "$RUNNER_TEMP/curated-job.json" --expected-image "$IMAGE"
+
+          CODE="$(base64 -w0 <<'PY'
+          import asyncio
+          from sqlalchemy import text
+          from app.db.session import engine
+          from scripts.import_curated_from_sheet import SheetClient, parse_rows
+
+          async def run():
+              rows = parse_rows(await SheetClient().read())
+              acked = [r for r in rows if r['handoff_status'] == 'ACKED']
+              if len(acked) < 65 or any(not r['life_ack_at_tpe'] or r['life_import_result'] not in ('CREATED','UPDATED','UNCHANGED') for r in acked):
+                  raise RuntimeError('receipt_not_complete')
+              async with engine.connect() as conn:
+                  await conn.execute(text('SET TRANSACTION READ ONLY'))
+                  await conn.execute(text("SET LOCAL statement_timeout = '20s'"))
+                  results = (await conn.execute(text(
+                      'SELECT handoff_event_key, content_hash, handoff_details FROM curated_activities WHERE handoff_event_key = ANY(:keys)'
+                  ), {'keys': [r['event_key'] for r in acked]})).mappings().all()
+              pg = {r['handoff_event_key']: r for r in results}
+              if len(pg) != len(acked):
+                  raise RuntimeError('db_missing_handoff_rows')
+              pending = 0
+              for sheet in acked:
+                  row = pg[sheet['event_key']]
+                  expected_status = sheet['verification_status'] or 'unknown'
+                  if row['content_hash'] != sheet['content_hash']:
+                      raise RuntimeError('db_content_hash_mismatch')
+                  if (row['handoff_details'] or {}).get('verification_status','unknown') != expected_status:
+                      raise RuntimeError('db_verification_status_mismatch')
+                  pending += expected_status == 'pending_review'
+              if pending < 4:
+                  raise RuntimeError('missing_pending_review_rows')
+              print(f'curated_pg_sheet_parity=PASS acked={len(acked)} pending_review={pending} read_only=true', flush=True)
+              await engine.dispose()
+
+          asyncio.run(run())
+          PY
+          )"
+          # Base64 only transports static visible Python code through the gcloud
+          # comma-separated --args parser. No user content or credentials.
+          BEFORE="$(gcloud run jobs executions list --job "$JOB" --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" --limit 1 --format='value(metadata.name)')"
+          gcloud run jobs execute "$JOB" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args="-c,import base64;exec(base64.b64decode('$CODE'))" --wait --quiet \
+            --format=json > "$RUNNER_TEMP/curated-db-readback.json"
+          AFTER="$(gcloud run jobs executions list --job "$JOB" --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" --limit 1 --format='value(metadata.name)')"
+          test -n "$AFTER"
+          test "$BEFORE" != "$AFTER"
+          gcloud run jobs executions describe "$AFTER" --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" --format=json > "$RUNNER_TEMP/curated-db-readback-execution.json"
+          python - "$RUNNER_TEMP/curated-db-readback-execution.json" <<'PY'
+          import json,sys
+          status=json.load(open(sys.argv[1]))['status']
+          if int(status.get('failedCount') or 0)>0 or not any(
+              c.get('type')=='Completed' and c.get('status') in ('True',True)
+              for c in status.get('conditions',[])
+          ):
+              raise SystemExit('read_only_db_parity_failed')
+          PY
+          echo "curated_pg_sheet_parity=PASS read_only=true execution=$AFTER" >> "$GITHUB_STEP_SUMMARY"

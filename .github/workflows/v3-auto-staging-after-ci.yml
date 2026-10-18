@@ -92,6 +92,10 @@ jobs:
             echo "auto_staging=SKIP one_shot_hash_repair_job" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          if jq -e 'all(.files[]; .filename==".github/workflows/life-01-03-runtime-evidence.yml" or .filename==".github/workflows/v3-auto-staging-after-ci.yml" or .filename=="backend/tests/test_cloud_build_v2.py") and any(.files[]; .filename==".github/workflows/life-01-03-runtime-evidence.yml")' <<< "$CHANGED" > /dev/null; then
+            echo "auto_staging=SKIP read_only_importer_pg_parity" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           # Do not start a second same-SHA release for CI re-runs, including
           # releases already dispatched manually. The V3 release has its own
           # immutable SHA guard and shared release concurrency lock.

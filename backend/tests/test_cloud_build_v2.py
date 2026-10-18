@@ -293,6 +293,16 @@ class CloudBuildV2Tests(unittest.TestCase):
                 self.assertIn('workflow_dispatch:', source)
                 self.assertNotIn('workflow_run:', source)
 
+    def test_read_only_curated_parity_has_no_production_mutation(self):
+        evidence = (ROOT / '.github/workflows/life-01-03-runtime-evidence.yml').read_text()
+        staging = (ROOT / '.github/workflows/v3-auto-staging-after-ci.yml').read_text()
+        self.assertIn('SET TRANSACTION READ ONLY', evidence)
+        self.assertIn('curated_pg_sheet_parity=PASS', evidence)
+        self.assertIn('v3_curated_handoff_alignment.py', evidence)
+        self.assertIn('auto_staging=SKIP read_only_importer_pg_parity', staging)
+        for forbidden in ('gcloud run jobs update', '--raw-field promote=true', 'gcloud run services update-traffic'):
+            self.assertNotIn(forbidden, evidence)
+
     def test_duplicate_sha_phase_is_idempotent_but_promotion_is_distinct(self):
         mine = {'id': 'b', 'createTime': '2'}
         previous = {'id': 'a', 'createTime': '1', 'status': 'SUCCESS',

@@ -60,7 +60,9 @@ jobs:
         run: flutter pub get
 
       - name: Build Flutter Web
-        run: APP_VERSION="$(sed -nE 's/^version: ([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+$/\1/p' pubspec.yaml)"
+        run: |
+          set -euo pipefail
+          APP_VERSION="$(sed -nE 's/^version: ([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+$/\1/p' pubspec.yaml)"
           test -n "$APP_VERSION"
           flutter build web --target=lib/main_web.dart --no-pub \
             --dart-define="LIFE_APP_VERSION=$APP_VERSION" \

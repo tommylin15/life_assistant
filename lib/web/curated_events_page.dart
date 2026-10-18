@@ -65,10 +65,16 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
     'closing_soon': '3 天內截止', 'limited': '限額優惠',
     'unknown_time': '時間待公布', 'latest': '最新收錄',
   };
+  // Keep the discovery shortcuts in priority order.
   static const explorationChips = {
     'latest': '最新收錄', 'ongoing': '正在進行',
-    'weekend': '本週末', 'next_7': '7 天內開始',
-    'next_30': '30 天內開始', 'free': '免費活動',
+    'weekend': '本週末',
+  };
+  // Secondary shortcuts live in the "更多" menu without changing API keys.
+  static const explorationMoreChips = {
+    'next_7': '7 天內開始',
+    'next_30': '30 天內開始',
+    'free': '免費活動',
   };
   static const regions = {
     '': '全台', 'north': '北部', 'central': '中部',
@@ -271,6 +277,29 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
                 child: ChoiceChip(label: Text(entry.value),
                   selected: quick == entry.key,
                   onSelected: (on) => filter(() => quick = on ? entry.key : ''))),
+            if (!opportunity)
+              Padding(padding: const EdgeInsets.only(right: 7),
+                child: PopupMenuButton<String>(
+                  key: const ValueKey('activity-more-quick-filters'),
+                  tooltip: '更多活動篩選',
+                  onSelected: (value) => filter(() =>
+                    quick = quick == value ? '' : value),
+                  itemBuilder: (context) => [
+                    for (final entry in explorationMoreChips.entries)
+                      CheckedPopupMenuItem<String>(
+                        value: entry.key,
+                        checked: quick == entry.key,
+                        child: Text(entry.value)),
+                  ],
+                  child: Chip(
+                    avatar: const Icon(Icons.arrow_drop_down),
+                    backgroundColor: explorationMoreChips.containsKey(quick)
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                        : null,
+                    label: Text(explorationMoreChips.containsKey(quick)
+                        ? '更多：${explorationMoreChips[quick]}'
+                        : '更多')),
+                )),
           ])),
           const SizedBox(height: 12),
           ExpansionTile(

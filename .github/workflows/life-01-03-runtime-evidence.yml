@@ -63,13 +63,24 @@ jobs:
               'resource.type="cloud_run_job" AND resource.labels.job_name="life-assistant-free-events"' \
               --project "$GCP_PROJECT_ID" --freshness=72h --limit=150 \
               --format='value(textPayload)' > "$RUNNER_TEMP/importer-logs.txt" 2>"$RUNNER_TEMP/importer-log-error.txt"; then
-            echo "- logging_read=NOT_VERIFIED (permission or API failure)" >> "$GITHUB_STEP_SUMMARY"
+            python - <<'PY'
+          import os
+          from pathlib import Path
+          msg = Path(os.environ["RUNNER_TEMP"] + "/importer-log-error.txt").read_text(errors="replace").lower()
+          kind = ("PERMISSION_DENIED" if any(k in msg for k in ("permission denied", "permission_denied", "logging.logentries.list", "403")) else
+                  "NOT_FOUND" if "not found" in msg or "404" in msg else
+                  "OTHER_API_ERROR" if msg.strip() else "EMPTY_ERROR")
+          print(f"importer_logging_read=NOT_VERIFIED reason={kind}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              print(f"- logging_read=NOT_VERIFIED reason={kind}", file=f)
+          PY
           else
             python - <<'PY'
           import collections, os
           from pathlib import Path
 
           log = Path(os.environ["RUNNER_TEMP"] + "/importer-logs.txt").read_text(errors="replace")
+          print("importer_logging_read=PASS")
           patterns = {
               "invalid_handoff_record": "invalid_handoff_record",
               "duplicate_event_key": "missing_or_duplicate_event_key",

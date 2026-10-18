@@ -87,6 +87,47 @@ class HandoffContractTests(unittest.TestCase):
             with self.subTest(updates=updates), self.assertRaises(ValueError):
                 validate_record(record(**updates))
 
+    def test_historical_error_offer_row_can_be_revalidated_without_faking_ack(self):
+        # 10/18 production Sheet row 55 remained ERROR after a previous
+        # invalid_handoff_record. Schema-valid data alone must not set ACKED;
+        # a real importer/DB commit is still required for the receipt.
+        value = record(
+            event_key="ntpclib:9af3c52d:20261024:parent-halloween",
+            parent_event_key="ntpclib:2026:wugu-parent-halloween-story",
+            record_type="offer",
+            title="五股成功分館｜免費親子故事＋萬聖節DIY限6組",
+            city="新北市", district="五股區",
+            category="限額免費親子故事／手作體驗",
+            organizer="新北市立圖書館五股成功分館",
+            start_at_tpe="2026-10-24T14:00:00+08:00",
+            end_at_tpe="2026-10-24T15:00:00+08:00",
+            venue="新北市立圖書館五股成功分館4樓故事屋",
+            official_url=("https://atpass.ntpclib.gov.tw/activities/detail?"
+                          "cntId=9af3c52d6a254c06a3a91893cf747674&"
+                          "svcId=8e109e8bb57a4b44b21e31c34db87dba"),
+            registration_url=("https://atpass.ntpclib.gov.tw/activities/detail?"
+                              "cntId=9af3c52d6a254c06a3a91893cf747674&"
+                              "svcId=8e109e8bb57a4b44b21e31c34db87dba"),
+            source_url=("https://atpass.ntpclib.gov.tw/activities/detail?"
+                        "cntId=9af3c52d6a254c06a3a91893cf747674&"
+                        "svcId=8e109e8bb57a4b44b21e31c34db87dba"),
+            importance_star="5", opportunity_type="報名",
+            registration_open_at_tpe="2026-10-14",
+            nonrefundable_cost_ntd="0",
+            eligibility_limit="6組親子；每組1大1小；額滿為止",
+            evidence_summary="官方核實10/24故事活動，名額即時餘額未知",
+            verified_at_tpe="2026-10-12T06:04:23+08:00",
+            handoff_updated_at_tpe="2026-10-14T09:43:43+08:00",
+            handoff_status="ERROR", life_error="invalid_handoff_record",
+        )
+        parsed = parse_rows(sheet(value))
+        self.assertEqual(parsed[0]["handoff_status"], "ERROR")
+        item = validate_record(parsed[0])
+        self.assertEqual(item.record_type, "offer")
+        self.assertEqual(item.registration_open_at_tpe.isoformat(), "2026-10-14")
+        self.assertEqual(item.nonrefundable_cost_ntd, 0)
+        self.assertEqual(item.verification_status, "unknown")
+
     def test_general_activity_and_date_only_registration_follow_sheet(self):
         item = validate_record(record(parent_event_key="official:show:2026",
             registration_open_at_tpe="2026-10-12", registration_deadline_at_tpe="2026-10-14"))

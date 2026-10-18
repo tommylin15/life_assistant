@@ -19,10 +19,13 @@ BUSINESS_FIELDS = (
     "registration_url", "source_url", "importance_star", "opportunity_type",
     "registration_open_at_tpe", "registration_deadline_at_tpe", "nonrefundable_cost_ntd",
     "refundable_deposit_ntd", "verified_benefit_ntd", "eligibility_limit",
-    "evidence_summary", "verified_at_tpe",
+    "evidence_summary", "verified_at_tpe", "verification_status",
 )
-HEADERS = ("event_key", "content_hash", *BUSINESS_FIELDS[1:], "handoff_status",
-           "handoff_updated_at_tpe", "life_ack_at_tpe", "life_import_result", "life_error")
+# Keep the first 30 physical columns stable for the deployed v1 importer.
+# The 31st optional status column is read only by upgraded consumers.
+LEGACY_HEADERS = ("event_key", "content_hash", *BUSINESS_FIELDS[1:-1], "handoff_status",
+                  "handoff_updated_at_tpe", "life_ack_at_tpe", "life_import_result", "life_error")
+HEADERS = (*LEGACY_HEADERS, "verification_status")
 
 
 class HandoffItem(BaseModel):
@@ -52,6 +55,9 @@ class HandoffItem(BaseModel):
     evidence_summary: str = Field(min_length=1, max_length=1200)
     # Unknown verification time is intentionally absent, never inferred from discovery/import time.
     verified_at_tpe: datetime | None = None
+    # Independent of opportunity type, 1/3/5 stars and currently available seats.
+    # Old 30-column business versions are never implicitly promoted to verified.
+    verification_status: Literal["unknown", "pending_review", "verified"] = "unknown"
     handoff_updated_at_tpe: datetime
 
     @field_validator("start_at_tpe", "end_at_tpe", "registration_open_at_tpe", "registration_deadline_at_tpe", mode="before")
@@ -130,9 +136,14 @@ async def upsert_handoff(db, item: HandoffItem, version: str) -> str:
                 raise ValueError("superseded_or_conflicting_handoff_version")
     if result == "UNCHANGED":
         stored = {k: v for k, v in (row.handoff_details or {}).items() if k != "handoff_updated_at_tpe"}
+        # Pre-v2 rows do not have the optional verification status; their
+        # absence is equivalent to unknown, not to a verified claim.
+        stored.setdefault("verification_status", "unknown")
         if stored != item.model_dump(mode="json", exclude={"handoff_updated_at_tpe"}):
             raise ValueError("same_hash_changed_business_payload")
-        row.handoff_details = {**row.handoff_details, "handoff_updated_at_tpe": item.handoff_updated_at_tpe.isoformat()}
+        row.handoff_details = {**row.handoff_details,
+                               "verification_status": item.verification_status,
+                               "handoff_updated_at_tpe": item.handoff_updated_at_tpe.isoformat()}
         await db.commit()
         return result
     if row is None:

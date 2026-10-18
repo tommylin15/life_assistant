@@ -36,6 +36,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
   String category = '';
   String district = '';
   String fee = '';
+  String verification = '';
   DateTime? from;
   bool savedOnly = false;
   late String _activeEntry;
@@ -99,6 +100,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
     if (category.isNotEmpty) params['category'] = category;
     if (district.isNotEmpty) params['district'] = district;
     if (fee.isNotEmpty) params['fee_kind'] = fee;
+    if (verification.isNotEmpty) params['verification_status'] = verification;
     if (savedOnly) params['saved_only'] = 'true';
     if (offset != 0 && snapshot != null) params['as_of'] = snapshot!;
     if (from != null) {
@@ -177,7 +179,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
                 const Text('目前沒有符合條件的活動'),
                 TextButton(onPressed: () => filter(() {
                   keyword = ''; search.clear(); quick = ''; region = '';
-                  city = ''; district = ''; category = ''; fee = ''; from = null;
+                  city = ''; district = ''; category = ''; fee = ''; verification = ''; from = null;
                   savedOnly = false; _activeEntry = 'explore';
                 }), child: const Text('清除篩選')),
               ]));
@@ -309,6 +311,16 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
                   textInputAction: TextInputAction.search,
                   onFieldSubmitted: (v) => filter(() => district = v.trim()),
                 )),
+                DropdownButton<String>(
+                  value: verification,
+                  items: const [
+                    DropdownMenuItem(value: '', child: Text('不限核證狀態')),
+                    DropdownMenuItem(value: 'pending_review', child: Text('可報名資訊待核')),
+                    DropdownMenuItem(value: 'verified', child: Text('主辦資料已核實')),
+                    DropdownMenuItem(value: 'unknown', child: Text('核證狀態未知')),
+                  ],
+                  onChanged: (v) => filter(() => verification = v ?? ''),
+                ),
                 DropdownButton<String>(
                   value: fee,
                   items: const [

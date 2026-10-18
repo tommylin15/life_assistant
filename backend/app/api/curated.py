@@ -290,6 +290,7 @@ async def list_curated(
     district: str | None = Query(None, max_length=100),
     fee_kind: Literal["free", "paid", "conditional_free", "unknown"] | None = None,
     saved_only: bool = False,
+    verification_status: Literal["unknown", "pending_review", "verified"] | None = None,
     as_of: datetime | None = Query(None, description="UTC snapshot from first page"),
 ):
     if _user and isinstance(db, AsyncSession):
@@ -300,6 +301,8 @@ async def list_curated(
     if not isinstance(keyword, (str, type(None))): keyword = None
     if not isinstance(district, (str, type(None))): district = None
     if not isinstance(as_of, (datetime, type(None))): as_of = None
+    if verification_status not in (None, "unknown", "pending_review", "verified"):
+        verification_status = None
     if as_of is not None and (as_of.tzinfo is None or as_of.utcoffset() is None):
         raise HTTPException(422, "as_of must include timezone")
     # An immutable page anchor prevents new imports from moving offset pages.
@@ -320,6 +323,14 @@ async def list_curated(
         category=category, fee_kind=fee_kind, starts_from=starts_from,
         today=today, saved_only=saved_only, user_sub=_user.get("sub"),
     )
+    if verification_status:
+        # JSON metadata is additive: no table migration or v1 30-column break.
+        from sqlalchemy import literal
+        stored_verification = func.coalesce(
+            CuratedActivity.handoff_details["verification_status"].as_string(),
+            literal("unknown"),
+        )
+        statement = statement.where(stored_verification == verification_status)
     statement = statement.where(CuratedActivity.created_at <= snapshot)
     # Legacy child saves and newer main saves both make the whole group saved.
     saves = (select(group.label("g"))
@@ -402,6 +413,8 @@ async def list_curated(
                 "registration_deadline", "created_at", "updated_at",
                 "handoff_event_key", "parent_event_key", "handoff_details",
             )},
+            "verification_status": (row.handoff_details or {}).get(
+                "verification_status", "unknown"),
             "saved": ((_group_key_value(row)) in saved_page),
         }
         for row in rows

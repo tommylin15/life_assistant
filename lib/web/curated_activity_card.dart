@@ -220,6 +220,10 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
                 if (!urgent && item['starts_on'] != null)
                   _EventChip(Icons.event_outlined, '活動：${item['starts_on']}'),
                 _EventChip(Icons.place_outlined, item['city']?.toString() ?? '地區待確認'),
+                if (d['verification_status'] == 'pending_review')
+                  const _EventChip(Icons.fact_check_outlined, '報名資訊待核'),
+                if (d['verification_status'] == 'verified')
+                  const _EventChip(Icons.verified_outlined, '主辦資料已核實'),
                 if (item['fee_kind'] == 'free')
                   const _EventChip(Icons.sell_outlined, '免費'),
                 if (cancelled)

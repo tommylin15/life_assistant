@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 from scripts.import_curated_from_sheet import parse_rows, validate_record, SheetClient, run_import, run_exclusive_import, SHEET_ID, IMPORT_LOCK_KEY
-from app.services.curated_handoff import HEADERS
+from app.services.curated_handoff import HEADERS, LEGACY_HEADERS
 
 
 def record(**updates):
@@ -13,7 +13,8 @@ def record(**updates):
     value.update(event_key="official:show:2026", record_type="main", title="活動測試",
                  parent_event_key="official:theme:2026", organizer="測試主辦", opportunity_type="一般活動", evidence_summary="官方核證",
                  official_url="https://example.org/event", importance_star="5",
-                 verified_at_tpe="2026-10-10T09:00:00+08:00", handoff_status="READY",
+                 verified_at_tpe="2026-10-10T09:00:00+08:00",
+                 verification_status="unknown", handoff_status="READY",
                  handoff_updated_at_tpe="2026-10-10T09:00:00+08:00")
     value.update(updates)
     value["content_hash"] = hashlib.sha256(value["title"].encode()).hexdigest()
@@ -40,6 +41,25 @@ class HandoffContractTests(unittest.TestCase):
         value["content_hash"] = "not a SHA256"
         with self.assertRaisesRegex(ValueError, "invalid_content_hash"):
             validate_record(value)
+
+    def test_verification_status_additive_contract_and_safe_promotion(self):
+        waiting = record(event_key="beclass:confirmed:session",
+                         official_url="https://www.beclass.com/rid=1234567",
+                         opportunity_type="報名", verification_status="pending_review")
+        self.assertEqual(parse_rows(sheet(waiting))[0]["verification_status"], "pending_review")
+        self.assertEqual(validate_record(waiting).verification_status, "pending_review")
+        legacy = [list(LEGACY_HEADERS), [waiting[key] for key in LEGACY_HEADERS]]
+        old = parse_rows(legacy)[0]
+        self.assertEqual(old["verification_status"], "unknown")
+        self.assertEqual(validate_record(old).verification_status, "unknown")
+        confirmed = dict(waiting, verification_status="verified",
+                         evidence_summary="主辦原站正式核證，已更新來源",
+                         content_hash=hashlib.sha256(b"confirmed-business-version").hexdigest())
+        self.assertEqual(confirmed["event_key"], waiting["event_key"])
+        self.assertNotEqual(confirmed["content_hash"], waiting["content_hash"])
+        self.assertEqual(validate_record(confirmed).verification_status, "verified")
+        with self.assertRaises(ValueError):
+            validate_record(dict(waiting, verification_status="unsubstantiated"))
 
     def test_unknowns_and_date_only_are_not_midnight_or_zero(self):
         item = validate_record(record(start_at_tpe="2026-10-12"))

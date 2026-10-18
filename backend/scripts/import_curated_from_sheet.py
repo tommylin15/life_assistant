@@ -9,7 +9,7 @@ import httpx
 from pydantic import ValidationError
 from sqlalchemy import text
 from app.db.session import SessionLocal, engine
-from app.services.curated_handoff import HEADERS, BUSINESS_FIELDS, HandoffItem, upsert_handoff
+from app.services.curated_handoff import HEADERS, LEGACY_HEADERS, BUSINESS_FIELDS, HandoffItem, upsert_handoff
 
 SHEET_ID = "1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4"
 TAB = "交接資料"
@@ -24,8 +24,9 @@ IMPORT_LOCK_KEY = 57926471020261015
 
 
 def parse_rows(values):
-    if not values or tuple(values[0]) != HEADERS:
+    if not values or tuple(values[0]) not in (HEADERS, LEGACY_HEADERS):
         raise ValueError("handoff_header_contract_mismatch")
+    is_legacy = tuple(values[0]) == LEGACY_HEADERS
     if len(values) > MAX_SHEET_ROWS + 1:
         raise ValueError("handoff_rows_exceed_limit")
     rows = []
@@ -33,6 +34,9 @@ def parse_rows(values):
     for row in values[1:]:
         record = {key: str(row[i] if i < len(row) and row[i] is not None else "").strip()
                   for i, key in enumerate(HEADERS)}
+        # v1 30-column rows and v2 rows with a blank AE cell stay unknown.
+        if is_legacy or not record["verification_status"]:
+            record["verification_status"] = "unknown"
         if not any(record.values()):
             continue
         if not record["event_key"] or record["event_key"] in seen:
@@ -93,7 +97,7 @@ class SheetClient:
                 return response.json()
 
     async def read(self):
-        result = await self.request("GET", "values/" + quote(f"'{TAB}'!A1:AD1002", safe=""),
+        result = await self.request("GET", "values/" + quote(f"'{TAB}'!A1:AE1002", safe=""),
                                     params={"valueRenderOption": "FORMATTED_VALUE"})
         return result.get("values", [])
 

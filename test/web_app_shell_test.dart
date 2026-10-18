@@ -34,6 +34,7 @@ void main() {
     expect(find.text('知識與計畫'), findsWidgets);
     expect(find.text('活動與機會'), findsWidgets);
     expect(find.text('個人化'), findsWidgets);
+    expect(find.text('最新消息'), findsWidgets);
     expect(find.text('更多'), findsNothing);
     await tester.tap(find.text('個人化'));
     expect(path, '/more/personalize');

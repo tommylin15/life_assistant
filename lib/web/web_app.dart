@@ -23,6 +23,7 @@ import 'today_page.dart';
 import 'personalize_page.dart';
 import 'admin_center_page.dart';
 import 'life_capture_page.dart';
+import 'release_notes_page.dart';
 
 final _router = GoRouter(
   routes: [
@@ -74,6 +75,7 @@ final _router = GoRouter(
         GoRoute(path: '/more/curated', redirect: (_, __) => '/more/explore'),
         GoRoute(path: '/more/opportunities', builder: (_, __) => const FeatureAccess(feature: 'opportunities', child: CuratedEventsPage(entry: 'opportunities'))),
         GoRoute(path: '/more/explore', builder: (_, __) => const FeatureAccess(feature: 'explore', child: CuratedEventsPage(entry: 'explore'))),
+        GoRoute(path: '/more/updates', builder: (_, __) => const ReleaseNotesPage()),
         GoRoute(path: '/more/personalize', builder: (_, state) =>
             PersonalizePage(initialTab: state.uri.queryParameters['tab'] ?? 'home')),
         GoRoute(path: '/integrations', redirect: (_, __) => '/more/personalize?tab=google'),

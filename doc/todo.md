@@ -1,6 +1,13 @@
 # Life — Active engineering TODO
 Updated 2026-10-18. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
 
+## 2026-10-18｜使用者版本更新中心
+
+- `v0.2.0+2` 為**下一個候選發布版本**，不是目前 production 已驗證版本。前端新增「最新消息」入口、輕量更新紀錄、每帳號每瀏覽器未讀標記；候選環境另顯示診斷用 SHA，正式介面不顯示。
+- CI 的候選與 Hosting build 從 `pubspec.yaml` 帶入語意版本及原有 Git SHA；只有通過既有 V3 promotion／正式 Hosting readback，才視為使用者可見的正式版。發布、回滾會連帶更新公告。
+- **驗證待辦（NOT VERIFIED）**：Flutter tests／四項 CI、staging 帳號與手機導覽、production same-SHA Hosting、不同帳號與瀏覽器未讀狀態、rollback。未達 gates 不可稱已上線。
+- 交付規則詳見 [版本更新公告政策](product_release_notes_policy.md)。
+
 ## 2026-10-18｜台灣活動探索接續／唯一活躍缺口（15:54 更新）
 
 | 優先序 | 項目 | 最新狀態／退出條件 |

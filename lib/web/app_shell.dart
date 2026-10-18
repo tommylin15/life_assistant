@@ -4,6 +4,8 @@ import '../app/theme/app_tokens.dart';
 import 'navigation_catalog.dart';
 import 'platform_api.dart';
 import 'life_ui_environment.dart';
+import 'auth_state.dart';
+import 'release_info.dart';
 
 /// One navigation model; desktop uses a collapsible sidebar, mobile a drawer.
 /// Home is present only in the four-slot bottom bar.
@@ -81,19 +83,22 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget _navigationPanel(BuildContext context, Map<String, bool>? flags,
       List<String> order, {required bool compact, required bool drawer}) {
     final isOwner = ref.watch(ownerAuthorizedProvider).asData?.value == true;
-    Widget utility(IconData icon, String title, String path, String key) {
+    Widget utility(IconData icon, String title, String path, String key,
+        {bool unread = false}) {
+      final displayIcon = Badge(
+        isLabelVisible: unread, smallSize: 7, child: Icon(icon));
       return compact
           ? Tooltip(
               message: title,
               child: IconButton(
                 key: ValueKey(key),
                 onPressed: () => _navigate(context, path, closeDrawer: drawer),
-                icon: Icon(icon),
+                icon: displayIcon,
               ),
             )
           : ListTile(
               key: ValueKey(key),
-              leading: Icon(icon),
+              leading: displayIcon,
               title: Text(title),
               selected: widget.location == path,
               onTap: () => _navigate(context, path, closeDrawer: drawer),
@@ -105,6 +110,9 @@ class _AppShellState extends ConsumerState<AppShell> {
         Expanded(child: _groupMenu(context, flags, order,
             compact: compact, drawer: drawer)),
         const Divider(height: 1),
+        utility(Icons.campaign_outlined, '最新消息', '/more/updates', 'nav-updates',
+            unread: hasUnreadReleaseNotes(
+                ref.watch(authProvider).asData?.value?['email'])),
         utility(Icons.tune_outlined, '個人化', '/more/personalize', 'nav-personalize'),
         if (isOwner) ...[
           utility(Icons.admin_panel_settings_outlined, '管理中心', '/more/admin', 'nav-admin'),

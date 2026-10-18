@@ -11,7 +11,6 @@ set -Eeuo pipefail
 : "${GCP_PROJECT_ID:?}"
 : "${GCP_REGION:?}"
 : "${CLOUD_RUN_SERVICE:?}"
-: "${CORE_ACCEPTANCE_JOB:?}"
 
 if [[ ! "${RELEASE_SHA}" =~ ^[a-f0-9]{40}$ ]] ||
    [[ ! "${CANDIDATE_REVISION}" =~ ^life-assistant-api-[A-Za-z0-9-]+$ ]] ||

@@ -58,6 +58,9 @@ class FixedStagingWorkflowTests(unittest.TestCase):
         self.assertNotIn('gcloud run services update-traffic', s)
         self.assertNotIn('firebase deploy', s)
         self.assertNotIn('firebase hosting:clone', s)
+        # Acceptance Jobs are retired; staging must not depend on their env vars.
+        self.assertNotIn('CORE_ACCEPTANCE_JOB', s)
+        self.assertNotIn('POSTDEPLOY_ACCEPTANCE_JOB', s)
 
     def test_staging_has_no_owner_oauth_gate_but_requires_pinned_401_readback(self):
         self.assertNotIn("staging_oauth_canary", self.staging)

@@ -30,7 +30,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       CI_RUN_ID: ${{ github.event.workflow_run.id }}
       RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
-      APPROVED_PARENT: a98755f1149e562decefed1e35e3d042bf9fb7dc
+      APPROVED_PARENT: 18d33872c0aa423b0b3fb90d6c61d46553b5716b
+      DOCUMENTATION_PARENT: a98755f1149e562decefed1e35e3d042bf9fb7dc
       TESTED_UI_SHA: babb49c723cebb9a6666fdb2e31920e0dc528c41
     steps:
       - name: Gate exact main ancestry and four independent CI jobs
@@ -46,25 +47,33 @@ jobs:
             exit 0
           fi
 
-          # Only the direct child of the reviewed documentation baseline may
-          # dispatch production, with exactly these two auditable CI files.
+          # Only the exact safety-test repair child of the failed bridge may
+          # dispatch production. No other future CI commit is eligible.
           COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA?per_page=100")"
           jq -e --arg parent "$APPROVED_PARENT" '
             (.parents | length)==1 and .parents[0].sha==$parent and
             ([.files[].filename] | sort) ==
-              ([".github/workflows/v3-auto-staging-after-ci.yml",
+              (["backend/tests/test_cloud_build_v2.py",
                 ".github/workflows/life-activity-filter-release-once-20261018.yml"] | sort)
           ' <<< "$COMMIT" >/dev/null || {
             echo "activity_ui_prod=SKIP unauthorized_commit_shape" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           }
 
-          # The parent must be the docs-only direct child of the tested UI SHA.
+          # The failed predecessor must only add this bridge and staging skip;
+          # its parent must only document the already-tested UI code change.
           PARENT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$APPROVED_PARENT?per_page=100")"
+          jq -e --arg grandparent "$DOCUMENTATION_PARENT" '
+            (.parents | length)==1 and .parents[0].sha==$grandparent and
+            ([.files[].filename] | sort) ==
+              ([".github/workflows/v3-auto-staging-after-ci.yml",
+                ".github/workflows/life-activity-filter-release-once-20261018.yml"] | sort)
+          ' <<< "$PARENT" >/dev/null
+          DOCUMENTATION="$(gh api "repos/$GITHUB_REPOSITORY/commits/$DOCUMENTATION_PARENT?per_page=100")"
           jq -e --arg tested "$TESTED_UI_SHA" '
             (.parents | length)==1 and .parents[0].sha==$tested and
             (.files | length)>0 and all(.files[]; .filename|startswith("doc/"))
-          ' <<< "$PARENT" >/dev/null
+          ' <<< "$DOCUMENTATION" >/dev/null
 
           CI="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID")"
           jq -e --arg repo "$GITHUB_REPOSITORY" --arg sha "$RELEASE_SHA" '

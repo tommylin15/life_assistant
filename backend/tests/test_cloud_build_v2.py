@@ -252,6 +252,27 @@ class CloudBuildV2Tests(unittest.TestCase):
                                   'gcloud run jobs execute', 'gcloud run services update-traffic',
                                   'add-iam-policy-binding', 'force: true'):
                     self.assertNotIn(forbidden, source)
+            elif workflow.name == 'life-activity-filter-release-once-20261018.yml':
+                # A single approved UI promotion, never a generic push-to-prod.
+                # Must match an immutable ancestor, four CI gates and exact
+                # main-SHA V3 release, not mutate any GCP resources directly.
+                self.assertIn('workflow_run:', source)
+                self.assertIn('workflows: ["CI"]', source)
+                self.assertIn("workflow_run.event == 'push'", source)
+                self.assertIn("workflow_run.conclusion == 'success'", source)
+                self.assertIn('APPROVED_PARENT:', source)
+                self.assertIn('TESTED_UI_SHA: babb49c723cebb9a6666fdb2e31920e0dc528c41', source)
+                self.assertIn('free-events-postgres', source)
+                self.assertIn('deployment-scripts', source)
+                self.assertIn('unauthorized_commit_shape', source)
+                self.assertIn('existing_release_for_sha', source)
+                self.assertIn('gh workflow run v3-release-ghcr.yml', source)
+                self.assertIn('--raw-field promote=true', source)
+                self.assertIn('--raw-field publish_staging=true', source)
+                for forbidden in ('schedule:', 'gcloud run jobs update',
+                                  'gcloud run services update-traffic',
+                                  'add-iam-policy-binding', 'force: true'):
+                    self.assertNotIn(forbidden, source)
             elif workflow.name == 'life-curated-import-once-20261018.yml':
                 # A single exact-commit importer smoke: not an auto release.
                 self.assertIn('workflow_run:', source)

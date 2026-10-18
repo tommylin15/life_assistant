@@ -46,6 +46,7 @@
 | --- | --- | --- |
 | `activity.sources.list` | 讀唯一核准來源清單、作用中/停用與策略版本 | `registry_version`、來源 ID、准入/禁用 |
 | `activity.snapshots.inspect` | 只讀 GAS 快照/manifest，驗 bytes/SHA/UID/EventID，含 stale | 原始證據/日期/狀態，不代替 GAS HTTP |
+| `activity.public_page.fetch` | 依核准來源/合法公開頁提供最小讀頁能力；實際工具可由 omniAgent 受控調用 | URL、HTTP/讀取時間、來源/內容指紋、限制狀態 |
 | `activity.source_repair.propose` | 保留舊 URL、失敗分類、官方 fallback 證據與計畫 | `proposal_id`, `requires_approval` |
 | `activity.source_repair.apply` | 僅有權的操作性來源變更，CAS/回滾/讀回；違反禁用策略拒絕 | `before/after`, `recheck_status`, `receipt` |
 | `activity.curated.propose` | schema/活動身份/原始證據檢查、不公開發布 | `accepted/rejected` 候選原因 |
@@ -61,7 +62,7 @@
 ## 4. 自動修復與文件權限分級
 
 - **Level 0 自動觀察**：來源讀取、快照/Manifest 二次驗證、異常類別、候選與健康紀錄、唯一 `YYYY-MM-DD.log` 依不同 run_id 追加；每輪先查同日完成項目避免重做。
-- **Level 1 有證據的自動修復**：官方網站搬家、可追溯同主辦替代入口、來源表操作性網址修訂或解析器的安全修正；必須原 URL/新 URL/主辦身份一致、原頁與備援 readback、修改前版本、diff/回滾及 audit。403/429 不代表可以繞過；來源失效不能充作零新增。
+- **Level 1 有證據的自動修復**：官方網站搬家、可追溯同主辦替代入口、來源表操作性網址修訂或已授權的非程式碼解析設定修正；程式碼層解析器修復只能產生提案交由 CI 與正常部署流程處理；必須原 URL/新 URL/主辦身份一致、原頁與備援 readback、修改前版本、diff/回滾及 audit。403/429 不代表可以繞過；來源失效不能充作零新增。
 - **Level 2 文件維護**：若只是操作記錄或明確錯誤連結，可經既有授權工具自動讀寫/讀回；但正式探索 README、01～05 的**來源准入、A/B 覆蓋、1/3/5 星、去重、交接、安全與保存期限等政策**只由 Agent 建立 proposed_diff，經專案核准後才由文件發布器套用；不能在每日 06:00 直接讓 LLM 改規格並自我宣告 PASS。
 - **Level 3 高風險禁止自動執行**：大規模刪資料、destructive migration、production IAM/Service Account 重大擴權、secret rotation、解除被停用來源政策、改寫 GitHub main 歷史或未核准的正式流量切換；另外需要使用者明確確認。
 

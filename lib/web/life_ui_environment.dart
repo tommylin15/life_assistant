@@ -14,5 +14,9 @@ class LifeUiEnvironment {
 }
 
 /// Production errors never reveal raw internal API details.
-String lifeUserError(String label, Object error) =>
-    LifeUiEnvironment.isCandidate ? '$label：$error' : '$label，請稍後重試。';
+String lifeUserError(String label, Object error) {
+  if (LifeUiEnvironment.isCandidate) {
+    return label.isEmpty ? error.toString() : '$label：$error';
+  }
+  return label.isEmpty ? '請稍後重試。' : '$label，請稍後重試。';
+}

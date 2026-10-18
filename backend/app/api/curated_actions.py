@@ -10,6 +10,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
+from app.api.ui_policies import feature_gate
 from app.api.ui_policies import _audit
 from app.api.google_integrations import _request_google, CALENDAR_EVENTS_URL, SERVICE_SCOPES
 from app.db.session import get_db
@@ -153,6 +154,12 @@ async def my_actions(response: Response, user: dict = Depends(activity_access), 
 @router.put("/{activity_id}/actions/{kind}")
 async def set_action(activity_id: str, kind: KINDS, body: ActionWrite,
                      user: dict = Depends(activity_access), db: AsyncSession = Depends(get_db)):
+    # Cross-feature actions must respect the TARGET feature's own rollout.
+    # An enabled Explore screen cannot bypass disabled Tasks or Calendar.
+    if kind == "task":
+        await feature_gate("tasks")(user=user, db=db)
+    elif kind.startswith("calendar_") or kind == "reminder":
+        await feature_gate("calendar")(user=user, db=db)
     item = await db.get(CuratedActivity, activity_id)
     if item is None:
         raise HTTPException(404, "Activity not found")

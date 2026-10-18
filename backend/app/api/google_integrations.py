@@ -355,7 +355,8 @@ async def list_gmail_metadata(
     return {"messages": messages, "returned": len(messages)}
 
 
-@router.post("/gmail/messages/{message_id}/task", status_code=201)
+@router.post("/gmail/messages/{message_id}/task", status_code=201,
+    dependencies=[Depends(feature_gate("tasks"))])
 async def gmail_message_to_task(
     message_id: str,
     body: GmailToTaskCreate,
@@ -616,7 +617,8 @@ async def delete_calendar_event(
     return Response(status_code=204)
 
 
-@router.post("/gmail/messages/{message_id}/calendar", status_code=201)
+@router.post("/gmail/messages/{message_id}/calendar", status_code=201,
+    dependencies=[Depends(feature_gate("calendar"))])
 async def gmail_message_to_calendar(
     message_id: str,
     body: GmailToCalendarCreate,
@@ -732,7 +734,8 @@ async def _ensure_drive_folder(
     return response.json(), True
 
 
-@router.post("/drive/bridge", status_code=201)
+@router.post("/drive/bridge", status_code=201,
+    dependencies=[Depends(feature_gate("drive"))])
 async def ensure_drive_bridge(
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import current_user
+from app.api.ui_policies import feature_gate
 from app.api.google_integrations import (
     CAPABILITIES,
     _get_gmail_metadata,
@@ -40,7 +41,8 @@ class GmailToProjectCreate(BaseModel):
     status: str = Field(default="active", min_length=1, max_length=32)
 
 
-@router.post("/gmail/messages/{message_id}/project", status_code=201)
+@router.post("/gmail/messages/{message_id}/project", status_code=201,
+    dependencies=[Depends(feature_gate("projects"))])
 async def gmail_message_to_project(
     message_id: str,
     body: GmailToProjectCreate,

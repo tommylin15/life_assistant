@@ -1,6 +1,9 @@
 # Life — Acceptance
 
-## 2026-10-18｜GCP 雙 Acceptance Job 正式退役決策（取代下方三項精簡紀錄）
+## 2026-10-18｜GCP 雙 Acceptance Job 已退役（取代下方三項精簡紀錄）
+- **GCP 實體刪除：PASS（2026-10-18）**。[GCP 一次性清理 Actions #39086446238](https://github.com/tommylin15/life_assistant/actions/runs/39086446238) completed/success；`life-assistant-core-acceptance`、`life-assistant-postdeploy-acceptance` 均完成刪除與 `Cannot find job` readback，且清理腳本最後確認 `life-assistant-db-migrate` 仍可 describe。前一次 #39086212488 因已刪除 Job 的正常訊息未納入比對而局部失敗；不可倒推該次已雙刪除。
+- **一次性清理 Workflow 已從 main 撤下**，避免日後 push 再次觸發；不包含 IAM 更動，也不允許刪除其他 Job。此記錄對應一次性執行證據，不等於任何新版本 runtime/UI 已驗收。
+
 - Owner 決定同時退役 `life-assistant-core-acceptance` 與 `life-assistant-postdeploy-acceptance`。V3 Release、舊 Deploy Cloud Run 不再建立／更新／執行兩支 Job。相關獨立 runtime acceptance workflow（Calendar 真實帳號、Gemini Signed Smoke、Postdeploy）停止啟用；Drive Knowledge 保留不依賴 Cloud Run Job 的 Hosting SHA／OAuth redirect／瀏覽器 UI 驗收。原始 runner 程式可保留供離線分析，但不再是發版 Gate。
 - 仍保留 `life-assistant-db-migrate` 與正式 Alembic 版本升級、既有四項 CI、固定 Staging candidate 及 Production 的 SHA/映像、HTTP health/readiness、401、OAuth redirect、流量核對及 rollback gates。Drive AI／Google Drive 供應商真實整合、活動池與租戶隔離的原 Job 型驗收不再執行，**不得據此宣稱其 runtime PASS**；需要時只能另以獨立來源重新取證。
 - GCP 實體刪除由一次性受控 GitHub Actions 進行，需記錄 delete 與 NOT_FOUND readback；若缺 Scheduler 盤點或權限則 FAIL／NOT VERIFIED，不得將 GitHub commit 等同 GCP 資源已刪除。

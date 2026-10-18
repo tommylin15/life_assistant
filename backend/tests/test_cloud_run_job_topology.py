@@ -40,17 +40,15 @@ class CloudRunJobTopologyTests(unittest.TestCase):
         self.assertIn("Post-promotion live health, PostgreSQL and access gates", v3)
         self.assertNotIn("Run real database/auth acceptance using release digest", v3)
 
-    def test_only_one_scoped_retirement_workflow_deletes_jobs(self):
+    def test_no_retirement_workflow_remains_after_gcp_readback(self):
         cleanup = "retire-life-acceptance-jobs-once.yml"
+        self.assertFalse((WORKFLOWS / cleanup).exists())
         for path in WORKFLOWS.glob("*.yml"):
             text = path.read_text(encoding="utf-8")
-            if path.name == cleanup:
-                self.assertIn("gcloud run jobs delete", text)
-                for name in RETIRED_NAMES:
-                    self.assertIn(name, text)
-                self.assertIn("life-assistant-db-migrate", text)
-            else:
-                self.assertNotIn("gcloud run jobs delete", text)
+            self.assertNotIn("gcloud run jobs delete", text)
+            for name in RETIRED_NAMES:
+                self.assertNotIn(name, text)
+
 
 if __name__ == "__main__":
     unittest.main()

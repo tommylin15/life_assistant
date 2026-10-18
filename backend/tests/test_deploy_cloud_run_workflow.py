@@ -10,7 +10,6 @@ DIAGNOSTIC_WRAPPER = REPO_ROOT / ".github" / "scripts" / "run_cloud_run_job_with
 WORKFLOW_RUN_CHAINS = {
     "deploy-cloud-run.yml": "deploy-cloud-run-main",
     "deploy-firebase-hosting.yml": "deploy-firebase-hosting-main",
-    "postdeploy-runtime-acceptance.yml": "postdeploy-runtime-acceptance-main",
     "drive-knowledge-runtime-acceptance.yml": "drive-knowledge-runtime-acceptance-main",
     "notes-ui-acceptance.yml": "notes-ui-acceptance-main",
 }

@@ -1,4 +1,5 @@
 """Manual-only Gmail action radar; never schedules or fetches entire mailboxes."""
+import asyncio
 import re
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -556,7 +557,8 @@ async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "bac
                 raise ValueError("Invalid Gmail metadata")
             subject = _gmail_header(raw, "Subject").strip()[:500]
             snippet = str(raw.get("snippet") or "").strip()[:500]
-            decision = classify_local(subject, snippet, classify_message(subject, snippet))
+            decision = await asyncio.to_thread(
+                classify_local, subject, snippet, classify_message(subject, snippet))
             category = decision.category
             if category:
                 stamp = raw.get("internalDate")

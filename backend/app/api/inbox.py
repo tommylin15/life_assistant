@@ -18,6 +18,7 @@ from app.api.notes import automatic_title
 from app.api.ui_policies import feature_gate
 from app.db.session import get_db
 from app.models.execution_log import ExecutionLog
+from app.models.gmail_radar import GmailRadarItem
 from app.models.note import Note
 from app.models.project import Project
 from app.models.schemas import NoteCreate, ShoppingItemCreate, TaskCreate
@@ -37,6 +38,7 @@ class InterpretInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     text: str = Field(min_length=1, max_length=1200)
     timezone: str = Field(default="Asia/Taipei", max_length=64)
+    gmail_item_id: str | None = Field(default=None, max_length=36)
 
 
 class SuggestedNote(BaseModel):
@@ -275,7 +277,8 @@ def build_prompt(value: str, now: str) -> str:
 
 @router.post("/interpret")
 async def interpret(body: InterpretInput, response: Response,
-                    user: dict = Depends(current_user)):
+                    user: dict = Depends(current_user),
+                    db: AsyncSession = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
     value = body.text.strip()
     if not value:
@@ -285,6 +288,28 @@ async def interpret(body: InterpretInput, response: Response,
     except (ValueError, ZoneInfoNotFoundError):
         raise HTTPException(422, "Invalid timezone")
     hint = _inbox_date_hint(value, now)
+    if body.gmail_item_id is not None:
+        # Gmail-derived data MUST NOT enter the generic Gemini Inbox route.
+        # Only the authenticated owner's saved Gmail radar classification is
+        # trusted; browser-supplied text is never an authority for identity.
+        item = await db.scalar(select(GmailRadarItem).where(
+            GmailRadarItem.id == body.gmail_item_id,
+            GmailRadarItem.user_sub == user["sub"],
+        ))
+        if item is None:
+            raise HTTPException(404, "Gmail item not found")
+        if item.linked_entity_id:
+            raise HTTPException(409, "Gmail item was already saved")
+        summary = (item.summary or "")[:320]
+        source_due = item.due_date.isoformat() if item.due_date else item.due_text
+        note = (summary + (("\n通知所載日期：" + str(source_due)) if source_due else ""))[:500]
+        proposal = Proposal(
+            target="task",
+            fields={"title": (item.title or "Gmail 待確認事項")[:500], "note": note or None},
+            ambiguities=["請先至官方 App 或自行輸入網址核實通知；日期由本人確認"],
+            select_default=False,
+        )
+        return {**_proposals([proposal], "gmail_local"), "date_hint": hint}
     fixed = rule_candidates(value)
     if fixed:
         return {**fixed, "date_hint": hint}

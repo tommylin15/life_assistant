@@ -6,7 +6,8 @@ Updated 2026-10-18. **One active backlog only.** Prior 01–07 execution plan ha
 - **已核准決策：** Gmail 掃描採規則引擎＋本地多語言語意模型（離線且按需載入）＋本地日期資訊抽取。**不向 Gemini／omniAgent／外部生成式 AI 傳 Gmail 內容**；不因本次工作新增背景排程或推播。完整規格與驗收證據要求：[Gmail V2](gmail_local_v2_delivery.md)。
 - **Source 已提交、驗收尚待：** 新增本地判讀服務、僅使用預載 checkpoint、版本化重判、非破壞性 Alembic 0022、最多 2,000 封列舉＋每批 40 封的七天補檢 API、Flutter 進度及期限證據、CI regression。舊 7 天快掃 20 封／3 天補檢相容。
 - **模型尚未布署：NOT VERIFIED。** Production Docker 尚未安裝大型 embedding 相依或打包 checkpoint；缺模型時只有 rules-only，不能宣稱 semantic AI 已啟用。進階模型先量測 CPU/記憶體／冷啟動／繁體中文品質，再決定是否獨立部署，禁止掃描時自行從網路下載。
-- **退出門檻：** 同 SHA backend/flutter/deployment/PostgreSQL 四項 CI PASS、migration readback、候選 Staging E2E、本人 Gmail 授權及漏判樣本讀回、一般帳號隔離、正式部署及 rollback／Hosting 同 SHA；若任何 gate 缺證據，維持 PARTIAL／NOT VERIFIED。
+- **已驗證工程 gates：** SHA `c4560ce77d3faaefbe31896849181f60ed6da27c` [四 CI #39271061902](https://github.com/tommylin15/life_assistant/actions/runs/39271061902) **PASS**；[固定 staging Release #39271510026](https://github.com/tommylin15/life_assistant/actions/runs/39271510026) **PASS**（hosting SHA/401/OAuth redirect、migration job step、traffic_unchanged=true）。workflow summary 仍寫舊 0018 字樣，須以程式 target 0022／資料庫 ledger 實讀為準，不能引用舊摘要當 schema 版本證據。
+- **退出門檻剩餘：** 實際 0022 DB revision 讀回、本人與一般帳號真實 Gmail/分類回執、已完成／略過重判、離線模型資產及品質/效能證據、正式 promotion/rollback/Hosting 同 SHA。缺證據維持 **PARTIAL／NOT VERIFIED**。
 
 ## 2026-10-19｜版本公告接續驗證
 - GitHub main `6f3ddba` 的 CI 四項 [#39128817868](https://github.com/tommylin15/life_assistant/actions/runs/39128817868) PASS；同版 V3 [#39129015414](https://github.com/tommylin15/life_assistant/actions/runs/39129015414) 固定 staging PASS，但 production promotion 與 Hosting 步驟 skipped；不宣稱 0.2.0 已對一般使用者上線。

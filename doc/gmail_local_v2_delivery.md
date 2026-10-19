@@ -1,6 +1,6 @@
 # Gmail Smart Radar V2 — local-only classification
 
-2026-10-19, Asia/Taipei. SOURCE IMPLEMENTED / MODEL NOT PROVISIONED / PRODUCTION NOT VERIFIED.
+2026-10-19, Asia/Taipei. SOURCE / 4 CI / FIXED STAGING PASS; MODEL / TRUE GMAIL E2E / PRODUCTION NOT VERIFIED.
 
 This V2 decision supersedes the V1 classification and seven-day backfill limits only. Keep user-scoped OAuth, manual scanning, confirmation receipts, no background schedule/push, no auto-writing Tasks/Calendar/Shopping, and no full Gmail body storage.
 
@@ -26,9 +26,11 @@ This V2 decision supersedes the V1 classification and seven-day backfill limits 
 
 ## Acceptance gates
 1. Implementation source and regression tests: source committed, CI to verify.
-2. Same-SHA four CI gates including Alembic real Postgres test: NOT VERIFIED.
+2. Same-SHA four CI gates including Alembic real Postgres test: PASS, #39271061902, code SHA c4560ce77d3faaefbe31896849181f60ed6da27c.
 3. Optional local semantic checkpoint installed, accuracy / p95 / RAM measurements: NOT VERIFIED.
-4. Staging exact-SHA, real Gmail readback, owner/general-user isolation: NOT VERIFIED.
-5. Production migration, controlled promotion, rollback and Hosting readback: NOT VERIFIED.
+4. Staging SHA / static Hosting / API 401 / OAuth redirect / migration runner: PASS, #39271510026. Actual owner/general-user Gmail and returned classification/DB E2E: NOT VERIFIED.
+5. Production promotion, rollback, Hosting readback: NOT VERIFIED; workflow explicitly skipped. No production traffic change.
+
+The staging workflow summary prints legacy alembic=20261012_0018 even though the checked-in migration release target is 20261019_0022. Use the actual runner/DB ledger as authority; do not cite the stale summary as proof of revision. Direct DB 0022 readback is NOT VERIFIED.
 
 No DONE status before matching runtime evidence. Rules-only improvements may be shipped as a PARTIAL subfeature if the semantic checkpoint remains unprovisioned.

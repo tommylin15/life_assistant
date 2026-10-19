@@ -1,6 +1,6 @@
 # Gmail Smart Radar V2 — local-only classification
 
-2026-10-19, Asia/Taipei. SOURCE / 4 CI / FIXED STAGING PASS; MODEL / TRUE GMAIL E2E / PRODUCTION NOT VERIFIED.
+2026-10-20, Asia/Taipei. SOURCE / FOUR-GATE CI / VERIFIED DB MIGRATION JOB / FIXED STAGING PASS; SEMANTIC MODEL DEPLOYMENT / REAL GMAIL E2E / PRODUCTION NOT VERIFIED.
 
 This V2 decision supersedes the V1 classification and seven-day backfill limits only. Keep user-scoped OAuth, manual scanning, confirmation receipts, no background schedule/push, no auto-writing Tasks/Calendar/Shopping, and no full Gmail body storage.
 
@@ -25,13 +25,13 @@ This V2 decision supersedes the V1 classification and seven-day backfill limits 
 - Release target and Postgres integration test head need to follow this Alembic head. Destructive downgrade is prohibited.
 
 ## Acceptance gates
-1. Implementation source and regression tests: source committed, CI to verify.
-2. Same-SHA four CI gates including Alembic real Postgres test: PASS, #39271061902, code SHA c4560ce77d3faaefbe31896849181f60ed6da27c.
+1. Implementation and regression tests: PASS at source SHA 3ad6b7768642fb8580027aa5460c5d2b4430d62f.
+2. Same-SHA four CI gates (backend, Flutter, PostgreSQL, deployment scripts): PASS [#39278270473](https://github.com/tommylin15/life_assistant/actions/runs/39278270473), source SHA 3ad6b7768642fb8580027aa5460c5d2b4430d62f.
 3. ONNX artifact SHA / offline synthetic quality / 1 GiB isolated Docker smoke: PASS #39276926718. Model deployment, real Gmail quality/generalization and Cloud Run capacity: NOT VERIFIED.
-4. Prior rules-only staging #39271510026: PASS for that older SHA. New source requires new same-SHA Staging/0022 DB readback. Actual owner/general-user Gmail and returned classification/DB E2E: NOT VERIFIED.
+4. Same-SHA staging [#39343836610](https://github.com/tommylin15/life_assistant/actions/runs/39343836610): PASS for Hosting version/static SHA, API unauthorized-401, OAuth callback, and fail-closed read-only Gmail V2 schema acceptance Job step (checks Alembic 20261019_0022, three tables/columns, per-user message unique constraint). The job runner exit is verified, not a raw SQL result included in the workflow log. Fixed hosting version sites/life-assistant-v3-stage-tl15/versions/433b1bc1b2014576. Real owner/general-user Gmail + result DB E2E: NOT VERIFIED.
 5. Production promotion, rollback, Hosting readback: NOT VERIFIED; workflow explicitly skipped. No production traffic change.
 
-The staging workflow summary prints legacy alembic=20261012_0018 even though the checked-in migration release target is 20261019_0022. Use the actual runner/DB ledger as authority; do not cite the stale summary as proof of revision. Direct DB 0022 readback is NOT VERIFIED.
+The migration workflow step label still says 'Apply additive 0018' (historical label), but migration runner target and new read-only DB acceptance script check Alembic 20261019_0022. DB validation Job step PASS in #39343836610; do not infer a full SQL transcript from the job's success status.
 
 No DONE status before matching runtime evidence. Rules-only improvements may be shipped as a PARTIAL subfeature if the semantic checkpoint remains unprovisioned.
 

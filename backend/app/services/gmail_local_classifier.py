@@ -1,7 +1,7 @@
 """Gmail V2: local-only semantic fallback and conservative date evidence.
 
 No outbound AI calls. No runtime model download. Embeddings are OPTIONAL:
-an approved multilingual SentenceTransformer checkpoint must already exist on
+an approved multilingual FastEmbed ONNX checkpoint must already exist on
 local disk and GMAIL_RADAR_LOCAL_MODEL_PATH must point to it.
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-CLASSIFIER_VERSION = "local-v2.1"
+CLASSIFIER_VERSION = "local-v2.2"
 
 # Short, de-identified reference intents. Do not train on Gmail data.
 EXAMPLES: dict[str, tuple[str, ...]] = {
@@ -90,15 +90,47 @@ def extract_due(subject: str, snippet: str) -> tuple[date | None, str | None]:
         return None, raw[:32]
 
 
+OFFLINE_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+REQUIRED_LOCAL_FILES = ("model_optimized.onnx", "tokenizer.json", "config.json")
+
+
+class _OfflineOnnxEncoder:
+    """Adapter for FastEmbed ONNX CPU; never resolves an online model ID."""
+
+    def __init__(self, model):
+        self._model = model
+
+    def encode(self, values, *, normalize_embeddings=True):
+        vectors = list(self._model.embed(list(values), batch_size=16))
+        if not normalize_embeddings:
+            return vectors
+        normalized = []
+        for vector in vectors:
+            norm = math.sqrt(sum(float(x) * float(x) for x in vector))
+            if norm <= 0 or not math.isfinite(norm):
+                raise ValueError("invalid_local_embedding_norm")
+            normalized.append([float(x) / norm for x in vector])
+        return normalized
+
+
 @lru_cache(maxsize=2)
 def _load_local_model(path: str):
-    if not path or not Path(path).is_dir():
+    directory = Path(path)
+    if not path or not directory.is_dir():
         raise RuntimeError("local_model_artifact_missing")
-    # Explicit offline mode; no remote model resolution and no dynamic code.
+    if not all((directory / filename).is_file() for filename in REQUIRED_LOCAL_FILES):
+        raise RuntimeError("local_model_artifact_incomplete")
+    # Offline is enforced at the loader boundary, even if a caller changes env.
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
-    from sentence_transformers import SentenceTransformer
-    return SentenceTransformer(path, device="cpu", trust_remote_code=False, local_files_only=True)
+    from fastembed import TextEmbedding
+    return _OfflineOnnxEncoder(TextEmbedding(
+        model_name=OFFLINE_MODEL_NAME,
+        specific_model_path=str(directory),
+        local_files_only=True,
+        threads=2,
+        providers=["CPUExecutionProvider"],
+    ))
 
 
 @lru_cache(maxsize=2)
@@ -116,7 +148,7 @@ def _semantic_category(subject: str, snippet: str, *, path: str) -> str | None:
         return None
     try:
         model, phrases, vectors = _examples_embeddings(path)
-        query_vector = model.encode([(" " .join((subject, snippet)))[:800]],
+        query_vector = model.encode([(" ".join((subject, snippet)))[:800]],
                                     normalize_embeddings=True)[0]
         scores: dict[str, float] = {}
         for (category, _), vector in zip(phrases, vectors):

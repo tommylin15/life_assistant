@@ -158,8 +158,10 @@ _ACCESS_SNIPPET = re.compile(
 )
 
 _RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("billing", ("繳費期限", "繳費通知", "繳款通知", "繳款截止", "付款期限", "付款提醒",
-                 "帳單到期", "payment due", "bill due", "statement due")),
+    ("billing", ("繳費期限", "繳費通知", "繳款通知", "繳款期限", "繳款截止",
+                 "繳款提醒", "付款期限", "付款提醒", "帳單到期", "帳單通知",
+                 "電子帳單", "e帳單", "信用卡帳單",
+                 "payment due", "bill due", "statement due")),
     ("pickup", ("取貨通知", "取貨期限", "包裹已到", "貨到門市", "package ready", "ready for pickup")),
     ("booking", ("訂房確認", "訂位確認", "預約確認", "預約成功", "booking confirmation",
                  "reservation confirmed", "appointment confirmed")),
@@ -200,6 +202,11 @@ def classify_message(subject: str, snippet: str) -> str | None:
         return "authorization"
     for category, phrases in _RULES:
         if _matches(title, phrases):
+            # Routine e-bills with an explicit "no payment required" notice
+            # are not actionable; do not turn them into payment reminders.
+            if category == "billing" and _matches(title, ("電子帳單", "e帳單", "帳單通知", "信用卡帳單")):
+                if _matches(preview, ("暫無需繳款", "本期無需繳款", "不需繳款", "無需繳款")):
+                    return None
             return category
 
     # A generic title with promotional snippet must not be escalated just
@@ -212,8 +219,13 @@ def classify_message(subject: str, snippet: str) -> str | None:
     if _ACCESS_SNIPPET.search(preview):
         return "authorization"
     for category, phrases in _RULES:
-        # Snippets are weaker evidence; require the narrow, existing examples.
-        if _matches(preview, phrases[:3]):
+        # Snippets are weaker evidence: match explicit payment/deadline wording
+        # rather than a generic mention of a bill or a promotional offer.
+        snippet_phrases = phrases[:3]
+        if category == "billing":
+            snippet_phrases += ("繳款截止", "繳費截止", "本期帳單應繳", "應繳總額",
+                                "payment is due", "payment deadline")
+        if _matches(preview, snippet_phrases):
             return category
     return None
 

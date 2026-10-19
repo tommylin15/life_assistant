@@ -25,6 +25,23 @@ class GmailLocalClassifierTests(unittest.TestCase):
         self.assertIsNone(d.due_date)
         self.assertEqual(d.due_text, "10月21日")
 
+    def test_settled_invoices_are_not_promoted_even_if_rule_title_matches(self):
+        for subject, preview in [
+            ("繳費通知", "本期費用已繳清，謝謝您"),
+            ("信用卡帳單通知", "暫無需繳款，併入次期"),
+            ("Payment due notice", "Payment received"),
+        ]:
+            with self.subTest(subject=subject):
+                decision = classify_local(subject, preview, "billing", model_path="")
+                self.assertIsNone(decision.category)
+                self.assertEqual(decision.reason_code, "billing_settled")
+
+    def test_security_rule_survives_marketing_footer(self):
+        decision = classify_local(
+            "異常登入安全性警告", "頁尾：unsubscribe 訂閱電子報",
+            "security", model_path="")
+        self.assertEqual(decision.category, "security")
+
     def test_explicit_full_dates_only(self):
         self.assertEqual(
             extract_due("繳款截止：2026/10/21", "")[0].isoformat(), "2026-10-21"

@@ -283,7 +283,19 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --args=-m,scripts.apply_cloud_domain_parity_release \
             --task-timeout 10m --wait --quiet
-          echo "curated_schema_migration=PASS alembic=20261012_0018" >> "$GITHUB_STEP_SUMMARY"
+          echo "migration_job=PASS (DB revision independently checked below)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify Gmail V2 actual PostgreSQL schema readback
+        if: ${{ inputs.promote || inputs.publish_staging }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh life-assistant-db-migrate \
+            gcloud run jobs execute life-assistant-db-migrate \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --args=-m,scripts.gmail_v2_db_acceptance \
+            --task-timeout 5m --wait --quiet
+          echo "gmail_v2_db_readback=PASS revision=20261019_0022 (job exit only)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Flutter for candidate Hosting Preview
         uses: subosito/flutter-action@v2

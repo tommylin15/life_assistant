@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import resource
 import socket
@@ -15,7 +16,7 @@ import time
 from contextlib import contextmanager
 
 from app.api.gmail_radar import classify_message
-from app.services.gmail_local_classifier import active_classifier_version, classify_local
+from app.services.gmail_local_classifier import active_classifier_version, classify_local, _examples_embeddings
 
 # Independent synthetic positive / negative test cases, not reference examples.
 CASES = [
@@ -94,6 +95,25 @@ def benchmark() -> dict:
         cold_seconds = time.perf_counter() - started
         preds = []
         timings = []
+        diagnostics = []
+        reference_model, reference_examples, reference_vectors = _examples_embeddings(model_path)
+        candidate_vectors = reference_model.encode(
+            [(subject + ' ' + snippet)[:800] for subject, snippet, _ in CASES],
+            normalize_embeddings=True,
+        )
+        for i, (query, (_, _, expected)) in enumerate(zip(candidate_vectors, CASES)):
+            scores = {}
+            for (category, _), vector in zip(reference_examples, reference_vectors):
+                similarity = sum(float(a) * float(b) for a, b in zip(query, vector))
+                if math.isfinite(similarity):
+                    scores[category] = max(scores.get(category, -1.0), similarity)
+            ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+            diagnostics.append({
+                'id': i, 'expected': expected or 'none',
+                'top_category': ranked[0][0],
+                'top_similarity': round(ranked[0][1], 4),
+                'margin': round(ranked[0][1] - ranked[1][1], 4),
+            })
         for subject, snippet, expected in CASES:
             tick = time.perf_counter()
             outcome = classify_local(subject, snippet, classify_message(subject, snippet))
@@ -119,6 +139,7 @@ def benchmark() -> dict:
         "median_message_ms": round(statistics.median(timings), 2),
         "p95_message_ms": round(percentile(timings, .95), 2),
         "max_rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
+        "score_diagnostics": diagnostics,
     }
 
 

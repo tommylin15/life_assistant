@@ -1,0 +1,4 @@
+# Optional runtime extras for an operator-provided local multilingual checkpoint.
+# NOT installed by the production FastAPI Dockerfile by default; never download
+# model weights or Gmail-derived content at runtime.
+sentence-transformers==5.1.2

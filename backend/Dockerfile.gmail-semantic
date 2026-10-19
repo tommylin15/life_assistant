@@ -1,0 +1,33 @@
+# Opt-in candidate only. Keep the default backend/Dockerfile lightweight.
+# Public pinned ONNX weights are fetched and hash-verified AT IMAGE BUILD TIME,
+# never during Gmail scans, user requests, or Cloud Run startup.
+FROM python:3.12-slim AS model-build
+
+WORKDIR /modelbuild
+COPY requirements-local-semantic.txt ./requirements-local-semantic.txt
+RUN pip install --no-cache-dir -r requirements-local-semantic.txt
+COPY scripts/gmail_semantic_artifact.py ./scripts/gmail_semantic_artifact.py
+COPY app/services/gmail_local_classifier.py ./app/services/gmail_local_classifier.py
+RUN python -m scripts.gmail_semantic_artifact --destination /opt/gmail-onnx
+
+
+FROM python:3.12-slim
+
+WORKDIR /app
+LABEL org.opencontainers.image.source="https://github.com/tommylin15/life_assistant"
+LABEL org.opencontainers.image.description="Opt-in Life Gmail offline ONNX candidate"
+
+COPY requirements.txt requirements-local-semantic.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-local-semantic.txt
+COPY --from=model-build /opt/gmail-onnx /opt/gmail-onnx
+COPY . .
+ENV GMAIL_RADAR_LOCAL_MODEL_PATH=/opt/gmail-onnx \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    HF_HUB_DISABLE_TELEMETRY=1
+
+# Fail the build if the checked-in public hash or local model load contract fails.
+RUN python -m scripts.gmail_semantic_artifact --destination /opt/gmail-onnx --verify-only \
+ && python -c "from app.services.gmail_local_classifier import active_classifier_version; assert active_classifier_version().endswith('-sem')"
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

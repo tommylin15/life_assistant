@@ -19,6 +19,7 @@ def mail(**kwargs):
         gmail_thread_id="thread-1", status="pending",
         received_at=None, created_at=None, sender="bank",
         category="billing", linked_target=None, linked_entity_id=None,
+        due_date=None, due_text=None,
     )
     fields.update(kwargs)
     return SimpleNamespace(**fields)

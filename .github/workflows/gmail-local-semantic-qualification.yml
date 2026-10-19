@@ -28,7 +28,7 @@ jobs:
       run:
         working-directory: backend
     env:
-      GMAIL_RADAR_LOCAL_MODEL_PATH: ${{ runner.temp }}/gmail-onnx-model
+      GMAIL_RADAR_LOCAL_MODEL_PATH: /tmp/gmail-onnx-model
       HF_HUB_DISABLE_TELEMETRY: '1'
       DO_NOT_TRACK: '1'
     steps:

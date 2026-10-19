@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import threading
 from dataclasses import dataclass
 from datetime import date
 from functools import lru_cache
@@ -101,6 +102,8 @@ def extract_due(subject: str, snippet: str) -> tuple[date | None, str | None]:
 
 OFFLINE_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 REQUIRED_LOCAL_FILES = ("model_optimized.onnx", "tokenizer.json", "config.json")
+# Protect CPU memory under concurrent manual scans from different users.
+_MODEL_LOCK = threading.RLock()
 
 
 class _OfflineOnnxEncoder:
@@ -123,7 +126,7 @@ class _OfflineOnnxEncoder:
 
 
 @lru_cache(maxsize=2)
-def _load_local_model(path: str):
+def _load_local_model_cached(path: str):
     directory = Path(path)
     if not path or not directory.is_dir():
         raise RuntimeError("local_model_artifact_missing")
@@ -142,12 +145,22 @@ def _load_local_model(path: str):
     ))
 
 
+def _load_local_model(path: str):
+    with _MODEL_LOCK:
+        return _load_local_model_cached(path)
+
+
 @lru_cache(maxsize=2)
-def _examples_embeddings(path: str):
+def _examples_embeddings_cached(path: str):
     model = _load_local_model(path)
     phrases = [(category, phrase) for category, examples in EXAMPLES.items() for phrase in examples]
     vectors = model.encode([phrase for _, phrase in phrases], normalize_embeddings=True)
     return model, phrases, vectors
+
+
+def _examples_embeddings(path: str):
+    with _MODEL_LOCK:
+        return _examples_embeddings_cached(path)
 
 
 def _semantic_category(subject: str, snippet: str, *, path: str) -> str | None:
@@ -157,8 +170,9 @@ def _semantic_category(subject: str, snippet: str, *, path: str) -> str | None:
         return None
     try:
         model, phrases, vectors = _examples_embeddings(path)
-        query_vector = model.encode([(" ".join((subject, snippet)))[:800]],
-                                    normalize_embeddings=True)[0]
+        with _MODEL_LOCK:
+            query_vector = model.encode([(" ".join((subject, snippet)))[:800]],
+                                        normalize_embeddings=True)[0]
         scores: dict[str, float] = {}
         for (category, _), vector in zip(phrases, vectors):
             similarity = sum(float(a) * float(b) for a, b in zip(query_vector, vector))

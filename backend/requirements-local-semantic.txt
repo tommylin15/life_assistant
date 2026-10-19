@@ -1,4 +1,5 @@
-# Optional runtime extras for an operator-provided local multilingual checkpoint.
-# NOT installed by the production FastAPI Dockerfile by default; never download
-# model weights or Gmail-derived content at runtime.
-sentence-transformers==5.1.2
+# Optional offline-only ONNX multilingual classifier (separate acceptance lane).
+# FastEmbed uses onnxruntime CPU; production Docker is unchanged until model
+# quality, cold-start and RSS gates are independently verified.
+fastembed==0.9.0
+huggingface-hub==0.35.3

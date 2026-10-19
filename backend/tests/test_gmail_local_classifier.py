@@ -16,8 +16,8 @@ class GmailLocalClassifierTests(unittest.TestCase):
     def test_versioned_rule_classification_without_model(self):
         self.assertTrue(CLASSIFIER_VERSION.startswith("local-v2"))
         d = classify_local(
-            "上海商銀信用卡繳款期限到期通知",
-            "本期帳單繳款截止日為10月21日，本期帳單應繳總額NT$9547元",
+            "虛構銀行信用卡繳款期限到期通知",
+            "本期帳單繳款截止日為10月21日，本期帳單應繳總額NT$1234元",
             "billing", model_path="",
         )
         self.assertEqual(d.category, "billing")

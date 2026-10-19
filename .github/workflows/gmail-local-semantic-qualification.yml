@@ -1,0 +1,69 @@
+# Isolated OFFLINE model qualification: no Gmail OAuth, message bodies,
+# external inference, Cloud Run deployment or private model file artifacts.
+name: Gmail Local Semantic Qualification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/app/services/gmail_local_classifier.py'
+      - 'backend/scripts/gmail_semantic_artifact.py'
+      - 'backend/scripts/gmail_semantic_benchmark.py'
+      - 'backend/requirements-local-semantic.txt'
+      - '.github/workflows/gmail-local-semantic-qualification.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gmail-local-qualification-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  offline-onnx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      GMAIL_RADAR_LOCAL_MODEL_PATH: ${{ runner.temp }}/gmail-onnx-model
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      DO_NOT_TRACK: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install CPU-only model and backend dependencies
+        run: |
+          python -m pip install -r requirements.txt -r requirements-local-semantic.txt
+      - name: Fetch immutable public ONNX checkpoint and verify SHA256
+        run: |
+          set -euo pipefail
+          python -m scripts.gmail_semantic_artifact --destination "$GMAIL_RADAR_LOCAL_MODEL_PATH"
+      - name: Offline CPU and synthetic quality acceptance
+        run: |
+          set -euo pipefail
+          python -m scripts.gmail_semantic_benchmark \
+            --report "$RUNNER_TEMP/gmail-semantic-results.json" --enforce-gates
+      - name: Publish bounded synthetic metrics
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/gmail-semantic-results.json" ]; then
+            {
+              echo "## Gmail offline model qualification"
+              echo '~~~json'
+              cat "$RUNNER_TEMP/gmail-semantic-results.json"
+              echo '~~~'
+              echo "Synthetic examples only; not real Gmail E2E acceptance."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gmail-onnx-synthetic-metrics
+          path: ${{ runner.temp }}/gmail-semantic-results.json
+          if-no-files-found: ignore
+          retention-days: 14

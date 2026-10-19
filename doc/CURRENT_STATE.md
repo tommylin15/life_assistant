@@ -1,3 +1,11 @@
+## 2026-10-20｜Gmail V2 CI + PostgreSQL 0022 + 固定 Staging 讀回
+
+- **工程 CI：PASS。** [#39278270473](https://github.com/tommylin15/life_assistant/actions/runs/39278270473)，Flutter／Backend／PostgreSQL／Deployment Scripts 四項 PASS，同 SHA `3ad6b7768642fb8580027aa5460c5d2b4430d62f`。
+- **自動接力：PASS（重試）。** [#39282095085](https://github.com/tommylin15/life_assistant/actions/runs/39282095085) 第 2 次執行成功觸發同 SHA staging-only。前次失敗屬接力 gate／GitHub API，未代表程式 CI FAIL。
+- **固定 Staging：PASS。** [Release #39343836610](https://github.com/tommylin15/life_assistant/actions/runs/39343836610)：0% digest-pinned candidate、migration Job、獨立 Gmail V2 PostgreSQL schema readback Job、Hosting SHA、Pinned Preview、Staging live/API 401、OAuth redirect 均成功。固定 Hosting version `sites/life-assistant-v3-stage-tl15/versions/433b1bc1b2014576`，`traffic_unchanged=true`；正式 promote 與 rollback steps 未執行。
+- **仍 PARTIAL：** FastEmbed ONNX 已通過離線合成樣本＋1 GiB 無網路容器工程驗收，但正式 API/Staging 尚未載入 optional ONNX 映像；使用者本人 Gmail 真信分類、一般帳號隔離、效能與模型誤判 E2E、正式版切流與 rollback：NOT VERIFIED。不能宣稱 Gmail V2 完整 DONE。規格：[Gmail V2](gmail_local_v2_delivery.md)。
+- **隱私治理：** 本輪最新測試已改合成帳單，但公開 Git 歷史過去提交可能保留原始銀行帳單信息；未經使用者核准不可改寫 `main` 歷史。
+
 ## 2026-10-19｜Gmail V2 local-only scan / seven-day backfill
 
 - User decision: no Gemini/omniAgent or other external generative AI on Gmail scanner. Rules + offline-only optional multilingual semantic model + local due-date extraction; manual only. Source: [V2 specification](gmail_local_v2_delivery.md).

@@ -59,6 +59,39 @@ CASES = [
 ]
 
 
+# Independent post-calibration holdout; never used to choose similarity limits.
+HOLDOUT_CASES = [
+    ("尚未入帳的水費請儘速處理", "逾期費用需補繳", "billing"),
+    ("本月分期款尚待支付", "請檢查付款帳戶", "billing"),
+    ("Your electricity bill is outstanding", "Service may be interrupted", "billing"),
+    ("宅配員將物品放在郵局領件窗口", "持證件前往領取", "pickup"),
+    ("門診已安排至下週二上午", "請確認您的就診行程", "booking"),
+    ("The airline moved your departure time", "Please check updated flight details", "travel"),
+    ("審核需要您補交相關證明文件", "資料尚未齊全", "administrative"),
+    ("主管正在等候文件簽核", "請至公司系統查看", "administrative"),
+    ("Your profile was accessed from an unfamiliar location", "Review account access", "security"),
+    ("有人未經您允許使用您的卡片", "請核對交易活動", "security"),
+    ("An application obtained additional mailbox permissions", "Review account access", "authorization"),
+    ("因為扣款資訊有問題，服務續約可能停止", "需查看繳款設定", "account"),
+    ("您的退費申請未獲准", "需要進一步處理", "refund"),
+    ("截止時間之前請回覆審核要求", "附加資料仍待提供", "deadline"),
+    ("本期卡費昨日已繳清", "本次付款完成", None),
+    ("服務條款更新供參考", "此次更新不需回覆", None),
+    ("個人購物清單已儲存", "資料同步成功", None),
+    ("網路商店包裹已寄出", "訂單已出貨，無需其他操作", None),
+    ("您已順利登入會員帳戶", "沒有異常情況", None),
+    ("上個月的帳戶使用月報", "供您自行參考", None),
+    ("交通安全知識文章", "航班旅遊新聞", None),
+    ("Payment received successfully", "Your balance is settled", None),
+    ("Newsletter: welcome to this month", "Read our newest articles", None),
+    ("上週活動圓滿結束", "歡迎查看活動照片", None),
+    ("週末美食推薦", "餐廳排名及菜單", None),
+    ("購物點數已入帳", "優惠回饋已完成", None),
+    ("Online order receipt", "Your order was delivered and paid", None),
+    ("本週路況新聞回顧", "沒有個人行程變更", None),
+]
+
+
 @contextmanager
 def network_forbidden():
     connect = socket.socket.connect
@@ -114,27 +147,32 @@ def benchmark() -> dict:
                 'top_similarity': round(ranked[0][1], 4),
                 'margin': round(ranked[0][1] - ranked[1][1], 4),
             })
-        for subject, snippet, expected in CASES:
+        for subject, snippet, expected in CASES + HOLDOUT_CASES:
             tick = time.perf_counter()
             outcome = classify_local(subject, snippet, classify_message(subject, snippet))
             timings.append((time.perf_counter() - tick) * 1000)
             preds.append((outcome.category, expected))
-    tp = sum(gold is not None and actual == gold for actual, gold in preds)
-    wrong_category = sum(gold is not None and actual is not None and actual != gold for actual, gold in preds)
-    fp = sum(gold is None and actual is not None for actual, gold in preds)
-    fn = sum(gold is not None and actual is None for actual, gold in preds)
-    tn = sum(gold is None and actual is None for actual, gold in preds)
-    precision = tp / max(1, tp + wrong_category + fp)
-    recall = tp / max(1, tp + wrong_category + fn)
-    specificity = tn / max(1, tn + fp)
+    def rates(rows):
+        tp = sum(gold is not None and actual == gold for actual, gold in rows)
+        wrong = sum(gold is not None and actual is not None and actual != gold for actual, gold in rows)
+        fp = sum(gold is None and actual is not None for actual, gold in rows)
+        fn = sum(gold is not None and actual is None for actual, gold in rows)
+        tn = sum(gold is None and actual is None for actual, gold in rows)
+        return {
+            "correct_positive": tp, "wrong_category": wrong, "false_positive": fp,
+            "false_negative": fn, "true_negative": tn,
+            "precision_exact_category": round(tp / max(1, tp + wrong + fp), 4),
+            "recall_exact_category": round(tp / max(1, tp + wrong + fn), 4),
+            "negative_specificity": round(tn / max(1, tn + fp), 4),
+        }
+    primary = rates(preds[:len(CASES)])
+    holdout = rates(preds[len(CASES):])
     return {
         "model_revision": model_version,
         "synthetic_samples": len(CASES),
-        "correct_positive": tp, "wrong_category": wrong_category,
-        "false_positive": fp, "false_negative": fn, "true_negative": tn,
-        "precision_exact_category": round(precision, 4),
-        "recall_exact_category": round(recall, 4),
-        "negative_specificity": round(specificity, 4),
+        **primary,
+        "independent_holdout_samples": len(HOLDOUT_CASES),
+        "holdout": holdout,
         "cold_load_seconds": round(cold_seconds, 3),
         "median_message_ms": round(statistics.median(timings), 2),
         "p95_message_ms": round(percentile(timings, .95), 2),
@@ -158,6 +196,9 @@ def main():
         if (result["precision_exact_category"] < 0.80
                 or result["recall_exact_category"] < 0.65
                 or result["negative_specificity"] < 0.90
+                or result["holdout"]["precision_exact_category"] < 0.80
+                or result["holdout"]["recall_exact_category"] < 0.65
+                or result["holdout"]["negative_specificity"] < 0.90
                 or result["p95_message_ms"] > 2500
                 or result["max_rss_mib"] > 1200):
             raise SystemExit("gmail_semantic_benchmark=FAIL quality_or_resource_guard")

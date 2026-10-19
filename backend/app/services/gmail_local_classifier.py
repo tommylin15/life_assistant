@@ -14,7 +14,7 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-CLASSIFIER_VERSION = "local-v2.2"
+CLASSIFIER_VERSION = "local-v2.3"
 
 # Short, de-identified reference intents. Do not train on Gmail data.
 EXAMPLES: dict[str, tuple[str, ...]] = {
@@ -30,14 +30,15 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "security": ("警告：偵測到未授權的帳戶登入", "Suspicious account activity detected"),
     "account": ("付款失敗導致帳號即將停用", "Subscription payment problem requires action"),
     "refund": ("退款申請遭拒，需要您處理", "Your refund request requires action"),
-    "administrative": ("學校通知需要家長回覆及繳交同意書", "Government document requires response"),
+    "administrative": ("學校通知需要家長回覆及繳交同意書", "補件尚未完成，請送交審查資料", "Government document requires response"),
     "authorization": ("新的第三方程式取得帳戶存取權，請確認授權", "App permissions have changed"),
 }
 
 # Never elevate a routine/no-action email or overt advertising via similarity.
 NO_ACTION = re.compile(
     r"(?i)(暫無需繳款|本期無需繳款|不需繳款|無需繳款|"
-    r"已完成繳費|付款成功|已繳清|無須處理|不需要採取任何行動|"
+    r"已完成繳費|付款成功|已繳清|繳款已成功|已成功繳款|繳款已完成|交易已完成|"
+    r"付款已完成|訂單已出貨|退款已完成|退款成功|無須處理|不需要採取任何行動|"
     r"優惠|促銷|電子報|廣告|特價|折扣|newsletter|unsubscribe|"
     r"payment received|payment successful|no action (?:is )?required)"
 )
@@ -157,8 +158,8 @@ def _semantic_category(subject: str, snippet: str, *, path: str) -> str | None:
                 scores[category] = max(scores.get(category, -1.0), similarity)
         ranked = sorted(scores.items(), key=lambda pair: pair[1], reverse=True)
         # Conservative starting guard, NOT a calibrated probability.
-        if ranked and ranked[0][1] >= 0.80 and (
-            len(ranked) == 1 or ranked[0][1] - ranked[1][1] >= 0.08
+        if ranked and ranked[0][1] >= 0.55 and (
+            len(ranked) == 1 or ranked[0][1] - ranked[1][1] >= 0.03
         ):
             return ranked[0][0]
     except (ImportError, OSError, RuntimeError, ValueError, TypeError):

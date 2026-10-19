@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from app.services.gmail_local_classifier import (
-    CLASSIFIER_VERSION, EXAMPLES, LocalDecision, classify_local, extract_due,
+    CLASSIFIER_VERSION, EXAMPLES, LocalDecision, active_classifier_version, classify_local, extract_due,
     _semantic_category,
 )
 
@@ -47,6 +47,13 @@ class GmailLocalClassifierTests(unittest.TestCase):
             with self.subTest(subject=subject):
                 self.assertEqual(classify_local(subject, snippet, None,
                                                 model_path="/tmp/nonexistent-checkpoint").category, None)
+
+    def test_offline_semantic_activation_changes_classifier_revision(self):
+        with patch.dict("os.environ", {"GMAIL_RADAR_LOCAL_MODEL_PATH": "/fake-checkpoint"}):
+            with patch("app.services.gmail_local_classifier._model_ready", return_value=False):
+                self.assertEqual(active_classifier_version(), CLASSIFIER_VERSION)
+            with patch("app.services.gmail_local_classifier._model_ready", return_value=True):
+                self.assertEqual(active_classifier_version(), CLASSIFIER_VERSION + "-sem")
 
     def test_missing_model_falls_back_without_network(self):
         with patch("app.services.gmail_local_classifier._load_local_model") as loader:

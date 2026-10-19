@@ -11,6 +11,7 @@ on:
       - 'backend/scripts/gmail_semantic_artifact.py'
       - 'backend/scripts/gmail_semantic_benchmark.py'
       - 'backend/requirements-local-semantic.txt'
+      - 'backend/Dockerfile.gmail-semantic'
       - '.github/workflows/gmail-local-semantic-qualification.yml'
 
 permissions:
@@ -23,7 +24,7 @@ concurrency:
 jobs:
   offline-onnx:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: backend
@@ -48,6 +49,15 @@ jobs:
           set -euo pipefail
           python -m scripts.gmail_semantic_benchmark \
             --report "$RUNNER_TEMP/gmail-semantic-results.json" --enforce-gates
+      - name: Build optional offline semantic Cloud Run image and smoke with no network
+        run: |
+          set -euo pipefail
+          docker build --file Dockerfile.gmail-semantic --tag life-gmail-semantic:ci .
+          docker run --rm --network none --memory 1g --cpus 2 \
+            --entrypoint python life-gmail-semantic:ci \
+            -m scripts.gmail_semantic_benchmark \
+            --report /tmp/gmail-onnx-container-metrics.json --enforce-gates
+          echo "gmail_semantic_offline_image=PASS network_none=true memory=1Gi" >> "$GITHUB_STEP_SUMMARY"
       - name: Publish bounded synthetic metrics
         if: always()
         run: |

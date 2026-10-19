@@ -1,11 +1,14 @@
 """Gmail V2 local-only classification: no external inference and no guessed dates."""
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 from app.services.gmail_local_classifier import (
     CLASSIFIER_VERSION, EXAMPLES, LocalDecision, active_classifier_version, classify_local, extract_due,
-    _semantic_category,
+    _semantic_category, _examples_embeddings,
 )
 
 
@@ -54,6 +57,28 @@ class GmailLocalClassifierTests(unittest.TestCase):
                 self.assertEqual(active_classifier_version(), CLASSIFIER_VERSION)
             with patch("app.services.gmail_local_classifier._model_ready", return_value=True):
                 self.assertEqual(active_classifier_version(), CLASSIFIER_VERSION + "-sem")
+
+    def test_multiple_users_cannot_initialize_embeddings_concurrently(self):
+        running = 0
+        peak = 0
+        guard = threading.Lock()
+
+        def fake_init(_path):
+            nonlocal running, peak
+            with guard:
+                running += 1
+                peak = max(peak, running)
+            time.sleep(0.01)
+            with guard:
+                running -= 1
+            return object()
+
+        with patch("app.services.gmail_local_classifier._examples_embeddings_cached",
+                   side_effect=fake_init):
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                results = list(executor.map(_examples_embeddings, ["/fake"] * 8))
+        self.assertEqual(len(results), 8)
+        self.assertEqual(peak, 1)
 
     def test_missing_model_falls_back_without_network(self):
         with patch("app.services.gmail_local_classifier._load_local_model") as loader:

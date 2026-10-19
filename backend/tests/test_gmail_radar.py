@@ -368,7 +368,7 @@ class GmailRadarOwnershipTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["seven_day_count"], 2)
         self.assertEqual(result["seven_day_remaining"], 0)
         self.assertTrue(result["seven_day_complete"])
-        self.assertEqual(older.classifier_version, "local-v2.1")
+        self.assertEqual(older.classifier_version, "local-v2.2")
         self.assertEqual(google.await_count, 4)
         self.assertEqual(google.await_args_list[1].kwargs["params"]["q"],
                          "newer_than:7d -in:spam -in:trash")

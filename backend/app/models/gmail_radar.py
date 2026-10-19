@@ -1,7 +1,7 @@
 """Per-user, explicitly requested Gmail radar results (no message body storage)."""
 import uuid
-from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Integer, String, UniqueConstraint, Index, func
+from datetime import date, datetime
+from sqlalchemy import Boolean, Date, DateTime, Integer, String, UniqueConstraint, Index, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
 
@@ -22,6 +22,11 @@ class GmailRadarItem(Base):
     summary: Mapped[str] = mapped_column(String(320), nullable=False, default="")
     sender: Mapped[str] = mapped_column(String(320), nullable=False, default="")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    classifier_version: Mapped[str] = mapped_column(String(32), nullable=False, default="legacy-v1")
+    classification_source: Mapped[str] = mapped_column(String(24), nullable=False, default="rules")
+    reason_code: Mapped[str] = mapped_column(String(48), nullable=False, default="legacy")
+    due_date: Mapped[date | None] = mapped_column(Date(), nullable=True)
+    due_text: Mapped[str | None] = mapped_column(String(32), nullable=True)
     linked_target: Mapped[str | None] = mapped_column(String(16), nullable=True)
     linked_entity_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -43,6 +48,9 @@ class GmailRadarScanState(Base):
     three_day_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     three_day_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
     three_day_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    seven_day_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    seven_day_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    seven_day_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class GmailRadarSeen(Base):
@@ -51,3 +59,4 @@ class GmailRadarSeen(Base):
     user_sub: Mapped[str] = mapped_column(String(255), primary_key=True)
     gmail_message_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    classifier_version: Mapped[str] = mapped_column(String(32), nullable=False, default="legacy-v1")

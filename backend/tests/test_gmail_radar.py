@@ -8,6 +8,7 @@ from app.api.gmail_radar import (
     manual_three_day_recheck, manual_seven_day_backfill,
 )
 from app.models.google_integration import GoogleConnection
+from app.services.gmail_local_classifier import CLASSIFIER_VERSION
 
 
 class GmailRadarRulesTests(unittest.TestCase):
@@ -368,7 +369,7 @@ class GmailRadarOwnershipTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["seven_day_count"], 2)
         self.assertEqual(result["seven_day_remaining"], 0)
         self.assertTrue(result["seven_day_complete"])
-        self.assertEqual(older.classifier_version, "local-v2.2")
+        self.assertEqual(older.classifier_version, CLASSIFIER_VERSION)
         self.assertEqual(google.await_count, 4)
         self.assertEqual(google.await_args_list[1].kwargs["params"]["q"],
                          "newer_than:7d -in:spam -in:trash")

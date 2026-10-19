@@ -19,8 +19,8 @@ class GmailRadarRulesTests(unittest.TestCase):
     def test_real_payment_deadline_notice_is_detected(self):
         # Regression: real 2026-10-19 credit-card due notice was filtered out.
         self.assertEqual(classify_message(
-            "2026年10月份 上海商銀信用卡繳款期限到期通知",
-            "本期帳單繳款截止日為10月21日，本期帳單應繳總額NT$9547元",
+            "2026年10月份 虛構銀行信用卡繳款期限到期通知",
+            "本期帳單繳款截止日為10月21日，本期帳單應繳總額NT$1234元",
         ), "billing")
         self.assertEqual(classify_message(
             "重要通知", "本期帳單繳款截止日為10月21日",

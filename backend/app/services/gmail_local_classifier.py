@@ -15,7 +15,7 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-CLASSIFIER_VERSION = "local-v2.4"
+CLASSIFIER_VERSION = "local-v2.5"
 
 # Short, de-identified reference intents. Do not train on Gmail data.
 EXAMPLES: dict[str, tuple[str, ...]] = {
@@ -51,6 +51,14 @@ NO_ACTION = re.compile(
     r"payment received|payment successful|order was delivered and paid|"
     r"order has been paid|no action (?:is )?required)"
 )
+# Higher-priority settlement status may override an actionable billing title.
+# A generic marketing footer never cancels an explicit security alert.
+SETTLED_BILL = re.compile(
+    r"(?i)(暫無需繳款|本期無需繳款|不需繳款|無需繳款|"
+    r"已完成繳費|已繳清|繳款已成功|已成功繳款|繳款已完成|"
+    r"付款已完成|payment received|payment successful|paid in full)"
+)
+
 # Specific evidence only. Month/day alone is retained as text: never invent a year.
 DUE = re.compile(
     r"(?:繳款截止|繳費截止|付款期限|繳費期限|繳款期限|到期日|截止日|"
@@ -210,7 +218,10 @@ def classify_local(subject: str, snippet: str, rule_category: str | None,
                    *, model_path: str | None = None) -> LocalDecision:
     stamp, text = extract_due(subject, snippet)
     if rule_category:
-        # Rule classifier already implements exact advertising exclusions.
+        # Do not create unpaid-bill reminders for receipts or zero-due notices.
+        if rule_category == "billing" and SETTLED_BILL.search(subject + " " + snippet):
+            return LocalDecision(None, "rules", "billing_settled")
+        # Preserve explicit security alerts regardless of marketing footers.
         return LocalDecision(rule_category, "rules", "explicit_action", stamp, text)
     candidate = (" ".join((subject, snippet)))[:1000]
     if not subject.strip() or NO_ACTION.search(candidate):

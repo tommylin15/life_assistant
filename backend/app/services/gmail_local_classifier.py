@@ -14,23 +14,30 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-CLASSIFIER_VERSION = "local-v2.3"
+CLASSIFIER_VERSION = "local-v2.4"
 
 # Short, de-identified reference intents. Do not train on Gmail data.
 EXAMPLES: dict[str, tuple[str, ...]] = {
     "billing": (
         "您的信用卡繳費期限即將到期，請確認是否已繳款",
         "電信費帳單已出帳，請在截止日前付款",
+        "自來水與電費尚有欠款，請完成繳納",
+        "Electricity and utility invoices require outstanding payment",
         "Payment reminder: your bill is due soon",
     ),
-    "pickup": ("包裹已到門市，請於期限前取貨", "Your package is ready for pickup"),
+    "pickup": ("包裹已到門市，請於期限前取貨",
+               "郵局窗口有待領的快遞，請攜證件領取", "Your package is ready for pickup"),
     "booking": ("預約確認通知，請核對訂位時間", "Your appointment has been confirmed"),
     "travel": ("航班時間異動，請確認最新出發時間", "Flight change requires attention"),
-    "deadline": ("文件需要補件，請於期限內辦理", "Response deadline is approaching"),
-    "security": ("警告：偵測到未授權的帳戶登入", "Suspicious account activity detected"),
+    "deadline": ("文件需要補件，請於期限內辦理",
+                 "審核回覆即將逾期，請在截止前處理", "Response deadline is approaching"),
+    "security": ("警告：偵測到未授權的帳戶登入",
+                 "發現非本人授權的信用卡刷卡交易",
+                 "Suspicious account activity detected"),
     "account": ("付款失敗導致帳號即將停用", "Subscription payment problem requires action"),
     "refund": ("退款申請遭拒，需要您處理", "Your refund request requires action"),
-    "administrative": ("學校通知需要家長回覆及繳交同意書", "補件尚未完成，請送交審查資料", "Government document requires response"),
+    "administrative": ("學校通知需要家長回覆及繳交同意書", "補件尚未完成，請送交審查資料",
+                       "公司主管請您完成文件審批簽署", "Government document requires response"),
     "authorization": ("新的第三方程式取得帳戶存取權，請確認授權", "App permissions have changed"),
 }
 
@@ -40,7 +47,8 @@ NO_ACTION = re.compile(
     r"已完成繳費|付款成功|已繳清|繳款已成功|已成功繳款|繳款已完成|交易已完成|"
     r"付款已完成|訂單已出貨|退款已完成|退款成功|無須處理|不需要採取任何行動|"
     r"優惠|促銷|電子報|廣告|特價|折扣|newsletter|unsubscribe|"
-    r"payment received|payment successful|no action (?:is )?required)"
+    r"payment received|payment successful|order was delivered and paid|"
+    r"order has been paid|no action (?:is )?required)"
 )
 # Specific evidence only. Month/day alone is retained as text: never invent a year.
 DUE = re.compile(

@@ -5,7 +5,7 @@ from fastapi import HTTPException
 
 from app.api.gmail_radar import (
     classify_message, gmail_urls, manual_quick_scan, manual_three_day_backfill,
-    manual_three_day_recheck,
+    manual_three_day_recheck, manual_seven_day_backfill,
 )
 from app.models.google_integration import GoogleConnection
 
@@ -349,3 +349,46 @@ class GmailRadarOwnershipTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["skipped"], 2)
         self.assertTrue(result["three_day_complete"])
         self.assertEqual(google.await_count, 2)
+
+    async def test_seven_day_backfill_progress_and_versioned_seen(self):
+        from app.models.gmail_radar import GmailRadarSeen
+        older = GmailRadarSeen(user_sub="user-a", gmail_message_id="msg1",
+                               classifier_version="legacy-v1")
+        # New classifier reevaluates an old unclassified ID instead of skipping it.
+        db = self.fake_db(seen=[older])
+        with patch("app.api.gmail_radar._request_google", new_callable=AsyncMock) as google:
+            google.side_effect = [
+                self.fake_list(["msg1"]), self.fake_list(["msg1", "msg2"]),
+                self.fake_metadata("msg1"), self.fake_metadata("msg2"),
+            ]
+            result = await manual_seven_day_backfill(user={"sub": "user-a"}, db=db)
+        self.assertEqual(result["scan_kind"], "seven_day")
+        self.assertEqual(result["checked"], 2)
+        self.assertEqual(result["added"], 2)
+        self.assertEqual(result["seven_day_count"], 2)
+        self.assertEqual(result["seven_day_remaining"], 0)
+        self.assertTrue(result["seven_day_complete"])
+        self.assertEqual(older.classifier_version, "local-v2.1")
+        self.assertEqual(google.await_count, 4)
+        self.assertEqual(google.await_args_list[1].kwargs["params"]["q"],
+                         "newer_than:7d -in:spam -in:trash")
+
+    async def test_seven_day_inventory_capped_must_never_claim_complete(self):
+        db = self.fake_db()
+        def list_response(ids, token=None):
+            result = self.fake_list(ids)
+            result.json.return_value["nextPageToken"] = token
+            return result
+        with patch("app.api.gmail_radar._request_google", new_callable=AsyncMock) as google:
+            google.side_effect = [
+                self.fake_list([]),
+                list_response([], "another-page"),
+                list_response([], "another-page"),
+                list_response([], "another-page"),
+                list_response([], "another-page"),
+            ]
+            result = await manual_seven_day_backfill(user={"sub": "user-a"}, db=db)
+        self.assertFalse(result["seven_day_complete"])
+        self.assertTrue(result["seven_day_count_capped"])
+        self.assertEqual(result["seven_day_count"], 0)
+        self.assertEqual(google.await_count, 5)

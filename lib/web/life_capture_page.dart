@@ -78,7 +78,12 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
     });
     try {
       final parsed = await ref.read(platformApiProvider).post('/inbox/interpret',
-          {'text': _input.text.trim(), 'timezone': 'Asia/Taipei'});
+          {
+            'text': _input.text.trim(),
+            'timezone': 'Asia/Taipei',
+            if (widget.gmailRadarItemId != null)
+              'gmail_item_id': widget.gmailRadarItemId,
+          });
       final raw = (parsed['candidates'] as List).cast<Map<String, dynamic>>();
       final suggestions = <Map<String, dynamic>>[];
       for (var i = 0; i < raw.length; i++) {

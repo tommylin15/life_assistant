@@ -15,6 +15,34 @@ class GmailRadarRulesTests(unittest.TestCase):
         self.assertEqual(classify_message("本期帳單繳費通知", ""), "billing")
         self.assertEqual(classify_message("Your payment due tomorrow", ""), "billing")
 
+    def test_real_payment_deadline_notice_is_detected(self):
+        # Regression: real 2026-10-19 credit-card due notice was filtered out.
+        self.assertEqual(classify_message(
+            "2026年10月份 上海商銀信用卡繳款期限到期通知",
+            "本期帳單繳款截止日為10月21日，本期帳單應繳總額NT$9547元",
+        ), "billing")
+        self.assertEqual(classify_message(
+            "重要通知", "本期帳單繳款截止日為10月21日",
+        ), "billing")
+
+    def test_e_bills_require_attention_but_no_payment_due_does_not(self):
+        self.assertEqual(classify_message(
+            "【重要】台灣大哥大115年10月份e帳單",
+            "本期應繳總額376元，繳款截止11月2日",
+        ), "billing")
+        self.assertIsNone(classify_message(
+            "【重要】台灣大哥大115年10月份e帳單",
+            "應繳總額94元，繳款截止：暫無需繳款併入次期",
+        ))
+        self.assertIsNone(classify_message(
+            "台新銀行綜合對帳單 2026年9月份",
+            "請查收本月對帳資料",
+        ))
+        self.assertIsNone(classify_message(
+            "限時優惠：電子帳單好禮活動",
+            "繳款截止日前享優惠",
+        ))
+
     def test_booking_pickup_and_deadline(self):
         self.assertEqual(classify_message("您的訂房確認", ""), "booking")
         self.assertEqual(classify_message("取貨通知：請前往門市", ""), "pickup")

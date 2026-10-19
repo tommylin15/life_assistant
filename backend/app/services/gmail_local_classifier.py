@@ -134,6 +134,23 @@ def _semantic_category(subject: str, snippet: str, *, path: str) -> str | None:
     return None
 
 
+@lru_cache(maxsize=2)
+def _model_ready(path: str) -> bool:
+    if not path or not Path(path).is_dir():
+        return False
+    try:
+        _examples_embeddings(path)
+        return True
+    except (ImportError, OSError, RuntimeError, ValueError, TypeError):
+        return False
+
+
+def active_classifier_version() -> str:
+    """Recheck legacy rules-only misses when a real offline model becomes ready."""
+    path = os.environ.get("GMAIL_RADAR_LOCAL_MODEL_PATH", "")
+    return CLASSIFIER_VERSION + "-sem" if _model_ready(path) else CLASSIFIER_VERSION
+
+
 def classify_local(subject: str, snippet: str, rule_category: str | None,
                    *, model_path: str | None = None) -> LocalDecision:
     stamp, text = extract_due(subject, snippet)

@@ -163,6 +163,10 @@ jobs:
                         "$RUNNER_TEMP/v3-pre-service.json")"
           test -n "$PREVIOUS_REVISIONS"
           echo "PREVIOUS_REVISIONS=$PREVIOUS_REVISIONS" >> "$GITHUB_ENV"
+          # Read-only capacity evidence for opt-in Gmail ONNX model sizing.
+          RAM="$(jq -r '.spec.template.spec.containers[0].resources.limits.memory // "NOT_VERIFIED"' "$RUNNER_TEMP/v3-pre-service.json")"
+          CPU="$(jq -r '.spec.template.spec.containers[0].resources.limits.cpu // "NOT_VERIFIED"' "$RUNNER_TEMP/v3-pre-service.json")"
+          echo "gmail_semantic_existing_service_capacity=memory:$RAM cpu:$CPU" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create 0%-traffic digest-pinned candidate
         id: candidate

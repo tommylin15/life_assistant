@@ -19,7 +19,7 @@ from app.models.gmail_radar import GmailRadarItem, GmailRadarScanState, GmailRad
 from app.models.execution_log import ExecutionLog
 from app.models.google_integration import GoogleConnection
 from app.services.google_oauth import SERVICE_SCOPES
-from app.services.gmail_local_classifier import CLASSIFIER_VERSION, classify_local
+from app.services.gmail_local_classifier import CLASSIFIER_VERSION, active_classifier_version, classify_local
 
 router = APIRouter(prefix="/integrations/google/gmail/radar", tags=["gmail-radar"])
 
@@ -467,6 +467,7 @@ async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "bac
     if connection is None or scope not in set(connection.scopes.split()):
         raise HTTPException(409, "Please authorize Gmail in Google service connections")
     now = datetime.now(timezone.utc)
+    current_version = await asyncio.to_thread(active_classifier_version)
     three_day_ids, listed_all = await _list_three_day_ids(db, sub, scope)
     seven_day_ids: list[str] = []
     seven_day_listed_all = False
@@ -506,7 +507,7 @@ async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "bac
     seen_ids = set(seen_rows)
     # Legacy records are eligible for re-evaluation under upgraded rules.
     stale_ids = {message_id for message_id, row in seen_rows.items()
-                 if row is not None and row.classifier_version != CLASSIFIER_VERSION}
+                 if row is not None and row.classifier_version != current_version}
 
     if kind == "backfill":
         # Progress over unprocessed or old-classifier IDs.
@@ -535,10 +536,10 @@ async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "bac
             skipped += 1
             if message_id not in seen_ids:
                 db.add(GmailRadarSeen(user_sub=sub, gmail_message_id=message_id,
-                                     checked_at=now, classifier_version=CLASSIFIER_VERSION))
+                                     checked_at=now, classifier_version=current_version))
                 newly_seen.add(message_id)
             elif message_id in stale_ids and seen_rows[message_id] is not None:
-                seen_rows[message_id].classifier_version = CLASSIFIER_VERSION
+                seen_rows[message_id].classifier_version = current_version
                 seen_rows[message_id].checked_at = now
                 refreshed.add(message_id)
             continue
@@ -575,7 +576,7 @@ async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "bac
                     category=category, title=subject or "Gmail 待確認事項",
                     summary=snippet[:320], sender=_gmail_header(raw, "From")[:320],
                     status="pending", received_at=received_at,
-                    classifier_version=CLASSIFIER_VERSION,
+                    classifier_version=current_version,
                     classification_source=decision.source,
                     reason_code=decision.reason_code,
                     due_date=decision.due_date, due_text=decision.due_text,
@@ -585,10 +586,10 @@ async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "bac
                 skipped += 1
             if message_id not in seen_ids:
                 db.add(GmailRadarSeen(user_sub=sub, gmail_message_id=message_id,
-                                     checked_at=now, classifier_version=CLASSIFIER_VERSION))
+                                     checked_at=now, classifier_version=current_version))
                 newly_seen.add(message_id)
             elif message_id in stale_ids and seen_rows[message_id] is not None:
-                seen_rows[message_id].classifier_version = CLASSIFIER_VERSION
+                seen_rows[message_id].classifier_version = current_version
                 seen_rows[message_id].checked_at = now
                 refreshed.add(message_id)
         except HTTPException as exc:
@@ -606,7 +607,9 @@ async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "bac
     if state is None:
         state = GmailRadarScanState(user_sub=sub, status="succeeded")
         db.add(state)
-    state.status = "partial" if failed or not listed_all else "succeeded"
+    incomplete = remaining > 0 or not listed_all or (
+        kind == "seven_day" and (seven_remaining > 0 or not seven_day_listed_all))
+    state.status = "partial" if failed or incomplete else "succeeded"
     state.last_started_at = now
     state.last_finished_at = datetime.now(timezone.utc)
     state.scan_kind = kind
@@ -620,7 +623,9 @@ async def _run_scan(user: dict, db: AsyncSession, *, kind: Literal["quick", "bac
         state.seven_day_complete = seven_day_listed_all and seven_remaining == 0
     await db.commit()
     return {
-        "source": "local_v2", "scan_window_days": 7 if kind in ("quick", "seven_day") else 3,
+        "source": "rules_and_local_semantic" if current_version.endswith("-sem") else "rules",
+        "classifier_version": current_version,
+        "scan_window_days": 7 if kind in ("quick", "seven_day") else 3,
         "limit": QUICK_LIMIT if kind == "quick" else BACKFILL_BATCH,
         "three_day_count_capped": not listed_all,
         "seven_day_count_capped": kind == "seven_day" and not seven_day_listed_all,

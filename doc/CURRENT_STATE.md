@@ -1,3 +1,11 @@
+## 2026-10-19｜Gmail V2 local-only scan / seven-day backfill
+
+- User decision: no Gemini/omniAgent or other external generative AI on Gmail scanner. Rules + offline-only optional multilingual semantic model + local due-date extraction; manual only. Source: [V2 specification](gmail_local_v2_delivery.md).
+- **Source/CI PASS:** SHA c4560ce77d3faaefbe31896849181f60ed6da27c, [four CI gates #39271061902](https://github.com/tommylin15/life_assistant/actions/runs/39271061902). Non-destructive Alembic 20261019_0022, versioned recheck, seven-day 2,000-ID bounded list/40-ID batch, user UI due evidence/coverage, no message body persisted.
+- **Staging PASS:** [V3 staging-only Release #39271510026](https://github.com/tommylin15/life_assistant/actions/runs/39271510026) success, migration step success, staging Hosting static SHA and API 401 readback PASS, OAuth redirect PASS, fixed Staging version sites/life-assistant-v3-stage-tl15/versions/d97953b44182cde6; traffic_unchanged=true. **Production promotion, production Hosting and rollback steps were skipped**, NOT VERIFIED.
+- **Not yet complete:** offline semantic checkpoint/dependencies not shipped (rules-only production Docker), Traditional-Chinese semantic quality/perf/RAM, actual Gmail human readback and per-user database receipts, cross-account E2E, direct database 0022 revision readback. Mark overall **PARTIAL**.
+- **Evidence correction:** V3 workflow migration step/summary still labels 0018; release runner code targets 0022. Do not interpret the outdated summary wording as actual DB revision proof.
+
 ## 2026-10-18｜15:54 後最新接續驗收：BeClass 三筆新活動 → Life PostgreSQL
 
 - **探索端有據的部分成功：** 正式 [10/18 唯一探索 Log](https://drive.google.com/file/d/1dOdbXe9zN-c5sT32RPA3bMk7ijNRk07-/view) 與執行紀錄記 `tw-discovery-manual-20261018-1507-rule-fallback`：A7 已實查 7，B 檢查 11 個 distinct 官方/主辦來源、可用 9；官方雙快照讀回 PASS（文化部 84 UID／觀光署 1,159 EventID），原池 78→81 個互異 `event_key`，新入池 BeClass 三筆皆 `pending_review`，四衍生視圖及交接新增寫後讀回 PASS。來源月曆新鮮度、主辦額外核證及本輪跨日全 ID delta 仍 PARTIAL／NOT VERIFIED，不以此宣稱完整探索 DONE。

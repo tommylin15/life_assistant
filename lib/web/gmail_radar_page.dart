@@ -18,6 +18,7 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
   bool _scanning = false;
   bool _backfilling = false;
   bool _rechecking = false;
+  bool _sevenDay = false;
   String? _error;
   String _filter = 'pending';
   Map<String, dynamic> _status = const {};
@@ -47,28 +48,32 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
     }
   }
 
-  Future<void> _scan({bool backfill = false, bool recheck = false}) async {
+  Future<void> _scan({bool backfill = false, bool recheck = false,
+      bool sevenDay = false}) async {
     if (_scanning || _status['gmail_authorized'] != true) return;
     setState(() {
       _scanning = true;
       _backfilling = backfill;
       _rechecking = recheck;
+      _sevenDay = sevenDay;
       _error = null;
     });
     try {
       final r = await ref.read(platformApiProvider).post(
-        recheck
+        sevenDay
+            ? '/integrations/google/gmail/radar/backfill-seven-days'
+            : recheck
             ? '/integrations/google/gmail/radar/recheck-three-days'
             : backfill
                 ? '/integrations/google/gmail/radar/backfill-three-days'
                 : '/integrations/google/gmail/radar/quick-scan', const {});
       if (!mounted) return;
-      final count = r['three_day_count'] ?? '未知';
-      final remaining = r['three_day_remaining'] ?? '未知';
-      final countText = r['three_day_count_capped'] == true
+      final count = (sevenDay ? r['seven_day_count'] : r['three_day_count']) ?? '未知';
+      final remaining = (sevenDay ? r['seven_day_remaining'] : r['three_day_remaining']) ?? '未知';
+      final countText = (sevenDay ? r['seven_day_count_capped'] : r['three_day_count_capped']) == true
           ? '至少$count' : '$count';
-      final message = (recheck ? '重新判讀' : backfill ? '三天補檢' : '快掃') +
-        '：近三天 $countText 封，本次檢查 ' + (r['checked'] ?? 0).toString() +
+      final message = (sevenDay ? '七天補檢' : recheck ? '重新判讀' : backfill ? '三天補檢' : '快掃') +
+        '：近${sevenDay ? '七' : '三'}天 $countText 封，本次檢查 ' + (r['checked'] ?? 0).toString() +
         ' 封，新增事項 ' + (r['added'] ?? 0).toString() +
         ' 筆，未檢查 ' + remaining.toString() +
         ' 封，失敗 ' + (r['failed'] ?? 0).toString() + ' 封';
@@ -84,6 +89,7 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
         _scanning = false;
         _backfilling = false;
         _rechecking = false;
+        _sevenDay = false;
       });
     }
   }
@@ -126,6 +132,7 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
     final threeDayRemaining = _status['three_day_remaining'] as int?;
     final needBackfill = granted && (threeDayRemaining ?? 0) > 0;
     final threeDayComplete = _status['three_day_complete'] == true;
+    final sevenDayCount = _status['seven_day_count'] as int?;
     return Scaffold(body: RefreshIndicator(
       onRefresh: _load,
       child: ListView(padding: const EdgeInsets.all(16), children: [
@@ -146,9 +153,16 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
                 ? const SizedBox.square(dimension: 18,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.radar),
-            label: Text(_scanning && !_backfilling && !_rechecking
+            label: Text(_scanning && !_backfilling && !_rechecking && !_sevenDay
                 ? '掃描中' : '立即快掃'),
           ),
+          if (granted && !_loading)
+            OutlinedButton.icon(
+              key: const ValueKey('gmail-radar-seven-day-backfill'),
+              onPressed: _loading || _scanning ? null : () => _scan(sevenDay: true),
+              icon: const Icon(Icons.fact_check_outlined),
+              label: Text(_scanning && _sevenDay ? '補檢中' : '七天補檢'),
+            ),
           if (needBackfill)
             OutlinedButton.icon(
               key: const ValueKey('gmail-radar-three-day-backfill'),
@@ -203,6 +217,14 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
               ),
             ),
           ),
+        if (sevenDayCount != null)
+          Card(child: ListTile(
+            title: Text('最近七天已列出 $sevenDayCount 封'),
+            subtitle: Text(_status['seven_day_complete'] == true
+                ? '本次七天範圍已檢查完成'
+                : '尚待補檢 ${_status['seven_day_remaining'] ?? '未知'} 封；'
+                  '每按一次處理最多 40 封，若超過 2000 封僅能統計已列出部分。'),
+          )),
         if (_error != null) Card(child: Padding(
           padding: const EdgeInsets.all(12),
           child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -235,7 +257,7 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
         else for (final item in _items) _itemCard(item),
         const SizedBox(height: 12),
         if (LifeUiEnvironment.isCandidate)
-          Text('快掃檢查最近 7 天最新最多 20 封；三天補檢每次補查 40 封未檢查郵件。'
+          Text('快掃檢查近 7 天最多 20 封；七天補檢每輪最多 40 封，'
           '結果保留已處理 ID 去重；「重新檢查近三天」每次最多重新判讀最新 40 封，'
           '包括 Life 過去略過的郵件，不會刪除已完成事項；'
           '未使用 Gemini，不執行背景排程或推播。原信若無法定位，可改由 Gmail 開啟。',
@@ -286,6 +308,13 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
                   (item['category']?.toString() ?? '未知')) +
               '　郵件時間：' + _date(item['received_at']),
               style: Theme.of(context).textTheme.bodySmall),
+          if (item['due_date'] != null || item['due_text'] != null)
+            Text('通知所載期限：' +
+                (item['due_date'] ?? item['due_text']).toString(),
+                style: Theme.of(context).textTheme.bodySmall),
+          if (item['classification_source'] == 'local_semantic')
+            Text('本地語意模型建議，請自行確認',
+                style: Theme.of(context).textTheme.bodySmall),
           if (linkedTarget != null)
             Text('已完成 · 已存入' + (targetLabels[linkedTarget] ?? 'Life'),
                 style: Theme.of(context).textTheme.bodySmall),

@@ -173,6 +173,10 @@ def benchmark() -> dict:
         **primary,
         "independent_holdout_samples": len(HOLDOUT_CASES),
         "holdout": holdout,
+        "holdout_classification_diagnostics": [
+            {"id": i, "expected": gold or "none", "predicted": actual or "none"}
+            for i, (actual, gold) in enumerate(preds[len(CASES):])
+        ],
         "cold_load_seconds": round(cold_seconds, 3),
         "median_message_ms": round(statistics.median(timings), 2),
         "p95_message_ms": round(percentile(timings, .95), 2),

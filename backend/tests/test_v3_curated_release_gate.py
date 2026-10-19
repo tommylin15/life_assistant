@@ -30,7 +30,7 @@ class CuratedV3ReleaseGateTests(unittest.TestCase):
         promotion = workflow.index("- name: Reconfirm source SHA and live traffic, then promote")
         self.assertLess(migration, staging)
         self.assertLess(staging, promotion)
-        self.assertIn("curated_schema_migration=PASS alembic=20261012_0018", workflow)
+        self.assertIn("gmail_v2_db_readback=PASS revision=20261019_0022", workflow)
         self.assertNotIn("scripts.run_curated_pool_runtime_acceptance", workflow)
         self.assertIn("Controlled rollback rehearsal and restore promoted live traffic", workflow)
 

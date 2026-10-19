@@ -2,13 +2,14 @@
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 
 from app.api.gmail_radar import (
     get_item_for_life_inbox, confirm_gmail_life_inbox_link,
     _handoff_action_id, _serialize_item,
 )
 from app.models.execution_log import ExecutionLog
+from app.api.inbox import InterpretInput, interpret
 
 
 def mail(**kwargs):
@@ -48,6 +49,31 @@ class GmailLifeLinkTests(unittest.IsolatedAsyncioTestCase):
                 item_id=self.item.id, user={"sub": "other-user"}, db=self.db)
         self.assertEqual(ctx.exception.status_code, 404)
         self.db.commit.assert_not_awaited()
+
+    async def test_gmail_handoff_uses_only_local_interpretation(self):
+        self.db.scalar = AsyncMock(return_value=self.item)
+        with patch("app.api.inbox.generate_text", new_callable=AsyncMock) as ai:
+            output = await interpret(
+                InterpretInput(text="Gmail 通知：繳費通知",
+                               gmail_item_id=self.item.id),
+                Response(), user={"sub": "account-a"}, db=self.db,
+            )
+        ai.assert_not_awaited()
+        self.assertEqual(output["classification_source"], "gmail_local")
+        self.assertEqual(output["candidates"][0]["target"], "task")
+        self.assertFalse(output["candidates"][0]["select_default"])
+        self.db.commit.assert_not_awaited()
+
+    async def test_another_users_gmail_handoff_cannot_call_ai(self):
+        self.db.scalar = AsyncMock(return_value=None)
+        with patch("app.api.inbox.generate_text", new_callable=AsyncMock) as ai:
+            with self.assertRaises(HTTPException) as raised:
+                await interpret(
+                    InterpretInput(text="Any content", gmail_item_id=self.item.id),
+                    Response(), user={"sub": "other-user"}, db=self.db,
+                )
+        self.assertEqual(raised.exception.status_code, 404)
+        ai.assert_not_awaited()
 
     async def test_no_receipt_does_not_mark_completed(self):
         self.db.scalar = AsyncMock(side_effect=[self.item, None])

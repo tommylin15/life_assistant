@@ -102,6 +102,12 @@ jobs:
             echo "auto_staging=SKIP read_only_importer_pg_parity" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          # Explicit one-time user-accepted Gmail UI production release.
+          # Its own exact SHA/CI-gated bridge owns the staging + production run.
+          if jq -e 'any(.files[]; .filename==".github/workflows/gmail-ui-production-once-20261020.yml")' <<< "$CHANGED" > /dev/null; then
+            echo "auto_staging=SKIP gmail_ui_one_shot_production_owns_release" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           # This approved Gmail ONNX staging-only continuation dispatches the
           # same V3 gates with enable_gmail_onnx=true. Never race a second
           # rules-only V3 release against the fixed staging Hosting site.

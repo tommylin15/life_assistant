@@ -1,0 +1,212 @@
+# Privately deploy isolated synthetic ONNX candidate. NEVER modify the
+# life-assistant-api service, production Hosting, OAuth, database or traffic.
+name: Gmail ONNX Cloud Run Candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/gmail-onnx-cloud-run-candidate.yml'
+      - 'backend/Dockerfile.gmail-semantic'
+      - 'backend/scripts/gmail_onnx_candidate_server.py'
+      - 'backend/scripts/gmail_semantic_artifact.py'
+      - 'backend/scripts/gmail_semantic_benchmark.py'
+      - 'backend/app/services/gmail_local_classifier.py'
+      - 'backend/requirements-local-semantic.txt'
+
+permissions:
+  contents: read
+  checks: read
+  actions: read
+  id-token: write
+  packages: write
+
+concurrency:
+  group: gmail-onnx-cloud-run-candidate
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      PRODUCTION_SERVICE: life-assistant-api
+      CANDIDATE_SERVICE: life-assistant-gmail-onnx-candidate
+      SMOKE_JOB: life-assistant-gmail-onnx-smoke
+      GHCR_IMAGE: ghcr.io/tommylin15/life_assistant-backend
+      RELEASE_SHA: ${{ github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Guard main and all four same-SHA CI jobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$RELEASE_SHA"
+          for attempt in $(seq 1 40); do
+            CHECKS="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/check-runs?per_page=100" 2>/dev/null)" || CHECKS=""
+            if jq -e '
+              [.check_runs[]? |
+                select(.name=="backend" or .name=="flutter" or
+                  .name=="free-events-postgres" or .name=="deployment-scripts") |
+                select(.conclusion=="success") | .name] | unique | length==4
+            ' <<< "$CHECKS" >/dev/null 2>&1; then
+              echo "same_sha_four_ci=PASS sha=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::same_sha_ci=NOT_VERIFIED; isolated ONNX candidate not deployed"
+          exit 1
+
+      - name: Build immutable pinned-model image on GitHub runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="gmail-onnx-$RELEASE_SHA"
+          IMAGE="$GHCR_IMAGE:$TAG"
+          docker build --pull --platform linux/amd64 \
+            --file backend/Dockerfile.gmail-semantic --tag "$IMAGE" backend
+          docker run --rm --network none --memory 1g --cpus 2 \
+            --entrypoint python "$IMAGE" \
+            -m scripts.gmail_semantic_benchmark \
+            --report /tmp/gmail-onnx-ci.json --enforce-gates
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          echo "offline_model_build=PASS 1GiB_network_none=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Scan candidate image before publishing
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.GHCR_IMAGE }}:gmail-onnx-${{ github.sha }}
+          scanners: vuln,secret
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Publish digest-pinned candidate image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push "$IMAGE"
+          IMAGE_REF="$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE")"
+          [[ "$IMAGE_REF" =~ ^ghcr[.]io/tommylin15/life_assistant-backend@sha256:[a-f0-9]{64}$ ]]
+          ANON_DOCKER="$(mktemp -d)"
+          DOCKER_CONFIG="$ANON_DOCKER" docker manifest inspect "$IMAGE_REF" >/dev/null
+          echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
+          echo "candidate_digest=PASS ref=$IMAGE_REF" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Authenticate GCP using existing deployer WIF
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Read current production capacity and immutable traffic baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$PRODUCTION_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/gmail-onnx-live-before.json"
+          jq -e '.status.url and (.status.traffic|type=="array") and
+            ([.status.traffic[] | (.percent // 0)] | add == 100)' \
+            "$RUNNER_TEMP/gmail-onnx-live-before.json"
+          jq '[.status.traffic[] |
+              {revisionName, percent:(.percent // 0), tag:(.tag // "")}] |
+              sort_by(.revisionName,.tag)' \
+            "$RUNNER_TEMP/gmail-onnx-live-before.json" \
+            > "$RUNNER_TEMP/gmail-onnx-live-traffic-before.json"
+          RAM="$(jq -r '.spec.template.spec.containers[0].resources.limits.memory // "UNVERIFIED"' "$RUNNER_TEMP/gmail-onnx-live-before.json")"
+          CPU="$(jq -r '.spec.template.spec.containers[0].resources.limits.cpu // "UNVERIFIED"' "$RUNNER_TEMP/gmail-onnx-live-before.json")"
+          CONCURRENCY="$(jq -r '.spec.template.spec.containerConcurrency // "UNVERIFIED"' "$RUNNER_TEMP/gmail-onnx-live-before.json")"
+          echo "existing_live_memory=$RAM cpu=$CPU concurrency=$CONCURRENCY" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Deploy separate private ONNX candidate service
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This is a SEPARATE service. Never deploy ONNX canary into the
+          # production life-assistant-api service or enable public ingress.
+          test "$CANDIDATE_SERVICE" != "$PRODUCTION_SERVICE"
+          gcloud run deploy "$CANDIDATE_SERVICE" \
+            --image "$IMAGE_REF" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --cpu 2 --memory 2Gi --concurrency 1 \
+            --min-instances 0 --max-instances 1 \
+            --ingress internal --no-allow-unauthenticated \
+            --command=uvicorn \
+            --args=scripts.gmail_onnx_candidate_server:app,--host,0.0.0.0,--port,8080 \
+            --quiet
+          gcloud run services describe "$CANDIDATE_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/gmail-onnx-service.json"
+          jq -e '
+            .spec.template.spec.containers[0].resources.limits.memory == "2Gi" and
+            .spec.template.spec.containers[0].resources.limits.cpu == "2" and
+            .spec.template.spec.containerConcurrency == 1 and
+            .metadata.annotations["run.googleapis.com/ingress"] == "internal" and
+            ([.status.conditions[] | select(.type=="Ready" and .status=="True")] | length == 1)
+          ' "$RUNNER_TEMP/gmail-onnx-service.json"
+          REVISION="$(jq -r '.status.latestReadyRevisionName' "$RUNNER_TEMP/gmail-onnx-service.json")"
+          test -n "$REVISION" && test "$REVISION" != null
+          gcloud run revisions describe "$REVISION" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/gmail-onnx-revision.json"
+          python .github/scripts/v3_image_identity.py --resource revision \
+            --json "$RUNNER_TEMP/gmail-onnx-revision.json" --expected "$IMAGE_REF"
+          echo "onnx_private_service=PASS cpu=2 memory=2Gi concurrency=1 min=0 max=1 ingress=internal revision=$REVISION" >> "$GITHUB_STEP_SUMMARY"
+          echo "onnx_live_gmail_traffic=0 (separate service)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Deploy and execute Cloud Run ONNX CPU smoke Job
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run jobs deploy "$SMOKE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --image "$IMAGE_REF" \
+            --cpu 2 --memory 2Gi --tasks 1 --max-retries 0 \
+            --task-timeout 10m \
+            --command=python \
+            --args=-m,scripts.gmail_semantic_benchmark,--report,/tmp/gmail-onnx-cloudrun.json,--enforce-gates \
+            --quiet
+          .github/scripts/run_cloud_run_job_with_diagnostics.sh "$SMOKE_JOB" \
+            gcloud run jobs execute "$SMOKE_JOB" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --wait --quiet
+          echo "onnx_cloud_run_cpu_synthetic_smoke=PASS cpu=2 memory=2Gi" >> "$GITHUB_STEP_SUMMARY"
+          echo "model_quality=synthetic_only true_gmail_accuracy=NOT_VERIFIED" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reconfirm original production traffic, IAM surface and service
+        shell: bash
+        if: always()
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$PRODUCTION_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
+            > "$RUNNER_TEMP/gmail-onnx-live-after.json"
+          jq '[.status.traffic[] |
+              {revisionName, percent:(.percent // 0), tag:(.tag // "")}] |
+              sort_by(.revisionName,.tag)' \
+            "$RUNNER_TEMP/gmail-onnx-live-after.json" \
+            > "$RUNNER_TEMP/gmail-onnx-live-traffic-after.json"
+          cmp "$RUNNER_TEMP/gmail-onnx-live-traffic-before.json" \
+              "$RUNNER_TEMP/gmail-onnx-live-traffic-after.json"
+          echo "production_original_service_traffic_unchanged=PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "no_production_promotion=PASS no_real_gmail_consumed=PASS" >> "$GITHUB_STEP_SUMMARY"

@@ -1,10 +1,11 @@
 # Life — Active engineering TODO
 Updated 2026-10-20. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
 
-## 2026-10-20｜Gmail 手機 UI 精簡：Staging 與使用者驗收 DONE
+## 2026-10-20｜Gmail 手機 UI 精簡：Production 正式發布 DONE
 
 - **已結案範圍：** 快掃 + 更多選單、統計預設收合、待處理優先、已完成／已忽略狀態選單、郵件詳情收合、歷史八筆分頁，未更動 Gmail 個人資料或事項狀態。來源 SHA `64cfecaec5e62fe4d77f5f94250ad154c4c7a0a5`；[四項 CI #39418261130](https://github.com/tommylin15/life_assistant/actions/runs/39418261130) PASS；[ONNX Staging-only #39418591499](https://github.com/tommylin15/life_assistant/actions/runs/39418591499) PASS；使用者 2026-10-20 回覆「驗收完成」，人工手機 UI 驗收 PASS。
-- **範圍界線：** 此驗收不等於真實 Gmail 漏判／誤判、跨帳號 Gmail-to-Inbox、正式 Production ONNX 流量、資源 p95/RSS 或正式 Hosting 發布的驗收；上述仍依下節 Gmail V2 既有 P0/P1 收尾。無新增排程或外部 AI。
+- **Production 正式發布 DONE：** 發布 SHA `555313e49517ae46976b6aaee0a489dc95b2a605`；四項 CI [#39436008511](https://github.com/tommylin15/life_assistant/actions/runs/39436008511) PASS，單次批准發布橋接 [#39436008563](https://github.com/tommylin15/life_assistant/actions/runs/39436008563) PASS，V3 Cloud Run 正式切流／健康與授權／rollback [#39436374275](https://github.com/tommylin15/life_assistant/actions/runs/39436374275) PASS，同 SHA Firebase Hosting 正式發布／readback／Task 與 Project UI [#39437588640](https://github.com/tommylin15/life_assistant/actions/runs/39437588640) PASS。URL：https://gen-lang-client-0593591102.web.app/ 。
+- **範圍界線：** UI 精簡已上線；Production 仍採 rules-only（`enable_gmail_onnx=false`），未發布 ONNX。真實 Gmail 漏判／誤判、跨帳號 Gmail-to-Inbox 與 ONNX p95/RSS/正式切流均依下節 Gmail V2 既有 P0/P1 收尾，無新增排程或外部 AI。
 
 ## 2026-10-20｜Gmail V2：ONNX 已接完整 Life Staging；產品仍 PARTIAL
 

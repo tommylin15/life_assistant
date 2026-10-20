@@ -1,0 +1,76 @@
+# Explicit ONE-TIME ONNX-enabled full Life FastAPI Staging continuation.
+# This dispatches the existing guarded V3 release (same SHA, CI, migration,
+# OAuth/Hosting pin, 0%-production-traffic, staging rollback protections).
+# NO automatic or requested production promotion.
+name: Gmail ONNX Full Life Staging Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/gmail-onnx-life-staging-once.yml'
+
+permissions:
+  contents: read
+  actions: write
+  checks: read
+
+concurrency:
+  group: gmail-onnx-full-life-staging-once
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - name: Verify exact main, no production authorization, and four CI gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          for attempt in $(seq 1 70); do
+            HEAD="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+            if [[ "$HEAD" != "$SOURCE_SHA" ]]; then
+              echo "::error::ONNX full Staging source superseded; no release dispatch"
+              exit 1
+            fi
+            CHECKS="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA/check-runs?per_page=100" 2>/dev/null)" || CHECKS=""
+            if jq -e '[.check_runs[]? |
+                 select(.name=="backend" or .name=="flutter" or
+                        .name=="deployment-scripts" or .name=="free-events-postgres") |
+                 select(.conclusion=="success") | .name] | unique | length == 4' \
+               <<< "$CHECKS" >/dev/null 2>&1; then
+              echo "same_sha_ci=PASS source=$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
+              break
+            fi
+            if [[ "$attempt" == 70 ]]; then
+              echo "::error::same_sha_four_ci=NOT_VERIFIED; ONNX full Life staging not dispatched"
+              exit 1
+            fi
+            sleep 12
+          done
+          COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA?per_page=100")"
+          jq -e 'any(.files[]; .filename==".github/workflows/gmail-onnx-life-staging-once.yml")' \
+            <<< "$COMMIT" >/dev/null
+          echo "deployment_scope=STAGING_ONLY onnx=true production_promote=false" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dispatch exact V3 release with ONNX staging flag
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$SOURCE_SHA"
+          RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
+          if jq -e --arg sha "$SOURCE_SHA" 'any(.workflow_runs[]; .head_sha==$sha)' <<< "$RUNS" > /dev/null; then
+            echo "::error::same-SHA V3 already exists; cannot assume it is the ONNX edition"
+            exit 1
+          fi
+          gh workflow run v3-release-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            --raw-field promote=false \
+            --raw-field publish_staging=true \
+            --raw-field enable_gmail_onnx=true
+          echo "full_life_onnx_staging=DISPATCHED sha=$SOURCE_SHA existing_v3_gates=true" >> "$GITHUB_STEP_SUMMARY"
+          echo "Production/Gmail real-user E2E remain NOT_VERIFIED until independently read back." >> "$GITHUB_STEP_SUMMARY"

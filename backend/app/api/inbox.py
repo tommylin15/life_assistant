@@ -151,16 +151,16 @@ def _proposals(items: list[Proposal], kind: str) -> dict:
 
 # Keep the deterministic lane deliberately narrow. Unknown or negative wording
 # falls back to the structured model; this must never invent an action.
-_SIMPLE_SHOPPING = re.compile(r"(?:買|購買|要買|記得買)\\s*([^。！？\\n]+)")
+_SIMPLE_SHOPPING = re.compile(r"(?:買|購買|要買|記得買)\s*([^。！？\n]+)")
 _SIMPLE_CALENDAR = re.compile(
-    r"(?P<day>今天|明天|後天)\\s*"
-    r"(?P<daypart>上午|下午|晚上|早上|中午)?\\s*"
-    r"(?P<hour>[0-9]{1,2}|[一二三四五六七八九十兩]{1,3})\\s*[點時]"
-    r"(?:半)?\\s*(?P<verb>去|到|參加|開會|看診|赴)\\s*(?P<place>[^。！？\\n]+)"
+    r"(?P<day>今天|明天|後天)\s*"
+    r"(?P<daypart>上午|下午|晚上|早上|中午)?\s*"
+    r"(?P<hour>[0-9]{1,2}|[一二三四五六七八九十兩]{1,3})\s*[點時]"
+    r"(?:半)?\s*(?P<verb>去|到|參加|開會|看診|赴)\s*(?P<place>[^。！？\n]+)"
 )
 _SIMPLE_TASK = re.compile(
-    r"(?:(?:今天|明天|後天|今晚|早上|上午|下午|晚上)\\s*)?"
-    r"(?:記得|提醒我|別忘了)\\s*(?P<title>[^。！？\\n]+)"
+    r"(?:(?:今天|明天|後天|今晚|早上|上午|下午|晚上)\s*)?"
+    r"(?:記得|提醒我|別忘了)\s*(?P<title>[^。！？\n]+)"
 )
 _SIMPLE_HOUR = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
                 "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
@@ -173,9 +173,9 @@ def _shopping_proposal(clause: str) -> Proposal | None:
         return None
     raw = matched.group(1).strip()
     # If an additional operation appears, do not mistake it for a product.
-    if re.search(r"(?:提醒|記得|繳費|繳電費|付款|開會|參加|不要|不用|取消|不買)", raw):
+    if re.search(r"(?:提醒|記得|繳費|繳電費|付款|開會|參加|然後|幫我|安排|行程|不要|不用|取消|不買)", raw):
         return None
-    names = [part.strip() for part in re.split(r"[,，、]|\\s*(?:跟|和)\\s*", raw)
+    names = [part.strip() for part in re.split(r"[,，、]|\s*(?:跟|和)\s*", raw)
              if part.strip()]
     if not 1 <= len(names) <= 20 or any(len(part) > 80 for part in names):
         return None
@@ -224,7 +224,7 @@ def _simple_clause(clause: str, now: str | None) -> Proposal | None:
 
 
 def _simple_clauses(value: str, now: str | None) -> list[Proposal]:
-    clauses = [part.strip() for part in re.split(r"[，,；;。\\n]+", value) if part.strip()]
+    clauses = [part.strip() for part in re.split(r"[，,；;。\n]+", value) if part.strip()]
     if not 2 <= len(clauses) <= 8:
         return []
     return [proposal for part in clauses if (proposal := _simple_clause(part, now))]
@@ -238,7 +238,7 @@ def rule_candidates(value: str, now: str | None = None) -> dict | None:
     whole_shopping = _shopping_proposal(value)
     if whole_shopping:
         return _proposals([whole_shopping], "rules")
-    clauses = [part.strip() for part in re.split(r"[，,；;。\\n]+", value) if part.strip()]
+    clauses = [part.strip() for part in re.split(r"[，,；;。\n]+", value) if part.strip()]
     if len(clauses) == 1:
         direct = _simple_clause(clauses[0], now)
         return _proposals([direct], "rules") if direct else None
@@ -295,7 +295,7 @@ def _grounded_candidates(decoded: dict, value: str, now: str) -> dict:
         # arbitrary duration or end time. Preserve the known start for editing.
         if entry.get("target") == "calendar" and "end" in fields:
             clock_count = len(re.findall(
-                r"(?:[0-9]{1,2}|[一二三四五六七八九十兩]{1,3})\\s*[點時:]",
+                r"(?:[0-9]{1,2}|[一二三四五六七八九十兩]{1,3})\s*[點時:]",
                 " ".join(evidence)))
             if clock_count < 2 and not re.search(r"(?:分鐘|小時|半小時|兩小時|一小時|整天)", " ".join(evidence)):
                 fields.pop("end", None)

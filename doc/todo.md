@@ -1,6 +1,11 @@
 # Life — Active engineering TODO
 Updated 2026-10-20. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
 
+## 2026-10-20｜Gmail 手機 UI 精簡：Staging 與使用者驗收 DONE
+
+- **已結案範圍：** 快掃 + 更多選單、統計預設收合、待處理優先、已完成／已忽略狀態選單、郵件詳情收合、歷史八筆分頁，未更動 Gmail 個人資料或事項狀態。來源 SHA `64cfecaec5e62fe4d77f5f94250ad154c4c7a0a5`；[四項 CI #39418261130](https://github.com/tommylin15/life_assistant/actions/runs/39418261130) PASS；[ONNX Staging-only #39418591499](https://github.com/tommylin15/life_assistant/actions/runs/39418591499) PASS；使用者 2026-10-20 回覆「驗收完成」，人工手機 UI 驗收 PASS。
+- **範圍界線：** 此驗收不等於真實 Gmail 漏判／誤判、跨帳號 Gmail-to-Inbox、正式 Production ONNX 流量、資源 p95/RSS 或正式 Hosting 發布的驗收；上述仍依下節 Gmail V2 既有 P0/P1 收尾。無新增排程或外部 AI。
+
 ## 2026-10-20｜Gmail V2：ONNX 已接完整 Life Staging；產品仍 PARTIAL
 
 - **決策不變：** Gmail 雷達採規則＋Life 本地多語言 ONNX＋本地欄位抽取，原信不外送 Gemini／omniAgent；僅手動掃描、七天補檢、郵件去重、本人確認，無背景掃描與自動寫入。正式 [Gmail V2 規格及證據](gmail_local_v2_delivery.md)。

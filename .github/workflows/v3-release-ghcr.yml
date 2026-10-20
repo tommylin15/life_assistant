@@ -13,6 +13,11 @@ on:
         required: true
         default: false
         type: boolean
+      enable_gmail_onnx:
+        description: "Staging-only: pin offline ONNX image and 2Gi/2vCPU/one concurrency; cannot promote"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -94,16 +99,40 @@ jobs:
           echo "::error::Production promotion requires publish_staging and pinned staging readback"
           exit 1
 
+      - name: Guard ONNX staging-only activation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.enable_gmail_onnx }}" == "true" ]]; then
+            test "${{ inputs.publish_staging }}" = "true"
+            test "${{ inputs.promote }}" = "false" || {
+              echo "::error::ONNX requires separate authenticated user E2E before production"; exit 1;
+            }
+            echo "gmail_onnx_rollout=STAGING_ONLY" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Build Docker image ONCE on GitHub runner
         run: |
           set -euo pipefail
-          docker build --pull --platform linux/amd64 -t "$GHCR_IMAGE:$RELEASE_SHA" backend
+          IMAGE_TAG="$RELEASE_SHA"
+          DOCKERFILE="backend/Dockerfile"
+          if [[ "${{ inputs.enable_gmail_onnx }}" == "true" ]]; then
+            IMAGE_TAG="${RELEASE_SHA}-gmail-onnx"
+            DOCKERFILE="backend/Dockerfile.gmail-semantic"
+          fi
+          echo "RELEASE_IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
+          docker build --pull --platform linux/amd64 -f "$DOCKERFILE" -t "$GHCR_IMAGE:$IMAGE_TAG" backend
+          if [[ "${{ inputs.enable_gmail_onnx }}" == "true" ]]; then
+            docker run --rm --network none --memory 1g --cpus 2 --entrypoint python "$GHCR_IMAGE:$IMAGE_TAG" \
+              -m scripts.gmail_semantic_benchmark --report /tmp/gmail-synthetic.json --enforce-gates
+            echo "onnx_local_offline_smoke=PASS no_network" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Scan local image before publishing
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
-          image-ref: ghcr.io/tommylin15/life_assistant-backend:${{ github.sha }}
+          image-ref: ${{ env.GHCR_IMAGE }}:${{ env.RELEASE_IMAGE_TAG }}
           scanners: vuln,secret
           exit-code: '1'
           ignore-unfixed: true
@@ -121,8 +150,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker push "$GHCR_IMAGE:$RELEASE_SHA"
-          IMAGE_REF="$(docker image inspect --format '{{index .RepoDigests 0}}' "$GHCR_IMAGE:$RELEASE_SHA")"
+          docker push "$GHCR_IMAGE:$RELEASE_IMAGE_TAG"
+          IMAGE_REF="$(docker image inspect --format '{{index .RepoDigests 0}}' "$GHCR_IMAGE:$RELEASE_IMAGE_TAG")"
           [[ "$IMAGE_REF" =~ ^ghcr[.]io/tommylin15/life_assistant-backend@sha256:[a-f0-9]{64}$ ]]
           echo "ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
           echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
@@ -174,9 +203,13 @@ jobs:
         run: |
           set -euo pipefail
           TAG="v3-$(printf '%s' "$RELEASE_SHA" | cut -c1-10)"
+          RESOURCE_FLAGS=()
+          if [[ "${{ inputs.enable_gmail_onnx }}" == "true" ]]; then
+            RESOURCE_FLAGS=(--cpu 2 --memory 2Gi --concurrency 1)
+          fi
           gcloud run deploy "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "$IMAGE_REF" --no-traffic --tag "$TAG" --quiet
+            --image "$IMAGE_REF" --no-traffic --tag "$TAG" "${RESOURCE_FLAGS[@]}" --quiet
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
             > "$RUNNER_TEMP/v3-candidate-service.json"
@@ -256,6 +289,12 @@ jobs:
               raise SystemExit("::error::candidate_oauth=FAIL google_host_callback_or_state")
           print("candidate_oauth_redirect=PASS google_host=PINNED callback=PINNED state=PRESENT")
           PY
+          if [[ "${{ inputs.enable_gmail_onnx }}" == "true" ]]; then
+            curl --fail --silent --show-error --max-time 30 "$URL/ready" \
+              | jq -e '.status=="ok" and .database=="ok" and .gmail_model=="local_semantic_ready"' > /dev/null
+            test "$(curl --silent --show-error --max-time 15 --output /dev/null --write-out '%{http_code}' "$URL/api/v1/integrations/google/gmail/radar/status")" = 401
+            echo "candidate_full_life_onnx=PASS db=READY semantic_model=READY owner_auth=ENFORCED" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "candidate_http=PASS health,ready,401,oauth-redirect" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pin migration job to same immutable release digest (do not execute)
@@ -612,7 +651,7 @@ jobs:
       - name: Publish stage verdict
         if: always()
         run: |
-          echo "run=$GITHUB_RUN_ID sha=$RELEASE_SHA promote=${{ inputs.promote }}" \
+          echo "run=$GITHUB_RUN_ID sha=$RELEASE_SHA promote=${{ inputs.promote }} onnx_staging=${{ inputs.enable_gmail_onnx }}" \
             >> "$GITHUB_STEP_SUMMARY"
           echo "Legacy Cloud Build and GCS/AR deletion are separately gated; NOT VERIFIED until readback." \
             >> "$GITHUB_STEP_SUMMARY"
@@ -621,7 +660,7 @@ jobs:
       # traffic-promotion or Hosting release gate.
       - name: Retire old Cloud Run revisions after successful V3 gates
         id: retire_revisions
-        if: ${{ success() && inputs.publish_staging }}
+        if: ${{ success() && inputs.publish_staging && !inputs.enable_gmail_onnx }}
         continue-on-error: true
         shell: bash
         run: |

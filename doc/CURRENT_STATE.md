@@ -1,3 +1,10 @@
+## 2026-10-20｜Gmail V2 完整 Life FastAPI ONNX Staging：PASS（產品 PARTIAL）
+
+- **同 SHA CI／啟動：** [四 CI #39353419852](https://github.com/tommylin15/life_assistant/actions/runs/39353419852) PASS；[ONNX 指定 Staging 接續 #39353419856](https://github.com/tommylin15/life_assistant/actions/runs/39353419856) PASS，SHA faa8f5b80e8c5724d8b9759cc71d794d73e75082。
+- **Cloud Run + Firebase 固定 Staging：** [V3 Release #39353638014](https://github.com/tommylin15/life_assistant/actions/runs/39353638014) PASS。2GiB／2vCPU／並行 1 ONNX 全功能 FastAPI candidate（0% Production）、Gmail 模型 ready 狀態 local_semantic_ready、正式 DB ready、Gmail 未授權 401、OAuth callback、PostgreSQL migration / 0022 Job、Preview 同 SHA、固定 Staging Hosting pin 及路由 PASS。Staging version sites/life-assistant-v3-stage-tl15/versions/938c9cfec8496d3c，https://life-assistant-v3-stage-tl15.web.app/。
+- **明確未完成：** 真人 Owner／一般帳號 Gmail 掃描、漏判帳單、40 封七天補檢、收件匣不外送 Gemini／跨帳號、完整 FastAPI RAM/p95/冷啟動及真實錯誤率、rollback rehearsal、正式 production 同 SHA 切流/Hosting 和手動讀回：**NOT VERIFIED**。本次 promote=false；正式使用者流量未切換。實際固定 Staging 已具備 ONNX，但不能因此將 Gmail V2 整體標 DONE。
+- **治理：** 保留舊公開 Git 提交敏感測試文字歷史修復待核准，未執行 history rewrite。完整證據與下一步詳見 [Gmail V2](gmail_local_v2_delivery.md)、[TODO](todo.md)。
+
 ## 2026-10-20｜ONNX Cloud Run 2Gi／2vCPU 獨立候選：DONE（Gmail V2 整體仍 PARTIAL）
 
 - **同 SHA CI PASS：** [#39349455453](https://github.com/tommylin15/life_assistant/actions/runs/39349455453)，候選 source SHA b3ea92b6e11865d82887d4aa6a16b00285a63553。

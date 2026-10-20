@@ -19,6 +19,11 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
   bool _backfilling = false;
   bool _rechecking = false;
   bool _sevenDay = false;
+  bool _scanDetails = false;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  int _loadRevision = 0;
+  static const int _pageSize = 8;
   String? _error;
   String _filter = 'pending';
   Map<String, dynamic> _status = const {};
@@ -28,23 +33,58 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
   @override
   void initState() { super.initState(); _load(); }
 
+
   Future<void> _load() async {
     if (!mounted) return;
-    setState(() { _loading = true; _error = null; });
+    final requestedFilter = _filter;
+    final revision = ++_loadRevision;
+    setState(() { _loading = true; _loadingMore = false; _error = null; });
     try {
       final api = ref.read(platformApiProvider);
       final status = await api.get('/integrations/google/gmail/radar/status');
-      final items = await api.get('/integrations/google/gmail/radar/items?status=' + _filter);
-      if (!mounted) return;
+      final response = await api.get(
+        '/integrations/google/gmail/radar/items?status=$requestedFilter&limit=${_pageSize + 1}&offset=0');
+      if (!mounted || revision != _loadRevision || requestedFilter != _filter) return;
+      final fetched = (response['items'] as List? ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map)).toList();
       setState(() {
         _status = status;
-        _items = (items['items'] as List? ?? const [])
-            .map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _items = fetched.take(_pageSize).toList();
+        _hasMore = fetched.length > _pageSize;
       });
     } catch (_) {
-      if (mounted) setState(() => _error = '無法取得 Gmail 事項，請重新整理。');
+      if (mounted && revision == _loadRevision) {
+        setState(() => _error = '無法取得 Gmail 事項，請重新整理。');
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && revision == _loadRevision) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || _loadingMore || !_hasMore) return;
+    final requestedFilter = _filter;
+    final revision = _loadRevision;
+    final offset = _items.length;
+    setState(() => _loadingMore = true);
+    try {
+      final response = await ref.read(platformApiProvider).get(
+        '/integrations/google/gmail/radar/items?status=$requestedFilter&limit=${_pageSize + 1}&offset=$offset');
+      if (!mounted || revision != _loadRevision || requestedFilter != _filter) return;
+      final fetched = (response['items'] as List? ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      setState(() {
+        final existing = _items.map((item) => item['id']).toSet();
+        _items.addAll(fetched.take(_pageSize).where((item) => existing.add(item['id'])));
+        _hasMore = fetched.length > _pageSize;
+      });
+    } catch (_) {
+      if (mounted && revision == _loadRevision) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('載入更多事項失敗，請重試。')));
+      }
+    } finally {
+      if (mounted && revision == _loadRevision) setState(() => _loadingMore = false);
     }
   }
 
@@ -125,143 +165,168 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
         two(local.day) + ' ' + two(local.hour) + ':' + two(local.minute);
   }
 
+
   @override
   Widget build(BuildContext context) {
     final granted = _status['gmail_authorized'] == true;
     final threeDayCount = _status['three_day_count'] as int?;
-    final threeDayRemaining = _status['three_day_remaining'] as int?;
-    final needBackfill = granted && (threeDayRemaining ?? 0) > 0;
-    final threeDayComplete = _status['three_day_complete'] == true;
+    final remaining = _status['three_day_remaining'] as int?;
+    final needBackfill = granted && (remaining ?? 0) > 0;
+    final complete = _status['three_day_complete'] == true;
     final sevenDayCount = _status['seven_day_count'] as int?;
+    final colors = Theme.of(context).colorScheme;
+    const statusLabels = {
+      'pending': '待處理', 'completed': '已完成', 'ignored': '已忽略',
+    };
+    final threeDayText = threeDayCount == null
+        ? '近三天：未統計'
+        : '近三天：${complete ? '' : (threeDayCount >= 2000 ? '至少 ' : '')}$threeDayCount 封';
+    final summary = !complete && remaining != null
+        ? '$threeDayText · 待補 $remaining 封'
+        : threeDayText;
+
     return Scaffold(body: RefreshIndicator(
       onRefresh: _load,
-      child: ListView(padding: const EdgeInsets.all(16), children: [
-        Wrap(alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 12, runSpacing: 12, children: [
-          const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Gmail 智慧事項雷達',
-                style: TextStyle(fontSize: 23, fontWeight: FontWeight.w700)),
-            Text('只有按下快掃才會檢查自己的 Gmail。'),
-            Text('安全或費用類警告僅依文字初篩，並非確認真偽；請從官方網站或 App 查證。',
-                style: TextStyle(fontSize: 12)),
-          ]),
+      child: ListView(padding: const EdgeInsets.symmetric(
+          horizontal: 14, vertical: 12), children: [
+        Text('Gmail 智慧事項雷達',
+            style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 2),
+        Text('僅手動掃描；提醒僅文字初篩，並非確認真偽，請至官方管道查證。',
+            style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 12),
+        Row(children: [
           FilledButton.icon(
             key: const ValueKey('gmail-radar-quick-scan'),
             onPressed: _loading || _scanning || !granted ? null : () => _scan(),
             icon: _scanning
-                ? const SizedBox.square(dimension: 18,
+                ? const SizedBox.square(dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.radar),
+                : const Icon(Icons.radar, size: 18),
             label: Text(_scanning && !_backfilling && !_rechecking && !_sevenDay
                 ? '掃描中' : '立即快掃'),
           ),
+          const SizedBox(width: 6),
           if (granted && !_loading)
-            OutlinedButton.icon(
-              key: const ValueKey('gmail-radar-seven-day-backfill'),
-              onPressed: _loading || _scanning ? null : () => _scan(sevenDay: true),
-              icon: const Icon(Icons.fact_check_outlined),
-              label: Text(_scanning && _sevenDay ? '補檢中' : '七天補檢'),
-            ),
-          if (needBackfill)
-            OutlinedButton.icon(
-              key: const ValueKey('gmail-radar-three-day-backfill'),
-              onPressed: _loading || _scanning ? null : () => _scan(backfill: true),
-              icon: const Icon(Icons.manage_search),
-              label: Text(_scanning && _backfilling ? '補檢中' : '三天補檢'),
-            ),
-          if (granted && !_loading)
-            OutlinedButton.icon(
-              key: const ValueKey('gmail-radar-three-day-recheck'),
-              onPressed: _loading || _scanning || !granted
-                  ? null : () => _scan(recheck: true),
-              icon: const Icon(Icons.refresh),
-              label: Text(_scanning && _rechecking
-                  ? '重新判讀中' : '重新檢查近三天'),
+            PopupMenuButton<String>(
+              key: const ValueKey('gmail-radar-scan-more'),
+              enabled: !_scanning,
+              tooltip: '更多掃描選項',
+              icon: const Icon(Icons.more_horiz),
+              onSelected: (value) {
+                if (value == 'seven_day') _scan(sevenDay: true);
+                if (value == 'backfill') _scan(backfill: true);
+                if (value == 'recheck') _scan(recheck: true);
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'seven_day',
+                  child: Text('七天補檢（每次最多 40 封）'),
+                ),
+                if (needBackfill)
+                  const PopupMenuItem(
+                    value: 'backfill',
+                    child: Text('三天補檢（尚未檢查）'),
+                  ),
+                const PopupMenuItem(
+                  key: ValueKey('gmail-radar-three-day-recheck'),
+                  value: 'recheck',
+                  child: Text('重新檢查近三天'),
+                ),
+              ],
             ),
         ]),
-        const SizedBox(height: 12),
-        if (!granted && !_loading) Card(child: ListTile(
-          title: const Text('尚未授權 Gmail'),
-          subtitle: const Text('前往個人化 → Google 服務連結，授權自己的 Gmail。'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => context.go('/more/personalize?tab=google'),
-        )),
-        if (_status['last_finished_at'] != null)
+        if (!granted && !_loading)
+          Card(child: ListTile(
+            title: const Text('尚未授權 Gmail'),
+            subtitle: const Text('前往個人化 → Google 服務連結。'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.go('/more/personalize?tab=google'),
+          )),
+        if (_status['last_finished_at'] != null) ...[
+          const SizedBox(height: 4),
           Card(
-            key: const ValueKey('gmail-radar-three-day-summary'),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('最近三天：' +
-                      (threeDayCount == null ? '尚未統計' :
-                          (threeDayComplete || threeDayCount < 2000
-                              ? '${threeDayCount} 封' : '至少 ${threeDayCount} 封')),
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 4),
-                  if (LifeUiEnvironment.isCandidate)
-                    Text('本次' + (_status['scan_kind'] == 'recheck'
-                      ? '重新判讀' : _status['scan_kind'] == 'backfill'
-                          ? '補檢' : '快掃') +
-                      '檢查 ${_status['checked'] ?? 0} 封，新增事項 ' +
-                      '${_status['added'] ?? 0} 筆，失敗 ${_status['failed'] ?? 0} 封'),
-                  Text(threeDayComplete
-                      ? '近三天郵件已全部檢查（截至上次掃描）'
-                      : '尚待補檢 ${threeDayRemaining ?? '未知'} 封；'
-                        '若郵件量超過 2000 封，統計可能尚未涵蓋全部郵件。'),
-                  Text('上次掃描：' + _date(_status['last_finished_at']),
-                    style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ),
+            child: ExpansionTile(
+              key: const ValueKey('gmail-radar-scan-summary'),
+              initiallyExpanded: _scanDetails,
+              onExpansionChanged: (value) => _scanDetails = value,
+              tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+              title: Text(summary, style: Theme.of(context).textTheme.bodyMedium),
+              subtitle: Text('上次掃描：${_date(_status['last_finished_at'])}',
+                  style: Theme.of(context).textTheme.bodySmall),
+              childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              children: [
+                if (LifeUiEnvironment.isCandidate)
+                  Text('本次檢查 ${_status['checked'] ?? 0} 封 · 新增 ${_status['added'] ?? 0} 筆 · 失敗 ${_status['failed'] ?? 0} 封'),
+                Text(complete ? '近三天已檢查完成（截至上次掃描）'
+                    : '近三天仍有 ${remaining ?? '未知'} 封待補檢；超過 2000 封只統計已列出部分。'),
+                if (sevenDayCount != null)
+                  Text('七天已列出 $sevenDayCount 封 · 尚待補檢 ${_status['seven_day_remaining'] ?? '未知'} 封'),
+              ],
             ),
           ),
-        if (sevenDayCount != null)
-          Card(child: ListTile(
-            title: Text('最近七天已列出 $sevenDayCount 封'),
-            subtitle: Text(_status['seven_day_complete'] == true
-                ? '本次七天範圍已檢查完成'
-                : '尚待補檢 ${_status['seven_day_remaining'] ?? '未知'} 封；'
-                  '每按一次處理最多 40 封，若超過 2000 封僅能統計已列出部分。'),
-          )),
-        if (_error != null) Card(child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-        )),
-        Wrap(spacing: 8, children: [
-          for (final group in const [
-            ('pending', '待處理'), ('completed', '已完成'), ('ignored', '已忽略')
-          ]) ChoiceChip(
-            label: Text(group.$2),
-            selected: _filter == group.$1,
-            onSelected: (selected) {
-              if (!selected) return;
-              setState(() => _filter = group.$1);
+        ],
+        if (_error != null)
+          Padding(padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(_error!, style: TextStyle(color: colors.error))),
+        const SizedBox(height: 8),
+        Row(children: [
+          Text('事項', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(width: 12),
+          PopupMenuButton<String>(
+            key: const ValueKey('gmail-radar-filter'),
+            initialValue: _filter,
+            tooltip: '切換事項狀態',
+            onSelected: (status) {
+              if (status == _filter) return;
+              setState(() => _filter = status);
               _load();
             },
+            itemBuilder: (_) => [
+              for (final entry in statusLabels.entries)
+                PopupMenuItem(value: entry.key, child: Text(entry.value)),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(statusLabels[_filter]!, style: TextStyle(color: colors.primary)),
+                const Icon(Icons.arrow_drop_down),
+              ]),
+            ),
           ),
+          const Spacer(),
+          if (_filter != 'pending')
+            Text('每次顯示 $_pageSize 筆', style: Theme.of(context).textTheme.bodySmall),
         ]),
-        const SizedBox(height: 10),
-        if (_loading) const Center(child: Padding(
-          padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
-        else if (_items.isEmpty) Card(child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(_status['last_finished_at'] == null
-              ? '尚未掃描 Gmail。請先按「立即快掃」。'
-              : '目前沒有符合規則的待處理事項。這不代表 Gmail 沒有郵件；'
-                'Life 只顯示命中的警告或待辦。'
-                '如有舊信曾被略過，請按「重新檢查近三天」；'
-                '還有未查郵件則可按「三天補檢」。',
-              textAlign: TextAlign.center)))
+        const SizedBox(height: 4),
+        if (_loading)
+          const Center(child: Padding(
+            padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+        else if (_items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 12),
+            child: Text(_status['last_finished_at'] == null
+                ? '尚未掃描 Gmail，請按「立即快掃」。'
+                : _filter != 'pending'
+                    ? '沒有${statusLabels[_filter]}紀錄。'
+                    : '目前沒有待處理事項。需要補檢或重判舊信，請開啟快掃旁的「⋯」。',
+                textAlign: TextAlign.center),
+          )
         else for (final item in _items) _itemCard(item),
-        const SizedBox(height: 12),
+        if (_hasMore && !_loading)
+          Center(child: TextButton.icon(
+            key: const ValueKey('gmail-radar-load-more'),
+            onPressed: _loadingMore ? null : _loadMore,
+            icon: _loadingMore
+                ? const SizedBox.square(dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.expand_more),
+            label: const Text('載入更多'),
+          )),
         if (LifeUiEnvironment.isCandidate)
-          Text('快掃檢查近 7 天最多 20 封；七天補檢每輪最多 40 封，'
-          '結果保留已處理 ID 去重；「重新檢查近三天」每次最多重新判讀最新 40 封，'
-          '包括 Life 過去略過的郵件，不會刪除已完成事項；'
-          '未使用 Gemini，不執行背景排程或推播。原信若無法定位，可改由 Gmail 開啟。',
-          style: Theme.of(context).textTheme.bodySmall),
+          Padding(padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text('快掃最多 20 封、補檢每輪最多 40 封；僅手動執行、不傳送 Gmail 內容給外部 AI。',
+              style: Theme.of(context).textTheme.bodySmall)),
       ]),
     ));
   }
@@ -273,6 +338,8 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
     final pending = item['status'] == 'pending';
     final linkedTarget = item['linked_target']?.toString();
     final linkedRoute = item['linked_route']?.toString();
+    final dateText = _date(item['received_at']);
+    final due = item['due_date'] ?? item['due_text'];
     const targetLabels = {
       'task': '待辦', 'note': '筆記', 'shopping': '購物清單', 'calendar': '日曆',
     };
@@ -288,100 +355,106 @@ class _GmailRadarPageState extends ConsumerState<GmailRadarPage> {
       'administrative': '行政／學校／工作待辦',
       'authorization': '第三方應用程式授權／權限變更',
     };
-
-    return Card(key: ValueKey('gmail-radar-item-' + id),
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(item['title']?.toString() ?? '', maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 6),
-          Text(item['sender']?.toString() ?? '', maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 4),
-          Text(item['summary']?.toString() ?? '', maxLines: 3,
-              overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 6),
-          Text('分類：' + (categoryLabels[item['category']] ??
-                  (item['category']?.toString() ?? '未知')) +
-              '　郵件時間：' + _date(item['received_at']),
-              style: Theme.of(context).textTheme.bodySmall),
-          if (item['due_date'] != null || item['due_text'] != null)
-            Text('通知所載期限：' +
-                (item['due_date'] ?? item['due_text']).toString(),
-                style: Theme.of(context).textTheme.bodySmall),
-          if (item['classification_source'] == 'local_semantic')
-            Text('本地語意模型建議，請自行確認',
-                style: Theme.of(context).textTheme.bodySmall),
-          if (linkedTarget != null)
-            Text('已完成 · 已存入' + (targetLabels[linkedTarget] ?? 'Life'),
-                style: Theme.of(context).textTheme.bodySmall),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              if (linkedTarget == null && pending)
-                TextButton.icon(
-                  key: ValueKey('gmail-radar-send-inbox-' + id),
-                  onPressed: () => context.go(
-                      '/capture?gmail_item=' + Uri.encodeComponent(id)),
-                  icon: const Icon(Icons.move_to_inbox_outlined),
-                  label: const Text('送到生活收件匣'),
-                ),
-              if (linkedTarget != null && linkedRoute != null)
-                TextButton.icon(
-                  key: ValueKey('gmail-radar-linked-' + id),
-                  onPressed: () => context.go(linkedRoute),
-                  icon: const Icon(Icons.open_in_new),
-                  label: Text('開啟' + (targetLabels[linkedTarget] ?? '已儲存功能')),
-                ),
-              if (_safeGmailUrl(url))
-                TextButton.icon(
-                  key: ValueKey('gmail-radar-open-source-' + id),
-                  onPressed: () => openExternalBrowser(url),
-                  icon: const Icon(Icons.open_in_new),
-                  label: const Text('開啟 Gmail 原信'),
-                ),
-              PopupMenuButton<String>(
-                key: ValueKey('gmail-radar-more-' + id),
-                tooltip: '更多 Gmail 操作',
-                icon: const Icon(Icons.more_horiz),
-                onSelected: (action) {
-                  if (action == 'mailbox' &&
-                      _safeGmailUrl(fallback)) {
-                    openExternalBrowser(fallback);
-                  } else if (action == 'complete' || action == 'restore') {
-                    _updateItem(id, action == 'complete' ? 'completed' : 'pending');
-                  } else if (action == 'ignore') {
-                    _updateItem(id, 'ignored');
-                  }
-                },
-                itemBuilder: (_) => [
-                  if (_safeGmailUrl(fallback))
-                    const PopupMenuItem(
-                      value: 'mailbox',
-                      child: Text('Gmail 信箱備援'),
-                    ),
-                  if (linkedTarget == null && !_updating.contains(id)) ...[
-                    PopupMenuItem(
-                      value: pending ? 'complete' : 'restore',
-                      child: Text(pending ? '手動標示完成' : '恢復待處理'),
-                    ),
-                    if (pending)
-                      const PopupMenuItem(
-                        value: 'ignore',
-                        child: Text('忽略'),
-                      ),
-                  ],
-                ],
-              ),
-            ],
+    final category = categoryLabels[item['category']] ??
+        (item['category']?.toString() ?? '未知');
+    final actions = Wrap(
+      spacing: 4,
+      runSpacing: 0,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (pending && linkedTarget == null)
+          TextButton.icon(
+            key: ValueKey('gmail-radar-send-inbox-' + id),
+            onPressed: () => context.go(
+                '/capture?gmail_item=' + Uri.encodeComponent(id)),
+            icon: const Icon(Icons.move_to_inbox_outlined, size: 18),
+            label: const Text('送收件匣'),
           ),
-        ]),
-      ),
+        if (linkedTarget != null && linkedRoute != null)
+          TextButton.icon(
+            key: ValueKey('gmail-radar-linked-' + id),
+            onPressed: () => context.go(linkedRoute),
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: Text('開啟' + (targetLabels[linkedTarget] ?? '已儲存功能')),
+          ),
+        if (_safeGmailUrl(url))
+          IconButton(
+            key: ValueKey('gmail-radar-open-source-' + id),
+            tooltip: '開啟 Gmail 原信',
+            onPressed: () => openExternalBrowser(url),
+            icon: const Icon(Icons.open_in_new),
+          ),
+        PopupMenuButton<String>(
+          key: ValueKey('gmail-radar-more-' + id),
+          tooltip: '更多 Gmail 操作',
+          icon: const Icon(Icons.more_horiz),
+          onSelected: (action) {
+            if (action == 'mailbox' && _safeGmailUrl(fallback)) {
+              openExternalBrowser(fallback);
+            } else if (action == 'complete' || action == 'restore') {
+              _updateItem(id, action == 'complete' ? 'completed' : 'pending');
+            } else if (action == 'ignore') {
+              _updateItem(id, 'ignored');
+            }
+          },
+          itemBuilder: (_) => [
+            if (_safeGmailUrl(fallback))
+              const PopupMenuItem(value: 'mailbox', child: Text('Gmail 信箱備援')),
+            if (linkedTarget == null && !_updating.contains(id)) ...[
+              PopupMenuItem(
+                value: pending ? 'complete' : 'restore',
+                child: Text(pending ? '手動標示完成' : '恢復待處理'),
+              ),
+              if (pending)
+                const PopupMenuItem(value: 'ignore', child: Text('忽略')),
+            ],
+          ],
+        ),
+      ],
+    );
+
+    return Card(
+      key: ValueKey('gmail-radar-item-' + id),
+      margin: const EdgeInsets.only(bottom: 6),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ExpansionTile(
+          key: ValueKey('gmail-radar-expand-' + id),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+          title: Text(item['title']?.toString() ?? '', maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall),
+          subtitle: Text(
+            '分類：$category · $dateText${due != null ? ' · 期限 $due' : ''}',
+            maxLines: 2, overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall),
+          children: [
+            if ((item['sender']?.toString() ?? '').isNotEmpty)
+              Align(alignment: Alignment.centerLeft,
+                child: Text(item['sender'].toString(),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall)),
+            if ((item['summary']?.toString() ?? '').isNotEmpty)
+              Align(alignment: Alignment.centerLeft, child:
+                Text(item['summary'].toString(), maxLines: 3,
+                  overflow: TextOverflow.ellipsis)),
+            if (item['classification_source'] == 'local_semantic')
+              Align(alignment: Alignment.centerLeft, child:
+                Text('本地語意模型建議，請自行確認',
+                  style: Theme.of(context).textTheme.bodySmall)),
+            if (linkedTarget != null)
+              Align(alignment: Alignment.centerLeft, child:
+                Text('已完成 · 已存入' + (targetLabels[linkedTarget] ?? 'Life'),
+                  style: Theme.of(context).textTheme.bodySmall)),
+            if (!pending) actions,
+          ],
+        ),
+        if (pending)
+          Padding(
+            padding: const EdgeInsets.only(left: 8, right: 8, bottom: 4),
+            child: Align(alignment: Alignment.centerLeft, child: actions),
+          ),
+      ]),
     );
   }
 }

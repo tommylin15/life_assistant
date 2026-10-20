@@ -316,13 +316,14 @@ def _serialize_state(state: GmailRadarScanState | None) -> dict:
 async def get_radar_items(
     status: Literal["pending", "completed", "ignored", "all"] = "pending",
     limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=100000),
     user: dict = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(GmailRadarItem).where(GmailRadarItem.user_sub == user["sub"])
     if status != "all":
         stmt = stmt.where(GmailRadarItem.status == status)
-    stmt = stmt.order_by(GmailRadarItem.created_at.desc()).limit(limit)
+    stmt = stmt.order_by(GmailRadarItem.created_at.desc(), GmailRadarItem.id.desc()).offset(offset).limit(limit)
     items = (await db.execute(stmt)).scalars().all()
     connection = await db.get(GoogleConnection, user["sub"])
     email = connection.email if connection else str(user.get("email") or "")

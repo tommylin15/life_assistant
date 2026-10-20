@@ -23,8 +23,12 @@ class _FakeRadarApi extends PlatformApi {
       };
     }
     if (path.contains('/items?status=')) {
-      final filter = Uri.parse(path).queryParameters['status'];
-      return {'items': items.where((item) => item['status'] == filter).toList()};
+      final query = Uri.parse(path).queryParameters;
+      final filter = query['status'];
+      final offset = int.parse(query['offset'] ?? '0');
+      final limit = int.parse(query['limit'] ?? '50');
+      return {'items': items.where((item) => item['status'] == filter)
+          .skip(offset).take(limit).toList()};
     }
     throw StateError('Unexpected request: ' + path);
   }
@@ -57,8 +61,10 @@ class _FakeRadarApi extends PlatformApi {
   @override
   Future<Map<String, dynamic>> patch(
       String path, Map<String, dynamic> body) async {
-    items.first['status'] = body['status'];
-    return {'item': items.first};
+    final id = Uri.parse(path).pathSegments.last;
+    final item = items.firstWhere((element) => element['id'] == id);
+    item['status'] = body['status'];
+    return {'item': item};
   }
 }
 
@@ -88,8 +94,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.scans, 1);
     expect(find.text('繳費通知'), findsOneWidget);
-    expect(find.text('開啟 Gmail 原信'), findsOneWidget);
-    expect(find.text('送到生活收件匣'), findsOneWidget);
+    expect(find.byTooltip('開啟 Gmail 原信'), findsOneWidget);
+    expect(find.text('送收件匣'), findsOneWidget);
     // Fallback is intentionally not a third primary button.
     expect(find.text('Gmail 信箱備援'), findsNothing);
     final more = find.byKey(const ValueKey('gmail-radar-more-item-1'));
@@ -126,11 +132,15 @@ void main() {
       child: const MaterialApp(home: GmailRadarPage()),
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('已完成'));
+    await tester.tap(find.byKey(const ValueKey('gmail-radar-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('已完成').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('訂房確認'));
     await tester.pumpAndSettle();
     expect(find.text('已完成 · 已存入待辦'), findsOneWidget);
     expect(find.text('開啟待辦'), findsOneWidget);
-    expect(find.text('送到生活收件匣'), findsNothing);
+    expect(find.text('送收件匣'), findsNothing);
     expect(find.text('Gmail 信箱備援'), findsNothing);
     final more = find.byKey(const ValueKey('gmail-radar-more-item-linked'));
     await tester.ensureVisible(more);
@@ -193,9 +203,11 @@ void main() {
       child: const MaterialApp(home: GmailRadarPage()),
     ));
     await tester.pumpAndSettle();
+    final more = find.byKey(const ValueKey('gmail-radar-scan-more'));
+    await tester.tap(more);
+    await tester.pumpAndSettle();
     final button = find.byKey(const ValueKey('gmail-radar-three-day-recheck'));
     expect(button, findsOneWidget);
-    await tester.ensureVisible(button);
     await tester.tap(button);
     await tester.pumpAndSettle();
     expect(api.rechecks, 1);
@@ -203,6 +215,60 @@ void main() {
     expect(find.textContaining('最近三天：'), findsOneWidget);
     expect(find.textContaining('本次重新判讀'), findsNothing);
     expect(find.textContaining('重新判讀最新 40 封'), findsNothing);
+  });
+
+
+  testWidgets('history is compact and pages eight at a time', (tester) async {
+    tester.view.physicalSize = const Size(440, 950);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final api = _FakeRadarApi(authorized: true);
+    for (var i = 0; i < 18; i++) {
+      api.items.add({
+        'id': 'history-$i', 'title': '歷史通知 $i',
+        'summary': '這筆摘要只在展開後顯示',
+        'sender': 'notice@example.com',
+        'category': 'billing', 'status': 'completed',
+        'received_at': '2026-10-16T08:00:00Z',
+        'gmail_url': 'https://mail.google.com/mail/#all/thread-$i',
+        'gmail_fallback_url': 'https://mail.google.com/mail/#all',
+      });
+    }
+    await tester.pumpWidget(ProviderScope(
+      overrides: [platformApiProvider.overrideWithValue(api)],
+      child: const MaterialApp(home: GmailRadarPage()),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('gmail-radar-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('已完成').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('gmail-radar-item-history-7')), findsOneWidget);
+    expect(find.byKey(const ValueKey('gmail-radar-item-history-8')), findsNothing);
+    expect(find.text('這筆摘要只在展開後顯示'), findsNothing);
+    final more = find.byKey(const ValueKey('gmail-radar-load-more'));
+    await tester.ensureVisible(more);
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('gmail-radar-item-history-8')), findsOneWidget);
+    expect(find.byKey(const ValueKey('gmail-radar-item-history-16')), findsNothing);
+  });
+
+  testWidgets('scan options and long diagnostics stay folded', (tester) async {
+    final api = _FakeRadarApi(authorized: true);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [platformApiProvider.overrideWithValue(api)],
+      child: const MaterialApp(home: GmailRadarPage()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('gmail-radar-scan-more')), findsOneWidget);
+    expect(find.text('七天補檢（每次最多 40 封）'), findsNothing);
+    expect(find.text('重新檢查近三天'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('gmail-radar-scan-more')));
+    await tester.pumpAndSettle();
+    expect(find.text('七天補檢（每次最多 40 封）'), findsOneWidget);
+    expect(find.text('重新檢查近三天'), findsOneWidget);
   });
 
 

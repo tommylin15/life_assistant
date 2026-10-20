@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import HTTPException
 
 from app.api.gmail_radar import (
-    classify_message, gmail_urls, manual_quick_scan, manual_three_day_backfill,
+    classify_message, gmail_urls, get_radar_items, manual_quick_scan, manual_three_day_backfill,
     manual_three_day_recheck, manual_seven_day_backfill,
 )
 from app.models.google_integration import GoogleConnection
@@ -205,6 +205,24 @@ class GmailRadarRulesTests(unittest.TestCase):
         self.assertIn("threadId123", links["gmail_url"])
         self.assertIn("authuser=somebody%40example.com", links["gmail_url"])
         self.assertTrue(links["gmail_fallback_url"].startswith("https://mail.google.com/"))
+
+
+class GmailRadarPagingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_completed_history_pagination_is_owner_scoped(self):
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        db.execute = AsyncMock(return_value=result)
+        db.get = AsyncMock(return_value=None)
+        output = await get_radar_items(
+            status="completed", limit=9, offset=8, user={"sub": "owner-a"}, db=db)
+        self.assertEqual(output["items"], [])
+        sql = str(db.execute.await_args.args[0].compile(
+            compile_kwargs={"literal_binds": True}))
+        self.assertIn("gmail_radar_items.user_sub = 'owner-a'", sql)
+        self.assertIn("gmail_radar_items.status = 'completed'", sql)
+        self.assertIn("LIMIT 9", sql)
+        self.assertIn("OFFSET 8", sql)
 
 
 class GmailRadarOwnershipTests(unittest.IsolatedAsyncioTestCase):

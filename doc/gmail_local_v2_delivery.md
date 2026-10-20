@@ -77,3 +77,12 @@ When a Gmail radar card is sent to Life Inbox, the browser submits an authentica
 - Date extraction treats ambiguous two-digit `26年` as unknown rather than fabricating a ROC date. Three-digit ROC year or an explicit `民國` prefix remains supported.
 - Regression fixtures are fully synthetic. No actual Gmail data was fetched, included in the repository, or used to judge real-world model precision.
 - New code requires exact-SHA CI and runtime checks before any PASS or DONE claim. Previously established ONNX Staging, real Gmail E2E and production evidence states are unchanged.
+
+
+## 2026-10-20 mobile Gmail radar density fix
+
+- Mobile page now prioritizes one 「立即快掃」 CTA. Seven-day backfill, conditional three-day backfill and three-day recheck are still manual, moved to the adjacent 「⋯」 menu. Safety notice remains visible in a shorter form.
+- Three-day / seven-day scan metrics become one folded summary instead of two permanent cards. Candidate diagnostics stay behind the fold.
+- Pending items stay the default. Completed and ignored records are accessible via a single compact status selector. All three states are fetched in stable eight-item pages with explicit 「載入更多」 rather than drawing up to 50 full-size cards. Backend adds bounded, owner-scoped offset pagination, with stable `created_at DESC, id DESC` ordering and no schema migration.
+- Each item defaults to subject, category, timestamp and optional due evidence; sender, preview and model caveats expand on tap. Pending items retain immediate Inbox handoff, original Gmail link and per-item actions; archived items show their actions on expansion. No item deletion or change to scan/consent/dedupe semantics.
+- New Flutter + backend paging tests and same-SHA CI/staging verification must be read back separately before declaring PASS.

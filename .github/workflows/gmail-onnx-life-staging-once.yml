@@ -1,6 +1,7 @@
 # Exact SHA staging-only replay for 2026-10-20 incremental Gmail classifier fixes.
 # The existing CI guards and production-promote=false are mandatory.
-# Explicit ONE-TIME ONNX-enabled full Life FastAPI Staging continuation.
+# Explicit ONNX-enabled full Life FastAPI Staging continuation for compact Gmail UI.
+# Keep the latest classifier and compact Flutter UI on the same staging SHA.
 # This dispatches the existing guarded V3 release (same SHA, CI, migration,
 # OAuth/Hosting pin, 0%-production-traffic, staging rollback protections).
 # NO automatic or requested production promotion.

@@ -10,6 +10,7 @@ class _CaptureApi extends PlatformApi {
   int committed = 0;
   final writes = <Map<String, dynamic>>[];
   Map<String, dynamic>? fakeCandidate;
+  List<Map<String, dynamic>>? fakeCandidates;
   Map<String, dynamic>? fakeDateHint;
   String fakeCommitStatus = 'CREATED';
 
@@ -21,7 +22,7 @@ class _CaptureApi extends PlatformApi {
         'classification_source': 'rules',
         'saved': false,
         'date_hint': fakeDateHint,
-        'candidates': [
+        'candidates': fakeCandidates ?? [
           fakeCandidate ?? {
             'proposal_id': 'p1', 'target': 'note',
             'fields': {'body': body['text'], 'title': ''},
@@ -69,6 +70,46 @@ void main() {
     ], child: const MaterialApp(home: LifeCapturePage())));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('multiple suggestions preserve per-action dates and write only selected',
+      (tester) async {
+    final api = _CaptureApi()
+      ..fakeDateHint = {
+        'precision': 'day', 'date': '2026-10-22', 'year': 2026,
+        'month': 10, 'day': 22, 'raw': '明天'
+      }
+      ..fakeCandidates = [
+        {
+          'proposal_id': 'p1', 'target': 'task',
+          'fields': {'title': '明天提交報告'}, 'select_default': true,
+          'date_hint': {
+            'precision': 'day', 'date': '2026-10-22', 'year': 2026,
+            'month': 10, 'day': 22, 'raw': '明天'
+          }, 'evidence_spans': ['明天提交報告'], 'ambiguities': []
+        },
+        {
+          'proposal_id': 'p2', 'target': 'task',
+          'fields': {'title': '繳電費'}, 'select_default': true,
+          'date_hint': null, 'evidence_spans': ['繳電費'], 'ambiguities': []
+        }
+      ];
+    await mount(tester, api);
+    await tester.enterText(find.byKey(const ValueKey('capture-input')),
+        '明天提交報告，記得繳電費');
+    await tester.tap(find.text('智慧辨識'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('capture-candidate-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('capture-candidate-1')), findsOneWidget);
+    expect(find.textContaining('辨識建議（2 項'), findsOneWidget);
+    await tester.ensureVisible(find.textContaining('確認新增所選 2 項'));
+    await tester.tap(find.textContaining('確認新增所選 2 項'));
+    await tester.pumpAndSettle();
+    expect(api.committed, 1);
+    final items = api.writes.single['items'] as List;
+    expect(items, hasLength(2));
+    expect((items[0]['fields'] as Map)['due_at'], '2026-10-22T23:59:00+08:00');
+    expect((items[1]['fields'] as Map).containsKey('due_at'), false);
+  });
 
   testWidgets('classification and saving are two separate explicit actions', (tester) async {
     final api = _CaptureApi();

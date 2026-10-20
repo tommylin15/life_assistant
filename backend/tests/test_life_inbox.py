@@ -30,6 +30,34 @@ class InboxRuleTests(unittest.TestCase):
         self.assertFalse(item["select_default"])
         self.assertIn("請選擇購物清單", item["ambiguities"])
 
+    def test_explicit_three_way_instruction_yields_three_editable_proposals(self):
+        now = "2026-10-21T07:12:00+08:00"
+        value = "明天下午三點去好市多，買牛奶跟雞蛋，晚上記得繳電費。"
+        result = inbox.rule_candidates(value, now)
+        self.assertEqual(result["classification_source"], "rules")
+        proposals = result["candidates"]
+        self.assertEqual([item["target"] for item in proposals],
+                         ["calendar", "shopping", "task"])
+        self.assertEqual(proposals[0]["fields"]["summary"], "去好市多")
+        self.assertEqual(proposals[0]["fields"]["start"], "2026-10-22T15:00:00+08:00")
+        self.assertNotIn("end", proposals[0]["fields"])
+        self.assertFalse(proposals[0]["select_default"])
+        self.assertEqual([x["name"] for x in proposals[1]["fields"]["items"]],
+                         ["牛奶", "雞蛋"])
+        self.assertEqual(proposals[2]["fields"]["title"], "繳電費")
+        self.assertNotIn("due_at", proposals[2]["fields"])
+        self.assertFalse(result["saved"])
+
+    def test_rule_language_filters_uncertain_or_negative_phrases(self):
+        for sample in ["不要買牛奶", "取消明天下午三點去好市多",
+                       "買牛奶，然後幫我安排一個行程"]:
+            with self.subTest(sample=sample):
+                self.assertIsNone(inbox.rule_candidates(sample,
+                    "2026-10-21T07:12:00+08:00"))
+        value = inbox.rule_candidates("買牛奶跟雞蛋")
+        self.assertEqual([x["name"] for x in value["candidates"][0]["fields"]["items"]],
+                         ["牛奶", "雞蛋"])
+
     def test_calendar_date_hints_keep_partial_precision_and_roc_year(self):
         now = "2026-10-17T12:00:00+08:00"
         cases = [
@@ -107,6 +135,62 @@ class InboxClassificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["candidates"][0]["target"], "task")
         self.assertFalse(result["saved"])
         ai.assert_awaited_once()
+
+    async def test_rules_three_actions_skip_gemini_and_have_separate_dates(self):
+        with patch.object(inbox, "generate_text", new_callable=AsyncMock) as model:
+            result = await inbox.interpret(inbox.InterpretInput(
+                text="明天下午三點去好市多，買牛奶跟雞蛋，晚上記得繳電費。"),
+                Response(), user={"sub": "owner"})
+        model.assert_not_awaited()
+        self.assertEqual([p["target"] for p in result["candidates"]],
+                         ["calendar", "shopping", "task"])
+        self.assertIsNone(result["candidates"][2]["date_hint"])
+        self.assertNotIn("due_at", result["candidates"][2]["fields"])
+
+    async def test_gemini_multi_intent_keeps_clause_date_scoped(self):
+        source = "明天10點去醫院，買牛奶跟雞蛋，晚上提醒我繳電費"
+        answer = {"candidates": [
+            {"target": "calendar", "fields": {
+                "summary": "去醫院", "start": "2026-10-22T10:00:00+08:00",
+                "end": "2026-10-22T11:00:00+08:00"},
+                "evidence_spans": ["明天10點去醫院"], "select_default": True},
+            {"target": "shopping", "fields": {
+                "items": [{"name": "牛奶"}, {"name": "雞蛋"}]},
+                "evidence_spans": ["買牛奶跟雞蛋"], "select_default": True},
+            {"target": "task", "fields": {
+                "title": "繳電費", "due_at": "2026-10-22T23:59:00+08:00"},
+                "evidence_spans": ["晚上提醒我繳電費"], "select_default": True}
+        ]}
+        import json
+        with patch.object(inbox, "generate_text", new=AsyncMock(
+                return_value={"text": json.dumps(answer, ensure_ascii=False)})):
+            result = await inbox.interpret(
+                inbox.InterpretInput(text=source), Response(),
+                user={"sub": "owner"})
+        rows = result["candidates"]
+        self.assertEqual([c["target"] for c in rows], ["calendar", "shopping", "task"])
+        self.assertEqual(rows[0]["date_hint"]["precision"], "day")
+        self.assertNotIn("end", rows[0]["fields"])
+        self.assertFalse(rows[0]["select_default"])
+        self.assertIsNone(rows[2]["date_hint"])
+        self.assertNotIn("due_at", rows[2]["fields"])
+        self.assertFalse(rows[2]["select_default"])
+
+    async def test_model_omission_recovers_grounded_explicit_action(self):
+        source = "明天10點去醫院，買牛奶跟雞蛋，晚上請幫我繳電費"
+        answer = {"candidates": [{"target": "calendar",
+            "fields": {"summary": "去醫院", "start": "2026-10-22T10:00:00+08:00"},
+            "evidence_spans": ["明天10點去醫院"], "select_default": False}]}
+        import json
+        with patch.object(inbox, "generate_text", new=AsyncMock(
+                return_value={"text": json.dumps(answer, ensure_ascii=False)})):
+            result = await inbox.interpret(
+                inbox.InterpretInput(text=source), Response(),
+                user={"sub": "owner"})
+        self.assertEqual([c["target"] for c in result["candidates"]],
+                         ["calendar", "shopping"])
+        self.assertEqual(result["candidates"][1]["fields"]["items"][1]["name"],
+                         "雞蛋")
 
     async def test_partial_month_or_day_cannot_be_fabricated_by_model(self):
         candidates = [

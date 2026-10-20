@@ -291,6 +291,16 @@ def _grounded_candidates(decoded: dict, value: str, now: str) -> dict:
         if multiple and not evidence:
             entry["select_default"] = False
             entry.setdefault("ambiguities", []).append("請核對此候選是否確實來自輸入內容")
+        # A single start-time expression cannot justify a model-generated
+        # arbitrary duration or end time. Preserve the known start for editing.
+        if entry.get("target") == "calendar" and "end" in fields:
+            clock_count = len(re.findall(
+                r"(?:[0-9]{1,2}|[一二三四五六七八九十兩]{1,3})\\s*[點時:]",
+                " ".join(evidence)))
+            if clock_count < 2 and not re.search(r"(?:分鐘|小時|半小時|兩小時|一小時|整天)", " ".join(evidence)):
+                fields.pop("end", None)
+                entry["select_default"] = False
+                entry.setdefault("ambiguities", []).append("未明示結束時間，請手動確認")
     # Explicit deterministic intent has priority over omission by a model.
     # Never manufacture unrecognized actions, and keep the eight-item bound.
     present = source
@@ -509,10 +519,12 @@ async def interpret(body: InterpretInput, response: Response,
                             warnings = []
                             proposed["ambiguities"] = warnings
                         warnings.append("日期不完整或有歧義，請使用萬年曆確認")
+        scoped_hints = [candidate.pop("date_hint", None)
+                        for candidate in decoded["candidates"]]
         items = ModelOutput.model_validate(decoded)
         results = _proposals(items.candidates, "gemini")
-        for candidate, source in zip(results["candidates"], decoded["candidates"]):
-            candidate["date_hint"] = source.get("date_hint")
+        for candidate, date_hint in zip(results["candidates"], scoped_hints):
+            candidate["date_hint"] = date_hint
         return {**results, "date_hint": hint}
     except (GatewayTextError, ValidationError, ValueError, TypeError, KeyError):
         return {**_fallback(value), "date_hint": hint}

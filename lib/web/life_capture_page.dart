@@ -91,7 +91,8 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
         if (_gmailActionId != null && i > 0) break;
         final suggestion = <String, dynamic>{
           ...candidate,
-          'date_hint': parsed['date_hint'],
+          'date_hint': candidate.containsKey('date_hint')
+              ? candidate['date_hint'] : parsed['date_hint'],
           'fields': Map<String, dynamic>.from(candidate['fields'] as Map),
           'selected': candidate['select_default'] == true,
           'action_id': _gmailActionId ?? _newActionId(i),
@@ -118,7 +119,10 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
   }
 
   void _changeTarget(Map<String, dynamic> candidate, String target) {
-    final original = _input.text.trim();
+    final spans = candidate['evidence_spans'] as List?;
+    final original = spans != null && spans.isNotEmpty &&
+            spans.first is String && (spans.first as String).trim().isNotEmpty
+        ? (spans.first as String).trim() : _input.text.trim();
     setState(() {
       candidate['target'] = target;
       candidate['selected'] = false;
@@ -661,7 +665,7 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
                 ),
               ],
             ],
-            const Text('輸入一段文字或網址，Life 會提出建議；只有確認後才會寫入。'),
+            const Text('可一次輸入多件事項，Life 會逐項建議；只有勾選確認後才會新增。'),
             const Text('待辦／行程日期可用萬年曆快速選擇；只有年月或月日會提示補選，無需輸入 ISO8601。',
                 style: TextStyle(fontSize: 12)),
             const SizedBox(height: 12),
@@ -684,7 +688,7 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
                     style: TextStyle(color: Theme.of(context).colorScheme.error))),
             if (_candidates.isNotEmpty) ...[
               const SizedBox(height: 16),
-              Text('辨識建議（來源：' + (_classification ?? '未知') + '）',
+              Text('辨識建議（${_candidates.length} 項，來源：' + (_classification ?? '未知') + '）',
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               for (var i = 0; i < _candidates.length; i++)

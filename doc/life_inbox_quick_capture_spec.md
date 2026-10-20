@@ -151,3 +151,11 @@ Admin 中途關閉／權限被撤銷 → 立即停止下一步新分析／寫入
 - 2026-10-16 使用者指示：先設計架構、正式規格及 AI 開發指示，**只回寫文件，之後才進行程式開發**；Admin 要可決定一般使用者是否使用。
 - 其他六項產品點子已存 Drive life_assistantGPT/討論構想區/好點子，狀態 PARKED；本文件不得把那些項目暗中加入 V1 scope。
 - 此規格對新功能的設計有效；如與當前 GitHub source/runtime 不同，當前實作狀態以 GitHub/runtime 為準，Drive 文件不能冒充已交付。
+
+## 2026-10-21｜P0 / P1 quick capture multi-intent improvements
+
+- **P2 ONNX explicitly cancelled** (user decision). Do not add a Quick Capture ONNX service, dependency or model; Gmail ONNX is a separate open project.
+- **Existing source capability:** ModelOutput allows 1–8 candidates and Flutter already renders and commits a selected batch. The prior rule parser only handled links/one shopping command, and the Gemini prompt did not enforce decomposition; on mixed text it might choose one closest category. The Flutter date picker previously propagated one global `date_hint` to all suggestions, risking incorrect dates.
+- **P0:** extend the no-network deterministic lane for unambiguous separate visit+time, shopping items separated by `跟/和/、`, and explicit reminders. Only apply if every clause can be parsed; otherwise use Gemini. No calendar end time is fabricated; an absent end requires manual picker confirmation. Never commit from interpretation.
+- **P1:** instruct Gemini to emit each explicitly supported independent action as its own candidate, to anchor evidence/date/time per clause and avoid duplicate actions. A conservative post-processor removes dates from candidates not bearing their own grounded dates, strips inferred calendar end times, and recovers unambiguous rules-covered clauses if Gemini omits them. Flutter now honors per-candidate date hints and preserves source-clause text when changing category.
+- Test synthetic mixed-sentence, negation, ungrounded date, model omission, Flutter two-item batch; all future same-SHA CI, Staging, real User E2E remain separately verified. No real user text in test fixtures/logs; no new database schema or IAM changes.

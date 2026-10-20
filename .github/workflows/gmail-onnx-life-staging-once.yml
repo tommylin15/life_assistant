@@ -5,6 +5,7 @@
 name: Gmail ONNX Full Life Staging Once
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:

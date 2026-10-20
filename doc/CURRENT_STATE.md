@@ -1,3 +1,12 @@
+## 2026-10-20｜ONNX Cloud Run 2Gi／2vCPU 獨立候選：DONE（Gmail V2 整體仍 PARTIAL）
+
+- **同 SHA CI PASS：** [#39349455453](https://github.com/tommylin15/life_assistant/actions/runs/39349455453)，候選 source SHA b3ea92b6e11865d82887d4aa6a16b00285a63553。
+- **Cloud Run 私有候選與實測 PASS：** [#39349455587](https://github.com/tommylin15/life_assistant/actions/runs/39349455587)：life-assistant-gmail-onnx-candidate 修訂 life-assistant-gmail-onnx-candidate-00002-l9b，2GiB／2vCPU、並行 1、實例 0–1、內部入口，digest sha256:f69b3f84cf10f829de8fe4e6522c388ebcd8f7b5e5944b9150e490b9e4543c31；獨立 Cloud Run Job life-assistant-gmail-onnx-smoke-57qqm 真實執行合成 ONNX 模型 PASS。正式 life-assistant-api 的非零流量 revision+百分比前後一致；**候選自己有 100% 私有流量，並非 Life 正式流量**。
+- **安全／IAM PASS：** gcloud deploy 曾輸出 IAM-policy 設定失敗警告，但 [只讀 IAM/Ingress/未授權探測 #39350332042](https://github.com/tommylin15/life_assistant/actions/runs/39350332042) 全 PASS：internal ingress、Invoker IAM check enabled，未發現 allUsers／allAuthenticatedUsers Invoker 綁定，外部未授權 HTTP 非 200；不更動 IAM，無 Gmail、DB、OAuth、外部模型內容處理。
+- **實測範圍限制：** 這是合成輸入、專用無私人郵件的 ONNX Cloud Run 候選服務；**沒有**將模型啟用到 Life 的登入版 Staging FastAPI，也沒有真實使用者 Gmail E2E／人為安全回退／正式 Hosting 切流。GitHub runner 1Gi 無網路容器測得程序 RSS 約 710MiB，但 Cloud Run Job p95 和 RSS 尚無精確指標讀回。對外不得宣稱 Gmail V2 產品 DONE。
+- **待辦順序：** P0 將 ONNX 以 0%-production-traffic 真正接入 Life Staging（完整 API/OAuth/DB + 對照原規則）、P0 Owner 與一般帳號 Gmail 真信及 Inbox 本地轉存讀回、P1 正式同 SHA production/Hosting 安全發布、回滾與真人驗收。詳見 [唯一 Gmail V2 規格](gmail_local_v2_delivery.md)／[TODO](todo.md)。
+- **歷史風險：** 公開 repo 的歷史提交疑含曾用於測試的實際帳單內容；程式最新工作樹已替換虛構樣本，歷史改寫需本人明確確認。
+
 ## 2026-10-20｜Gmail V2 CI + PostgreSQL 0022 + 固定 Staging 讀回
 
 - **工程 CI：PASS。** [#39278270473](https://github.com/tommylin15/life_assistant/actions/runs/39278270473)，Flutter／Backend／PostgreSQL／Deployment Scripts 四項 PASS，同 SHA `3ad6b7768642fb8580027aa5460c5d2b4430d62f`。

@@ -59,8 +59,9 @@ class _CaptureApi extends PlatformApi {
 }
 
 void main() {
-  Future<void> mount(WidgetTester tester, _CaptureApi api) async {
-    tester.view.physicalSize = const Size(850, 1000);
+  Future<void> mount(WidgetTester tester, _CaptureApi api,
+      {double height = 1000}) async {
+    tester.view.physicalSize = Size(850, height);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -93,7 +94,7 @@ void main() {
           'date_hint': null, 'evidence_spans': ['繳電費'], 'ambiguities': []
         }
       ];
-    await mount(tester, api);
+    await mount(tester, api, height: 1900);
     await tester.enterText(find.byKey(const ValueKey('capture-input')),
         '明天提交報告，記得繳電費');
     await tester.tap(find.text('智慧辨識'));

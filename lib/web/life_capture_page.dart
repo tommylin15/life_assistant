@@ -665,7 +665,7 @@ class _LifeCapturePageState extends ConsumerState<LifeCapturePage> {
                 ),
               ],
             ],
-            const Text('可一次輸入多件事項，Life 會逐項建議；只有勾選確認後才會新增。'),
+            const Text('可一次輸入多件事項，Life 會逐項建議；需勾選確認才會儲存。'),
             const Text('待辦／行程日期可用萬年曆快速選擇；只有年月或月日會提示補選，無需輸入 ISO8601。',
                 style: TextStyle(fontSize: 12)),
             const SizedBox(height: 12),

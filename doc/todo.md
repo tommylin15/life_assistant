@@ -1,13 +1,14 @@
 # Life — Active engineering TODO
-Updated 2026-10-18. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
+Updated 2026-10-20. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
 
-## 2026-10-19｜Gmail 智慧事項 V2（唯一新增執行事項）
+## 2026-10-20｜Gmail V2：ONNX 離線候選 DONE；使用者正式功能仍 PARTIAL
 
-- **已核准決策：** Gmail 掃描採規則引擎＋本地多語言語意模型（離線且按需載入）＋本地日期資訊抽取。**不向 Gemini／omniAgent／外部生成式 AI 傳 Gmail 內容**；不因本次工作新增背景排程或推播。完整規格與驗收證據要求：[Gmail V2](gmail_local_v2_delivery.md)。
-- **Source 已提交、驗收尚待：** 新增本地判讀服務、僅使用預載 checkpoint、版本化重判、非破壞性 Alembic 0022、最多 2,000 封列舉＋每批 40 封的七天補檢 API、Flutter 進度及期限證據、CI regression。舊 7 天快掃 20 封／3 天補檢相容。
-- **模型尚未布署：NOT VERIFIED。** Production Docker 尚未安裝大型 embedding 相依或打包 checkpoint；缺模型時只有 rules-only，不能宣稱 semantic AI 已啟用。進階模型先量測 CPU/記憶體／冷啟動／繁體中文品質，再決定是否獨立部署，禁止掃描時自行從網路下載。
-- **已驗證工程 gates：** SHA `c4560ce77d3faaefbe31896849181f60ed6da27c` [四 CI #39271061902](https://github.com/tommylin15/life_assistant/actions/runs/39271061902) **PASS**；[固定 staging Release #39271510026](https://github.com/tommylin15/life_assistant/actions/runs/39271510026) **PASS**（hosting SHA/401/OAuth redirect、migration job step、traffic_unchanged=true）。workflow summary 仍寫舊 0018 字樣，須以程式 target 0022／資料庫 ledger 實讀為準，不能引用舊摘要當 schema 版本證據。
-- **退出門檻剩餘：** 實際 0022 DB revision 讀回、本人與一般帳號真實 Gmail/分類回執、已完成／略過重判、離線模型資產及品質/效能證據、正式 promotion/rollback/Hosting 同 SHA。缺證據維持 **PARTIAL／NOT VERIFIED**。
+- **決策不變：** Gmail 雷達採規則＋Life 本地多語言 ONNX＋本地欄位抽取，原信不外送 Gemini／omniAgent；僅手動掃描、七天補檢、郵件去重、本人確認，無背景掃描與自動寫入。正式 [Gmail V2 規格及證據](gmail_local_v2_delivery.md)。
+- **ONNX 獨立候選＝DONE：** [同 SHA CI #39349455453](https://github.com/tommylin15/life_assistant/actions/runs/39349455453) 四項 PASS；[GCP 模型候選＋Job #39349455587](https://github.com/tommylin15/life_assistant/actions/runs/39349455587) PASS；[IAM/Ingress readback #39350332042](https://github.com/tommylin15/life_assistant/actions/runs/39350332042) PASS。服務 life-assistant-gmail-onnx-candidate：2Gi RAM／2 vCPU／並行 1／實例 0–1／internal ingress，不接受任意郵件、不連 Gmail、DB 或 Gemini。Cloud Run 同映像 digest 執行合成模型 Job PASS；正式 Life API 的非零加權流量前後一致。
+- **P0｜ONNX 接入真正 Life Staging（未完成）：** 目前候選是**只含合成測試的獨立私有服務**，不是帶登入／DB／Gmail 的正式 FastAPI。要以 0% 正式流量接上完整 Life Staging，驗證 FastAPI 記憶體、CPU、冷啟動、p95、fallback、資料隔離及回滾。未通過不得切 Production。
+- **P0｜真實 Gmail E2E（未完成）：** Staging 的 Owner／一般帳號實際授權、七天補檢、漏判帳單重新辨識、已繳清／促銷排除、時間與繳費額證據、Gmail → Inbox **本地**轉存、跨帳號隔離和正式資料庫回執；不得將真實 Gmail 內容寫入公開 CI 日誌。
+- **P1｜正式上線（未完成）：** 完整 Staging 真實 E2E 後，正式 Cloud Run／Hosting 同 SHA、安全切流與 rollback rehearsal、一般使用者畫面讀回。
+- **治理分案：** 舊公開 Git commit 歷史疑含真實帳單片段；工作樹測試已換虛構資料，歷史重寫／force push 需使用者**明確核准**，本輪不執行。原已通過 Alembic 0022 readback、V2 1.0 規則版 Staging Release，不重複當作 ONNX 真實 Gmail 驗收。
 
 ## 2026-10-19｜版本公告接續驗證
 - GitHub main `6f3ddba` 的 CI 四項 [#39128817868](https://github.com/tommylin15/life_assistant/actions/runs/39128817868) PASS；同版 V3 [#39129015414](https://github.com/tommylin15/life_assistant/actions/runs/39129015414) 固定 staging PASS，但 production promotion 與 Hosting 步驟 skipped；不宣稱 0.2.0 已對一般使用者上線。

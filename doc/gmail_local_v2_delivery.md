@@ -70,3 +70,10 @@ When a Gmail radar card is sent to Life Inbox, the browser submits an authentica
 - **Next gates:** 1) capture sanitized, owner-consented real-Gmail E2E results on fixed Staging (no real subject/body or PII in GitHub logs); 2) collect read-only Cloud Run per-revision memory/CPU and latency evidence under bounded load, compare with 2Gi memory and fallback; 3) only after evidence, controlled same-SHA production promotion with rollback/Hosting readback and user acceptance; 4) separately get explicit authorization if rewriting historical public Git test leaks.
 
 **Result:** ONNX full Staging engineering = DONE/PASS; complete Gmail V2 product = PARTIAL.
+
+## 2026-10-20 follow-up: alert coverage and date evidence (source update)
+
+- Rules now include explicit cloud project/workspace deletion, permanent data deletion and service termination subject lines, with narrow snippet support when the title is generic. Advertising headlines and promotional snippets remain excluded. These are **review items**, not verified messages or confirmation of actual resource loss.
+- Date extraction treats ambiguous two-digit `26年` as unknown rather than fabricating a ROC date. Three-digit ROC year or an explicit `民國` prefix remains supported.
+- Regression fixtures are fully synthetic. No actual Gmail data was fetched, included in the repository, or used to judge real-world model precision.
+- New code requires exact-SHA CI and runtime checks before any PASS or DONE claim. Previously established ONNX Staging, real Gmail E2E and production evidence states are unchanged.

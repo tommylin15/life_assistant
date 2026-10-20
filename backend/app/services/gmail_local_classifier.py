@@ -99,8 +99,9 @@ def extract_due(subject: str, snippet: str) -> tuple[date | None, str | None]:
     try:
         year, month, day = map(int, bits)
         if year < 1911:
-            # ROC years must be explicit; a two-digit Gregorian year is not inferred.
-            if not (raw.startswith("民國") or "年" in raw or len(bits[0]) == 3):
+            # Only explicit 民國 or a three-digit year can safely mean ROC.
+            # A two-digit 26年 may mean 2026; never invent 1937.
+            if not (raw.startswith("民國") or len(bits[0]) == 3):
                 return None, raw[:32]
             year += 1911
         return date(year, month, day), raw[:32]

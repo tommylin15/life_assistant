@@ -106,6 +106,29 @@ class GmailRadarRulesTests(unittest.TestCase):
             with self.subTest(subject=subject):
                 self.assertIsNone(classify_message(subject, snippet))
 
+    def test_cloud_data_loss_and_service_termination_need_review(self):
+        # Synthetic examples only: no real Gmail subject or private content.
+        actionable = (
+            ("Your project will be deleted in 7 days", "", "account"),
+            ("Project scheduled for deletion", "", "account"),
+            ("Important notice", "Your data will be permanently deleted", "account"),
+            ("Your workspace will be deleted", "", "account"),
+            ("您的專案即將被刪除", "", "account"),
+            ("雲端服務即將終止", "", "account"),
+            ("重要通知", "資料將被永久刪除，請自行檢查", "account"),
+        )
+        for title, snippet, expected in actionable:
+            with self.subTest(title=title):
+                self.assertEqual(classify_message(title, snippet), expected)
+        promotional = (
+            ("Newsletter: Your project will be deleted", "Product news"),
+            ("限時優惠：雲端服務即將終止？", "選購續約折扣"),
+            ("Important notice", "Special offer: a guide to deleted projects"),
+        )
+        for title, snippet in promotional:
+            with self.subTest(title=title):
+                self.assertIsNone(classify_message(title, snippet))
+
     def test_ads_and_normal_account_messages_do_not_create_false_alerts(self):
         harmless = [
             ("限時優惠！升級帳號保障交易安全", "異常登入防護限時特惠"),

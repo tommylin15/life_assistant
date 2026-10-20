@@ -90,6 +90,12 @@ _ACCOUNT_TITLE = (
     "project permanently frozen", "project about to be frozen",
     "your project has been paused", "your project is paused",
     "專案即將永久凍結", "專案將被永久凍結", "專案即將凍結", "專案已暫停",
+    # Resource loss and service termination are actionable even without a bill.
+    "您的專案即將被刪除", "雲端專案即將刪除", "資料將被永久刪除",
+    "您的工作區即將刪除", "雲端服務即將終止",
+    "your project will be deleted", "project scheduled for deletion",
+    "your workspace will be deleted", "your data will be permanently deleted",
+    "your account will be permanently closed", "your service will be terminated",
 )
 _ACCOUNT_SNIPPET = (
     "您的付款失敗", "扣款失敗", "付款方式已失效",
@@ -97,6 +103,8 @@ _ACCOUNT_SNIPPET = (
     "your payment failed", "your payment was declined",
     "update your payment method", "your account will be suspended",
     "your subscription will renew",
+    "your project will be deleted", "your data will be permanently deleted",
+    "您的專案即將被刪除", "資料將被永久刪除",
 )
 _REFUND_TITLE = (
     "退款失敗", "退費失敗", "退款遭拒", "退款申請遭拒", "退費遭拒", "退款延遲",

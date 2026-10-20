@@ -53,6 +53,11 @@ class GmailLocalClassifierTests(unittest.TestCase):
             extract_due("付款期限：115/11/02", "")[0].isoformat(), "2026-11-02"
         )
         self.assertEqual(extract_due("繳款截止 10月21日", ""), (None, "10月21日"))
+        # 26年 is ambiguous (2026 Gregorian vs ROC 26), not 1937 by default.
+        self.assertEqual(extract_due("繳款截止：26年10月21日", ""),
+                         (None, "26年10月21日"))
+        self.assertEqual(extract_due("繳款截止：民國26年10月21日", "")[0].isoformat(),
+                         "1937-10-21")
         self.assertEqual(extract_due("繳款截止：2026/02/31", ""),
                          (None, "2026/02/31"))
         self.assertEqual(extract_due("本週有優惠", ""), (None, None))

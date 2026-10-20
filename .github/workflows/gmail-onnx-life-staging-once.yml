@@ -2,6 +2,7 @@
 # The existing CI guards and production-promote=false are mandatory.
 # Explicit ONNX-enabled full Life FastAPI Staging continuation for compact Gmail UI.
 # Keep the latest classifier and compact Flutter UI on the same staging SHA.
+# Regression: compact summary label now uses 近三天; retest exact revision.
 # This dispatches the existing guarded V3 release (same SHA, CI, migration,
 # OAuth/Hosting pin, 0%-production-traffic, staging rollback protections).
 # NO automatic or requested production promotion.

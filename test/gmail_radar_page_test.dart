@@ -212,7 +212,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.rechecks, 1);
     // Normal Flutter test hosts use the production-safe presentation.
-    expect(find.textContaining('最近三天：'), findsOneWidget);
+    expect(find.textContaining('近三天：'), findsOneWidget);
     expect(find.textContaining('本次重新判讀'), findsNothing);
     expect(find.textContaining('重新判讀最新 40 封'), findsNothing);
   });

@@ -149,18 +149,167 @@ def _proposals(items: list[Proposal], kind: str) -> dict:
         for i, item in enumerate(items)]}
 
 
-def rule_candidates(value: str) -> dict | None:
+# Keep the deterministic lane deliberately narrow. Unknown or negative wording
+# falls back to the structured model; this must never invent an action.
+_SIMPLE_SHOPPING = re.compile(r"(?:買|購買|要買|記得買)\\s*([^。！？\\n]+)")
+_SIMPLE_CALENDAR = re.compile(
+    r"(?P<day>今天|明天|後天)\\s*"
+    r"(?P<daypart>上午|下午|晚上|早上|中午)?\\s*"
+    r"(?P<hour>[0-9]{1,2}|[一二三四五六七八九十兩]{1,3})\\s*[點時]"
+    r"(?:半)?\\s*(?P<verb>去|到|參加|開會|看診|赴)\\s*(?P<place>[^。！？\\n]+)"
+)
+_SIMPLE_TASK = re.compile(
+    r"(?:(?:今天|明天|後天|今晚|早上|上午|下午|晚上)\\s*)?"
+    r"(?:記得|提醒我|別忘了)\\s*(?P<title>[^。！？\\n]+)"
+)
+_SIMPLE_HOUR = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+                "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+                "十一": 11, "十二": 12, "兩": 2}
+
+
+def _shopping_proposal(clause: str) -> Proposal | None:
+    matched = _SIMPLE_SHOPPING.fullmatch(clause)
+    if not matched:
+        return None
+    raw = matched.group(1).strip()
+    # If an additional operation appears, do not mistake it for a product.
+    if re.search(r"(?:提醒|記得|繳費|繳電費|付款|開會|參加|不要|不用|取消|不買)", raw):
+        return None
+    names = [part.strip() for part in re.split(r"[,，、]|\\s*(?:跟|和)\\s*", raw)
+             if part.strip()]
+    if not 1 <= len(names) <= 20 or any(len(part) > 80 for part in names):
+        return None
+    return Proposal(target="shopping",
+                    fields={"items": [{"name": name} for name in names]},
+                    evidence_spans=[clause], select_default=False)
+
+
+def _simple_clause(clause: str, now: str | None) -> Proposal | None:
+    if re.search(r"(?:不要|不用|取消|不需要|別去|別買|不必)", clause):
+        return None
+    shopping = _shopping_proposal(clause)
+    if shopping:
+        return shopping
+    scheduled = _SIMPLE_CALENDAR.fullmatch(clause)
+    if scheduled and now is not None:
+        hour_text = scheduled.group("hour")
+        hour = int(hour_text) if hour_text.isdigit() else _SIMPLE_HOUR.get(hour_text, -1)
+        daypart = scheduled.group("daypart")
+        if not 0 <= hour <= 23 or (daypart is not None and not 1 <= hour <= 12):
+            return None
+        if daypart in ("下午", "晚上") and hour < 12:
+            hour += 12
+        if daypart in ("上午", "早上") and hour == 12:
+            hour = 0
+        current = datetime.fromisoformat(now)
+        offset = {"今天": 0, "明天": 1, "後天": 2}[scheduled.group("day")]
+        start = (current + timedelta(days=offset)).replace(
+            hour=hour, minute=30 if "點半" in clause else 0, second=0, microsecond=0)
+        place = scheduled.group("place").strip()
+        if not place or len(place) > 100:
+            return None
+        return Proposal(target="calendar", fields={
+            "summary": scheduled.group("verb") + place, "start": start.isoformat()
+        }, evidence_spans=[clause], select_default=False,
+            ambiguities=["行程結束時間未提供，請手動選擇"])
+    task = _SIMPLE_TASK.fullmatch(clause)
+    if task:
+        title = task.group("title").strip()
+        if not title or len(title) > 200 or title.startswith(("買", "購買")):
+            return None
+        return Proposal(target="task", fields={"title": title},
+                        evidence_spans=[clause], select_default=False,
+                        ambiguities=["未指定完整截止時間，請視需要設定"])
+    return None
+
+
+def _simple_clauses(value: str, now: str | None) -> list[Proposal]:
+    clauses = [part.strip() for part in re.split(r"[，,；;。\\n]+", value) if part.strip()]
+    if not 2 <= len(clauses) <= 8:
+        return []
+    return [proposal for part in clauses if (proposal := _simple_clause(part, now))]
+
+
+def rule_candidates(value: str, now: str | None = None) -> dict | None:
     if is_http_url(value):
         return _proposals([Proposal(target="note", fields={"title": "", "body": value},
                                     select_default=True)], "rules")
-    pattern = re.fullmatch(r"(?:買|購買|要買)\s*([^。！？\n]+)", value)
-    if pattern:
-        names = [name.strip() for name in re.split(r"[,，、]", pattern.group(1)) if name.strip()]
-        if 1 <= len(names) <= 20:
-            return _proposals([Proposal(target="shopping",
-                                        fields={"items": [{"name": name} for name in names]},
-                                        evidence_spans=[value])], "rules")
+    # A standalone shopping instruction may use commas between products.
+    whole_shopping = _shopping_proposal(value)
+    if whole_shopping:
+        return _proposals([whole_shopping], "rules")
+    clauses = [part.strip() for part in re.split(r"[，,；;。\\n]+", value) if part.strip()]
+    if len(clauses) == 1:
+        direct = _simple_clause(clauses[0], now)
+        return _proposals([direct], "rules") if direct else None
+    proposals = _simple_clauses(value, now)
+    if len(clauses) >= 2 and len(proposals) == len(clauses):
+        return _proposals(proposals, "rules")
+    # Partial deterministic extraction is NOT a full response; send this to
+    # Gemini, then recover grounded clauses that the model may have missed.
     return None
+
+
+def _grounded_candidates(decoded: dict, value: str, now: str) -> dict:
+    """Return scoped date hints and retain unambiguous extra actions.
+
+    A global date is NOT evidence for each task in a multi-intent paragraph.
+    AI-generated dates need a matching, exact source span per candidate.
+    """
+    source = decoded.get("candidates")
+    if not isinstance(source, list):
+        return decoded
+    multiple = len(source) > 1 or len(_simple_clauses(value, now)) > 1
+    for entry in source:
+        if not isinstance(entry, dict):
+            continue
+        spans = entry.get("evidence_spans")
+        evidence = [span for span in spans if isinstance(span, str) and span and span in value] if isinstance(spans, list) else []
+        hint = _inbox_date_hint(" ".join(evidence), now) if evidence else None
+        if not multiple:
+            hint = _inbox_date_hint(value, now)
+        entry["date_hint"] = hint
+        fields = entry.get("fields")
+        if not isinstance(fields, dict):
+            continue
+        keys = (("due_at",) if entry.get("target") == "task" else
+                ("start", "end", "start_date", "end_date") if entry.get("target") == "calendar" else ())
+        # An exact date outside this particular action is not permission to
+        # fill its date/time. Unknown/missing precision stays editable.
+        if keys and (hint is None and multiple or
+                     hint is not None and hint["precision"] != "day"):
+            had_dates = any(key in fields for key in keys)
+            for key in keys:
+                fields.pop(key, None)
+            if had_dates:
+                entry["select_default"] = False
+                warnings = entry.get("ambiguities")
+                if not isinstance(warnings, list):
+                    warnings = []
+                    entry["ambiguities"] = warnings
+                warnings.append("此事項缺少可對應的完整日期，請自行確認")
+        if multiple and not evidence:
+            entry["select_default"] = False
+            entry.setdefault("ambiguities", []).append("請核對此候選是否確實來自輸入內容")
+    # Explicit deterministic intent has priority over omission by a model.
+    # Never manufacture unrecognized actions, and keep the eight-item bound.
+    present = source
+    for proposal in _simple_clauses(value, now):
+        if len(present) >= 8:
+            break
+        if any(isinstance(item, dict) and item.get("target") == proposal.target
+               and any(isinstance(span, str) and span == proposal.evidence_spans[0]
+                       for span in item.get("evidence_spans", [])) for item in present):
+            continue
+        # Another model candidate of the same type, without grounded spans,
+        # might already represent this clause; do not duplicate it.
+        if any(isinstance(item, dict) and item.get("target") == proposal.target
+               and not item.get("evidence_spans") for item in present):
+            continue
+        rendered = proposal.model_dump(mode="json")
+        rendered["date_hint"] = _inbox_date_hint(proposal.evidence_spans[0], now)
+        present.append(rendered)
+    return decoded
 
 
 def _fallback(value: str) -> dict:
@@ -259,6 +408,17 @@ def build_prompt(value: str, now: str) -> str:
     return (
         "You are a side-effect-free Life Assistant zh-TW classification function. "
         "Return ONLY JSON with a candidates array (1-8 entries). "
+        "One input can contain several separate actions. Split each explicit action "
+        "into its own candidate, preserving source order. For example, a visit, a "
+        "shopping list and a bill reminder must be three proposals, NOT one closest "
+        "category or a catch-all note. Group products from one shopping action in "
+        "one shopping proposal, and do not split an item list into separate notes. "
+        "Do not create duplicate candidates or infer actions from negations. "
+        "Each candidate MUST include an exact verbatim evidence_spans substring "
+        "from its own clause, INCLUDING its local date/time words when present. "
+        "Never copy a date or time from a different clause onto another candidate. "
+        "Do not invent an end time for a timed event; leave it absent and mark "
+        "select_default false until the user picks the end time. "
         "Every candidate has target (note/task/shopping/calendar), fields object, "
         "evidence_spans array, ambiguities array, select_default boolean. "
         "Note fields: title and body. Task: title, optional note/due_at ISO8601 with offset. "
@@ -310,8 +470,11 @@ async def interpret(body: InterpretInput, response: Response,
             select_default=False,
         )
         return {**_proposals([proposal], "gmail_local"), "date_hint": hint}
-    fixed = rule_candidates(value)
+    fixed = rule_candidates(value, now)
     if fixed:
+        for candidate in fixed["candidates"]:
+            evidence = candidate.get("evidence_spans") or [value]
+            candidate["date_hint"] = _inbox_date_hint(evidence[0], now)
         return {**fixed, "date_hint": hint}
     try:
         output = await generate_text(build_prompt(value, now), user_sub=user["sub"], purpose="life_inbox")
@@ -321,6 +484,8 @@ async def interpret(body: InterpretInput, response: Response,
             raw = re.sub(r"^" + re.escape(fence) + r"(?:json)?\s*", "", raw)
             raw = re.sub(r"\s*" + re.escape(fence) + r"$", "", raw)
         decoded = json.loads(raw)
+        if isinstance(decoded, dict):
+            decoded = _grounded_candidates(decoded, value, now)
         # An AI may turn "11/5" or "2026/11" into an unsupported exact
         # timestamp. Remove such invented precision BEFORE schema validation
         # so the proper Task/Calendar candidate can still reach the picker.
@@ -345,7 +510,10 @@ async def interpret(body: InterpretInput, response: Response,
                             proposed["ambiguities"] = warnings
                         warnings.append("日期不完整或有歧義，請使用萬年曆確認")
         items = ModelOutput.model_validate(decoded)
-        return {**_proposals(items.candidates, "gemini"), "date_hint": hint}
+        results = _proposals(items.candidates, "gemini")
+        for candidate, source in zip(results["candidates"], decoded["candidates"]):
+            candidate["date_hint"] = source.get("date_hint")
+        return {**results, "date_hint": hint}
     except (GatewayTextError, ValidationError, ValueError, TypeError, KeyError):
         return {**_fallback(value), "date_hint": hint}
 

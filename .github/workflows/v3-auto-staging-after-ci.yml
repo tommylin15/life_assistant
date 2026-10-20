@@ -102,6 +102,13 @@ jobs:
             echo "auto_staging=SKIP read_only_importer_pg_parity" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          # This approved Gmail ONNX staging-only continuation dispatches the
+          # same V3 gates with enable_gmail_onnx=true. Never race a second
+          # rules-only V3 release against the fixed staging Hosting site.
+          if jq -e 'any(.files[]; .filename==".github/workflows/gmail-onnx-life-staging-once.yml")' <<< "$CHANGED" > /dev/null; then
+            echo "auto_staging=SKIP onnx_full_life_staging_owns_release" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           # Do not start a second same-SHA release for CI re-runs, including
           # releases already dispatched manually. The V3 release has its own
           # immutable SHA guard and shared release concurrency lock.

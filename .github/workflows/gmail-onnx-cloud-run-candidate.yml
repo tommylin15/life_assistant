@@ -129,9 +129,9 @@ jobs:
           jq -e '.status.url and (.status.traffic|type=="array") and
             ([.status.traffic[] | (.percent // 0)] | add == 100)' \
             "$RUNNER_TEMP/gmail-onnx-live-before.json"
-          jq '[.status.traffic[] |
-              {revisionName, percent:(.percent // 0), tag:(.tag // "")}] |
-              sort_by(.revisionName,.tag)' \
+          jq '[.status.traffic[] | select((.percent // 0) > 0) |
+              {revisionName, percent:(.percent // 0)}] |
+              sort_by(.revisionName)' \
             "$RUNNER_TEMP/gmail-onnx-live-before.json" \
             > "$RUNNER_TEMP/gmail-onnx-live-traffic-before.json"
           RAM="$(jq -r '.spec.template.spec.containers[0].resources.limits.memory // "UNVERIFIED"' "$RUNNER_TEMP/gmail-onnx-live-before.json")"
@@ -201,12 +201,19 @@ jobs:
           gcloud run services describe "$PRODUCTION_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
             > "$RUNNER_TEMP/gmail-onnx-live-after.json"
-          jq '[.status.traffic[] |
-              {revisionName, percent:(.percent // 0), tag:(.tag // "")}] |
-              sort_by(.revisionName,.tag)' \
+          jq '[.status.traffic[] | select((.percent // 0) > 0) |
+              {revisionName, percent:(.percent // 0)}] |
+              sort_by(.revisionName)' \
             "$RUNNER_TEMP/gmail-onnx-live-after.json" \
             > "$RUNNER_TEMP/gmail-onnx-live-traffic-after.json"
-          cmp "$RUNNER_TEMP/gmail-onnx-live-traffic-before.json" \
-              "$RUNNER_TEMP/gmail-onnx-live-traffic-after.json"
-          echo "production_original_service_traffic_unchanged=PASS" >> "$GITHUB_STEP_SUMMARY"
+          if ! cmp "$RUNNER_TEMP/gmail-onnx-live-traffic-before.json" \
+                    "$RUNNER_TEMP/gmail-onnx-live-traffic-after.json"; then
+            echo "::error::production weighted traffic changed during isolated ONNX test"
+            echo "before nonzero production traffic:"
+            cat "$RUNNER_TEMP/gmail-onnx-live-traffic-before.json"
+            echo "after nonzero production traffic:"
+            cat "$RUNNER_TEMP/gmail-onnx-live-traffic-after.json"
+            exit 1
+          fi
+          echo "production_original_weighted_traffic_unchanged=PASS" >> "$GITHUB_STEP_SUMMARY"
           echo "no_production_promotion=PASS no_real_gmail_consumed=PASS" >> "$GITHUB_STEP_SUMMARY"

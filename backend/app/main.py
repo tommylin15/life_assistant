@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -34,6 +35,7 @@ from app.api.templates import router as templates_router
 from app.confirmation import CONFIRMATION_HEADER, confirmation_requirement, confirmation_satisfied
 from app.db import session as db_session
 from app.db.session import engine
+from app.services.gmail_local_classifier import active_classifier_version
 from app.errors import (
     ApiError,
     api_error_handler,
@@ -101,6 +103,13 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 
 @app.on_event("startup")
 async def startup():
+    # Only model-enabled images opt into this gate; default Life rules-only
+    # images have no local checkpoint path and behave as before.
+    if os.environ.get("GMAIL_RADAR_LOCAL_MODEL_PATH"):
+        version = await asyncio.to_thread(active_classifier_version)
+        if not version.endswith("-sem"):
+            raise RuntimeError("offline_gmail_model_unavailable")
+        logging.info("gmail_onnx_runtime_ready version=%s", version)
     try:
         # Never apply DDL from a live API instance. 0%-traffic candidates can
         # start before release migrations; create_all would silently create
@@ -139,6 +148,11 @@ async def ready():
                 },
             },
         )
+    if os.environ.get("GMAIL_RADAR_LOCAL_MODEL_PATH"):
+        version = await asyncio.to_thread(active_classifier_version)
+        if not version.endswith("-sem"):
+            return JSONResponse(status_code=503, content={"status": "unavailable", "gmail_model": "unavailable"})
+        return {"status": "ok", "database": "ok", "gmail_model": "local_semantic_ready"}
     return {"status": "ok", "database": "ok"}
 
 

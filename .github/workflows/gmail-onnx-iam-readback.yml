@@ -1,0 +1,76 @@
+# Read-only privacy verification for the isolated Gmail ONNX Cloud Run canary.
+# This workflow never changes IAM, production traffic, Gmail OAuth, or secrets.
+name: Gmail ONNX Candidate IAM Readback
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/gmail-onnx-iam-readback.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  readback:
+    environment: dev-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: us-central1
+      CANDIDATE_SERVICE: life-assistant-gmail-onnx-candidate
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Read and enforce candidate-only ingress, resource and invoker IAM
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$CANDIDATE_SERVICE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --format=json > "$RUNNER_TEMP/onnx-candidate-service.json"
+          jq -e '
+            .metadata.annotations["run.googleapis.com/ingress"] == "internal" and
+            .metadata.annotations["run.googleapis.com/invoker-iam-disabled"] != "true" and
+            .spec.template.spec.containers[0].resources.limits.memory == "2Gi" and
+            .spec.template.spec.containers[0].resources.limits.cpu == "2" and
+            .spec.template.spec.containerConcurrency == 1 and
+            ([.status.conditions[] | select(.type=="Ready" and .status=="True")] | length==1)
+          ' "$RUNNER_TEMP/onnx-candidate-service.json" > /dev/null
+          echo "onnx_candidate_ingress_resource_and_iam_check=PASS" >> "$GITHUB_STEP_SUMMARY"
+          if ! gcloud run services get-iam-policy "$CANDIDATE_SERVICE" \
+                 --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+                 --format=json > "$RUNNER_TEMP/onnx-candidate-iam.json"; then
+            echo "::error::candidate_invoker_iam=NOT_VERIFIED read denied"
+            exit 1
+          fi
+          if ! jq -e '
+            ([.bindings[]? | select(.role=="roles/run.invoker") |
+              .members[]? | select(.=="allUsers" or .=="allAuthenticatedUsers")] | length==0)
+          ' "$RUNNER_TEMP/onnx-candidate-iam.json" > /dev/null; then
+            echo "::error::candidate_invoker_iam=FAIL broad public invoker principal"
+            exit 1
+          fi
+          echo "candidate_public_invoker_binding=PASS none" >> "$GITHUB_STEP_SUMMARY"
+          echo "candidate_external_gmail_data=NONE synthetic_only=true" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify public internet cannot access isolated service
+        run: |
+          set -euo pipefail
+          URL="$(jq -r '.status.url' "$RUNNER_TEMP/onnx-candidate-service.json")"
+          [[ "$URL" == https://*.run.app ]]
+          CODE="$(curl --silent --show-error --location --max-time 12 \
+            --output /dev/null --write-out '%{http_code}' "$URL/ready")" || CODE=000
+          if [[ "$CODE" == 200 ]]; then
+            echo "::error::candidate_unauthenticated_external_probe=FAIL unexpectedly public"
+            exit 1
+          fi
+          echo "candidate_unauthenticated_external_probe=PASS http=$CODE" >> "$GITHUB_STEP_SUMMARY"

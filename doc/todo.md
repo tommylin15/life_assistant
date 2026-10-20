@@ -5,7 +5,8 @@ Updated 2026-10-20. **One active backlog only.** Prior 01–07 execution plan ha
 
 - **P0／P1 已提交程式待驗收：** 規則快速解析多件明確事項、擴充繁體中文購物分隔詞；Gemini 逐項拆解並補足可驗證遺漏；每個候選獨立日期依據，未提供的結束時間／日期不臆測；Flutter 顯示多項且分別勾選後才提交。完整規格見 [快速新增](life_inbox_quick_capture_spec.md)。
 - **P2 ONNX 試點：CANCELLED**（使用者決策）。本功能不載入 Gmail ONNX 模型，不新增 Cloud Run 推論服務。
-- **驗收：** 需同 SHA Backend/Flutter/PostgreSQL/Deploy CI、Staging、真人混合事項與日期測試；尚未取得者保持 NOT VERIFIED。
+- **工程子項 DONE／PASS（2026-10-21）：** 同 SHA `5f41a86b0a210971d73467f409fb654746f13630`，Backend／Flutter／PostgreSQL／Deploy 四 CI [#39515249836](https://github.com/tommylin15/life_assistant/actions/runs/39515249836) PASS；V3 候選、固定 Staging、API/DB/OAuth 及 Flutter Preview [#39515593787](https://github.com/tommylin15/life_assistant/actions/runs/39515593787) PASS。此次僅 Staging，不切正式 Production。
+- **仍需人工驗收（NOT VERIFIED）：** 使用者以混合事項測試 Gemini 複合拆解／補選行事曆結束時間／選購物清單／確認後各功能真實讀回；在真人通過前此產品交付仍 PARTIAL。
 
 ## 2026-10-20｜Gmail 手機 UI 精簡：Production 正式發布 DONE
 

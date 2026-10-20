@@ -1,11 +1,11 @@
 # Life — Active engineering TODO
 Updated 2026-10-20. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
 
-## 2026-10-20｜Gmail V2：ONNX 離線候選 DONE；使用者正式功能仍 PARTIAL
+## 2026-10-20｜Gmail V2：ONNX 已接完整 Life Staging；產品仍 PARTIAL
 
 - **決策不變：** Gmail 雷達採規則＋Life 本地多語言 ONNX＋本地欄位抽取，原信不外送 Gemini／omniAgent；僅手動掃描、七天補檢、郵件去重、本人確認，無背景掃描與自動寫入。正式 [Gmail V2 規格及證據](gmail_local_v2_delivery.md)。
 - **ONNX 獨立候選＝DONE：** [同 SHA CI #39349455453](https://github.com/tommylin15/life_assistant/actions/runs/39349455453) 四項 PASS；[GCP 模型候選＋Job #39349455587](https://github.com/tommylin15/life_assistant/actions/runs/39349455587) PASS；[IAM/Ingress readback #39350332042](https://github.com/tommylin15/life_assistant/actions/runs/39350332042) PASS。服務 life-assistant-gmail-onnx-candidate：2Gi RAM／2 vCPU／並行 1／實例 0–1／internal ingress，不接受任意郵件、不連 Gmail、DB 或 Gemini。Cloud Run 同映像 digest 執行合成模型 Job PASS；正式 Life API 的非零加權流量前後一致。
-- **P0｜ONNX 接入真正 Life Staging（未完成）：** 目前候選是**只含合成測試的獨立私有服務**，不是帶登入／DB／Gmail 的正式 FastAPI。要以 0% 正式流量接上完整 Life Staging，驗證 FastAPI 記憶體、CPU、冷啟動、p95、fallback、資料隔離及回滾。未通過不得切 Production。
+- **P0｜完整 Life Staging 部署 PASS（工程子項 DONE）：** [CI #39353419852](https://github.com/tommylin15/life_assistant/actions/runs/39353419852) 四項 PASS，SHA `faa8f5b80e8c5724d8b9759cc71d794d73e75082`；[V3 #39353638014](https://github.com/tommylin15/life_assistant/actions/runs/39353638014) 完整 ONNX FastAPI 0% 候選 + `/ready` 顯示 `local_semantic_ready`、DB／OAuth／Gmail 401、Alembic 0022、Firebase Preview、固定 Staging Hosting 同 SHA 全 PASS，production 流量不變；正式切流、真人 Google session、完整 FastAPI p95/RSS、rollback drill 仍 NOT VERIFIED。測試站：https://life-assistant-v3-stage-tl15.web.app/ 。
 - **P0｜真實 Gmail E2E（未完成）：** Staging 的 Owner／一般帳號實際授權、七天補檢、漏判帳單重新辨識、已繳清／促銷排除、時間與繳費額證據、Gmail → Inbox **本地**轉存、跨帳號隔離和正式資料庫回執；不得將真實 Gmail 內容寫入公開 CI 日誌。
 - **P1｜正式上線（未完成）：** 完整 Staging 真實 E2E 後，正式 Cloud Run／Hosting 同 SHA、安全切流與 rollback rehearsal、一般使用者畫面讀回。
 - **治理分案：** 舊公開 Git commit 歷史疑含真實帳單片段；工作樹測試已換虛構資料，歷史重寫／force push 需使用者**明確核准**，本輪不執行。原已通過 Alembic 0022 readback、V2 1.0 規則版 Staging Release，不重複當作 ONNX 真實 Gmail 驗收。

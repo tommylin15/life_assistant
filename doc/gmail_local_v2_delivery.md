@@ -1,6 +1,6 @@
 # Gmail Smart Radar V2 — local-only classification
 
-2026-10-20, Asia/Taipei. RULES API CI/STAGING + DB GATE PASS; ISOLATED PRIVATE ONNX CLOUD RUN CANDIDATE / CLOUD RUN SYNTHETIC JOB / IAM READBACK PASS. Gmail-authenticated Life Staging E2E, ONNX-in-Life API cutover and production release NOT VERIFIED.
+2026-10-20, Asia/Taipei. ONNX full Life FastAPI candidate + fixed Staging deployment PASS (#39353638014). Authenticated real Gmail E2E, full API resource p95/RSS and production rollout NOT VERIFIED.
 
 This V2 decision supersedes the V1 classification and seven-day backfill limits only. Keep user-scoped OAuth, manual scanning, confirmation receipts, no background schedule/push, no auto-writing Tasks/Calendar/Shopping, and no full Gmail body storage.
 
@@ -58,3 +58,15 @@ When a Gmail radar card is sent to Life Inbox, the browser submits an authentica
 3. **P1 production:** same SHA CI, real Staging E2E, live revision/digest and rollback rehearsal, controlled promotion and matching Hosting SHA, real user readback.
 4. **Separate governance:** past real-mail fields may still be present in public Git commit history. Current tests are synthetic. Rewriting main history is destructive and requires explicit user approval; no history rewrite was attempted.
 
+
+## 2026-10-20 Full Life API ONNX staging release (newer evidence)
+
+- **Source/CI PASS:** SHA faa8f5b80e8c5724d8b9759cc71d794d73e75082; four jobs Backend, Flutter, PostgreSQL, Deployment Scripts [CI #39353419852](https://github.com/tommylin15/life_assistant/actions/runs/39353419852) PASS.
+- **Explicit ONNX one-time continuation PASS:** [#39353419856](https://github.com/tommylin15/life_assistant/actions/runs/39353419856) dispatched the existing V3 release with enable_gmail_onnx=true, publish_staging=true, promote=false. Automatic rules-only staging dispatch was skipped to prevent a same-SHA race.
+- **Complete FastAPI candidate and fixed Staging PASS:** [V3 #39353638014](https://github.com/tommylin15/life_assistant/actions/runs/39353638014), source SHA above. Built and scanned unique ONNX image (separate "-gmail-onnx" immutable tag), deployed 0%-production-traffic life-assistant-api candidate with 2Gi/2 vCPU/concurrency 1; the *full* FastAPI /ready response indicated real DB=ok and gmail_model=local_semantic_ready, checked by release gate. Unauthenticated Gmail status returned HTTP 401, /auth/login redirect checked, migration + separate 0022 DB acceptance Job PASS. Preview/static SHA, Firebase API/auth rewrite, fixed Staging OAuth callback and pinned routes PASS. Fixed Staging version: sites/life-assistant-v3-stage-tl15/versions/938c9cfec8496d3c, URL https://life-assistant-v3-stage-tl15.web.app/.
+- **No Production promotion:** V3 explicit promote=false; no production traffic switched. Production live/rollback rehearsal, production Hosting deployment and curated handoff mutation steps skipped as intended. Candidate revision-retirement step also skipped to preserve rollback evidence.
+- **Rules-only production compatibility:** original standard backend/Dockerfile and default enable_gmail_onnx=false unchanged. Model-enabled image fails startup and /ready if its local model is missing; a rules-only image without checkpoint stays compatible. No scan calls an external inference service. Model bytes are verified and baked at image-build time, not fetched in a user request.
+- **Not verified (P0):** real authenticated Owner and general-user Gmail seven-day 40/batch, previously missed bills, completed/ignored receipts, local-only Life Inbox conversion, cross-account ownership and false-positive/false-negative quality. Automated smoke proves 401 and OAuth redirect but cannot complete a human Google session. Neither V3 release nor prior synthetic tests measured the full FastAPI memory peak, cold-start distributions or production-like p95. Do NOT declare those PASS.
+- **Next gates:** 1) capture sanitized, owner-consented real-Gmail E2E results on fixed Staging (no real subject/body or PII in GitHub logs); 2) collect read-only Cloud Run per-revision memory/CPU and latency evidence under bounded load, compare with 2Gi memory and fallback; 3) only after evidence, controlled same-SHA production promotion with rollback/Hosting readback and user acceptance; 4) separately get explicit authorization if rewriting historical public Git test leaks.
+
+**Result:** ONNX full Staging engineering = DONE/PASS; complete Gmail V2 product = PARTIAL.

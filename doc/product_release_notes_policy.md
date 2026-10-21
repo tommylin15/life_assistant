@@ -2,7 +2,7 @@
 
 ## 目標與唯一來源
 - 版本記錄使用 Flutter `pubspec.yaml` 的 `MAJOR.MINOR.PATCH+build`；正式身份仍為 Git SHA（現有 `release.txt`）。
-- 首版候選 `0.2.0+2` 已完成 CI 與 staging；尚無已核證 production Hosting。當前下一候選版本為 `0.3.0+3`。舊 `0.1.0+1` 只是既有 source 值，不代表已查證正式版顯示該號；禁止倒填歷史上線版本。
+- 早期 `0.2.0+2`、`0.3.0+3` 為歷史候選版本；不憑舊文件倒填正式發布狀態。最新已驗證 Production 友善版本為 `0.4.0+4`，對應正式部署 SHA `cadf61168c87731b00a240def5da579e7f931a6e`，證據見下方發版紀錄；Git SHA 仍是發布身份。
 - 兩條 Web build（V3 staging/Preview 與 Production Hosting）從同一份 pubspec 注入 `LIFE_APP_VERSION` 和 `LIFE_RELEASE_SHA`；版本文字僅作友善顯示，安全與發布驗證仍以同 SHA／digest／正式 readback 為準。
 
 ## 使用者體驗
@@ -23,7 +23,7 @@
 - P1：每十五分鐘、前端恢復前景時，GET 同站 `/release.txt`（no-cache，帶 query）；僅收到完整 40 位 SHA 且不同於內建 SHA 才顯示非阻擋重新整理提示，不能將 HTML fallback / API revision 或網路失敗當作更新。後台不啟動另一支 worker。
 - P1：只有 Backend 發布的使用者可感知修復由後端輕量唯讀 `GET /api/v1/release-notes` 提供，資料是 source-owned 的 `PUBLISHED_NOTES`，預設空列表，無新資料表、不需要定時任務。不為尚未經證據核實的修正事先填入公告。後端獨立部署不更改前端友善版本號，顯示為「維護更新」。
 - 高風險需強制重新登入或相容升級仍走獨立重要服務提示流程，不能讓一般更新卡取代。
-- `0.3.0+3` 新候選僅列這次功能，不能由 staging 的成功宣稱 production 已發布。
+- 歷史 `0.3.0+3` 候選公告只限該版功能，不能由 staging 成功推論 production 已發布；新版本以實際同 SHA live readback 為準。
 
 ## 驗證與之後可補強
 - Flutter 測試：版本比較、舊版本不顯示未發布公告、不同帳號／候選正式標記隔離、桌面／手機有入口。
@@ -39,3 +39,11 @@
 - **正式發布必須檢查：** `scripts/check_user_release_metadata.py` 比較目前 Production `/release.txt` 的 SHA 與候選 SHA 之間的 Git diff。含使用者可見的 Flutter 檔案就必須有遞增 semver/build 與新版簡短公告；Gmail 雷達和生活快速新增額外檢查 featureKey。未達標擋下 Production promotion 和獨立 Firebase Hosting，不阻礙開發中 CI／Staging。正式版來源不可查或 SHA 不正確即 FAIL closed。
 - **Backend-only：** 依 `backend/app/api/release_notes.py` 與人工 code review 判斷使用者可感知變更，正式驗證後才能更新 source-owned `PUBLISHED_NOTES`；不強制每個 backend commit 升 Flutter 版號。機械檢查無法取代所有語意判讀。
 - 以上只重用現有 V3 發布門檻，不新增外部 AI、DB、排程或額外 GCP 服務。
+
+## 2026-10-21｜v0.4.0+4 Production 正式發布 PASS
+
+- **正式版本：** `0.4.0+4`，Git SHA `cadf61168c87731b00a240def5da579e7f931a6e`；產品候選與正式版共用相同 source，沒有第二份人工最新消息。
+- **產品公告：** 「Gmail 雷達操作更簡潔」、「快速新增可拆解多件事項」。受限功能依 `featureKey: gmail_radar / life_inbox` 與各帳號 effectiveFeatures 顯示，不向未開放帳號錯誤公告。
+- **已驗證證據：** [四項 CI #39583599134](https://github.com/tommylin15/life_assistant/actions/runs/39583599134) PASS；[單次核准橋接 #39583599086](https://github.com/tommylin15/life_assistant/actions/runs/39583599086) PASS；[V3 Production #39584025660](https://github.com/tommylin15/life_assistant/actions/runs/39584025660) PASS（正式切流、DB、OAuth 安全、自動回滾演練）；[Firebase Hosting #39585004848](https://github.com/tommylin15/life_assistant/actions/runs/39585004848) PASS（本 SHA 發布、release.txt／路由／靜態資源與 Task／Project UI 自動驗收）。
+- **人工驗收：** 使用者已回覆快速新增先前 Staging 驗收完成；真實 Production 各帳號的 Gemini 自由輸入準確率與個別操作並非本輪可自動測得，獨立不標造 PASS。Gmail ONNX 正式啟用不在此版範圍（`enable_gmail_onnx=false`），仍獨立 PARTIAL。
+- 發布網址：https://gen-lang-client-0593591102.web.app/ 。

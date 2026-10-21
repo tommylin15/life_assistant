@@ -35,6 +35,26 @@ class LifeReleaseNote {
 /// A bundled changelog is rolled out atomically with the Hosting build.
 /// Never claim unrelated / unverified candidate fixes are production releases.
 const lifeReleaseNotes = <LifeReleaseNote>[
+  // 0.4.0 is a candidate until the matching production Hosting SHA passes.
+  LifeReleaseNote(
+    id: 'web-0.4.0-gmail-radar-compact',
+    version: '0.4.0',
+    title: 'Gmail 雷達操作更簡潔',
+    featureKey: 'gmail_radar',
+    changes: <String>[
+      '整合掃描選項、收合郵件詳情，已完成與已忽略紀錄可分批查看。',
+    ],
+  ),
+  LifeReleaseNote(
+    id: 'web-0.4.0-life-inbox-multi-actions',
+    version: '0.4.0',
+    title: '快速新增可拆解多件事項',
+    featureKey: 'life_inbox',
+    changes: <String>[
+      '一句話中的行程、購物和待辦可分開確認後新增。',
+      '日期與時間依各筆事項辨識，不會套用到其他事項。',
+    ],
+  ),
   LifeReleaseNote(
     id: 'web-0.3.0-release-visibility',
     version: '0.3.0',

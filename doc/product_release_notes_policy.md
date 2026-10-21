@@ -30,3 +30,12 @@
 - 發布驗證：候選讀到新版本與 SHA、正式成功才可見相同版本、rollback 能恢復舊頁面與公告；無證據則標記 NOT VERIFIED。
 - 之後若需要跨裝置同步已讀狀態，再以現有個人偏好 API 後端保存，不另起獨立通知 DB／服務。
 - 大範圍相容性問題（需要立即重新整理、版本不相容）應獨立實作更新提示；不要拿一般更新公告冒充強制更新機制。
+
+## 2026-10-21｜開發與發布時自動判定的正式門檻
+
+- **主動判斷、不等使用者提醒：** 每項工作先核對實際 GitHub 差異，標註 `USER_VISIBLE`（新增功能、操作調整、可感知 bug）或 `INTERNAL_ONLY`（測試、CI、治理、不可見維護）；沒有公開效果的改動不寫公告。
+- **版號以「正式發布候選」為單位，絕非每個 commit 一次：** `0.4.0+4` 彙整已正式發布但遺漏公告的 Gmail 雷達精簡，以及已通過 Staging 驗收的快速新增多事項拆解。未來遵循 MAJOR/MINOR/PATCH＋build 遞增，合併同批次的使用者可見變更。
+- **候選與正式分開：** 將公告寫進 `lib/web/release_info.dart` 和版本寫進 `pubspec.yaml` 只產生候選；Staging 顯示候選。只有 Production V3 + Firebase Hosting 相同 SHA 的 live readback PASS，才可標示對外上線。公告依 `featureKey` 限制可見帳號。
+- **正式發布必須檢查：** `scripts/check_user_release_metadata.py` 比較目前 Production `/release.txt` 的 SHA 與候選 SHA 之間的 Git diff。含使用者可見的 Flutter 檔案就必須有遞增 semver/build 與新版簡短公告；Gmail 雷達和生活快速新增額外檢查 featureKey。未達標擋下 Production promotion 和獨立 Firebase Hosting，不阻礙開發中 CI／Staging。正式版來源不可查或 SHA 不正確即 FAIL closed。
+- **Backend-only：** 依 `backend/app/api/release_notes.py` 與人工 code review 判斷使用者可感知變更，正式驗證後才能更新 source-owned `PUBLISHED_NOTES`；不強制每個 backend commit 升 Flutter 版號。機械檢查無法取代所有語意判讀。
+- 以上只重用現有 V3 發布門檻，不新增外部 AI、DB、排程或額外 GCP 服務。

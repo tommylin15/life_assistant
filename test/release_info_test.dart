@@ -11,6 +11,28 @@ void main() {
     expect(releaseNotesFor('0.3.0').first.title, '版本提醒更清楚');
   });
 
+  test('0.4.0 candidates include feature-scoped product improvements', () {
+    expect(isReleaseAtLeast('0.3.0', '0.4.0'), isFalse);
+    expect(isReleaseAtLeast('0.4.0', '0.4.0'), isTrue);
+    final oldNotes = releaseNotesFor('0.3.0', features: {
+      'gmail_radar': true, 'life_inbox': true,
+    });
+    expect(oldNotes.any((note) => note.version == '0.4.0'), isFalse);
+    final all = releaseNotesFor('0.4.0', features: {
+      'gmail_radar': true, 'life_inbox': true,
+    });
+    expect(all.where((note) => note.version == '0.4.0').length, 2);
+    expect(all.first.title, 'Gmail 雷達操作更簡潔');
+    final hiddenInbox = releaseNotesFor('0.4.0', features: {
+      'gmail_radar': true, 'life_inbox': false,
+    });
+    expect(hiddenInbox.any((note) =>
+        note.id == 'web-0.4.0-life-inbox-multi-actions'), isFalse);
+    expect(hiddenInbox.any((note) =>
+        note.id == 'web-0.4.0-gmail-radar-compact'), isTrue);
+    expect(releaseReadToken(oldNotes), isNot(releaseReadToken(all)));
+  });
+
   test('feature-specific notices are gated and newly visible notes change read token', () {
     const note = LifeReleaseNote(
       id: 'backend-20261019-calendar', title: '日曆調整',

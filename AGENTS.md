@@ -16,6 +16,7 @@
    - `testing_strategy.md`、`release_checklist.md`：驗證與發版門檻
 3. 先檢查現有實作、呼叫者與測試，再修改最少必要檔案。
 4. 完成後執行適用驗證，並檢查規格是否需要同步更新。
+5. 主動依 `doc/product_release_notes_policy.md` 判斷產品可見性，準備正式候選時同步版本號與「最新消息」；不等使用者提醒。正式 V3/Hosting release metadata gate 未通過不可發布。
 
 若規格互相衝突，以 `doc/PROJECT_RULES.md` 為最高優先；在其餘產品規格間，依 `decisions.md`、`spec.md`、對應專項規格判斷，無法判斷時停下來指出衝突。
 

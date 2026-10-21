@@ -2,6 +2,13 @@
 
 A *working CI* or a *successful V3 GHCR release* is **not** proof that the entire Life product is DONE. Earlier 189-line gate checklist and its unchecked historical states are available in [archive/release_checklist_through_2026-10-09.md](archive/release_checklist_through_2026-10-09.md).
 
+## Every release: user-facing news and version review
+
+- [ ] Determine `USER_VISIBLE` (feature, UX or observable fix) vs `INTERNAL_ONLY` from code changes. Do not wait for Owner reminders.
+- [ ] For Web user-visible candidates: bump `pubspec.yaml` version/build and add concise `lib/web/release_info.dart` note(s) with rollout `featureKey` when relevant. One bump per release candidate, not per commit.
+- [ ] For backend-only user-visible maintenance: review `backend/app/api/release_notes.py` (verified source-owned notes) instead of automatically bumping Web version.
+- [ ] V3 Production + standalone Hosting live-SHA diff metadata gate PASS; formal announcements only after same-SHA production readback PASS.
+
 ## Mandatory release gates (per changed product scope)
 
 - [ ] GitHub main exact full SHA pinned to CI and immutable public GHCR digest, backend & Flutter tests, migration tests, permission/security tests.

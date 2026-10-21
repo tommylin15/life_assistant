@@ -233,5 +233,6 @@ jobs:
             tests/test_v3_workflow_consolidation.py \
             tests/test_v3_auto_production_hosting_workflow.py \
             tests/test_v3_release_no_oauth_gate.py \
+            tests/test_user_release_metadata.py \
             tests/test_v3_free_event_retirement_readback.py \
             -v

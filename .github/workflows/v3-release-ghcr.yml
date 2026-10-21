@@ -67,6 +67,23 @@ jobs:
             '
           echo "source=PASS sha=$RELEASE_SHA; required-ci=PASS" >> "$GITHUB_STEP_SUMMARY"
 
+
+      - name: Guard user-facing version and latest news before production
+        if: ${{ inputs.promote }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIVE_SHA="$(curl --fail --silent --show-error --retry 3 \
+            -H 'Cache-Control: no-cache' \
+            "$FRONTEND_URL/release.txt?candidate=$RELEASE_SHA" | tr -d '\r\n')"
+          [[ "$LIVE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Cannot verify previous production SHA for version review"; exit 1;
+          }
+          git fetch --quiet --no-tags --depth=1 origin "$LIVE_SHA"
+          python scripts/check_user_release_metadata.py \
+            --base-sha "$LIVE_SHA" --head-sha "$RELEASE_SHA"
+          echo "user_release_metadata=PASS live=$LIVE_SHA candidate=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Create isolated immutable Preview channel for this attempt
         shell: bash
         run: |

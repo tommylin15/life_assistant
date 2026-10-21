@@ -119,6 +119,13 @@ life_assistant 可有一般 background jobs，例如：
 - Google OAuth token、API secret 與其他敏感 credential 必須放安全儲存或 Secret Manager 等適當機制，不進一般 log、export 或 Bridge。
 - 外部整合失敗不得破壞 PostgreSQL 主資料或既有 SQLite 遷移來源。
 
+## 使用者版本與「最新消息」強制治理（2026-10-21）
+
+- 每次工程需求都須自行判定是否有使用者可感知的功能、操作、畫面與修復，按 `doc/product_release_notes_policy.md` 在產品候選版同步版本號及公告；不等待使用者提醒，無關內部工作不製造公告。
+- `pubspec.yaml`、`lib/web/release_info.dart` 為 Web 版本／使用者公告的唯一 source；同一候選版本可彙整多個 commit。只宣告真實可用功能；受控功能的公告必須 featureKey 過濾。
+- Production V3 promotion 及獨立 Firebase Hosting 正式發布，必須用 `scripts/check_user_release_metadata.py` 針對目前 live SHA 比較 Flutter 更新是否同步遞增版號、新增對應公告；不影響日常 CI／Staging。Production live readback 完成才算上線。
+- Backend-only 修復按 source-owned `backend/app/api/release_notes.py` 另行判斷，不必無關地增加 Web 版本；CI 無法完全理解 bug 的使用者影響，開發者仍必須主動檢核。
+
 ## 驗證與完成條件
 
 完成工作前必須：

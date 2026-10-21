@@ -102,6 +102,12 @@ jobs:
             echo "auto_staging=SKIP read_only_importer_pg_parity" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          # Approved 0.4.0 user release: its exact-SHA production bridge
+          # runs full V3 staging itself; prevent a duplicate staging dispatch.
+          if jq -e 'any(.files[]; .filename==".github/workflows/life-v040-production-once-20261021.yml")' <<< "$CHANGED" > /dev/null; then
+            echo "auto_staging=SKIP life_v040_one_shot_production_owns_release" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           # Explicit one-time user-accepted Gmail UI production release.
           # Its own exact SHA/CI-gated bridge owns the staging + production run.
           if jq -e 'any(.files[]; .filename==".github/workflows/gmail-ui-production-once-20261020.yml")' <<< "$CHANGED" > /dev/null; then

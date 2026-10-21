@@ -1,0 +1,104 @@
+# ONE-TIME user-approved 0.4.0+4 production publish, 2026-10-21.
+# Exact parent must be the completed/staged 0.4.0 candidate; additional
+# changes to business code, version or notes are rejected. Never a recurring
+# production release. Delegate all migration/auth/rollback/Hosting gates to V3.
+name: Life v0.4.0 Approved Production Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/life-v040-production-once-20261021.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  checks: read
+
+concurrency:
+  group: life-v040-approved-production-once
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.sha }}
+      ACCEPTED_PARENT: db884a7bdfdc83358e658ffb53489d142f33357c
+      ACCEPTED_CI: '39522048109'
+      ACCEPTED_STAGING: '39522328744'
+    steps:
+      - name: Guard approved ancestry, one-time file scope, same-source Staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$SOURCE_SHA"
+          COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA?per_page=100")"
+          jq -e --arg parent "$ACCEPTED_PARENT" '
+            (.parents | length)==1 and .parents[0].sha==$parent and
+            ([.files[].filename] | sort) ==
+            ([".github/workflows/life-v040-production-once-20261021.yml",
+              ".github/workflows/v3-auto-staging-after-ci.yml"] | sort)
+          ' <<< "$COMMIT" >/dev/null
+          CI="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ACCEPTED_CI")"
+          jq -e --arg parent "$ACCEPTED_PARENT" '
+            .head_sha==$parent and .status=="completed" and
+            .conclusion=="success" and .event=="push"
+          ' <<< "$CI" >/dev/null
+          STAGE="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ACCEPTED_STAGING")"
+          jq -e --arg parent "$ACCEPTED_PARENT" '
+            .head_sha==$parent and .status=="completed" and
+            .conclusion=="success" and .event=="workflow_dispatch"
+          ' <<< "$STAGE" >/dev/null
+          echo "approved_v040=PASS source=$SOURCE_SHA accepted_staging=$ACCEPTED_STAGING" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require all four CI jobs PASS on exact new main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          for n in $(seq 1 70); do
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$SOURCE_SHA"
+            RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=30")"
+            CI_ID="$(jq -r --arg sha "$SOURCE_SHA" '
+              [.workflow_runs[] | select(.head_sha==$sha and .event=="push" and
+                .head_branch=="main" and .status=="completed" and .conclusion=="success")
+              | .id] | first // empty' <<< "$RUNS")"
+            if [[ -n "$CI_ID" ]]; then
+              JOBS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_ID/jobs?per_page=100")"
+              if jq -e '[.jobs[] | select(.conclusion=="success") | .name] | unique |
+                (index("backend")!=null and index("flutter")!=null and
+                 index("free-events-postgres")!=null and
+                 index("deployment-scripts")!=null)' <<< "$JOBS" >/dev/null; then
+                echo "same_sha_ci=PASS source=$SOURCE_SHA run=$CI_ID" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+            fi
+            if [[ "$n" -eq 70 ]]; then
+              echo "::error::same_sha_ci=NOT_VERIFIED: blocking promotion"
+              exit 1
+            fi
+            sleep 12
+          done
+
+      - name: Dispatch existing full V3 production and Hosting release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$SOURCE_SHA"
+          RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
+          if jq -e --arg sha "$SOURCE_SHA" '
+            any(.workflow_runs[]; .head_sha==$sha)' <<< "$RUNS" >/dev/null; then
+            echo "v3_dispatch=SKIPPED existing_release_for_sha=$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh workflow run v3-release-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            --raw-field promote=true \
+            --raw-field publish_staging=true \
+            --raw-field enable_gmail_onnx=false
+          echo "v3_dispatch=REQUESTED sha=$SOURCE_SHA promote=true publish_staging=true onnx=false" >> "$GITHUB_STEP_SUMMARY"
+          echo "Await V3 live traffic, rollback rehearsal, same-SHA Hosting and runtime readback before declaring DONE." >> "$GITHUB_STEP_SUMMARY"

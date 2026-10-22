@@ -54,7 +54,7 @@ class AutoProductionHostingContractTests(unittest.TestCase):
                          'select(.conclusion=="success")',
                          '.name=="backend"', '.name=="flutter"',
                          '.name=="deployment-scripts"', '.name=="free-events-postgres"',
-                         'length==4', '.[0].revisionName==$rev', '.[0].percent==100',
+                         'length==5', '.[0].revisionName==$rev', '.[0].percent==100',
                          'v3_image_identity.py --resource revision',
                          '--expected "$IMAGE_REF"',
                          'any(.workflow_runs[]; .head_sha==$sha)',

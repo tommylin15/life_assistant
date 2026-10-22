@@ -303,7 +303,15 @@ async def list_curated(
     as_of: datetime | None = Query(None, description="UTC snapshot from first page"),
 ):
     if _user and isinstance(db, AsyncSession):
-        await feature_gate("events" if entry == "all" else entry)(user=_user, db=db)
+        if entry == "explore":
+            # Unified activity listing inherits either legacy activity entitlement.
+            from app.api.ui_policies import effective_features
+            features = await effective_features(db, _user)
+            if not any(x["available"] for x in features
+                       if x["key"] in ("explore", "opportunities")):
+                raise HTTPException(403, "Activity features unavailable")
+        else:
+            await feature_gate("events" if entry == "all" else entry)(user=_user, db=db)
     # Direct callers in connector/integration tests bypass FastAPI's Query coercion.
     # Normalize omitted Query descriptors without changing HTTP validation.
     if not isinstance(quick, (str, type(None))): quick = None

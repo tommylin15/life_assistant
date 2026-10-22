@@ -330,7 +330,8 @@ async def list_curated(
     if quick and quick not in (
         {"latest", "opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"}
         if entry == "opportunities"
-        else {"latest", "ongoing", "weekend", "next_7", "next_30", "free"}
+        else {"latest", "ongoing", "weekend", "next_7", "next_30", "free",
+              "opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"}
     ):
         raise HTTPException(422, "Unsupported quick filter")
     group = _group_key()

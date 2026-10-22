@@ -18,9 +18,9 @@ class CuratedV3ReleaseGateTests(unittest.TestCase):
         gate = self.workflow.split("- name: Guard main SHA", 1)[1].split(
             "- name: Build Docker", 1
         )[0]
-        for job in ("backend", "flutter", "deployment-scripts", "free-events-postgres"):
+        for job in ("backend", "flutter", "deployment-scripts", "free-events-postgres", "gmail-onnx-image"):
             self.assertIn(f'.name=="{job}"', gate)
-        self.assertIn("unique | length == 4", gate)
+        self.assertIn("unique | length == 5", gate)
         self.assertIn("test \"$MAIN_SHA\" = \"$RELEASE_SHA\"", gate)
 
     def test_0018_migration_runs_before_live_traffic_without_retired_job(self):

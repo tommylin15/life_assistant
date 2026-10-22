@@ -248,7 +248,7 @@ def _activity_filters(statement, *, entry, quick, keyword, region, city, distric
         statement = statement.where(or_(end >= starts_from, and_(end.is_(None), start >= starts_from)))
     if quick == "latest" or not quick:
         return statement
-    if entry == "opportunities":
+    if quick in ("opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"):
         if quick == "opening_soon":
             statement = statement.where(opening.between(today, today + timedelta(days=7)))
         elif quick == "opening_today":

@@ -129,7 +129,10 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
   @override
   Widget build(BuildContext context) {
     final features = ref.watch(effectiveFeaturesProvider).asData?.value;
-    final canExplore = features?['explore'] == true;
+    // Existing accounts may still have the legacy opportunity feature enabled.
+    // Do not disable the unified list solely because the old tab was removed.
+    final canExplore = features?['explore'] == true ||
+        features?['opportunities'] == true;
     final chips = explorationChips;
     final optionState = ref.watch(curatedOptionsProvider);
     final options = optionState.asData?.value ?? const {};

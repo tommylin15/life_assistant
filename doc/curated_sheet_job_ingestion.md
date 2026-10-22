@@ -1,3 +1,13 @@
+
+## 2026-10-22｜交換池與「全部活動」整併驗收契約（待實作驗證）
+
+- 唯一使用者活動列表為「全部活動」；移除「限時機會」獨立切換不代表刪除、隱藏或排除原 `opportunities` 類別。後端 `entry=explore` 必須包含所有合格的 `event_key`，無論 `record_type=main/offer/session`、`opportunity_type`、核證狀態 `verified/pending_review/unknown`，並以 `parent_event_key` 分組去重。
+- 交換池 `READY` 只表示待匯入；`ACKED` 只表示 importer 已回執，**不能推論**已在 Life「全部活動」可見。須對同一 `event_key/content_hash` 逐段讀回：交接 Sheet → importer 結果 → PostgreSQL → `entry=explore` API（含搜尋、篩選、游標分頁）→ Flutter 卡片。
+- 部分待核且具有合法具名來源、可信活動日期／開報節點的活動可以進交換池；不要求第二官方網站、即時餘額或全部費用欄位。未知資料留空、前台標示待核，不得偽造可報名、仍有名額或報名成功。
+- 正式列表仍排除已過期／取消活動；已收藏歷史活動可回查並標註。功能旗標、舊 `opportunities` 入口、個人收藏與待辦／日曆標記需維持相容；不得因 UI 整併變成資料遺失。
+- 回歸測試至少包含：新 `offer` 入庫可在「全部活動」找到、`pending_review` 可顯示、主子項去重、同一鍵版本更新、跨分頁不漏項、搜尋與地區篩選、舊收藏、過期排除、舊網址導向。
+- 這是工程驗收契約，**不是**程式、CI、部署或真實活動端到端驗收已完成的證據。
+
 # 台灣活動｜獨立 Drive 交接資料 → Life 每日匯入契約
 
 > **2026-10-18 15:54＋PostgreSQL 最終增量讀回：技術資料鏈 PASS。** `交接資料` 已達 65 個互異鍵、65 ACKED／0 READY／0 ERROR；新增三筆 BeClass 仍 `verification_status=pending_review`。既有 importer 完成真實 GCP 執行，另以 [#39110194986](https://github.com/tommylin15/life_assistant/actions/runs/39110194986) 進行不覆寫 importer 的 `SET TRANSACTION READ ONLY` 核對全部已 ACK 活動之 PostgreSQL `event_key/content_hash/verification_status`，PASS。此為技術資料交接，不取代尚待驗的 Flutter 真實前台、GAS 次日自然觸發及完整來源品質。下方 62 ACKED 及來源 ERROR 舊數字屬歷史快照，不得作最新狀態。

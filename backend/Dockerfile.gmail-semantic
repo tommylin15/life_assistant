@@ -5,7 +5,8 @@ FROM python:3.12-slim AS model-build
 
 WORKDIR /modelbuild
 COPY requirements-local-semantic.txt ./requirements-local-semantic.txt
-RUN pip install --no-cache-dir -r requirements-local-semantic.txt
+RUN pip install --no-cache-dir -r requirements-local-semantic.txt \
+ && pip install --no-cache-dir --no-deps pillow==13.0.0
 COPY scripts/gmail_semantic_artifact.py ./scripts/gmail_semantic_artifact.py
 COPY app/services/gmail_local_classifier.py ./app/services/gmail_local_classifier.py
 RUN python -m scripts.gmail_semantic_artifact --destination /opt/gmail-onnx
@@ -18,7 +19,8 @@ LABEL org.opencontainers.image.source="https://github.com/tommylin15/life_assist
 LABEL org.opencontainers.image.description="Opt-in Life Gmail offline ONNX candidate"
 
 COPY requirements.txt requirements-local-semantic.txt ./
-RUN pip install --no-cache-dir -r requirements.txt -r requirements-local-semantic.txt
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-local-semantic.txt \
+ && pip install --no-cache-dir --no-deps pillow==13.0.0
 COPY --from=model-build /opt/gmail-onnx /opt/gmail-onnx
 COPY . .
 ENV GMAIL_RADAR_LOCAL_MODEL_PATH=/opt/gmail-onnx \

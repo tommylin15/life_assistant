@@ -2,4 +2,6 @@
 # FastEmbed uses onnxruntime CPU; production Docker is unchanged until model
 # quality, cold-start and RSS gates are independently verified.
 fastembed==0.9.0
+# FastEmbed transitively installs Pillow; pin the patched version for Trivy.
+pillow==13.0.0
 huggingface-hub==0.35.3

@@ -39,32 +39,27 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
   String verification = '';
   DateTime? from;
   bool savedOnly = false;
-  late String _activeEntry;
+  // The user-facing list always uses the unified explore query.
 
   @override
   void initState() {
     super.initState();
-    _activeEntry = widget.entry == 'opportunities' ? 'opportunities' : 'explore';
+    // Legacy opportunities links land on the same complete activity list.
   }
   List<int> offsets = [0];
   String? snapshot;
 
-  bool get opportunity => _activeEntry == 'opportunities';
+
 
   @override
   void didUpdateWidget(covariant CuratedEventsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.entry != widget.entry) {
-      _activeEntry = widget.entry == 'opportunities' ? 'opportunities' : 'explore';
+      // Keep saved filters reset when a legacy route changes.
       quick = ''; savedOnly = false; offsets = [0]; snapshot = null;
     }
   }
 
-  static const opportunityChips = {
-    'opening_soon': '即將開報', 'opening_today': '今天開報',
-    'closing_soon': '3 天內截止', 'limited': '限額優惠',
-    'unknown_time': '時間待公布', 'latest': '最新收錄',
-  };
   // Keep the discovery shortcuts in priority order.
   static const explorationChips = {
     'latest': '最新收錄', 'ongoing': '正在進行',
@@ -75,6 +70,11 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
     'next_7': '7 天內開始',
     'next_30': '30 天內開始',
     'free': '免費活動',
+    'opening_soon': '即將開報',
+    'opening_today': '今天開報',
+    'closing_soon': '3 天內截止',
+    'limited': '限額優惠',
+    'unknown_time': '時間待公布',
   };
   static const regions = {
     '': '全台', 'north': '北部', 'central': '中部',
@@ -95,7 +95,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
 
   String _query(int offset) {
     final params = <String, String>{
-      'entry': opportunity ? 'opportunities' : 'explore',
+      'entry': 'explore',
       'limit': offset == 0 ? '5' : '10',
       'offset': '$offset',
     };
@@ -130,8 +130,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
   Widget build(BuildContext context) {
     final features = ref.watch(effectiveFeaturesProvider).asData?.value;
     final canExplore = features?['explore'] == true;
-    final canOpportunity = features?['opportunities'] == true;
-    final chips = opportunity ? opportunityChips : explorationChips;
+    final chips = explorationChips;
     final optionState = ref.watch(curatedOptionsProvider);
     final options = optionState.asData?.value ?? const {};
     final pages = <Widget>[];
@@ -186,14 +185,14 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
                 TextButton(onPressed: () => filter(() {
                   keyword = ''; search.clear(); quick = ''; region = '';
                   city = ''; district = ''; category = ''; fee = ''; verification = ''; from = null;
-                  savedOnly = false; _activeEntry = 'explore';
+                  savedOnly = false;
                 }), child: const Text('清除篩選')),
               ]));
           }
           Widget activityCard(List<Map<String, dynamic>> group) =>
               CuratedActivityCard(
                 key: ValueKey('group-${group.first['parent_event_key'] ?? group.first['handoff_event_key'] ?? group.first['identity_key']}'),
-                items: group, entry: _activeEntry,
+                items: group, entry: 'explore',
                 actionIds: batchedActionIds, onChanged: _refreshPages);
           // One comfortable mobile column; two independently-sized desktop
           // columns (no fixed-height GridView that clips expanded offers).
@@ -250,16 +249,9 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
             child: Row(children: [
               ChoiceChip(key: const ValueKey('activity-mode-all'),
                 label: const Text('全部活動'),
-                selected: !opportunity && !savedOnly,
+                selected: !savedOnly,
                 onSelected: canExplore ? (_) => filter(() {
-                  _activeEntry = 'explore'; savedOnly = false; quick = '';
-                }) : null),
-              const SizedBox(width: 7),
-              ChoiceChip(key: const ValueKey('activity-mode-urgent'),
-                label: const Text('限時機會'),
-                selected: opportunity,
-                onSelected: canOpportunity ? (_) => filter(() {
-                  _activeEntry = 'opportunities'; savedOnly = false; quick = '';
+                  savedOnly = false; quick = '';
                 }) : null),
               const SizedBox(width: 7),
               ChoiceChip(key: const ValueKey('activity-mode-saved'),
@@ -267,7 +259,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
                 avatar: const Icon(Icons.bookmark_outline, size: 17),
                 selected: savedOnly,
                 onSelected: canExplore ? (_) => filter(() {
-                  _activeEntry = 'explore'; savedOnly = true; quick = '';
+                  savedOnly = true; quick = '';
                 }) : null),
             ])),
           const SizedBox(height: 8),
@@ -277,8 +269,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
                 child: ChoiceChip(label: Text(entry.value),
                   selected: quick == entry.key,
                   onSelected: (on) => filter(() => quick = on ? entry.key : ''))),
-            if (!opportunity)
-              Padding(padding: const EdgeInsets.only(right: 7),
+            Padding(padding: const EdgeInsets.only(right: 7),
                 child: PopupMenuButton<String>(
                   key: const ValueKey('activity-more-quick-filters'),
                   tooltip: '更多活動篩選',

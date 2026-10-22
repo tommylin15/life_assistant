@@ -206,7 +206,7 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
         key = "ci:unified:" + uuid.uuid4().hex
         city = "ci-unified-" + uuid.uuid4().hex
         item = HandoffItem(
-            event_key=key, parent_event_key=key, record_type="offer",
+            event_key=key + ":offer", parent_event_key=key, record_type="offer",
             title="新匯入待核限額活動", city=city, organizer="官方主辦",
             start_at_tpe="2099-05-01", end_at_tpe="2099-05-02",
             official_url=self.url, source_url=self.url,

@@ -200,6 +200,36 @@ class CuratedPostgresTests(unittest.IsolatedAsyncioTestCase):
             task = await db.get(Task, first["entity_id"])
             self.assertEqual(task.status, "cancelled")
 
+    async def test_pending_offer_handoff_is_visible_in_unified_explore(self):
+        """A new partially verified opportunity must survive handoff and explore filters."""
+        from app.services.curated_handoff import HandoffItem, upsert_handoff
+        key = "ci:unified:" + uuid.uuid4().hex
+        city = "ci-unified-" + uuid.uuid4().hex
+        item = HandoffItem(
+            event_key=key, parent_event_key=key, record_type="offer",
+            title="新匯入待核限額活動", city=city, organizer="官方主辦",
+            start_at_tpe="2099-05-01", end_at_tpe="2099-05-02",
+            official_url=self.url, source_url=self.url,
+            importance_star=3, opportunity_type="限額優惠",
+            evidence_summary="活動日期與來源已核對；報名資訊待核",
+            verification_status="pending_review",
+            handoff_updated_at_tpe="2026-10-22T18:00:00+08:00")
+        async with self.sessions() as db:
+            self.assertEqual(await upsert_handoff(db, item, "e" * 64), "CREATED")
+            result = await list_curated(
+                Response(), _user={}, db=db, entry="explore",
+                limit=10, offset=0, city=city, category=None,
+                starts_from=None, verification_status="pending_review")
+            self.assertEqual(result["returned"], 1)
+            self.assertEqual(result["items"][0]["title"], item.title)
+            self.assertEqual(result["items"][0]["verification_status"], "pending_review")
+            limited = await list_curated(
+                Response(), _user={}, db=db, entry="explore",
+                quick="limited", limit=10, offset=0, city=city,
+                category=None, starts_from=None)
+            self.assertEqual(limited["returned"], 1)
+            self.assertEqual(limited["items"][0]["title"], item.title)
+
     async def test_parent_pagination_keeps_all_distinct_offers_on_one_card(self):
         from app.services.curated_handoff import HandoffItem, upsert_handoff
         key = "ci:" + uuid.uuid4().hex

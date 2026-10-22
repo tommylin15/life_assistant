@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:life_assistant/web/navigation_catalog.dart';
 import 'package:life_assistant/web/curated_activity_card.dart';
@@ -16,6 +17,16 @@ void main() {
     expect(lifeNavigationItems.containsKey('opportunities'), false);
     expect(availablePinKeys(const ['opportunities', 'events', 'explore'],
       (_) => true).where((key) => key == 'explore').length, 1);
+  });
+
+  test('unified activity screen has no urgent tab and keeps complete explore feed', () async {
+    final source = await File('lib/web/curated_events_page.dart').readAsString();
+    expect(source, contains("key: const ValueKey('activity-mode-all')"));
+    expect(source, contains("key: const ValueKey('activity-mode-saved')"));
+    expect(source, isNot(contains("activity-mode-urgent")));
+    expect(source, contains("'entry': 'explore'"));
+    expect(source, contains("'opening_soon': '即將開報'"));
+    expect(source, contains("'limited': '限額優惠'"));
   });
 
   test('one parent activity has one visual group across distinct offers', () {

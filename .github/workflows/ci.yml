@@ -236,3 +236,23 @@ jobs:
             tests/test_user_release_metadata.py \
             tests/test_v3_free_event_retirement_readback.py \
             -v
+
+  gmail-onnx-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ONNX image and verify offline inference
+        run: |
+          docker build --pull --platform linux/amd64 -f backend/Dockerfile.gmail-semantic -t life-gmail-onnx:ci backend
+          docker run --rm --network none --memory 1g --cpus 2 --entrypoint python life-gmail-onnx:ci \
+            -m scripts.gmail_semantic_benchmark --report /tmp/gmail-synthetic.json --enforce-gates
+      - name: Scan ONNX image for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: life-gmail-onnx:ci
+          scanners: vuln,secret
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH

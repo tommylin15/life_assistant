@@ -35,6 +35,16 @@ class LifeReleaseNote {
 /// A bundled changelog is rolled out atomically with the Hosting build.
 /// Never claim unrelated / unverified candidate fixes are production releases.
 const lifeReleaseNotes = <LifeReleaseNote>[
+  LifeReleaseNote(
+    id: 'web-0.5.0-unified-activities',
+    version: '0.5.0',
+    title: '活動探索整合為全部活動',
+    changes: <String>[
+      '移除重複的「限時機會」分頁，活動集中在「全部活動」瀏覽。',
+      '限額優惠、即將開報與截止提醒改由「更多」篩選快速查看。',
+      '保留未驗證活動標示，方便辨識活動來源與確認狀態。',
+    ],
+  ),
   // 0.4.0 is a candidate until the matching production Hosting SHA passes.
   LifeReleaseNote(
     id: 'web-0.4.0-gmail-radar-compact',

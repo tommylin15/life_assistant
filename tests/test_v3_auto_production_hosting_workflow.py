@@ -70,7 +70,7 @@ class AutoProductionHostingContractTests(unittest.TestCase):
         h = self.hosting
         for marker in ('workflow_dispatch:',
                        'Guard same-SHA promoted backend and snapshot production Hosting',
-                       'docker buildx imagetools inspect',
+                       'docker pull "ghcr.io/tommylin15/life_assistant-backend:$RELEASE_SHA"',
                        'v3_image_identity.py --resource revision',
                        'Capture exact published production Hosting version',
                        'Restore previous production Hosting on failed readback',

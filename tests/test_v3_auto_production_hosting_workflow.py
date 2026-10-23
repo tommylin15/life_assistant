@@ -70,7 +70,8 @@ class AutoProductionHostingContractTests(unittest.TestCase):
         h = self.hosting
         for marker in ('workflow_dispatch:',
                        'Guard same-SHA promoted backend and snapshot production Hosting',
-                       'docker pull "ghcr.io/tommylin15/life_assistant-backend:$RELEASE_SHA"',
+                       '"$RELEASE_SHA-gmail-onnx" "$RELEASE_SHA"',
+                       'No immutable same-SHA GHCR image matches the production revision',
                        'v3_image_identity.py --resource revision',
                        'Capture exact published production Hosting version',
                        'Restore previous production Hosting on failed readback',

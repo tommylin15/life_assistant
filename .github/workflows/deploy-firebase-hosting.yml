@@ -114,9 +114,10 @@ jobs:
           gcloud run revisions describe "$LIVE_REVISION" \
             --project "$GCP_PROJECT_ID" --region us-central1 --format=json \
             > "$RUNNER_TEMP/hosting-backend-revision.json"
-          EXPECTED_DIGEST="$(docker buildx imagetools inspect \
-            "ghcr.io/tommylin15/life_assistant-backend:$RELEASE_SHA" \
-            --format '{{.Manifest.Digest}}')"
+          docker pull "ghcr.io/tommylin15/life_assistant-backend:$RELEASE_SHA"
+          EXPECTED_DIGEST="$(docker image inspect \
+            --format '{{index .RepoDigests 0}}' \
+            "ghcr.io/tommylin15/life_assistant-backend:$RELEASE_SHA" | sed 's|^.*@||')"
           [[ "$EXPECTED_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
           EXPECTED_IMAGE="ghcr.io/tommylin15/life_assistant-backend@$EXPECTED_DIGEST"
           python .github/scripts/v3_image_identity.py --resource revision \
@@ -294,7 +295,7 @@ jobs:
 
       - name: Run Project UI production acceptance
         id: project_ui_acceptance
-        if: always()
+        if: ${{ success() || steps.firebase_publish.outcome == 'success' }}
         run: |
           BASE_URL="https://${GCP_PROJECT_ID}.web.app"
           for attempt in 1 2 3; do

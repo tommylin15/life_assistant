@@ -114,15 +114,31 @@ jobs:
           gcloud run revisions describe "$LIVE_REVISION" \
             --project "$GCP_PROJECT_ID" --region us-central1 --format=json \
             > "$RUNNER_TEMP/hosting-backend-revision.json"
-          docker pull "ghcr.io/tommylin15/life_assistant-backend:$RELEASE_SHA"
-          EXPECTED_DIGEST="$(docker image inspect \
-            --format '{{index .RepoDigests 0}}' \
-            "ghcr.io/tommylin15/life_assistant-backend:$RELEASE_SHA" | sed 's|^.*@||')"
-          [[ "$EXPECTED_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
-          EXPECTED_IMAGE="ghcr.io/tommylin15/life_assistant-backend@$EXPECTED_DIGEST"
-          python .github/scripts/v3_image_identity.py --resource revision \
-            --json "$RUNNER_TEMP/hosting-backend-revision.json" \
-            --expected "$EXPECTED_IMAGE"
+          # The ONNX release is published under SHA-gmail-onnx, not SHA.
+          # Require one of the two immutable GHCR digests to match the live revision.
+          # Never accept a different source SHA or a mutable image tag.
+          VERIFIED_IMAGE=""
+          for TAG in "$RELEASE_SHA-gmail-onnx" "$RELEASE_SHA"; do
+            IMAGE="ghcr.io/tommylin15/life_assistant-backend:$TAG"
+            if ! docker pull "$IMAGE"; then
+              echo "hosting_image_candidate=UNAVAILABLE tag=$TAG"
+              continue
+            fi
+            DIGEST="$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE" | sed 's|^.*@||')"
+            [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
+            EXPECTED_IMAGE="ghcr.io/tommylin15/life_assistant-backend@$DIGEST"
+            if python .github/scripts/v3_image_identity.py --resource revision \
+              --json "$RUNNER_TEMP/hosting-backend-revision.json" \
+              --expected "$EXPECTED_IMAGE"; then
+              VERIFIED_IMAGE="$EXPECTED_IMAGE"
+              echo "hosting_image_identity=PASS tag=$TAG digest=$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+              break
+            fi
+          done
+          if [[ -z "$VERIFIED_IMAGE" ]]; then
+            echo "::error::No immutable same-SHA GHCR image matches the production revision"
+            exit 1
+          fi
           TOKEN="$(gcloud auth print-access-token)"
           curl -fsS --retry 3 -H "Authorization: Bearer $TOKEN" \
             "https://firebasehosting.googleapis.com/v1beta1/sites/$GCP_PROJECT_ID/releases?pageSize=10" \

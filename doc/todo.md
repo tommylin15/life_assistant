@@ -55,7 +55,7 @@ Updated 2026-10-26. **One active backlog only.** Prior 01–07 execution plan ha
 | P0（關閉） | Life importer／交接 Sheet／PG 同版本 | **PASS／DONE（技術資料鏈）**：正式 Job 真實成功 [#39101120210](https://github.com/tommylin15/life_assistant/actions/runs/39101120210)；15:54 Sheet **65 ACKED、0 ERROR／READY**，3 筆新 BeClass 同鍵 CREATED；[只讀 PG 逐鍵版本＋核證狀態比對 #39110194986](https://github.com/tommylin15/life_assistant/actions/runs/39110194986) PASS。嚴禁為重複驗收再跑 importer。 |
 | P1 | Life 活動探索前台新版顯示／分類 | **PARTIAL**：`pending_review` 與 verified／unknown、來源與報名兩網址及搜尋功能 source/CI 已具備；但當前並行 Flutter UI commits 的同 SHA Staging／Production Hosting、登入後一般帳號可見新三筆、標籤與雙連結真實 E2E **NOT VERIFIED**。合併當輪 UI 工作一次驗收。 |
 | P1 | 人工 15:07 新版來源探索品質 | **PARTIAL**：A7＝7 已實查、B11＝11 distinct 實查／9 usable、快照 PASS、精選池 78→81、四視圖／交接讀回 PASS，唯一 10/18 Log PASS；B 月曆／Yii 新鮮度、原主辦額外證據及本輪跨日逐 ID 變更 **NOT VERIFIED**。不要把來源閱讀備援視作繞 403／429。 |
-| P2 | 次日自然排程／發布 | **SCHEDULED**：已設定 Linux 系統級排程 `tw-activity-discovery.timer`（台灣時間每日 04:00，即 UTC 20:00，調用 agy 搭載 Gemini 3.8 Flash Medium）作為唯一正式啟動者，串行完成探索與 Life 入庫，獨立於任何對話視窗；舊 06:00 外部排程與 GAS 07:30 觸發器依指示停用。次日自然執行待真實日誌證據。 |
+| P2 | 次日自然排程／發布 | **SCHEDULED**：已設定 Linux 系統級排程 `tw-activity-discovery.timer`（台灣時間每日 04:00，即 UTC 20:00，調用 agy 搭載 Gemini 3.8 Flash Medium）作為唯一正式啟動者，串行完成探索與 Life 入庫，獨立於任何對話視窗；2026-10-26 使用者確認舊 06:00 外部排程與 GAS 07:30 觸發器已正式停用。次日自然執行待真實日誌證據。 |
 
 
 | Priority | Work / exit gate | Status |

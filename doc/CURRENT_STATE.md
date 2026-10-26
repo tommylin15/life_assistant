@@ -49,8 +49,8 @@
 - **Not yet complete:** offline semantic checkpoint/dependencies not shipped (rules-only production Docker), Traditional-Chinese semantic quality/perf/RAM, actual Gmail human readback and per-user database receipts, cross-account E2E, direct database 0022 revision readback. Mark overall **PARTIAL**.
 - **Evidence correction:** V3 workflow migration step/summary still labels 0018; release runner code targets 0022. Do not interpret the outdated summary wording as actual DB revision proof.
 
-## 2026-10-26｜台灣活動探索排程整併為 Antigravity VM 常駐單一排程
-- **排程收斂：** 台灣活動探索自原先分散的 GAS 04:30、外部 06:00 探索與 GAS 07:30 觸發 Cloud Run 入庫，統一整併為目前 Antigravity VM 內建常駐排程（`schedule`，Asia/Taipei 每日 04:00，UTC 20:00 喚醒）。
+## 2026-10-26｜台灣活動探索排程整併為 Linux systemd 系統排程
+- **排程收斂：** 台灣活動探索自原先分散的 GAS 04:30、外部 06:00 探索與 GAS 07:30 觸發 Cloud Run 入庫，統一整併為目前 VM 的 Linux 系統級排程（`tw-activity-discovery.timer`，Asia/Taipei 每日 04:00，UTC 20:00 喚醒，調用 `agy` 搭載 `Gemini 3.8 Flash (Medium)`）。完全獨立於任何對話視窗。
 - **單一寫入者保護：** 外部舊 06:00 排程及 GAS 07:30 定時接收觸發器停用，消除跨排程時間差與 Sheet 競態風險。串行完成 01快照 → 02探索 → 03核證 → 04入池與READY → 04.5 Life入庫與ACK → 05結報。
 
 ## 2026-10-18｜15:54 後最新接續驗收：BeClass 三筆新活動 → Life PostgreSQL

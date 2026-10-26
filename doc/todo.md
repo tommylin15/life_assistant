@@ -1,5 +1,18 @@
 # Life — Active engineering TODO
-Updated 2026-10-21. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
+Updated 2026-10-26. **One active backlog only.** Prior 01–07 execution plan has been completed at source/release-gate level where cited, but unverified integration outcomes remain open. [Current evidence](CURRENT_STATE.md) · [Risk register](RISK_REGISTER.md).
+
+## 2026-10-26｜Gmail V2 P0/P1：Production 已於 2026-10-23 完成發布；Staging 真人快掃已驗收
+
+- **P1 正式上線已於 2026-10-23 發布完成（DONE，同 main SHA `2e2bbb50d7166fe49b9130594af3fe952dbf6334`）：**
+  - 四項 CI [#39887105661](https://github.com/tommylin15/life_assistant/actions/runs/39887105661) PASS。
+  - V3 Production 切流 [#39888978522](https://github.com/tommylin15/life_assistant/actions/runs/39888978522)（輸入 `promote=true`、`enable_gmail_onnx=true`、`publish_staging=true`）PASS：100% 正式切流、Post-promotion live health / PG access、rollback drill rehearsal、Revision 清理維持最新 10 個、定時 Job digest 對齊均通過。
+  - Firebase Hosting [#39889756103](https://github.com/tommylin15/life_assistant/actions/runs/39889756103) PASS：同 SHA `2e2bbb5`、GHCR ONNX 映像 digest 對齊，正式站 live readback 與 Task/Project UI 驗收 PASS。正式站 `https://gen-lang-client-0593591102.web.app/release.txt` 讀回 `2e2bbb50d7166fe49b9130594af3fe952dbf6334`，未授權 API 401 正常。
+- **P0 真實 Gmail Staging 驗收（使用者結案，2026-10-26）：**
+  - 使用者於 2026-10-25 21:08 手機截圖確認：Owner 重新授權 Google 後，「立即快掃」正常執行，近三天 19 封「重新判讀」`失敗 0 封、未檢查 0 封`，掃描狀態更新為 2026/10/25 21:08。此前失敗屬 Google OAuth 憑證過期（409），重新授權後排除。
+  - 使用者於 2026-10-26 明確確認目前操作與結果符合預期，P0 正式結案。
+- **仍屬 NOT VERIFIED（不因發布與結案而推定 PASS）：**
+  - 正式 Production 環境真實 Gmail 真人操作（目前真人回報僅限於 Staging 站；正式站僅通過自動化 401 / redirect / digest 驗收）。
+  - 實際帳單命中與時間/金額抽取、促銷排除、7 天 40 封補檢、Gmail → Inbox 本地轉存寫入 PG、一般帳號跨帳號隔離、完整 FastAPI ONNX p95/RSS。上述項目需在日常營運中持續觀測。
 
 ## 2026-10-21｜快速新增 P0–P1：Production DONE（ONNX P2 取消）
 

@@ -1,3 +1,22 @@
+## 2026-10-26｜Gmail V2 P0/P1：Production 已於 2026-10-23 正式發布，Staging 真人快掃已驗收
+
+- **P1 正式上線已於 2026-10-23 發布完成（DONE，同 main SHA `2e2bbb50d7166fe49b9130594af3fe952dbf6334`）：**
+  - **CI 四項 PASS**：[CI #39887105661](https://github.com/tommylin15/life_assistant/actions/runs/39887105661)，同 SHA。
+  - **V3 100% 正式切流 PASS**：[Release #39888978522](https://github.com/tommylin15/life_assistant/actions/runs/39888978522)（`promote=true`、`enable_gmail_onnx=true`、`publish_staging=true`）：
+    - 0% 候選驗證（`life-assistant-api-00439-dil`）、Alembic 0022 資料庫遷移。
+    - 100% 切換正式流量，正式 API 啟動 ONNX 本地語意推論（`gmail-onnx` 映像標記）。
+    - 上線後健康檢查 `live_ready=PASS`、`live_readback=PASS`。
+    - Rollback 演練恢復正常 `rollback_drill=PASS`。
+    - Revision 清理保持最新 10 個、定時 Job digest 對齊 PASS。
+  - **正式 Hosting 發布 PASS**：[Deploy Firebase Hosting #39889756103](https://github.com/tommylin15/life_assistant/actions/runs/39889756103)，同 SHA `2e2bbb5`，ONNX 映像 digest 對齊，正式站 live readback PASS，Task/Project 自動 UI 驗收通過。
+  - **正式站現況實測**：`https://gen-lang-client-0593591102.web.app/release.txt` 讀回 `2e2bbb50d7166fe49b9130594af3fe952dbf6334`，未授權 API 探測返回 HTTP 401。
+- **P0 真實 Gmail Staging 驗收（使用者結案，2026-10-26）：**
+  - 使用者於 2026-10-25 21:08 手機截圖確認：Owner 重新授權 Google 後，「立即快掃」正常執行，近三天 19 封「重新判讀」`失敗 0 封、未檢查 0 封`，掃描狀態更新為 2026/10/25 21:08。此前失敗屬 Google OAuth 憑證過期（409），重新授權後排除。
+  - 使用者於 2026-10-26 明確確認目前操作與結果符合預期，P0 正式結案。
+- **未被證明事項（NOT VERIFIED）：**
+  - 正式 Production 環境真人 Gmail 登入與掃描操作（目前真人回報僅限於 Staging 站）。
+  - 實際帳單抽取與促銷排除、7 天 40 封補檢、Gmail → Inbox 本地轉存寫入 PG、一般帳號跨帳號隔離、完整 FastAPI ONNX p95/RSS。
+
 ## 2026-10-20｜Gmail V2 完整 Life FastAPI ONNX Staging：PASS（產品 PARTIAL）
 
 - **同 SHA CI／啟動：** [四 CI #39353419852](https://github.com/tommylin15/life_assistant/actions/runs/39353419852) PASS；[ONNX 指定 Staging 接續 #39353419856](https://github.com/tommylin15/life_assistant/actions/runs/39353419856) PASS，SHA faa8f5b80e8c5724d8b9759cc71d794d73e75082。

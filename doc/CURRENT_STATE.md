@@ -49,6 +49,10 @@
 - **Not yet complete:** offline semantic checkpoint/dependencies not shipped (rules-only production Docker), Traditional-Chinese semantic quality/perf/RAM, actual Gmail human readback and per-user database receipts, cross-account E2E, direct database 0022 revision readback. Mark overall **PARTIAL**.
 - **Evidence correction:** V3 workflow migration step/summary still labels 0018; release runner code targets 0022. Do not interpret the outdated summary wording as actual DB revision proof.
 
+## 2026-10-26｜台灣活動探索排程整併為 Antigravity VM 常駐單一排程
+- **排程收斂：** 台灣活動探索自原先分散的 GAS 04:30、外部 06:00 探索與 GAS 07:30 觸發 Cloud Run 入庫，統一整併為目前 Antigravity VM 內建常駐排程（`schedule`，Asia/Taipei 每日 04:00，UTC 20:00 喚醒）。
+- **單一寫入者保護：** 外部舊 06:00 排程及 GAS 07:30 定時接收觸發器停用，消除跨排程時間差與 Sheet 競態風險。串行完成 01快照 → 02探索 → 03核證 → 04入池與READY → 04.5 Life入庫與ACK → 05結報。
+
 ## 2026-10-18｜15:54 後最新接續驗收：BeClass 三筆新活動 → Life PostgreSQL
 
 - **探索端有據的部分成功：** 正式 [10/18 唯一探索 Log](https://drive.google.com/file/d/1dOdbXe9zN-c5sT32RPA3bMk7ijNRk07-/view) 與執行紀錄記 `tw-discovery-manual-20261018-1507-rule-fallback`：A7 已實查 7，B 檢查 11 個 distinct 官方/主辦來源、可用 9；官方雙快照讀回 PASS（文化部 84 UID／觀光署 1,159 EventID），原池 78→81 個互異 `event_key`，新入池 BeClass 三筆皆 `pending_review`，四衍生視圖及交接新增寫後讀回 PASS。來源月曆新鮮度、主辦額外核證及本輪跨日全 ID delta 仍 PARTIAL／NOT VERIFIED，不以此宣稱完整探索 DONE。

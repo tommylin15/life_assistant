@@ -7,7 +7,7 @@
 ## 1. 決策：AI Agent 在 omniAgent，不在 Life 再造
 
 - **omniAgent**：`TaiwanActivityAgent` 的 LangGraph/Agent Worker、網站下探、主辦核證推理、來源診斷修復、文檔差異建議、重試與 checkpoint、受控 Gemini/MCP tools。Agent 不得直接讀寫 Life PostgreSQL，亦不得代替 Life 決定正式發布。
-- **life_assistant**：Data + UI + API + Execution + Integration；活動欄位與版本 schema、來源/精選池/交接寫入驗證、Drive 對接、權限/稽核、現有 07:30 Sheet importer → PostgreSQL → Flutter。只新增**domain capability / adapter**，不建第二個 Agent runtime、LangGraph loop、全域 Tool Registry 或爬蟲工作流程。
+- **life_assistant**：Data + UI + API + Execution + Integration；活動欄位與版本 schema、來源/精選池/交接寫入驗證、Drive 對接、權限/稽核、現由 04:00 VM 排程串行 Sheet importer → PostgreSQL → Flutter。只新增**domain capability / adapter**，不建第二個 Agent runtime、LangGraph loop、全域 Tool Registry 或爬蟲工作流程。
 - **Drive 內 `life_assistantGPT`**：唯一有效「台灣活動探索」README + 01～05、官方 GAS 快照、核准來源表、精選池與四衍生視圖、固定 30 欄交接資料、逐站執行表及唯一日誌。**本文不能覆蓋 Drive 正式規格**；有衝突先指出，再依核准修訂程序變更。
 - 目前 ChatGPT Work/Chat 探索與 GCP AI Agent 是**替代架構切換**，不是預設兩個正式並行寫入者。只有 Shadow 為純讀/提出候選，不碰正式精選池或交接。
 
@@ -25,7 +25,7 @@
      Drive「台灣活動｜交接資料」固定 30 欄 outbox
              READY / ERROR / ACKED  (content_hash)
                          |
-  Life 現有每日約 07:30 GAS -> Cloud Run import_curated_from_sheet
+  Life 每日 04:00 VM 排程串行啟動 import_curated_from_sheet
                          |
      PostgreSQL CuratedActivity -> Flutter「活動探索」
 ```

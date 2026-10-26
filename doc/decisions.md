@@ -10,6 +10,9 @@
 
 ## 活動來源與使用者功能
 
+- **2026-10-26 台灣活動探索排程整併與 Antigravity VM 常駐排程決策**：
+  使用者確認將原本分散在 GAS 快照 (04:30)、外部 AI 探索 (06:00) 與 GAS 觸發 Cloud Run 入庫 (07:30) 的三段分離式排程，整合為由目前 Antigravity VM 內建常駐排程器（`schedule`，Asia/Taipei 每日 04:00 喚醒，即 UTC 20:00）單一入口啟動。排程依 SOP 循序完成：01快照驗證 → 02全面探索與二輪補漏 → 03候選核證 → 04精選池入池與交接表 READY 輸出 → 04.5 串行觸發 Life 匯入器完成 PostgreSQL 入庫與 ACKED 回寫 → 05回寫統計表與 YYYY-MM-DD.log 結報。停用外部舊 06:00 探索排程與 GAS 07:30 定時觸發器，維持交接表與精選池單一寫入者（Single-Writer）原則。
+
 - **2026-10-12 交接缺值規則（現行，優先於早期『已核證才交接』的敘述）**：`verified_at_tpe` 一律選填，來源未能提供可靠核證時間時保留空白；Life Pydantic 接收為 `None`／持久化 JSON `null`，不可由發現日、交接更新時間或匯入時間補造。來源網址、穩定 `event_key/content_hash`、具名活動與有據活動日／開報節點仍必須具備，待核證據須寫 `evidence_summary`；成功入庫與版本回執門檻不放寬。只有提供核證時間時才驗證 ISO 8601 台北 +08:00 時區。
 
 - 唯一預設交接：ChatGPT 探索／核證 → Drive 精選池 → 獨立交接 Sheet → Life 每日 GCP Job 依永久 event_key/content_hash PostgreSQL 去重、DB commit 後版本一致 ACKED/ERROR。Life 不重啟 crawler、舊 Queue/claim/lease、第二輪 AI；既有 direct API/舊資料留相容。Job／正式 E2E 狀態仍需驗證。[資料契約](curated_sheet_job_ingestion.md)

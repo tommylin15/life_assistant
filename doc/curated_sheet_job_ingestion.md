@@ -1,4 +1,6 @@
 
+> **2026-10-26 排程整併更新**：每日批次改由 Antigravity VM 常駐排程於 Asia/Taipei 04:00 單一入口啟動。探索、核證、精選池更新並將交接表輸出為 `READY` 並讀回後，由排程串行啟動 Life 匯入器完成入庫與 `ACKED` 回執。原 GAS 07:30 定時接收觸發器停用，避免雙重排程衝突。
+
 ## 2026-10-22｜交換池與「全部活動」整併驗收契約（待實作驗證）
 
 - 唯一使用者活動列表為「全部活動」；移除「限時機會」獨立切換不代表刪除、隱藏或排除原 `opportunities` 類別。後端 `entry=explore` 必須包含所有合格的 `event_key`，無論 `record_type=main/offer/session`、`opportunity_type`、核證狀態 `verified/pending_review/unknown`，並以 `parent_event_key` 分組去重。

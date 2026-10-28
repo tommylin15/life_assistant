@@ -38,7 +38,7 @@
   <div id="nav" class="grid" hidden>
     <button data-view="drafts">✍️ 快速記錄</button>
     <button data-view="summary">☀️ 今日總覽</button>
-    <button data-view="summary">🔎 查資料</button>
+    <button data-view="search">🔎 查資料</button>
     <button data-view="summary">✅ 待辦・購物</button>
     <a class="action" href="/" rel="noopener">📅 日曆・活動</a>
     <a class="action" href="/" rel="noopener">🏠 我的 Life</a>
@@ -95,7 +95,7 @@
           try {
             await api("me"); setLinked(true);
             const requested = new URLSearchParams(window.location.search).get("view");
-            if (requested === "drafts" || requested === "summary") await show(requested);
+            if (requested === "drafts" || requested === "summary" || requested === "search") await show(requested);
           }
           catch (e) { setLinked(false); }
         } catch (e) {
@@ -149,6 +149,45 @@
             const go = text("a","開啟 Life 快速新增","action");
             go.href="/";
             result.append(go);
+          } else if (view === "search") {
+            result.append(text("h2","查詢個人留存"));
+            result.append(text("p","搜尋本人 Life 筆記、待辦與購物品項。行事曆與活動仍在 Life 網站查看。","muted"));
+            const searchForm = document.createElement("form");
+            searchForm.style.display = "flex";
+            searchForm.style.gap = "8px";
+            searchForm.style.flexWrap = "wrap";
+            const input = document.createElement("input");
+            input.type = "search";
+            input.maxLength = 80;
+            input.minLength = 2;
+            input.required = true;
+            input.placeholder = "輸入兩字以上關鍵字";
+            input.setAttribute("aria-label","搜尋個人資料");
+            input.style.flex = "1";
+            input.style.padding = "12px";
+            const submit = text("button","搜尋");
+            submit.type = "submit";
+            searchForm.append(input, submit);
+            const found = document.createElement("div");
+            result.append(searchForm, found);
+            searchForm.addEventListener("submit",async event => {
+              event.preventDefault();
+              const q = input.value.trim();
+              if (q.length < 2) return;
+              found.replaceChildren(text("p","查詢中…"));
+              try {
+                const matches = await api("search?q=" + encodeURIComponent(q));
+                found.replaceChildren();
+                for (const [key,heading] of [["notes","筆記"],["tasks","待辦"],["shopping_items","購物品項"]]) {
+                  found.append(text("h3",heading));
+                  for (const item of matches[key] || []) {
+                    found.append(text("div", item.title || item.name || "未命名", "item"));
+                    if (item.snippet) found.append(text("p",item.snippet,"muted"));
+                  }
+                  if (!(matches[key] || []).length) found.append(text("p","沒有符合的記錄。","muted"));
+                }
+              } catch (e) {found.replaceChildren(text("p",e.message));}
+            });
           } else {
             result.append(text("h2","Life 個人概覽"));
             result.append(text("h3","未完成待辦（最多 5 項）"));

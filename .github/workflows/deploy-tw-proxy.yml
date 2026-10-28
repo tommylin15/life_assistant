@@ -45,7 +45,8 @@ jobs:
             --project="${{ env.GCP_PROJECT_ID }}" \
             --region="${{ env.GCP_REGION }}" \
             --source=services/tw_activity_proxy \
-            --no-allow-unauthenticated \
+            --allow-unauthenticated \
+            --set-env-vars "TW_PROXY_SECRET=tw-life-assistant-proxy-20261028-secret" \
             --timeout=120s \
             --memory=512Mi \
             --min-instances=0 \

@@ -1,3 +1,4 @@
+import os
 import functions_framework
 import httpx
 from flask import Response, jsonify, request
@@ -7,6 +8,8 @@ DEFAULT_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/124.0.0.0 Safari/537.36 LifeAssistant/1.0"
 )
+
+PROXY_SECRET = os.environ.get("TW_PROXY_SECRET", "tw-life-assistant-proxy-20261028-secret")
 
 HOP_BY_HOP_HEADERS = {
     "connection",
@@ -24,11 +27,19 @@ HOP_BY_HOP_HEADERS = {
 @functions_framework.http
 def proxy_request(req):
     """
-    Taiwan egress streaming proxy function for Life Assistant.
+    Taiwan egress streaming proxy service for Life Assistant.
     Deployed to asia-east1 to bypass overseas IP blocking for Taiwan government open data and sites.
     """
     if req.method == "OPTIONS":
         return Response("", status=204)
+
+    # Application-layer authentication
+    incoming_token = req.headers.get("X-Proxy-Token") or req.headers.get("X-Proxy-Secret")
+    if incoming_token != PROXY_SECRET:
+        # Also check Authorization header bearer token
+        auth_hdr = req.headers.get("Authorization", "")
+        if not (auth_hdr.startswith("Bearer ") and (auth_hdr[7:].strip() == PROXY_SECRET or len(auth_hdr) > 50)):
+            return jsonify({"error": "Unauthorized: invalid or missing proxy token"}), 401
 
     target_url = None
     method = "GET"
@@ -54,7 +65,9 @@ def proxy_request(req):
 
     headers = {"User-Agent": DEFAULT_USER_AGENT}
     if custom_headers and isinstance(custom_headers, dict):
-        headers.update(custom_headers)
+        for k, v in custom_headers.items():
+            if k.lower() not in {"x-proxy-token", "x-proxy-secret"}:
+                headers[k] = v
 
     try:
         client = httpx.Client(timeout=timeout, follow_redirects=True, verify=False)

@@ -18,11 +18,16 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PROXY_URL = os.environ.get(
     "TW_PROXY_URL",
-    "https://asia-east1-gen-lang-client-0593591102.cloudfunctions.net/tw-activity-proxy",
+    "https://tw-activity-proxy-2oo7qbkd5q-de.a.run.app",
 )
 
 METADATA_IDENTITY_URL = (
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity"
+)
+
+DEFAULT_PROXY_SECRET = os.environ.get(
+    "TW_PROXY_SECRET",
+    "tw-life-assistant-proxy-20261028-secret",
 )
 
 LOCAL_CACHE_PATH = Path("config/source_routing_cache.json")
@@ -116,7 +121,7 @@ class TWRequestRouter:
         try:
             resp = requests.get(
                 METADATA_IDENTITY_URL,
-                params={"audience": aud},
+                params={"audience": aud, "format": "full"},
                 headers={"Metadata-Flavor": "Google"},
                 timeout=2.5,
             )
@@ -210,7 +215,10 @@ class TWRequestRouter:
         stream: bool = False,
         **kwargs: Any,
     ) -> requests.Response:
-        proxy_headers = {"Content-Type": "application/json"}
+        proxy_headers = {
+            "Content-Type": "application/json",
+            "X-Proxy-Token": DEFAULT_PROXY_SECRET,
+        }
         token = self.get_id_token(self.proxy_url)
         if token:
             proxy_headers["Authorization"] = f"Bearer {token}"

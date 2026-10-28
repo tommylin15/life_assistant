@@ -1,3 +1,11 @@
+## 2026-10-28｜LINE 整合方案 B：Source 已提交，人工驗收與正式功能仍 PARTIAL
+
+- **唯一規格與可執行 WI：** [LINE 整合方案 B](line_integration_b.md)。本次新增 `backend/app/api/line_bridge.py`、`backend/app/models/line_bridge.py`、非破壞性 Alembic `20261028_0023`、`web/line.html`、簽章／重送／隔離測試；所有 LINE secrets 均須透過 Secret Manager 注入，`LINE_BRIDGE_ENABLED` 預設關閉。
+- **現有 source 能力：** Webhook HMAC、LINE ID Token 驗證、Life Google 登入雙身分綁定／撤銷、私聊純文字草稿去重、LIFF 的最近 20 筆草稿／五筆待辦與五個購物清單名稱。不得把草稿視為已正式新增 Task／Calendar。
+- **產品差距：** LIFF 草稿尚需複製到既有 Life 快速新增並由本人確認；查資料、筆記、活動、日曆皆尚未完整 LINE 原生查詢／深連結。原先「完整方案 B」不能標記 DONE。
+- **驗收狀態：** implementation/source PASS；單元測試執行／四項同 SHA CI／Staging PG migration／LIFF 真正登入／LINE OA webhook／Rich Menu／Production runtime 全部 **NOT VERIFIED**，直到當輪 Actions、runtime 與使用者本人 WI 實際驗收。既有成功的 Gmail 與 Life CI 不得沿用。
+- **下一工程入口：** LINE 草稿→Life Inbox 的安全預填／逐筆人工確認；接續 LIFF 個人筆記、活動與 Calendar 查詢。由使用者依 [WI-LINE-00～05](line_integration_b.md) 操作外部整合驗收。正式 OA 選單與 Production 改動保留到驗收合格後。
+
 ## 2026-10-26｜Gmail V2 P0/P1：Production 已於 2026-10-23 正式發布，Staging 真人快掃已驗收
 
 - **P1 正式上線已於 2026-10-23 發布完成（DONE，同 main SHA `2e2bbb50d7166fe49b9130594af3fe952dbf6334`）：**

@@ -1,7 +1,22 @@
 import os
+import socket
 import functions_framework
 import httpx
 from flask import Response, jsonify, request
+
+# Prefer IPv4 over IPv6 to prevent hanging on broken IPv6 routes common in TW government servers
+orig_getaddrinfo = socket.getaddrinfo
+
+def getaddrinfo_prefer_ipv4(host, port, family=0, type=0, proto=0, flags=0):
+    try:
+        res = orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+        if res:
+            return res
+    except Exception:
+        pass
+    return orig_getaddrinfo(host, port, family, type, proto, flags)
+
+socket.getaddrinfo = getaddrinfo_prefer_ipv4
 
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

@@ -134,6 +134,7 @@ def _enforce_general_user_route(request: Request, user: dict) -> None:
         "/api/v1/free-events/curated/filters",
         "/api/v1/free-events/curated/actions",
         "/api/v1/activity",
+        "/api/v1/line/bind", "/api/v1/line/unbind",
     }
     safe_prefixes = (
         "/api/v1/tasks/",

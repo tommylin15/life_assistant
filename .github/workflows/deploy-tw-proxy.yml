@@ -1,0 +1,64 @@
+name: Deploy Taiwan Activity Proxy (Cloud Function)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/tw_activity_proxy/**'
+      - '.github/workflows/deploy-tw-proxy.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy-proxy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev-test
+    env:
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+      GCP_REGION: asia-east1
+      FUNCTION_NAME: tw-activity-proxy
+      INVOKER_SA: postgres-vm@gen-lang-client-0593591102.iam.gserviceaccount.com
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Cloud Function to asia-east1
+        run: |
+          echo "Deploying ${{ env.FUNCTION_NAME }} to ${{ env.GCP_REGION }} in ${{ env.GCP_PROJECT_ID }}..."
+          gcloud functions deploy "${{ env.FUNCTION_NAME }}" \
+            --project="${{ env.GCP_PROJECT_ID }}" \
+            --region="${{ env.GCP_REGION }}" \
+            --gen2 \
+            --runtime=python311 \
+            --entry-point=proxy_request \
+            --source=services/tw_activity_proxy \
+            --trigger-http \
+            --no-allow-unauthenticated \
+            --timeout=120s \
+            --memory=512Mi \
+            --min-instances=0 \
+            --max-instances=5
+
+      - name: Set invoker policy binding for VM service account
+        run: |
+          echo "Binding invoker role for ${{ env.INVOKER_SA }}..."
+          gcloud functions add-invoker-policy-binding "${{ env.FUNCTION_NAME }}" \
+            --project="${{ env.GCP_PROJECT_ID }}" \
+            --region="${{ env.GCP_REGION }}" \
+            --member="serviceAccount:${{ env.INVOKER_SA }}" || true

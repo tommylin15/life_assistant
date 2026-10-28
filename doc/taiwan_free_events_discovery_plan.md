@@ -26,3 +26,11 @@
 - **不設虛假保底筆數**：天然低產出時可有據結案；品質是覆蓋與資料驗證，不是硬湊 N 筆。達合法成本上限而未查完應標 PARTIAL，未查來源是 NOT_RUN 非零活動。Life DB／UI 實際入庫是獨立驗收。
 
 本節不修改 Life 30／31 欄機器交接 schema、stable event_key、content_hash 或 ACK 所有權，不建立新排程、Queue、DB 或 Job。
+
+## 2026-10-28｜四大阻礙類型根因與規則補強（海外 IP、候選冷凍、社群首頁與短網址）
+
+針對政府報名網（如 `https://event.ner.gov.tw/`）、官方 Facebook 粉專（如 `ntpchakka` 新北市客家局、`agr.ntpc` 新北市農業局稼日蒔光）及 Threads 短網址（`threads.com/share/*`）過去無法寫入交換池之問題，Drive 正式規格 `01-source-quality.md`、`02-discovery.md`、`03-qualification.md` 與 `tw_request_router.py` 已同步確立四項強制規則：
+1. **海外 IP 阻擋自動轉發與路由快取（`TW_PROXY`）**：凡台灣政府與機關活動站（`.gov.tw`、主題活動網）於美西 VM 直連遭遇 Timeout 或 403，一律由 `tw_request_router` 經台灣彰化（`asia-east1`）Cloud Run Proxy 轉發，並自動寫入 `config/source_routing_cache.json` 與 Drive `台灣活動探索｜來源路由控制.json`，次輪直接走台灣節點。
+2. **破除 `B-source-validation` 候選冷凍死鎖**：每日批次強制從 `B-source-validation`／`CANDIDATE`／`REVIEW_SOCIAL` 實測並晉升至少 2 個合格來源進入 `官網來源總表` 與 `每日探索來源管理`（`ACTIVE_ROTATION`），不再讓已具官方身分之報名網與局處粉專無限期排除於 `B_active` 之外。
+3. **官方粉專「三步雙入口探索協議」（Twin-Entry Binding）**：Meta（FB/IG）公開粉專首頁對未登入請求回傳 `/login/` 跳轉或隱藏貼文時間軸，屬平台匿名列表限制，**嚴禁直接視為權限牆放棄該主辦**；必須同時綁定其對應局處官網／報名網（經 `TW_PROXY` 抓取）並結合搜尋引擎發掘最新貼文與外部報名表單（Accupass、`forms.gle`）。
+4. **社群短網址 OpenGraph 解析、民國年換算與明確排除日誌**：對 `threads.com`／`facebook.com`／`instagram.com` 預設帶入 `User-Agent: facebookexternalhit/1.1` 以解析 `/share/` 302 轉址與 `og:description` 全文；強制支援政府網站民國年換算（$Y_{\text{CE}} = Y_{\text{ROC}} + 1911$，如 `115年` $\to$ `2026年`）；若解析後確認為非活動之個人日常貼文，明確記 `NON_EVENT_POST_EXCLUDED` 與原文摘要。

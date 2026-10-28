@@ -84,6 +84,30 @@
       "reason": "OVERSEAS_CONNECTION_TIMEOUT",
       "marked_at": "2026-10-28T08:41:00.147680+08:00",
       "note": "Auto-learned by router"
+    },
+    "event.ner.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-28T10:06:21.067540+08:00",
+      "note": "Auto-learned by router"
+    },
+    "www.hakka.ntpc.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-28T10:10:45.652450+08:00",
+      "note": "Auto-learned by router"
+    },
+    "www.agriculture.ntpc.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-28T10:11:00.298346+08:00",
+      "note": "Auto-learned by router"
+    },
+    "ntpc-farming.com": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-28T10:11:45.872652+08:00",
+      "note": "Auto-learned by router"
     }
   }
 }

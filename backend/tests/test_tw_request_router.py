@@ -67,6 +67,15 @@ class TestTWRequestRouter(unittest.TestCase):
             self.assertIn("fae.moa.gov.tw", updated["routes"])
             self.assertEqual(updated["routes"]["fae.moa.gov.tw"]["route"], "TW_PROXY")
 
+    def test_social_opengraph_user_agent(self):
+        mock_resp = MagicMock(spec=requests.Response)
+        mock_resp.status_code = 200
+        with patch("requests.request", return_value=mock_resp) as mock_direct:
+            self.router.request("https://www.threads.com/share/_lOwL9aj1/", allow_proxy=False)
+            mock_direct.assert_called_once()
+            headers = mock_direct.call_args.kwargs["headers"]
+            self.assertIn("facebookexternalhit/1.1", headers["User-Agent"])
+
 
 if __name__ == "__main__":
     unittest.main()

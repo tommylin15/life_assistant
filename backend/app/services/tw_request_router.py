@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
-import httpx
 import requests
 
 logger = logging.getLogger(__name__)
@@ -40,6 +39,22 @@ DEFAULT_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/124.0.0.0 Safari/537.36 LifeAssistant/1.0"
 )
+
+SOCIAL_CRAWLER_USER_AGENT = (
+    "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
+)
+
+SOCIAL_OPENGRAPH_DOMAINS = {
+    "threads.com",
+    "www.threads.com",
+    "threads.net",
+    "www.threads.net",
+    "facebook.com",
+    "www.facebook.com",
+    "m.facebook.com",
+    "instagram.com",
+    "www.instagram.com",
+}
 
 
 class TWRequestRouter:
@@ -146,7 +161,12 @@ class TWRequestRouter:
         parsed = urlparse(url)
         domain = parsed.netloc.split(":")[0].lower()
 
-        req_headers = {"User-Agent": DEFAULT_USER_AGENT}
+        default_ua = (
+            SOCIAL_CRAWLER_USER_AGENT
+            if domain in SOCIAL_OPENGRAPH_DOMAINS
+            else DEFAULT_USER_AGENT
+        )
+        req_headers = {"User-Agent": default_ua}
         if headers:
             req_headers.update(headers)
 

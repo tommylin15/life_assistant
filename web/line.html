@@ -92,7 +92,11 @@
           if (!liff.isLoggedIn()) { liff.login(); return; }
           idToken = liff.getIDToken();
           if (!idToken) throw new Error("需要 LINE OpenID 授權，請檢查 LIFF scope。");
-          try { await api("me"); setLinked(true); }
+          try {
+            await api("me"); setLinked(true);
+            const requested = new URLSearchParams(window.location.search).get("view");
+            if (requested === "drafts" || requested === "summary") await show(requested);
+          }
           catch (e) { setLinked(false); }
         } catch (e) {
           status.textContent = "LINE 功能尚未可用";

@@ -1,5 +1,11 @@
 ## 2026-10-28｜LINE 整合方案 B：Source 已提交，人工驗收與正式功能仍 PARTIAL
 
+## 2026-10-28｜LINE 前次已測試原版復原查核（PARTIAL／BLOCKED）
+- 先前對話回報 153 項通過（LINE 15 項）是**歷史口頭回報**，未對應 GitHub SHA／保存測試日誌；原版檔案 **NOT VERIFIED**。
+- 已查前次 LINE 開發前 Git commit `56275487` 的完整 tree（765 檔，無 LINE 專項），現存其他分支及授權 Drive 亦無可恢復版本。現有重寫版為後次才加入 main，不能冒充原版。
+- [CI #40616784019](https://github.com/tommylin15/life_assistant/actions/runs/40616784019) 同 SHA `a21979c` **FAIL**：Backend 743 tests 有 1 項舊 release revision 契約測試失敗；Flutter／Deployment Scripts／Free Events PG／Gmail ONNX jobs 成功。部署與真實 LINE E2E 未驗。
+- 依使用者決策暫停後次 LINE 重寫版的成果認列與後續開發；feature flag 預設停用，不做破壞性 Git、DB rollback；詳 [復原查核紀錄](line_recovery_audit_20261028.md)。
+
 - **唯一規格與可執行 WI：** [LINE 整合方案 B](line_integration_b.md)。本次新增 `backend/app/api/line_bridge.py`、`backend/app/models/line_bridge.py`、非破壞性 Alembic `20261028_0023`、`web/line.html`、簽章／重送／隔離測試；所有 LINE secrets 均須透過 Secret Manager 注入，`LINE_BRIDGE_ENABLED` 預設關閉。
 - **現有 source 能力：** Webhook HMAC、LINE ID Token 驗證、Life Google 登入雙身分綁定／撤銷、私聊純文字草稿去重、LIFF 的最近 20 筆草稿／五筆待辦與五個購物清單名稱。不得把草稿視為已正式新增 Task／Calendar。
 - **產品差距：** LIFF 草稿尚需複製到既有 Life 快速新增並由本人確認；查資料、筆記、活動、日曆皆尚未完整 LINE 原生查詢／深連結。原先「完整方案 B」不能標記 DONE。

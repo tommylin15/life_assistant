@@ -1,5 +1,12 @@
 # Life — Active engineering TODO
 
+## 2026-10-28｜LINE 原版復原優先（BLOCKED／NOT VERIFIED）
+
+- **使用者最新決策：** 前次「LINE整合方案評估」已開發與自述測試 153 項／LINE 15 項的版本，才是希望恢復的基準；後次 GitHub LINE 重寫不列入正式成果，不以此繼續開發。
+- **復原查核：** [line_recovery_audit_20261028.md](line_recovery_audit_20261028.md)。前次原始碼、git SHA 或可恢復檔案 **NOT VERIFIED**；前次開發前 main `56275487` 和其他已知分支沒有 LINE 版本。不得捏造「原版已找回」。
+- **目前新版本：** 保持 source 可供比對、功能開關預設關閉；同 SHA [CI #40616784019](https://github.com/tommylin15/life_assistant/actions/runs/40616784019) 為 **FAIL（Backend 1 項 migration 版號契約測試）**，不是 CI NOT VERIFIED；Staging/LINE 真人／Runtime 均 NOT VERIFIED。
+- **停止線：** 原版的可讀原始碼 + 確切檔案/SHA、15 項測試的可重跑指令與結果、逐檔差異均有證據後，才能以正常 commit 做有界回退與替換；禁止整棵 main reset/force push，不碰同期間非 LINE 的探索匯入程式。未達上述條件時暫停 LINE 功能開發及發布。
+
 ## 2026-10-28｜LINE 整合方案 B：Source 已提交，人工驗收與正式功能仍 PARTIAL
 
 - **唯一規格與可執行 WI：** [LINE 整合方案 B](line_integration_b.md)。本次新增 `backend/app/api/line_bridge.py`、`backend/app/models/line_bridge.py`、非破壞性 Alembic `20261028_0023`、`web/line.html`、簽章／重送／隔離測試；所有 LINE secrets 均須透過 Secret Manager 注入，`LINE_BRIDGE_ENABLED` 預設關閉。

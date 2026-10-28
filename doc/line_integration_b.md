@@ -1,5 +1,9 @@
 # Life Assistant × LINE｜方案 B 正式規格、落地現況與 WI（2026-10-28）
 
+> **2026-10-28 復原暫停／NOT VERIFIED：本文件第 1–8 節記載的是後一次重新實作，不是「LINE整合方案評估」前次已測試原版；使用者要求排除這批重寫成果，不納入正式完成清單，也不得直接沿此版本開發、配置、部署或宣稱已驗收。**
+> 前次對話曾回報 153 項後端測試（含 LINE 15 項）通過，但尚未取得原始碼、commit、執行命令與同版本測試收據；2026-10-28 前次開發前 main `56275487` 與現存其他分支均無 LINE 專項程式，`life_assistantGPT` Drive 根及其可見子資料夾沒有可恢復的原版。這次版本 `a21979c` 的 GitHub CI [#40616784019](https://github.com/tommylin15/life_assistant/actions/runs/40616784019) **FAIL**（Backend release revision 斷言仍預期 0022，實際配置已到 0023；其他四項成功）。完整證據、隔離決策、恢復條件見 [復原查核紀錄](line_recovery_audit_20261028.md)。
+> **禁止**在找到且核對原版之前依本文件下方的開發／部署 WI 接續重寫；目前保持 `LINE_BRIDGE_ENABLED` 預設 false，保留原始 Git 歷史與非 LINE 修改；尚未回退程式或 migration。
+
 > 狀態：**PARTIAL（程式已提交 main；CI、Staging、LINE 真人與正式版尚未驗收）**。
 > 唯一有效 implementation 來源為 GitHub main 與同 SHA 的執行證據；本文件是技術規格及驗收指示，不等於產品已啟用。手動驗收由使用者執行。
 

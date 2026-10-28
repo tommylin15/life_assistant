@@ -110,3 +110,13 @@ Firebase Hosting 應保留既有 `/api/**` rewrite 到同個 Cloud Run FastAPI�
 唯一後續工程：實作 **草稿→Life Inbox 預填→逐項確認** 的 LIFF 流程（保留按人授權與嚴格去重），再擴充筆記／活動／Calendar 查詢；目前不另外引入 agent orchestration、不新增獨立 Scheduler、不建立第二個使用者 DB。
 
 參考：GitHub `doc/life_inbox_quick_capture_spec.md`、`doc/PROJECT_RULES.md`、`doc/ci_cd_ghcr_release_policy.md`；LINE 官方文件 https://developers.line.biz/en/docs/messaging-api/verify-webhook-signature/ 、https://developers.line.biz/en/docs/liff/using-user-profile/ 。
+
+## 8. 給其他 AI／工程代理的可執行 WI（不需重新規劃）
+
+請使用下列指示在下一工程輪次執行，**不得直接把尚未驗證之功能標 DONE**：
+
+> 你在 `tommylin15/life_assistant` 的 `main` 繼續 LINE 方案 B。先讀最新 `doc/line_integration_b.md`、`doc/todo.md`、`doc/PROJECT_RULES.md`、`doc/ci_cd_ghcr_release_policy.md` 以及現行 Backend/Flutter/Alembic。不要沿用對話中的歷史「測試已通過」說法。維持單 branch main，最小差異修改。功能開關預設關閉，不得寫入真實 channel secret、access token、ID token、個人訊息至程式、測試或 log。
+>
+> 首先核對這批 source、synthetic tests 與 release revision 0023 的相容性，補修 CI 失敗；保留 LINE HMAC raw-body 驗證、server-side ID Token verify、Life Google session 雙重綁定、跨帳號與 staging/production 隔離、訊息 ID 去重及已撤銷拒絕。下一功能只實作「LINE 草稿 → Life Inbox 預填 → 多項逐筆確認」及缺失的活動／Calendar 深連結和唯讀查詢；不能讓 webhook 直接永久新增或刪除個人主資料。
+>
+> 使用 synthetic 狀態執行 Backend 單元／API／PostgreSQL migration、Flutter smoke、security regression，確認四 CI 同 SHA；再使用現行 V3 staging-only 執行、讀回 migration 0023 與 Hosting /line.html，不得自動 promote production。將所有 PASS/FAIL/NOT VERIFIED 證據回寫 `doc/CURRENT_STATE.md` 和唯一 `doc/todo.md`。LINE Console、Secret Manager 憑證、LINE 真人操作與 Rich Menu 驗收由使用者執行，沒有真人證據一律 NOT VERIFIED。不可 force push、覆寫舊規格、清空 production DB 或更動高風險 IAM。

@@ -40,12 +40,12 @@ Firebase Hosting /api/** → Cloud Run FastAPI /api/v1/line/webhook
 | --- | --- | --- |
 | ① 快速記錄 | 私聊文字經驗證後保存草稿；LIFF 讀最近 20 筆，複製後進 Life 快速新增確認 | 直接從草稿進 Life 預填／確認流程、照片／語音轉文字 |
 | ② 今日總覽 | LIFF 顯示本人最多 5 筆未完成待辦、5 個購物清單名稱 | 整合本人日曆、今日日程與提示 |
-| ③ 查資料 | 目前與今日總覽共用 scoped 查詢，**不是全文搜尋** | 筆記、待辦、活動與歷史個人記錄的分頁檢索 |
+| ③ 查資料 | LIFF 已有 `/search?q=` 限量、按人 scoped 搜尋 Life 筆記、待辦及購物品項（每類最多 10 筆，僅關鍵字匹配，**不是全文 AI 搜尋**） | 活動與歷史個人記錄、模糊語意及分頁檢索 |
 | ④ 待辦・購物 | 同上基本列表；沒有直接改狀態／刪除 | Life 原有授權 API 明確操作 |
 | ⑤ 日曆・活動 | 連到 Life 網站現有入口；**不是 LINE LIFF 原生查詢** | 導向指定 Life 頁面、串接本人 Google Calendar |
 | ⑥ 我的 Life | 連到既有 Life 網站 | 統一深連結及 LINE 登入後返回 |
 
-以上 ③–⑥ 不能對外宣稱完整完成；除已證實的 LIFF 基本 UI／API source，實際 LINE 真人運作也仍是 NOT VERIFIED。
+以上 ③ 的活動範圍及 ④–⑥ 不能對外宣稱完整完成；除已證實的 LIFF 基本 UI／API source，實際 LINE 真人運作也仍是 NOT VERIFIED。
 
 ## 4. API 契約
 
@@ -54,7 +54,7 @@ Firebase Hosting /api/** → Cloud Run FastAPI /api/v1/line/webhook
 - `POST /webhook`：僅接受 LINE 官方原始 body 的 `X-Line-Signature` 正確 HMAC-SHA256；每次最多 50 events、64 KiB，僅私聊文字，最多 1,200 字；不接收群組；使用 LINE message ID 防重送；未綁定不得保存；可回覆簡短提醒，不輸出憑證或原始文字到 Log。
 - `POST /bind`：需使用者 Life `__session` Cookie + LINE OpenID `id_token`，後端呼叫 LINE 官方 ID token verify；同 LINE ID 綁定另一人須回 409；staging 與 production 隔離。
 - `POST /unbind`：需雙身分，使用者只能撤銷自己的綁定；撤銷後 /summary /drafts 不可用，未來私聊訊息不得入庫。
-- `GET /me`、`GET /drafts`、`GET /summary`：LIFF 的 LINE ID token Bearer，每次向 LINE 核驗且只讀已綁定 user_sub 的資料；禁止使用 LINE userId 客戶端直接作為 Life user_sub。
+- `GET /me`、`GET /drafts`、`GET /summary`：LIFF 的 LINE ID token Bearer，每次向 LINE 核驗且只讀已綁定 user_sub 的資料；`GET /search?q=` 額外提供 bounded 本人筆記／待辦／購物品項的關鍵字查詢，不提供 Google Calendar 或活動；禁止使用 LINE userId 客戶端直接作為 Life user_sub。
 
 目前沒有 Life 正式記錄的 LINE 自動寫入 API；一旦真正要新增應經原有 Life Inbox `interpret → explicit confirm` 契約，不得讓 webhook 直接執行寫入。
 

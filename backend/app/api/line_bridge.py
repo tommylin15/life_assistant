@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,8 @@ from app.api import auth
 from app.api.auth import current_user
 from app.db.session import get_db
 from app.models.line_bridge import LineAccountLink, LineCaptureDraft
-from app.models.shopping import ShoppingList
+from app.models.shopping import ShoppingList, ShoppingItem
+from app.models.note import Note
 from app.models.task import Task
 
 router = APIRouter(prefix="/line", tags=["line-bridge"])
@@ -203,6 +204,48 @@ async def line_summary(
             "shopping_lists": [{"name": s.name} for s in shopping],
             "note": "Only Life PostgreSQL tasks and shopping list names are shown; external Google Calendar is not queried."}
 
+
+
+
+@router.get("/search")
+async def line_search(
+    q: str,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bounded personal search; no arbitrary SQL, public feed or Google scope."""
+    query = q.strip()
+    if not 2 <= len(query) <= 80:
+        raise HTTPException(422, "Search phrase must be 2-80 characters")
+    line_id = await _bearer_user(authorization)
+    sub, _ = await _linked_user(db, line_id)
+    # Escape LIKE wildcards so user input cannot turn into a full-table scan.
+    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    pattern = f"%{escaped}%"
+    notes = (await db.execute(select(Note).where(
+        Note.user_sub == sub, or_(
+            Note.title.ilike(pattern, escape="\\"),
+            Note.body.ilike(pattern, escape="\\"),
+        ),
+    ).order_by(Note.updated_at.desc()).limit(10))).scalars().all()
+    tasks = (await db.execute(select(Task).where(
+        Task.user_sub == sub, Task.deleted_at.is_(None),
+        or_(Task.title.ilike(pattern, escape="\\"),
+            Task.note.ilike(pattern, escape="\\")),
+    ).order_by(Task.updated_at.desc()).limit(10))).scalars().all()
+    shopping = (await db.execute(select(ShoppingItem.name).join(
+        ShoppingList, ShoppingItem.list_id == ShoppingList.id
+    ).where(
+        ShoppingList.user_sub == sub,
+        ShoppingItem.name.ilike(pattern, escape="\\"),
+    ).limit(10))).scalars().all()
+    return {
+        "notes": [{"title": n.title or "未命名筆記", "snippet": (n.body or "")[:160]}
+                  for n in notes],
+        "tasks": [{"title": t.title, "status": t.status} for t in tasks],
+        "shopping_items": [{"name": name} for name in shopping],
+        "scope": "life_postgresql_only",
+    }
 
 async def _reply(reply_token: str | None, text: str) -> None:
     access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")

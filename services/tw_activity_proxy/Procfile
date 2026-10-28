@@ -1,0 +1,1 @@
+web: functions-framework --target=proxy_request --port=8080

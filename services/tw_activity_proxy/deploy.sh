@@ -1,32 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deployment script for Taiwan Activity Proxy Cloud Function in asia-east1
+# Deployment script for Taiwan Activity Proxy on Cloud Run in asia-east1
 PROJECT_ID="${GCP_PROJECT_ID:-gen-lang-client-0593591102}"
 REGION="${GCP_REGION:-asia-east1}"
-FUNCTION_NAME="tw-activity-proxy"
+SERVICE_NAME="tw-activity-proxy"
 INVOKER_SA="postgres-vm@${PROJECT_ID}.iam.gserviceaccount.com"
 
-echo "Deploying ${FUNCTION_NAME} to ${REGION} in project ${PROJECT_ID}..."
+echo "Deploying ${SERVICE_NAME} to ${REGION} in project ${PROJECT_ID}..."
 
-gcloud functions deploy "${FUNCTION_NAME}" \
+gcloud run deploy "${SERVICE_NAME}" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
-  --gen2 \
-  --runtime=python311 \
-  --entry-point=proxy_request \
   --source="$(dirname "$0")" \
-  --trigger-http \
   --no-allow-unauthenticated \
   --timeout=120s \
   --memory=512Mi \
   --min-instances=0 \
-  --max-instances=5
+  --max-instances=5 \
+  --quiet
 
-echo "Granting invoker role to VM service account: ${INVOKER_SA}..."
-gcloud functions add-invoker-policy-binding "${FUNCTION_NAME}" \
+echo "Granting run.invoker role to VM service account: ${INVOKER_SA}..."
+gcloud run services add-iam-policy-binding "${SERVICE_NAME}" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
-  --member="serviceAccount:${INVOKER_SA}"
+  --member="serviceAccount:${INVOKER_SA}" \
+  --role="roles/run.invoker" \
+  --quiet || true
 
-echo "Deployment completed successfully."
+URL="$(gcloud run services describe "${SERVICE_NAME}" --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
+echo "Deployment completed successfully. Service URL: ${URL}"

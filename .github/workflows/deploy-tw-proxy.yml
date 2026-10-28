@@ -1,4 +1,4 @@
-name: Deploy Taiwan Activity Proxy (Cloud Function)
+name: Deploy Taiwan Activity Proxy (Cloud Run)
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102
       GCP_REGION: asia-east1
-      FUNCTION_NAME: tw-activity-proxy
+      SERVICE_NAME: tw-activity-proxy
       INVOKER_SA: postgres-vm@gen-lang-client-0593591102.iam.gserviceaccount.com
 
     steps:
@@ -38,27 +38,32 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Deploy Cloud Function to asia-east1
+      - name: Deploy Cloud Run service to asia-east1
         run: |
-          echo "Deploying ${{ env.FUNCTION_NAME }} to ${{ env.GCP_REGION }} in ${{ env.GCP_PROJECT_ID }}..."
-          gcloud functions deploy "${{ env.FUNCTION_NAME }}" \
+          echo "Deploying ${{ env.SERVICE_NAME }} to ${{ env.GCP_REGION }} in ${{ env.GCP_PROJECT_ID }}..."
+          gcloud run deploy "${{ env.SERVICE_NAME }}" \
             --project="${{ env.GCP_PROJECT_ID }}" \
             --region="${{ env.GCP_REGION }}" \
-            --gen2 \
-            --runtime=python311 \
-            --entry-point=proxy_request \
             --source=services/tw_activity_proxy \
-            --trigger-http \
             --no-allow-unauthenticated \
             --timeout=120s \
             --memory=512Mi \
             --min-instances=0 \
-            --max-instances=5
+            --max-instances=5 \
+            --quiet
 
       - name: Set invoker policy binding for VM service account
         run: |
-          echo "Binding invoker role for ${{ env.INVOKER_SA }}..."
-          gcloud functions add-invoker-policy-binding "${{ env.FUNCTION_NAME }}" \
+          echo "Binding run.invoker role for ${{ env.INVOKER_SA }}..."
+          gcloud run services add-iam-policy-binding "${{ env.SERVICE_NAME }}" \
             --project="${{ env.GCP_PROJECT_ID }}" \
             --region="${{ env.GCP_REGION }}" \
-            --member="serviceAccount:${{ env.INVOKER_SA }}" || true
+            --member="serviceAccount:${{ env.INVOKER_SA }}" \
+            --role="roles/run.invoker" \
+            --quiet || true
+
+      - name: Output Service URL
+        run: |
+          URL="$(gcloud run services describe "${{ env.SERVICE_NAME }}" --project="${{ env.GCP_PROJECT_ID }}" --region="${{ env.GCP_REGION }}" --format='value(status.url)')"
+          echo "PROXY_URL=${URL}" >> $GITHUB_ENV
+          echo "Service deployed successfully at ${URL}"

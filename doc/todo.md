@@ -1,3 +1,7 @@
+## 2026-10-28｜原版 LINE 方案 B 已恢復為優先基線
+
+依 Owner 最新指示，以本對話工作副本的 `api/line.py` 與 `web/line/` 為準。原版 manifest、patch 與 153/15 測試收據已保存於 doc/evidence、doc/archive。保留舊 0023 資料表，以 0024 向前遷移；舊 bridge router 不註冊。現行規格：[LINE B](line_integration_b.md)，設定與真人驗收：[WI](line_integration_b_wi.md)。下方舊「原版未找到／停止線」是歷史查核，已由本次找回證據及 Owner 指示取代。CI／部署／真人整合依當次證據分別判定。
+
 # Life — Active engineering TODO
 
 ## 2026-10-28｜LINE 原版復原優先（BLOCKED／NOT VERIFIED）

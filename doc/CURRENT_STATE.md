@@ -1,3 +1,7 @@
+## 2026-10-28｜原版 LINE 方案 B 已恢復為優先基線
+
+依 Owner 最新指示，以本對話工作副本的 `api/line.py` 與 `web/line/` 為準。原版 manifest、patch 與 153/15 測試收據已保存於 doc/evidence、doc/archive。保留舊 0023 資料表，以 0024 向前遷移；舊 bridge router 不註冊。現行規格：[LINE B](line_integration_b.md)，設定與真人驗收：[WI](line_integration_b_wi.md)。下方舊「原版未找到／停止線」是歷史查核，已由本次找回證據及 Owner 指示取代。CI／部署／真人整合依當次證據分別判定。
+
 ## 2026-10-28｜LINE 整合方案 B：Source 已提交，人工驗收與正式功能仍 PARTIAL
 
 ## 2026-10-28｜LINE 前次已測試原版復原查核（PARTIAL／BLOCKED）
@@ -233,3 +237,4 @@ At audit time the source baseline was `fc800b280be59f44f485dfc170fe45a14fc9c981`
 
 - [CI #39048784160](https://github.com/tommylin15/life_assistant/actions/runs/39048784160) 與 [workflow 載入失敗 #39048783013](https://github.com/tommylin15/life_assistant/actions/runs/39048783013) 暴露：Preview channel Base36 計算的內嵌 Python heredoc 沒有保持 YAML `run: |` 縮排，導致 GitHub Actions workflow 直接無法解析（0 jobs）；程式碼 CI 不能取代 workflow YAML 格式檢查。
 - 修正 heredoc YAML 縮排，並在 deployment-scripts CI 新增 PyYAML 的 **所有 .github/workflows/*.yml** 結構載入驗證；正式 staging/production 仍以新的同 SHA workflow/runtime readback 判定，不沿用之前的綠燈。
+

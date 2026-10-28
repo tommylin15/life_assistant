@@ -36,6 +36,16 @@ class LifeReleaseNote {
 /// Never claim unrelated / unverified candidate fixes are production releases.
 const lifeReleaseNotes = <LifeReleaseNote>[
   LifeReleaseNote(
+    id: 'web-0.6.0-line-life',
+    version: '0.6.0',
+    title: 'LINE 生活助手',
+    featureKey: 'line',
+    changes: <String>[
+      '連結帳號後，可從 LINE 留下文字草稿並確認新增生活事項。',
+      '支援個人資料查詢，以及 LINE 內的待辦、購物與行程操作。',
+    ],
+  ),
+  LifeReleaseNote(
     id: 'web-0.5.0-unified-activities',
     version: '0.5.0',
     title: '活動探索整合為全部活動',
@@ -199,3 +209,4 @@ void markReleaseNotesRead(String? email, List<LifeReleaseNote> visible) {
 
 /// Signals that the local unread indicator should rebuild immediately.
 final releaseNotesReadRevisionProvider = StateProvider<int>((_) => 0);
+

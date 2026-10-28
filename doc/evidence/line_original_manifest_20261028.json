@@ -1,0 +1,31 @@
+{
+  "source_workspace": "/workspace/scratch/ce8451bfc5e6/life-line",
+  "original_github_base": "e70d696bdd93a41dbabe56b857d0ba636642f705",
+  "sha256": {
+    ".github/workflows/ci.yml": "aa655a6952121c902dca273d8b317b9b45885ceb74bc43c89c8ba6f0517a3730",
+    ".github/workflows/v3-release-ghcr.yml": "8672aacbcf65f2434ddcd5c64ce507af298219a3860c4c95e2c6a62fada34ae7",
+    "backend/alembic/env.py": "1d19ac39ee1a7804e1593fee7f9b5560e09d8eea2957f8f38334b7b7f3b89162",
+    "backend/alembic/versions/20261028_0023_line_channel.py": "699433ec036edd425efd6187f48ee1c9910a5abac5a1cee08128c7da81ca488e",
+    "backend/app/api/auth.py": "1a388b07e30fd8d78468de90c864039466efd75787c8f95962d7a482f3e580fe",
+    "backend/app/api/inbox.py": "633a2e7c88180cddf02f4a05d01fda100a0d633aaff43263bf7ce27e02794ebb",
+    "backend/app/api/line.py": "b851500f55519a3a1fc5a693f885b0201fc9127af1566bf70228f41b083305bb",
+    "backend/app/api/ui_policies.py": "92c243d100b0f4f847b72705fa052cc1ec636b77a0094a05bec7dedd93a603b0",
+    "backend/app/main.py": "23d9d38a82c6faca2c212605e02b261195c0e22853ec89d86ffbc60cf9fc36b5",
+    "backend/app/models/line.py": "d1b6ae232abf17b9c4a4be30a63491bb2dc2bbb58d04beeb95fcc39aa7efd399",
+    "backend/app/services/line_channel.py": "8cb8840e293e0c6497cec26b2e053e74451ff40a7b78908ab9f3835bd79b4efb",
+    "backend/requirements-test.txt": "c31e808abbb4750b0f2c9efd1189a412cb864c73d910774323ca8c5ce078866d",
+    "backend/tests/test_line_channel.py": "77defd0c638e68448da93f391385bbcf64e7fc27dbecb31d1e73459723852171",
+    "firebase.json": "29f0a9cbf17902bffa3d40074e320e87f9dacc37dd2b18ad960f793f6e7a38f7",
+    "lib/web/personalize_page.dart": "de5fd7a91ae8756f997080f564c776410d1b9199d32bcec04fbf62e8dcdc3c66",
+    "lib/web/release_info.dart": "a0ae38f2b85c2bf739860a676c73edfa5c88c3eb8586faa266b1c5294df7be57",
+    "pubspec.yaml": "7abad50cb65095b7c7513fd2feb87ae7a51f6ba16c30fbe801b5848e829a6988",
+    "scripts/line_deploy_flags.py": "a4762c2c73686e8d001b1150fd8eb3abb0ce5fa0655faa14fa18bd5905db2169",
+    "scripts/line_rich_menu.py": "2cab55e20a578bfa6e6c22ac8abc38cc81d0140edbe0a8ab26d6285c4ff71cf5",
+    "tests/line_web_smoke.cjs": "4f33153f47234619700f3135c479ce97d014968ded199126b670c302d62e60b0",
+    "web/line/index.html": "8177565e0abef3d9c35593adc58be5e242110d35ffe42eedf0a3372151fb8e9f",
+    "web/line/app.js": "2566a8fb55c37291a5ded0c1a876ebf9362dd9f89b11459bc9cba4b048f96971",
+    "web/line/link.html": "769b533f00a35d965eb90a62b0baadd77236a1bd1941c63a44ec175a7287ea7b",
+    "web/line/link.js": "dbb281f6386870f8c19d8f4ff00683330509dfe43b008b1a80062eb155a1b848",
+    "web/line/style.css": "e42ce96581c7e9dffa19d91b04c1caab25e54e4a8645f3b114ed4d51e1679696"
+  }
+}

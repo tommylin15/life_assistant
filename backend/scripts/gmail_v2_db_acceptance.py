@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.config import settings
 
-EXPECTED_HEAD = "20261019_0022"
+EXPECTED_HEAD = "20261028_0024"
 EXPECTED_COLUMNS = {
     "gmail_radar_items": {
         "classifier_version", "classification_source", "reason_code",
@@ -60,3 +60,4 @@ async def run_acceptance() -> None:
 
 if __name__ == "__main__":
     asyncio.run(run_acceptance())
+

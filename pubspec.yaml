@@ -1,7 +1,7 @@
 name: life_assistant
 description: Personal life management assistant app.
 publish_to: 'none'
-version: 0.5.0+5
+version: 0.6.0+6
 
 environment:
   sdk: ^3.13.3
@@ -66,3 +66,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/life_assistant_hero_v2.jpg
+

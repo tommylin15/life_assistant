@@ -31,6 +31,8 @@ from scripts.reconcile_projects_status_default import (
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 PREVIOUS_RELEASE_REVISION = "20261012_0018"
 LEGACY_DIRECT_RELEASE_REVISIONS = {
+    "20261028_0023",
+    "20261019_0022",
     "20261019_0022",
     "20261017_0021",
     "20261016_0020",
@@ -47,7 +49,7 @@ LEGACY_DIRECT_RELEASE_REVISIONS = {
     "20261009_0012",
     "20261009_0013",
 }
-RELEASE_TARGET_REVISION = "20261028_0023"
+RELEASE_TARGET_REVISION = "20261028_0024"
 EXIT_RELEASE_REVISION = 60
 EXIT_RELEASE_ALEMBIC = 61
 EXIT_RELEASE_MISSING_TABLES = 62
@@ -353,3 +355,4 @@ if __name__ == "__main__":
         exit_code = classify_failure(exc)
         print(f"migration_failure_exit_code={exit_code}", file=sys.stderr)
         raise SystemExit(exit_code) from exc
+

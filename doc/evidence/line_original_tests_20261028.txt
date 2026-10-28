@@ -1,0 +1,53 @@
+WARNING:root:inbox_article_summary=FAIL phase=gateway code=gemini_text_disabled
+/workspace/scratch/ce8451bfc5e6/life-line/backend/app/api/notes.py:270: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+Coroutine created at (most recent call last)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/async_case.py", line 113, in _callMaybeAsync
+    return self._asyncioRunner.run(
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/asyncio/base_events.py", line 678, in run_until_complete
+    self.run_forever()
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/asyncio/base_events.py", line 645, in run_forever
+    self._run_once()
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/asyncio/base_events.py", line 1991, in _run_once
+    handle._run()
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/asyncio/events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "/workspace/scratch/ce8451bfc5e6/life-line/backend/tests/test_notes.py", line 245, in test_replace_tags_reuses_existing_tag_and_creates_missing_tag
+    response = await replace_note_tags(
+  File "/workspace/scratch/ce8451bfc5e6/life-line/backend/app/api/notes.py", line 270, in replace_note_tags
+    db.add(EntityTag(entity_type="note", entity_id=note_id, tag_id=tag.id))
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+  db.add(EntityTag(entity_type="note", entity_id=note_id, tag_id=tag.id))
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+/workspace/scratch/ce8451bfc5e6/life-line/backend/app/api/notes.py:268: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+Coroutine created at (most recent call last)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/async_case.py", line 113, in _callMaybeAsync
+    return self._asyncioRunner.run(
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/asyncio/base_events.py", line 678, in run_until_complete
+    self.run_forever()
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/asyncio/base_events.py", line 645, in run_forever
+    self._run_once()
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/asyncio/base_events.py", line 1991, in _run_once
+    handle._run()
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/asyncio/events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "/workspace/scratch/ce8451bfc5e6/life-line/backend/tests/test_notes.py", line 245, in test_replace_tags_reuses_existing_tag_and_creates_missing_tag
+    response = await replace_note_tags(
+  File "/workspace/scratch/ce8451bfc5e6/life-line/backend/app/api/notes.py", line 268, in replace_note_tags
+    db.add(tag)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+  db.add(tag)
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+----------------------------------------------------------------------
+Ran 153 tests in 1.588s
+
+OK

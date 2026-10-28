@@ -89,7 +89,7 @@ jobs:
 
       - name: Install and verify backend
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements-test.txt
           python -c "from app.main import app; print('OK')"
           alembic upgrade head --sql > /tmp/life-assistant-migrations.sql
           python -m unittest discover -s tests -v
@@ -126,7 +126,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-test.txt
 
       - name: Run Alembic migrations
         run: |
@@ -220,6 +220,15 @@ jobs:
             .github/scripts/v3_free_event_retirement_readback.py \
             .github/scripts/v3_staging_gate.py
 
+      - uses: ./.github/actions/setup-playwright
+
+      - name: LINE mobile page offline smoke
+        run: |
+          node --check web/line/app.js
+          node --check web/line/link.js
+          node tests/line_web_smoke.cjs
+          python -m unittest tests/test_line_deploy_tools.py -v
+
       - name: Run deployment script tests
         run: |
           python -m unittest \
@@ -256,3 +265,4 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: CRITICAL,HIGH
+

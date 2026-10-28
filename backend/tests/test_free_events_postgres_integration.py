@@ -164,7 +164,7 @@ class FreeEventPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_exact_alembic_head_and_additive_tables(self):
         async with self.engine.connect() as conn:
             revision = await conn.scalar(text("SELECT version_num FROM alembic_version"))
-            self.assertEqual(revision, "20261028_0023")
+            self.assertEqual(revision, "20261028_0024")
             rows = (await conn.execute(text(
                 "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public' "
                 "AND tablename LIKE 'free_event_%'"
@@ -405,3 +405,4 @@ class FreeEventPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -1,3 +1,7 @@
+## 2026-10-28 更新：原版已找回
+
+原版位於 `/workspace/scratch/ce8451bfc5e6/life-line`；檔案 SHA256 見 [manifest](evidence/line_original_manifest_20261028.json)，原始內容見 [patch](archive/line-original-20261028.patch)，重跑 153 項（LINE 15 項）收據見 [test log](evidence/line_original_tests_20261028.txt)。Owner 明確指定我們這版優先，已解除下方歷史復原停止線。整合僅新增 0024，保留 0023 及其他 main 改動。
+
 # LINE 方案 B｜前次已測試版本復原證據與隔離決策（2026-10-28）
 
 ## 使用者決策與停止條件
@@ -32,3 +36,4 @@ WI-REC-03：若原版已確認可恢復，採 additive/forward-only migration �
 WI-REC-04：跑同 SHA targeted tests → 五項 CI → staging readback → 交使用者完成 LINE OAuth、Webhook、Rich Menu 真實 WI；沒有 runtime 整合證據標 NOT VERIFIED，正式發布只能在 gate 成功後獨立核准。
 
 **當前唯一下一入口：定位前次可讀 source/artifact 與測試證據。無檔案時不得依後次版本繼續產品開發。**
+

@@ -39,6 +39,7 @@ class InterpretInput(BaseModel):
     text: str = Field(min_length=1, max_length=1200)
     timezone: str = Field(default="Asia/Taipei", max_length=64)
     gmail_item_id: str | None = Field(default=None, max_length=36)
+    line_event_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class SuggestedNote(BaseModel):
@@ -457,6 +458,16 @@ async def interpret(body: InterpretInput, response: Response,
         now = datetime.now(ZoneInfo(body.timezone)).isoformat()
     except (ValueError, ZoneInfoNotFoundError):
         raise HTTPException(422, "Invalid timezone")
+    if body.line_event_id is not None:
+        from app.models.line import LineEvent
+        from app.services.line_channel import aware, configuration, utcnow
+        await feature_gate("line")(user=user, db=db)
+        event = await db.get(LineEvent, body.line_event_id)
+        if (event is None or event.user_sub != user["sub"]
+                or event.namespace != configuration()["namespace"]
+                or aware(event.expires_at) <= utcnow() or not event.text):
+            raise HTTPException(404, "LINE draft not found")
+        now = aware(event.created_at).astimezone(ZoneInfo(body.timezone)).isoformat()
     hint = _inbox_date_hint(value, now)
     if body.gmail_item_id is not None:
         # Gmail-derived data MUST NOT enter the generic Gemini Inbox route.
@@ -534,6 +545,8 @@ async def _verify_target(target: str, db: AsyncSession, user: dict):
     key = {"note": "notes", "task": "tasks",
            "shopping": "shopping", "calendar": "integrations"}[target]
     await TARGET_GATES[key](user=user, db=db)
+    if target == "calendar":
+        await feature_gate("calendar")(user=user, db=db)
 
 
 async def _internal_write(target: str, fields: dict, db: AsyncSession, user: dict, reservation):
@@ -651,3 +664,4 @@ async def receipt(action_id: str, response: Response,
     return {"action_id": action_id,
             "status": "CREATED" if result.status == "success" else "UNKNOWN",
             "entity_id": result.entity_id if result.status == "success" else None}
+

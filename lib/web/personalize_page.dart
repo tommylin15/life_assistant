@@ -375,6 +375,14 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
                 if (_tab == 'home') _homeTab(flags),
                 if (_tab == 'navigation') _navigationTab(flags),
                 if (_tab == 'appearance') _appearanceTab(),
+                if (_tab == 'google' && flags?['line'] == true)
+                  Card(child: ListTile(
+                    leading: const Icon(Icons.chat_bubble_outline),
+                    title: const Text('LINE 生活助手'),
+                    subtitle: const Text('連結或解除 LINE 帳號；原有 Life 資料保留'),
+                    trailing: const Icon(Icons.open_in_new),
+                    onTap: () => navigateBrowser('/line/link.html'),
+                  )),
                 if (_tab == 'google') const FeatureAccess(
                     feature: 'integrations', child: GoogleConnectionsPanel()),
                 if (_tab == 'home' || _tab == 'navigation') ...[
@@ -447,3 +455,4 @@ class _PersonalizePageState extends ConsumerState<PersonalizePage> {
     }
   }
 }
+

@@ -134,7 +134,6 @@ def _enforce_general_user_route(request: Request, user: dict) -> None:
         "/api/v1/free-events/curated/filters",
         "/api/v1/free-events/curated/actions",
         "/api/v1/activity",
-        "/api/v1/line/bind", "/api/v1/line/unbind",
     }
     safe_prefixes = (
         "/api/v1/tasks/",
@@ -142,7 +141,7 @@ def _enforce_general_user_route(request: Request, user: dict) -> None:
         "/api/v1/shopping-lists/", "/api/v1/shopping-items/",
         "/api/v1/integrations/google/calendar",
         "/api/v1/integrations/google/gmail",
-        "/api/v1/inbox/",
+        "/api/v1/inbox/", "/api/v1/line/",
     )
     action_prefix = "/api/v1/free-events/curated/"
     action_parts = path[len(action_prefix):].split("/") if path.startswith(action_prefix) else []
@@ -303,7 +302,10 @@ async def current_user(
 ) -> dict:
     session = request.cookies.get(SESSION_COOKIE, "")
     fixed_stage = _fixed_staging_origin(request)
-    if session.startswith("se:"):
+    if session.startswith("ln:"):
+        from app.services.line_channel import read_line_session
+        user = await read_line_session(request, db, session)
+    elif session.startswith("se:"):
         user = await _read_persistent_session(db, session, staging=fixed_stage)
     else:
         # Backward compatibility until previously issued one-hour Google ID
@@ -465,6 +467,14 @@ async def logout(
     request: Request, response: Response, db: AsyncSession = Depends(get_db),
 ):
     cookie = request.cookies.get(SESSION_COOKIE, "")
+    if cookie.startswith("ln:"):
+        from app.models.line import LineSession
+        from app.services.line_channel import check_origin, configuration, digest
+        check_origin(request, configuration())
+        record = await db.get(LineSession, digest(cookie.removeprefix("ln:")))
+        if record is not None:
+            await db.delete(record)
+            await db.commit()
     if cookie.startswith(("se:production:", "se:staging:")):
         bearer = cookie.rsplit(":", 1)[-1]
         if re.fullmatch(r"[A-Za-z0-9_-]{64}", bearer):
@@ -476,3 +486,4 @@ async def logout(
                 await db.commit()
     response.delete_cookie(SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
     return {"status": "ok"}
+

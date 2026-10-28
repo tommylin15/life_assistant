@@ -24,6 +24,7 @@ from app.models.drive import DriveDocumentEnrichmentRun
 router = APIRouter(tags=["ui-and-admin"])
 # Stable, code-owned routes: the database cannot supply executable paths.
 FEATURES = {
+    "line": ("/line/link.html", "LINE 生活助手"),
     "today": ("/today", "首頁"),
     "tasks": ("/tasks", "待辦"),
     "calendar": ("/calendar", "日曆"),
@@ -52,7 +53,7 @@ AI_PROVIDERS = ["gemini", "gemini_lite", "groq", "openrouter", "openai", "codex"
 GENERAL_ACCOUNT_FEATURES = frozenset({
     "today", "tasks", "calendar", "integrations", "projects", "notes",
     "habits", "shopping", "opportunities", "explore", "life_inbox",
-    "gmail_radar",
+    "gmail_radar", "line",
 })
 OWNER_ONLY_FEATURES = frozenset(FEATURES) - GENERAL_ACCOUNT_FEATURES
 
@@ -68,7 +69,7 @@ def _permitted_for_account(key: str, user: dict, status: str, audience: str) -> 
 
 def _default_rollout(key: str) -> tuple[str, str]:
     # New curated feature stays owner-only until actual V3 E2E release.
-    return ("beta", "owner") if key in ("events", "opportunities", "explore", "life_inbox") else ("enabled", "owner" if key in OWNER_ONLY_FEATURES else "all")
+    return ("beta", "owner") if key in ("events", "opportunities", "explore", "life_inbox", "line") else ("enabled", "owner" if key in OWNER_ONLY_FEATURES else "all")
 
 
 
@@ -138,10 +139,16 @@ async def effective_features(db: AsyncSession, user: dict) -> list[dict]:
         policy = policies.get(key)
         status, audience = (
             (policy.status, policy.audience) if policy else
-            ("hidden", "owner") if (pre_0015 and key in ("events", "opportunities", "explore", "life_inbox")) else
+            ("hidden", "owner") if (pre_0015 and key in ("events", "opportunities", "explore", "life_inbox", "line")) else
             _default_rollout(key)
         )
         permitted = _permitted_for_account(key, user, status, audience)
+        if key == "line":
+            from app.services.line_channel import configuration
+            try:
+                configuration()
+            except HTTPException:
+                permitted = False
         result.append({"key": key, "path": path, "title": title, "available": permitted,
                        "status": status, "audience": audience})
     return result
@@ -158,7 +165,7 @@ def feature_gate(key: str):
                 raise
             # Existing features retain their pre-rollout behavior while the
             # approved additive migration is pending; no new feature opens.
-            if key in ("events", "opportunities", "explore", "life_inbox"):
+            if key in ("events", "opportunities", "explore", "life_inbox", "line"):
                 raise HTTPException(503, "Curated feature requires verified migration") from exc
             return
         status, audience = (row.status, row.audience) if row else _default_rollout(key)
@@ -478,3 +485,4 @@ async def ai_usage(
     return {"counts": [{"provider": provider, "status": status, "count": count}
                        for provider, status, count in rows],
             "tokens": None, "cost": None, "cost_status": "not_instrumented"}
+

@@ -13,6 +13,11 @@ on:
         required: true
         default: false
         type: boolean
+      enable_line:
+        description: "Enable configured LINE channel; uses STAGE or PROD variables according to promote"
+        required: true
+        default: false
+        type: boolean
       enable_gmail_onnx:
         description: "Enable offline Gmail ONNX image with 2Gi/2vCPU/one concurrency for staging and promotion"
         required: true
@@ -213,6 +218,14 @@ jobs:
 
       - name: Create 0%-traffic digest-pinned candidate
         id: candidate
+        env:
+          LINE_ENABLED: ${{ inputs.enable_line && 'true' || 'false' }}
+          LINE_NAMESPACE: ${{ vars[format('LINE_{0}_NAMESPACE', inputs.promote && 'PROD' || 'STAGE')] }}
+          LINE_ORIGIN: ${{ vars[format('LINE_{0}_ORIGIN', inputs.promote && 'PROD' || 'STAGE')] }}
+          LINE_LIFF_ID: ${{ vars[format('LINE_{0}_LIFF_ID', inputs.promote && 'PROD' || 'STAGE')] }}
+          LINE_LOGIN_CHANNEL_ID: ${{ vars[format('LINE_{0}_LOGIN_CHANNEL_ID', inputs.promote && 'PROD' || 'STAGE')] }}
+          LINE_CHANNEL_SECRET_REF: ${{ vars[format('LINE_{0}_CHANNEL_SECRET_REF', inputs.promote && 'PROD' || 'STAGE')] }}
+          LINE_ACCESS_TOKEN_REF: ${{ vars[format('LINE_{0}_ACCESS_TOKEN_REF', inputs.promote && 'PROD' || 'STAGE')] }}
         shell: bash
         run: |
           set -euo pipefail
@@ -221,9 +234,11 @@ jobs:
           if [[ "${{ inputs.enable_gmail_onnx }}" == "true" ]]; then
             RESOURCE_FLAGS=(--cpu 2 --memory 2Gi --concurrency 1)
           fi
+          python scripts/line_deploy_flags.py > "$RUNNER_TEMP/line-flags.bin"
+          mapfile -d '' -t LINE_FLAGS < "$RUNNER_TEMP/line-flags.bin"
           gcloud run deploy "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "$IMAGE_REF" --no-traffic --tag "$TAG" "${RESOURCE_FLAGS[@]}" --quiet
+            --image "$IMAGE_REF" --no-traffic --tag "$TAG" "${RESOURCE_FLAGS[@]}" "${LINE_FLAGS[@]}" --quiet
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
             > "$RUNNER_TEMP/v3-candidate-service.json"
@@ -352,7 +367,7 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --args=-m,scripts.gmail_v2_db_acceptance \
             --task-timeout 5m --wait --quiet
-          echo "life_db_readback=PASS revision=20261028_0023 (job exit only)" >> "$GITHUB_STEP_SUMMARY"
+          echo "life_db_readback=PASS revision=20261028_0024 (job exit only)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Flutter for candidate Hosting Preview
         uses: subosito/flutter-action@v2
@@ -780,4 +795,5 @@ jobs:
           gh workflow run deploy-firebase-hosting.yml --repo "$GITHUB_REPOSITORY" --ref main
           echo "production_hosting_dispatch=DISPATCHED sha=$RELEASE_SHA source_v3_run=$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
           echo "production_hosting_runtime=NOT_VERIFIED until Hosting live readback PASS" >> "$GITHUB_STEP_SUMMARY"
+
 

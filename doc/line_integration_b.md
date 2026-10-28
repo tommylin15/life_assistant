@@ -1,126 +1,120 @@
-# Life Assistant × LINE｜方案 B 正式規格、落地現況與 WI（2026-10-28）
+# Life × LINE 方案 B｜正式規格 V1
 
-> **2026-10-28 復原暫停／NOT VERIFIED：本文件第 1–8 節記載的是後一次重新實作，不是「LINE整合方案評估」前次已測試原版；使用者要求排除這批重寫成果，不納入正式完成清單，也不得直接沿此版本開發、配置、部署或宣稱已驗收。**
-> 前次對話曾回報 153 項後端測試（含 LINE 15 項）通過，但尚未取得原始碼、commit、執行命令與同版本測試收據；2026-10-28 前次開發前 main `56275487` 與現存其他分支均無 LINE 專項程式，`life_assistantGPT` Drive 根及其可見子資料夾沒有可恢復的原版。這次版本 `a21979c` 的 GitHub CI [#40616784019](https://github.com/tommylin15/life_assistant/actions/runs/40616784019) **FAIL**（Backend release revision 斷言仍預期 0022，實際配置已到 0023；其他四項成功）。完整證據、隔離決策、恢復條件見 [復原查核紀錄](line_recovery_audit_20261028.md)。
-> **禁止**在找到且核對原版之前依本文件下方的開發／部署 WI 接續重寫；目前保持 `LINE_BRIDGE_ENABLED` 預設 false，保留原始 Git 歷史與非 LINE 修改；尚未回退程式或 migration。
+日期：2026-10-28（Asia/Taipei）
+狀態：開發候選；真人驗收由 Owner 執行。文件、原始碼及自動測試不等於 LINE 已啟用。
 
-> 狀態：**PARTIAL（程式已提交 main；CI、Staging、LINE 真人與正式版尚未驗收）**。
-> 唯一有效 implementation 來源為 GitHub main 與同 SHA 的執行證據；本文件是技術規格及驗收指示，不等於產品已啟用。手動驗收由使用者執行。
+## 1. 決策與工程基線
 
-## 1. 決策、邊界與業務目標
+Owner 已選 B「聊天快速記錄＋LINE 內管理頁面」，並明確指定以本對話原版優先。原版已於 `/workspace/scratch/ce8451bfc5e6/life-line` 找回；其前進整合使用 `backend/app/api/line.py`、`models/line.py`、`services/line_channel.py` 與 `web/line/`。
 
-採用方案 B：既有 LINE 官方帳號 + LINE Messaging API + 六格圖文選單 + LIFF 頁面，快速留下日常文字，透過 Life 提供的待辦、購物、筆記、行事曆、活動資料與後續查詢。使用者的個人資料仍由 **Life PostgreSQL** 持久化。LINE webhook 只作薄型入口；其餘既有 FastAPI 授權／資料模型／功能開放管控維持不變。omniAgent 不處理 LINE 帳號、DB 直接寫入或 webhook 派送。既有 Google OAuth 用於 Life 使用者身分；LINE OpenID ID Token 僅證明 LINE 身分，不授予 Google 權限。
+- [原版復原證據](line_recovery_audit_20261028.md)：保存精確來源 hash、原始 patch 及 153 項本地測試重跑收據，其中 LINE 15 項。153 是本地已取得的相關測試集合，不是全倉庫完整 CI 數量。
+- 後次 `line_bridge.py` 與 `web/line.html` 的替代流程不再作為產品基線。舊 API 模組不註冊；舊頁僅導向原版入口。保留既有 0023 migration／model／資料表，不做 downgrade 或抹除資料。
+- 本版採新 migration **20261028_0024 → 20261028_0023**。可從 0022 依序前進，不假設 0023 是否已在真實 DB 套用。既有舊版綁定／草稿不自動轉成新授權；舊資料保留，新版要求重新綁定。
+- 所有非 LINE 的 main 變更（來源路由、活動匯入等）保留。
 
-每次 LINE 訊息接收後的第一階段只進入 **LINE 草稿**；**不得自行建立、變更、完成或刪除 Tasks/Shopping/Notes/Calendar**。使用者在 Life 的「快速新增」先確認分類、時間與目的地，才透過原本 Life Inbox 提交。無日期不補日期；傳訊日期不是自動推定的行程日期。Google Calendar／活動探索仍以 Life 既有功能為準，不另造平行資料源／排程。
+## 2. 本版交付範圍
 
-## 2. 系統架構
+| 能力 | 本版行為 | 邊界 |
+|---|---|---|
+| 帳號綁定 | Google 登入 Life → 產生碼 → 本人 LINE 傳送 → Life 核對尾碼並確認 | 一個 namespace 內 LINE 與 Life 帳號一對一；不覆蓋其他綁定 |
+| 文字／網址快記 | 私聊文字 1–1200 字先持久化為草稿，回覆 LIFF 入口 | 尚未確認不建立正式事項；不自動下載網址 |
+| 草稿分類 | 沿用 Life Inbox 規則／omniAgent Gateway，拆成筆記、待辦、購物、行程 | AI 只提出候選；使用者確認欄位與目的地 |
+| 正式新增 | 每項明確確認，沿用 Inbox validation／receipt／idempotency | UNKNOWN 先核對回執，不能自動重新建立 |
+| 個人查詢 | 筆記內容、未完成待辦、未買購物品項；20 筆分頁 | V1 為關鍵字查詢，不宣稱完整自由語意或跨來源推理 |
+| 聊天查詢 | `查 筆記 水電`、`查 待辦 繳費`、`查 購物 牛奶`、`待辦`、`購物` | 回覆前五筆標題及時間，詳細原文在頁面看 |
+| 問句防誤存 | 無法確定的常見問句引導搜尋，不當作新增指令執行 | 未支援任意自然語言查詢規劃 |
+| 待辦 | 查看、完成、修改標題與截止時間 | 新增使用確認流程；不自動推播 |
+| 購物 | 新增清單、品項、勾選完成 | 沿用原資料與 ownership |
+| 筆記 | 查看原文、修改標題與內容 | 輸出以 textContent 顯示，不執行筆記 HTML |
+| 日曆 | Google Calendar 日期範圍查詢、確認新增、外連 Google 編輯 | 只讀已授權日曆；授權錯誤不得回報空清單 |
+| 活動 | 關鍵字、全部／已收藏、分頁、來源、收藏切換 | 查 Life 已匯入池，不發動新的網站探索；標示待核與費用未知 |
+| 今日總覽 | 今日／逾期待辦與今日 Google 行程 | 待辦前 20 筆、行程前 50 筆；畫面明示範圍 |
+| 停用 | 解除綁定／unfollow／feature hidden 會撤銷後續 LINE 存取 | 原有 Life 資料不刪；重新加入好友需重新綁定 |
 
-```text
-LINE 官方帳號／文字訊息 ── HTTPS webhook (HMAC SHA-256)
-                           │
-                           ▼
-Firebase Hosting /api/** → Cloud Run FastAPI /api/v1/line/webhook
-                           │（驗證、個人帳號綁定、訊息 ID 去重）
-                           ▼
-                    Life PostgreSQL
-          line_account_links / line_capture_drafts
-                           ▲
-           LIFF (/line.html) + LINE Login OpenID
-                 （伺服器核驗 ID Token）
-                           │
-                Life Google 登入 Cookie
-                  → bind / unbind
-                           │
-        個人 scoped drafts / summary（唯讀）
-                           │
-     主動確認後才經既有 Life Inbox／其他 API 寫正式項目
-```
+下一版：主動提醒、每日摘要、語音／圖片辨識、完整自然語言查詢、多使用者共用清單。沒有建立上述排程或推播工作。
 
-新資料表 migration：`backend/alembic/versions/20261028_0023_line_bridge.py`，Revision `20261028_0023`，接在 `20261019_0022`，新增 `line_account_links`（`line_user_id, audience` 複合 PK）與 `line_capture_drafts`（`message_id` PK）。新增索引及外鍵，不更動既有個人資料；禁止 destructive downgrade。單一 LINE user ID 在 staging/production 是不同綁定，不得相互轉用。
+## 3. 入口與六格選單
 
-## 3. 交互體驗與能力矩陣
+| 位置 | 名稱 | LIFF page |
+|---|---|---|
+| 上左 | 快速記錄 | capture |
+| 上中 | 今日總覽 | today |
+| 上右 | 查我的資料 | search |
+| 下左 | 待辦・購物 | tasks（頁面上可切 shopping） |
+| 下中 | 日曆・活動 | calendar（頁面上可切 activities） |
+| 下右 | 我的 Life | home |
 
-| LINE 圖文選單 | 已提交到 main 的版本 | 下一個待開發階段 |
-| --- | --- | --- |
-| ① 快速記錄 | 私聊文字經驗證後保存草稿；LIFF 讀最近 20 筆，複製後進 Life 快速新增確認 | 直接從草稿進 Life 預填／確認流程、照片／語音轉文字 |
-| ② 今日總覽 | LIFF 顯示本人最多 5 筆未完成待辦、5 個購物清單名稱 | 整合本人日曆、今日日程與提示 |
-| ③ 查資料 | LIFF 已有 `/search?q=` 限量、按人 scoped 搜尋 Life 筆記、待辦及購物品項（每類最多 10 筆，僅關鍵字匹配，**不是全文 AI 搜尋**） | 活動與歷史個人記錄、模糊語意及分頁檢索 |
-| ④ 待辦・購物 | 同上基本列表；沒有直接改狀態／刪除 | Life 原有授權 API 明確操作 |
-| ⑤ 日曆・活動 | 連到 Life 網站現有入口；**不是 LINE LIFF 原生查詢** | 導向指定 Life 頁面、串接本人 Google Calendar |
-| ⑥ 我的 Life | 連到既有 Life 網站 | 統一深連結及 LINE 登入後返回 |
+- LIFF endpoint：`https://<同環境 Hosting>/line/index.html`。
+- Google 身分綁定頁：`https://<同環境 Hosting>/line/link.html`，需外部瀏覽器開啟。
+- Life 個人化 → 服務連結新增 LINE 入口，僅在 LINE 已設定且帳號 rollout 可用時顯示。
+- 選單 URL：`https://liff.line.me/<LIFF_ID>?page=<page>`。無須先按選單即可直接傳文字。
+- `scripts/line_rich_menu.py` 預設只輸出 JSON；`--apply` 才會建立、上傳指定圖及套用預設選單。不自動刪除舊選單。
 
-以上 ③ 的活動範圍及 ④–⑥ 不能對外宣稱完整完成；除已證實的 LIFF 基本 UI／API source，實際 LINE 真人運作也仍是 NOT VERIFIED。
+## 4. 架構與權責
 
-## 4. API 契約
+Firebase Hosting 的 LIFF 輕量頁面 → 既有 FastAPI → PostgreSQL／既有 Google adapter。Flutter 仍為完整 Life 主站；LIFF 使用同一組業務 API，不另建資料庫或完整第二套產品。
 
-均位於 `/api/v1/line`：
-- `GET /config`：僅回傳 enabled、public LIFF ID 與環境。server-side 配置不足時 503；不曝露密鑰。
-- `POST /webhook`：僅接受 LINE 官方原始 body 的 `X-Line-Signature` 正確 HMAC-SHA256；每次最多 50 events、64 KiB，僅私聊文字，最多 1,200 字；不接收群組；使用 LINE message ID 防重送；未綁定不得保存；可回覆簡短提醒，不輸出憑證或原始文字到 Log。
-- `POST /bind`：需使用者 Life `__session` Cookie + LINE OpenID `id_token`，後端呼叫 LINE 官方 ID token verify；同 LINE ID 綁定另一人須回 409；staging 與 production 隔離。
-- `POST /unbind`：需雙身分，使用者只能撤銷自己的綁定；撤銷後 /summary /drafts 不可用，未來私聊訊息不得入庫。
-- `GET /me`、`GET /drafts`、`GET /summary`：LIFF 的 LINE ID token Bearer，每次向 LINE 核驗且只讀已綁定 user_sub 的資料；`GET /search?q=` 額外提供 bounded 本人筆記／待辦／購物品項的關鍵字查詢，不提供 Google Calendar 或活動；禁止使用 LINE userId 客戶端直接作為 Life user_sub。
+Webhook 路徑不執行 AI、Google 日曆查詢或通用 Agent loop；僅驗證、綁定握手、持久化文字、有限 DB 查詢及 Reply。AI 理解移至使用者開啟草稿並按解析後，沿用既有 Inbox。沒有記憶體背景工作、長駐 worker 或新的 Cloud Tasks/PubSub。
 
-目前沒有 Life 正式記錄的 LINE 自動寫入 API；一旦真正要新增應經原有 Life Inbox `interpret → explicit confirm` 契約，不得讓 webhook 直接執行寫入。
+Webhook 為有界同步處理，與原方案中「耗時工作非同步」相容的方式是將耗時理解移出 webhook，而非虛稱已有 queue。資料先 commit 再回覆，HTTP 失敗由 LINE 重送；即使 Reply 失敗仍可從 LIFF 最近草稿找回。
 
-## 5. 設定與部署（全部不得提交到公開 GitHub）
+## 5. 資料與 API 契約
 
-| 變數 | 用途／規則 |
-| --- | --- |
-| `LINE_BRIDGE_ENABLED` | 預設 `false`；只在 LINE、資料庫與授權設置完成後開 `true` |
-| `LINE_BRIDGE_AUDIENCE` | 必須明確為 `staging` 或 `production`；與 Life session 所屬站一致 |
-| `LINE_CHANNEL_SECRET` | LINE Messaging API channel secret；Secret Manager 注入 |
-| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Messaging API access token；Secret Manager 注入，僅用於 reply API |
-| `LINE_LOGIN_CHANNEL_ID` | LIFF 所屬 LINE Login channel ID（非 Messaging channel ID）；ID token 驗證 audience |
-| `LINE_LIFF_ID` | LINE Login channel 中已建立的 LIFF ID；公開客戶端配置 |
- 
-LINE Developers 設定：在同一 LINE Provider 中核對既有官方帳號的 Messaging API channel（取得 Channel secret、Access token），建立或選用 LINE Login channel，在該 Login channel 建立 LIFF App：**Endpoint URL** 指向部署後的 `https://<host>/line.html`，Scope 勾選 `openid`，可選 `profile`。正式 Webhook URL：`https://<host>/api/v1/line/webhook`；Webhook 功能啟用，並由 LINE Console 完成 Verify。若用戶仍在 staging 做測試，優先使用獨立測試 LINE OA/Channel、獨立 LIFF endpoint 與相應候選部署／受控環境變數，避免同一 production OA 對到錯誤 audience。LINE 的 Channel secret 與 access token 不能傳在對話中，也不能寫入 docs 或 git commit。
+新增四張表：`line_bindings`（namespace＋LINE id／Life sub 唯一）、`line_link_tickets`（雜湊碼、10 分鐘、一用）、`line_sessions`（雜湊 bearer、1 小時）、`line_events`（namespace＋webhookEventId 的 SHA256、文字草稿、回覆狀態、到期時間）。
 
-LINE 六格 Rich Menu URL 指向已核證之 `https://<host>/line.html?view=drafts`（①）、`?view=summary`（②–④）、`https://<host>/line.html`（⑤⑥，LIFF 再跳 Life 功能）；正式上線前要在 UI 文案上註明 ③–⑤ 尚未具備完整查詢的限制，不宣稱完整串接。由 LINE OA Manager/LINE Developers 完成選單配置及是否設為預設；不得於尚未驗收時直接取代現有正式 Rich Menu。
+| API（/api/v1/line 下） | 用途與授權 |
+|---|---|
+| GET config | 僅回公開 LIFF ID／origin；未配置 503 |
+| POST webhook | 原始 body HMAC 簽章；只接受一對一 user source |
+| POST session | LINE 平台驗證 ID token 的 issuer/audience/expiry/sub，再查既有綁定 |
+| POST link/start、check、confirm、unlink；GET link/status | 已登入 Google Life 身分＋line rollout；LINE session 不可管理綁定 |
+| GET search | 已登入帳號＋目的功能 rollout；kind 白名單、q≤120 字、20 筆分頁 |
+| GET drafts、drafts/{id} | 帳號＋namespace＋TTL＋life_inbox 權限；最近最多 30 筆 |
+| POST drafts/{id}/archive | 本人明確移除草稿原文；保留事件去重 receipt |
 
-Firebase Hosting 應保留既有 `/api/**` rewrite 到同個 Cloud Run FastAPI；`web/line.html` 隨 Flutter Web 靜態站部署（實際 Hosting 讀回待驗收）。**Production 切流仍受既有 V3 手動 promote / same-SHA / rollback gate 控制**；本次 commit 不宣稱啟用 production LINE。
+正式業務寫入使用既有 `/api/v1/inbox/interpret`、`commit`、`receipts/{action_id}`，並沿用 Notes／Tasks／Shopping／Calendar／Curated API。新增 `line_event_id` 只用於讀取屬於該使用者的原始 capture 日期，不接受客戶端提供任意日期基準。
 
-## 6. WI：由使用者執行的整合／驗收指示
+- 「明天」以 LINE 簽署事件的傳送日期（Asia/Taipei）為基準；截止或結束時間不明不自填。
+- 草稿正式 action ID：`line-<event-id>-<candidate-index>`；同草稿同候選重送保持同一 ID。請求結果不明時保持欄位與 ID，不換 ID 重試。
+- 手動新輸入採一次畫面內固定的隨機 capture ID。重新整理後再次手動輸入視為新的意圖，不宣稱跨頁面自動辨識同義重複。
+- PostgreSQL 與 Google 是不同交易邊界；外部 Calendar 結果不明使用 UNKNOWN，不自動 retry create。
 
-**WI-LINE-00｜前置與版本讀回**  
-確認 GitHub `main` 含 `backend/app/api/line_bridge.py`、`backend/alembic/versions/20261028_0023_line_bridge.py`、`web/line.html`；找出相同 SHA 的四項 CI + staging workflow；任一失敗先停，不以歷史 CI PASS 替代。Cloud Run staging 應讀回有界 migration `alembic_version=20261028_0023` 與兩個新表；禁止用 production 證件貼日誌。
+## 6. 安全、保留與故障處理
 
-**WI-LINE-01｜配置、身分與綁定（使用者操作）**  
-用 LINE Developers 獨立測試 OA/LIFF：Webhooks 測試成功、LIFF 能 `openid` 登入；先登入 Life staging Google 帳號，再開 LIFF 綁定，看到「已綁定」。若 Life 未登入不能綁；不同 Google 帳號綁同 LINE ID 應 409；staging 綁定不應使 production 身分取得任何 staging 記錄。
+1. Secrets 僅 Secret Manager 注入；frontend/config/log 不含 channel secret、access token、ID token、綁定碼。
+2. Server 驗證 LINE ID token；不信任 LIFF 解碼 profile、名字或 email。Google 既有帳號是 Life ownership 來源。
+3. 兩端握手，綁定碼 192-bit 隨機且雜湊儲存。確認前比較 LINE 尾碼；唯一約束防止競爭綁定。
+4. LINE session 使用 HttpOnly/Secure/SameSite=Lax 的 `__session` cookie；每次 request 重查 binding、expiry、namespace、rollout。Owner 的 LINE session 也不能存取 admin、Drive、Gmail、connector。
+5. Cookie 寫入端點驗證固定 origin；群組／多人聊天室訊息完全忽略。URL 與 private text 不寫一般 log。
+6. 保留既有 Owner 對 NULL legacy rows 的既有 ownership 規則，一般帳號不可讀取。
+7. 草稿讀取 TTL 30 天；下一個合法 webhook 有界清理各類最多 100 筆到期事件／session／ticket。低流量時物理資料可能晚於 TTL 才清理，不能宣稱時間一到即完成實體刪除；讀取始終阻擋過期資料。
+8. 封鎖官方帳號（unfollow）立即將 binding inactive；解封不自動恢復。重新綁定需由 Google Life 身分先解除舊綁定。
+9. 回覆失敗不自動改用 Push；可能已成功送出的 reply token 不換 token 猜測重發。草稿可在 LIFF 找回。
+10. 顯示外部錯誤與部分完成；沒有 CI 或實機證據不能標 DONE。聊天回覆可出現在手機通知預覽，私人長文預設留在登入後頁面。
 
-**WI-LINE-02｜實際私聊快記與去重（使用者操作）**  
-傳三筆虛構短文：`明天買牛奶`、`下週活動記一下`、`週五晚上七點吃飯`；開 `/line.html?view=drafts`，每則只出現一次，文字相同、時間以 Asia/Taipei 正確顯示。LINE redelivery 再送同 message ID 不得重複；無效 Signature、群組來源、未綁定帳號、超長文字不得入庫。草稿不是 Life 正式 Task：沒有操作 Life Inbox 確認前，Tasks/Calendar 不新增任何資料。
+## 7. 部署、版本及回滾
 
-**WI-LINE-03｜唯讀查詢與授權（使用者操作）**  
-用已綁定身份讀 summary，對照 Life 中同一帳號最多五筆未完成待辦與五張購物清單；另一帳號及撤銷後應拒絕（401/403/404 依情境），不得返回任何第一個人的文字。日曆與活動目前為 Life 連結：只驗證能打開既有 Life，不把它認作 LIFF 原生功能。
+候選版 `0.6.0+6`，公告 featureKey=`line`。V3 原有 tests/build/migration/staging/live/rollback gates 保留。新增 `enable_line`，預設 false；每次需要 LINE 的手動 staging／promotion 必須勾選，並配置對應 STAGE／PROD variables 與 Secret Manager 數字版本。完整配置見 [WI](line_integration_b_wi.md)。
 
-**WI-LINE-04｜撤銷與異常（使用者操作）**  
-點「解除綁定」，再送訊息：DB 不得增加草稿；`/drafts` 不得讀舊內容。LINE access token 不可寫入 logs；失敗時不可假回已正式建立 Task。LINE API 超時、斷線應顯示失敗；不要捏造成功通知。
+正式與測試應使用不同 LINE channel/LIFF、不同 namespace；同一 OA webhook 只能指向一個環境。只有一個 OA 時，應先在 staging 驗收，切正式時同步替換 endpoint、webhook、menu 及配置，不同時假裝兩環境都可用。
 
-**WI-LINE-05｜確認與發版（使用者決策）**  
-先取得相同 SHA Backend/Flutter/PostgreSQL/Deploy CI、Staging Hosting、FastAPI API/DB、LINE 真人驗收證據，並明確列出 ③–⑥ 待辦能力。**只在本人驗收核准後**依既有手動 V3 promote 進行 Production／Hosting 同 SHA readback；再到 LINE Console 變更正式 webhook / Rich Menu。即使 CI 全綠，但真正 LINE 真人與持久化讀回未完成，整體仍標 PARTIAL。
+既有 V3 promotion 會把同一 candidate 同時用於 staging gate 與正式流量。當 candidate 配置 PROD origin 時，staging 的 LINE 頁面會拒絕環境不符；這不是另外一個已啟用的 stage LINE 版本。一般 staging OAuth gates 不變；要再測 LINE staging，重新跑 STAGE 配置候選。
 
-## 7. 狀態與下一工程入口
+停用以 rollout hidden 或 `enable_line=false` 的正常 V3 發布處理；Google Life 功能保留。回滾 application revision，不 downgrade 0023/0024、不刪原有資料。尚未核對真實 DB revision 或 LINE Console，均 NOT VERIFIED。
 
-| Gate | 當前判定 | 理由 |
-| --- | --- | --- |
-| Code & GitHub main | PASS（source present） | 已提交 Router、Model、migration、LIFF、測試來源；仍可依 CI 發現修正 |
-| 測試執行 | NOT VERIFIED | 已提交合成測試，尚無可引用的同 SHA 完整結果 |
-| CI | NOT VERIFIED | 須查詢此次新 SHA 的 GitHub Actions |
-| Staging + migration | NOT VERIFIED | 尚無這次 SHA 的 Cloud Run/PG/Hosting 實際讀回 |
-| LINE Console 配置、真人 | NOT VERIFIED | LINE Channel/LIFF/Secrets 未提供證據 |
-| Production + runtime | NOT VERIFIED | 尚未推定部署或 LINE 功能可用 |
-| 方案 B 完整使用體驗 | PARTIAL | 查資料、直接確認、日曆/活動深連結、正式選單後續實作仍需開發 |
+## 8. 交付／驗收對照
 
-唯一後續工程：實作 **草稿→Life Inbox 預填→逐項確認** 的 LIFF 流程（保留按人授權與嚴格去重），再擴充筆記／活動／Calendar 查詢；目前不另外引入 agent orchestration、不新增獨立 Scheduler、不建立第二個使用者 DB。
+| 工作 | 程式或文件 | 自動／人工驗收 |
+|---|---|---|
+| 原版復原 | archive patch、manifest、test receipt | hash＋原版 153/15 重跑 |
+| 連結／登入 | api/line.py、services/line_channel.py | 簽章、雙端確認、撤銷、origin、帳號隔離 |
+| 資料／契約 | models/line.py、migration 0024 | Alembic single head＋PG CI；真實 DB readback 獨立 |
+| LIFF | web/line/*、Flutter 服務連結 | 離線 Playwright；LINE iOS/Android 由 Owner |
+| 選單／部署 | line_rich_menu.py、line_deploy_flags.py、V3 workflow | 配置 fail-closed；真實 Console 由 Owner |
+| 正式業務 | 既有 Inbox／domain API | targeted regression＋Owner WI 多功能讀回 |
 
-參考：GitHub `doc/life_inbox_quick_capture_spec.md`、`doc/PROJECT_RULES.md`、`doc/ci_cd_ghcr_release_policy.md`；LINE 官方文件 https://developers.line.biz/en/docs/messaging-api/verify-webhook-signature/ 、https://developers.line.biz/en/docs/liff/using-user-profile/ 。
-
-## 8. 給其他 AI／工程代理的可執行 WI（不需重新規劃）
-
-請使用下列指示在下一工程輪次執行，**不得直接把尚未驗證之功能標 DONE**：
-
-> 你在 `tommylin15/life_assistant` 的 `main` 繼續 LINE 方案 B。先讀最新 `doc/line_integration_b.md`、`doc/todo.md`、`doc/PROJECT_RULES.md`、`doc/ci_cd_ghcr_release_policy.md` 以及現行 Backend/Flutter/Alembic。不要沿用對話中的歷史「測試已通過」說法。維持單 branch main，最小差異修改。功能開關預設關閉，不得寫入真實 channel secret、access token、ID token、個人訊息至程式、測試或 log。
->
-> 首先核對這批 source、synthetic tests 與 release revision 0023 的相容性，補修 CI 失敗；保留 LINE HMAC raw-body 驗證、server-side ID Token verify、Life Google session 雙重綁定、跨帳號與 staging/production 隔離、訊息 ID 去重及已撤銷拒絕。下一功能只實作「LINE 草稿 → Life Inbox 預填 → 多項逐筆確認」及缺失的活動／Calendar 深連結和唯讀查詢；不能讓 webhook 直接永久新增或刪除個人主資料。
->
-> 使用 synthetic 狀態執行 Backend 單元／API／PostgreSQL migration、Flutter smoke、security regression，確認四 CI 同 SHA；再使用現行 V3 staging-only 執行、讀回 migration 0023 與 Hosting /line.html，不得自動 promote production。將所有 PASS/FAIL/NOT VERIFIED 證據回寫 `doc/CURRENT_STATE.md` 和唯一 `doc/todo.md`。LINE Console、Secret Manager 憑證、LINE 真人操作與 Rich Menu 驗收由使用者執行，沒有真人證據一律 NOT VERIFIED。不可 force push、覆寫舊規格、清空 production DB 或更動高風險 IAM。
+參考官方文件（2026-10-28 查核）：
+- https://developers.line.biz/en/docs/liff/using-user-profile/
+- https://developers.line.biz/en/docs/messaging-api/receiving-messages/
+- https://developers.line.biz/en/docs/line-login/getting-started/
+- https://developers.line.biz/en/docs/messaging-api/using-rich-menus/

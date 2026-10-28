@@ -1,3 +1,5 @@
+from app.models.line_bridge import LineAccountLink, LineCaptureDraft  # noqa: F401
+from app.models.line import LineBinding, LineLinkTicket, LineSession, LineEvent  # noqa: F401
 import asyncio
 from logging.config import fileConfig
 
@@ -30,7 +32,6 @@ from app.models.execution_log import ExecutionLog  # noqa: F401
 from app.models.google_integration import GoogleConnection, GoogleOAuthState  # noqa: F401
 from app.models.gmail_radar import GmailRadarItem, GmailRadarScanState, GmailRadarSeen  # noqa: F401
 from app.models.life_login_session import LifeLoginSession  # noqa: F401
-from app.models.line_bridge import LineAccountLink, LineCaptureDraft  # noqa: F401
 from app.models.habit import Habit, HabitCompletion  # noqa: F401
 from app.models.migration_support import (  # noqa: F401
     CalendarEventRef,
@@ -101,3 +102,4 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
+

@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import config as app_config
+from app.api.line import router as line_router
 from app.api.activity import router as activity_router
 from app.api.auth import SESSION_COOKIE, router as auth_router
 from app.api.gemini_text import router as gemini_text_router
@@ -25,7 +26,6 @@ from app.api.curated import router as curated_router
 from app.api.curated_actions import router as curated_actions_router
 from app.api.ui_policies import router as ui_policies_router, feature_gate
 from app.api.release_notes import router as release_notes_router
-from app.api.line_bridge import router as line_router
 from fastapi import Depends
 from app.api.habits import router as habits_router
 from app.api.notes import router as notes_router
@@ -66,7 +66,7 @@ async def request_context(request: Request, call_next):
     token = set_request_id(request_id)
     try:
         requirement = confirmation_requirement(request.method, request.url.path)
-        authenticated_session = request.cookies.get(SESSION_COOKIE, "").startswith(("id:", "se:"))
+        authenticated_session = request.cookies.get(SESSION_COOKIE, "").startswith(("id:", "se:", "ln:"))
         if (
             requirement is not None
             and authenticated_session
@@ -182,4 +182,6 @@ app.include_router(curated_router, prefix="/api/v1")
 app.include_router(curated_actions_router, prefix="/api/v1")
 app.include_router(ui_policies_router, prefix="/api/v1")
 app.include_router(release_notes_router, prefix="/api/v1")
+
+
 app.include_router(line_router, prefix="/api/v1")

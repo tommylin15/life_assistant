@@ -1,0 +1,66 @@
+{
+  "version": "1.0",
+  "updated_at_tpe": "2026-10-28T04:00:00+08:00",
+  "routes": {
+    "cloud.culture.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-26T00:00:00+08:00",
+      "note": "文化部全國藝文活動開放資料端點，海外機房IP連線逾時"
+    },
+    "media.taiwan.net.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-26T00:00:00+08:00",
+      "note": "觀光署全國觀光活動ZIP資料端點，海外機房IP連線逾時"
+    },
+    "fae.moa.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_BLOCKED",
+      "marked_at": "2026-10-28T04:10:00+08:00",
+      "note": "農業部食農教育平台"
+    },
+    "rse.ardswc.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_BLOCKED",
+      "marked_at": "2026-10-28T04:10:00+08:00",
+      "note": "農社企暨農村好物網"
+    },
+    "event.hchcc.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_BLOCKED",
+      "marked_at": "2026-10-28T04:10:00+08:00",
+      "note": "新竹縣政府農業處"
+    },
+    "eservices.taichung.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_BLOCKED",
+      "marked_at": "2026-10-28T04:10:00+08:00",
+      "note": "臺中市政府服務e櫃檯"
+    },
+    "www.forest.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_BLOCKED",
+      "marked_at": "2026-10-28T04:10:00+08:00",
+      "note": "林業保育署"
+    },
+    "www.tyfa.org.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_BLOCKED",
+      "marked_at": "2026-10-28T04:10:00+08:00",
+      "note": "桃園市農會"
+    },
+    "www.hccg.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_BLOCKED",
+      "marked_at": "2026-10-28T04:10:00+08:00",
+      "note": "新竹市政府"
+    },
+    "ccl.taitung.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_BLOCKED",
+      "marked_at": "2026-10-28T04:10:00+08:00",
+      "note": "臺東縣文化處"
+    }
+  }
+}

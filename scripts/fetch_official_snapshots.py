@@ -145,14 +145,18 @@ def fetch_tourism_snapshot(date_str: str, target_dir: Path) -> Tuple[bool, Dict[
         # Extract items
         items = []
         if isinstance(inner_data, dict):
-            # Typically {"XMLHead": {"Infos": {"Info": [...]}}}
-            infos = inner_data.get("XMLHead", {}).get("Infos", {}).get("Info", [])
-            items = infos if isinstance(infos, list) else [infos]
+            # Format v2.0 has top-level "Events": [...]
+            if "Events" in inner_data and isinstance(inner_data["Events"], list):
+                items = inner_data["Events"]
+            else:
+                # Older format: {"XMLHead": {"Infos": {"Info": [...]}}}
+                infos = inner_data.get("XMLHead", {}).get("Infos", {}).get("Info", [])
+                items = infos if isinstance(infos, list) else [infos]
         elif isinstance(inner_data, list):
             items = inner_data
 
         record_count = len(items)
-        unique_ids = {it.get("Id") or it.get("EventID") for it in items if isinstance(it, dict)}
+        unique_ids = {it.get("EventID") or it.get("Id") for it in items if isinstance(it, dict)}
         unique_count = len(unique_ids)
 
         now_tpe = datetime.now(TPE_TZ).isoformat()

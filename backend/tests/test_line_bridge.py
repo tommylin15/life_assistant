@@ -10,7 +10,7 @@ import os
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import HTTPException
 from starlette.requests import Request
@@ -82,12 +82,38 @@ class LineApiTests(IsolatedAsyncioTestCase):
                             "message":{"id":"m123","type":"text","text":"買牛奶"},
                             "timestamp":1793145600000,"replyToken":"unused"}]}
         raw = json.dumps(event).encode()
-        db = SimpleNamespace(get=AsyncMock(return_value=object()), add=AsyncMock(),
+        db = SimpleNamespace(get=AsyncMock(return_value=object()), add=MagicMock(),
                              commit=AsyncMock())
         with self.env():
             self.assertEqual((await line.line_webhook(request(raw, signed(raw)), db))["created"],0)
         db.commit.assert_not_awaited()
-        db.add.assert_not_awaited()
+        db.add.assert_not_called()
+
+    async def test_valid_private_text_is_saved_once_as_draft_not_task(self):
+        uid = "U" + "a"*32
+        event = {"events":[{"type":"message","source":{"type":"user","userId":uid},
+                            "message":{"id":"new-message","type":"text","text":"記得買牛奶"},
+                            "timestamp":1793145600000,"replyToken":"unused"}]}
+        raw = json.dumps(event).encode()
+        account = SimpleNamespace(revoked_at=None, user_sub="owner-sub")
+        db = SimpleNamespace(get=AsyncMock(side_effect=[None,account]),
+                             add=MagicMock(),commit=AsyncMock())
+        with self.env():
+            self.assertEqual((await line.line_webhook(request(raw,signed(raw)),db))["created"],1)
+        db.add.assert_called_once()
+        draft = db.add.call_args.args[0]
+        self.assertEqual(type(draft).__name__,"LineCaptureDraft")
+        self.assertEqual(draft.user_sub,"owner-sub")
+        self.assertEqual(draft.body,"記得買牛奶")
+        db.commit.assert_awaited_once()
+
+    async def test_search_requires_bounded_phrase(self):
+        with self.env():
+            db = SimpleNamespace(execute=AsyncMock())
+            with self.assertRaises(HTTPException) as ctx:
+                await line.line_search(q="x",authorization="Bearer fake",db=db)
+            self.assertEqual(ctx.exception.status_code,422)
+            db.execute.assert_not_awaited()
 
     async def test_group_messages_are_never_stored(self):
         event = {"events":[{"type":"message","source":{"type":"group","userId":"U"+"b"*32},

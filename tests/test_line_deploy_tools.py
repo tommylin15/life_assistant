@@ -17,14 +17,21 @@ class LineDeployTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             load('line_deploy_flags').build_flags({'LINE_ENABLED':'true'})
 
-    def test_pinned_secret_versions_and_untrusted_origin(self):
+    def test_pinned_shared_bundle_and_untrusted_origin(self):
         env={'LINE_ENABLED':'true','LINE_NAMESPACE':'stage','LINE_ORIGIN':'https://life.example',
              'LINE_LIFF_ID':'123-abc','LINE_LOGIN_CHANNEL_ID':'123',
-             'LINE_CHANNEL_SECRET_REF':'line-secret:2','LINE_ACCESS_TOKEN_REF':'line-token:3'}
+             'LINE_BUNDLE_REF':'life-assistant-bundle:9'}
         flags=load('line_deploy_flags').build_flags(env)
         self.assertEqual(len(flags),2)
-        self.assertIn('line-secret:2',flags[1])
-        for key,value in [('LINE_ORIGIN','https://life.example,OTHER=true'),('LINE_CHANNEL_SECRET_REF','secret:latest')]:
+        self.assertEqual(flags[1], '--update-secrets=LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:9')
+        self.assertNotIn('LIFE_LINE_CHANNEL_SECRET=', ' '.join(flags))
+        self.assertNotIn('LIFE_LINE_ACCESS_TOKEN=', ' '.join(flags))
+        for key,value in [
+            ('LINE_ORIGIN','https://life.example,OTHER=true'),
+            ('LINE_BUNDLE_REF','life-assistant-bundle:latest'),
+            ('LINE_BUNDLE_REF','other-secret:9'),
+            ('LINE_BUNDLE_REF','life-assistant-bundle:9,OTHER=true'),
+        ]:
             with self.subTest(key=key),self.assertRaises(ValueError):
                 load('line_deploy_flags').build_flags({**env,key:value})
 

@@ -1,3 +1,4 @@
+import json
 import os
 import unittest
 from unittest.mock import patch
@@ -22,6 +23,18 @@ class BundleParsingTests(unittest.TestCase):
         self.assertEqual(bundle_format, "json-object")
         self.assertEqual(values["DATABASE_URL"], "postgresql+asyncpg://user:pass@10.42.0.5:5432/life_assistant")
         self.assertEqual(values["FRONTEND_URL"], "https://example.test")
+
+    def test_json_bundle_preserves_existing_settings_and_line_credentials(self):
+        payload = {
+            "GOOGLE_CLIENT_ID": "existing-google-client",
+            "LIFE_LINE_CHANNEL_SECRET": "synthetic-channel-secret",
+            "LIFE_LINE_ACCESS_TOKEN": "synthetic-token",
+        }
+        with patch.dict(os.environ, {"LIFE_ASSISTANT_BUNDLE": json.dumps(payload)}, clear=True):
+            fmt = _load_bundle()
+            self.assertEqual(fmt, "json-object")
+            for key, value in payload.items():
+                self.assertEqual(os.environ.get(key), value)
 
     def test_dotenv_bundle(self):
         values, bundle_format = _parse_bundle(

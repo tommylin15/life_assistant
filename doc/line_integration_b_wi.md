@@ -6,7 +6,7 @@
 1. 在既有官方帳號啟用 Messaging API。建立同一 Provider 下的 LINE Login channel，新增 LIFF，scope 勾選 openid、profile。
 2. LIFF endpoint 設為測試站 `https://life-assistant-v3-stage-tl15.web.app/line/index.html`。
 3. Webhook 設為同環境 `/api/v1/line/webhook`，開啟 webhook 與 redelivery。避免預設自動回覆與程式重複回覆。
-4. Channel secret、Messaging API access token 放 Secret Manager；不得貼在聊天、原始碼或一般 variables。授予既有 Cloud Run runtime identity 對這兩個 secret 的最小讀取權限。
+4. Channel secret 與 Messaging API access token 置於**現有 Secret Manager `life-assistant-bundle` JSON 物件**，分別為 `LIFE_LINE_CHANNEL_SECRET`、`LIFE_LINE_ACCESS_TOKEN`。本次已建立並讀回第 9 版；日後若輪替，以實際有效版本為準。保留原有所有 bundle keys，不另外建立兩個 LINE Secret。不得把憑證內容貼在聊天、原始碼或一般 variables。沿用既有 Cloud Run runtime identity 的 bundle 讀取權限，先核對是否足夠，不擴大 IAM。
 
 ## WI-02：GitHub Variables 與候選部署
 在既有 dev-test environment 設下列 variables；STAGE 與 PROD 各一組：
@@ -17,10 +17,9 @@
 | ORIGIN | 該環境 Hosting HTTPS origin，無尾斜線 |
 | LIFF_ID | Console 顯示的 LIFF ID |
 | LOGIN_CHANNEL_ID | LINE Login channel 數字 ID |
-| CHANNEL_SECRET_REF | Secret Manager 名稱:數字版本，例如 life-line-secret:1 |
-| ACCESS_TOKEN_REF | Secret Manager 名稱:數字版本，例如 life-line-token:1 |
+| BUNDLE_REF | 現有 Secret Manager bundle 名稱:數字版本，例如 `life-assistant-bundle:9`（STAGE/PROD 各自明確填寫，需先讀回確認） |
 
-執行 V3 Release workflow：先選 promote=false、publish_staging=true、enable_line=true；Gmail ONNX 選項維持目前正式需求。確認同 SHA CI、migration 0024、candidate、Hosting staging gates PASS。
+執行 V3 Release workflow：先選 promote=false、publish_staging=true、enable_line=true；Gmail ONNX 選項維持目前正式需求。CI 執行時檢查候選 revision 的 `LIFE_ASSISTANT_BUNDLE` 確實指向指定數字版本，且不使用獨立的 `LINE_*_SECRET_REF` / `LINE_*_ACCESS_TOKEN_REF`。確認同 SHA CI、真實 DB migration 0024、candidate、Hosting staging gates PASS。GitHub Variables 只保存名稱與版本，不保存 Secret 內容。
 
 後台將 line、life_inbox 與需要的目的功能對 Owner 開放。預設 line 為 beta/owner。一般使用者需另行開放；不可只開 LINE 而忽略目的功能權限。
 

@@ -224,8 +224,7 @@ jobs:
           LINE_ORIGIN: ${{ vars[format('LINE_{0}_ORIGIN', inputs.promote && 'PROD' || 'STAGE')] }}
           LINE_LIFF_ID: ${{ vars[format('LINE_{0}_LIFF_ID', inputs.promote && 'PROD' || 'STAGE')] }}
           LINE_LOGIN_CHANNEL_ID: ${{ vars[format('LINE_{0}_LOGIN_CHANNEL_ID', inputs.promote && 'PROD' || 'STAGE')] }}
-          LINE_CHANNEL_SECRET_REF: ${{ vars[format('LINE_{0}_CHANNEL_SECRET_REF', inputs.promote && 'PROD' || 'STAGE')] }}
-          LINE_ACCESS_TOKEN_REF: ${{ vars[format('LINE_{0}_ACCESS_TOKEN_REF', inputs.promote && 'PROD' || 'STAGE')] }}
+          LINE_BUNDLE_REF: ${{ vars[format('LINE_{0}_BUNDLE_REF', inputs.promote && 'PROD' || 'STAGE')] }}
         shell: bash
         run: |
           set -euo pipefail
@@ -253,6 +252,17 @@ jobs:
           gcloud run revisions describe "$REVISION" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
             > "$RUNNER_TEMP/v3-candidate-revision.json"
+          if [[ "${{ inputs.enable_line }}" == "true" ]]; then
+            EXPECTED_BUNDLE_NAME="${LINE_BUNDLE_REF%:*}"
+            EXPECTED_BUNDLE_VERSION="${LINE_BUNDLE_REF##*:}"
+            jq -e --arg name "$EXPECTED_BUNDLE_NAME" --arg version "$EXPECTED_BUNDLE_VERSION" '
+              [.spec.containers[0].env[]? |
+               select(.name=="LIFE_ASSISTANT_BUNDLE") |
+               .valueFrom.secretKeyRef |
+               select(.name==$name and (.key | tostring)==$version)] | length==1
+            ' "$RUNNER_TEMP/v3-candidate-revision.json"
+            echo "line_bundle_reference=PASS secret=$EXPECTED_BUNDLE_NAME version=$EXPECTED_BUNDLE_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          fi
           python .github/scripts/v3_image_identity.py \
             --resource revision \
             --json "$RUNNER_TEMP/v3-candidate-revision.json" \

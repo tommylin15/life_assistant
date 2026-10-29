@@ -282,6 +282,11 @@ async def build_reply(event, record, identity, cfg, db):
     record.binding_id, record.user_sub = binding.id, binding.user_sub
     if event.get("type") == "follow":
         return message("歡迎使用 Life。直接傳文字可保留草稿；輸入「查 筆記 關鍵字」、「待辦」或「購物」查詢。", cfg)
+    if event.get("type") == "postback":
+        # LINE v2 is additive: signed, actor-scoped postbacks reuse the existing
+        # v1 binding, rollout gate, event receipt and reply deduplication.
+        from app.services.line_v2 import handle_postback
+        return await handle_postback(event, identity, cfg, user, db)
     if event.get("type") != "message" or (event.get("message") or {}).get("type") != "text":
         return message("目前支援文字與網址。圖片、語音請先轉成文字；尚未建立任何事項。", cfg)
     menus = {"快速記錄": "capture", "今日總覽": "today", "查我的資料": "search",

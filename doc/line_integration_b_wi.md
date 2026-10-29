@@ -65,7 +65,7 @@
 | U13 | 群組傳訊息 | 不保存、不回覆私人資訊 | PASS（Owner 2026-10-29 Staging 回報；無附逐案截圖） |
 | U14 | 解除綁定／封鎖後，用舊頁查資料 | 舊登入失效；Life 原資料保留 | PASS（Owner 2026-10-29 Staging 回報；無附逐案截圖） |
 | U15 | LINE 功能 hidden，或目的功能關閉 | API 拒絕，不僅隱藏按鈕 | PASS（Owner 2026-10-29 Staging 回報；無附逐案截圖） |
-| U16 | 官方帳號六格 Rich Menu（完成製圖／套用）及 iOS/Android 開啟與登入返回 | 應先有 OA 六格選單、六個 LIFF deep links；頁面可操作、無溢出 | NOT VERIFIED（SVG／產圖程式 source PASS；本地 PNG 尺寸／大小 PASS；OA 未套用、手機未驗證） |
+| U16 | 官方帳號六格 Rich Menu（完成製圖／套用）及 iOS/Android 開啟與登入返回 | 應先有 OA 六格選單、六個 LIFF deep links；頁面可操作、無溢出 | NOT VERIFIED（**六格操作=PASS，Owner 2026-10-29 確認驗收完成**；iOS／Android 各自覆蓋與登入返回未逐項回報，完整 U16 尚未獨立核證） |
 | U17 | Reply 失敗／連線中斷後查看草稿與回執 | 草稿保留，結果不明不重複建立 | NOT VERIFIED |
 
 每項記錄：環境、Git SHA、台北時間、案例 ID、PASS/FAIL、實際結果與截圖（遮蔽 token/碼/個資）。遇 UNKNOWN 先查看回執和 Life／Google 原資料，不換 action ID 盲目重建。
@@ -112,5 +112,13 @@
 - **LINE 上架方式改為 Owner 直接執行 Google Colab：** Colab 以 Google Drive OAuth 唯讀和上述 image file ID 取得私人圖片，驗證 JPEG、尺寸、大小與 SHA256；Messaging API token 由 Colab `getpass()` 臨時輸入，不存 Drive/GitHub。已知 GitHub Actions 直接套用 run [#40838851219](https://github.com/tommylin15/life_assistant/actions/runs/40838851219) **FAIL**：部署身分缺 `secretmanager.versions.access`，流程在呼叫 LINE API 以前停止。不可因 GitHub CI 或上傳 Drive 成功聲稱 LINE OA 已套用。
 - **驗收：** `IMAGE IN DRIVE=PASS`；`COLAB API 實際套用=NOT VERIFIED`；`LINE 手機六格操作／LIFF 返回=NOT VERIFIED`；**U16 維持 NOT VERIFIED，整體 PARTIAL**。待 Owner 回報 Colab 所印的新 `richMenuId` 和 LINE default readback PASS，再進行行動裝置測試。
   
+## WI-05F：2026-10-29 Owner 六格操作驗收完成回報
+
+- **真人實測：** Owner 明確回報「六格操作驗收完成」，登錄 **LINE 官方帳號 Rich Menu 六格操作 = PASS（Owner reported）**，不重新要求重做六個按鈕；未附圖或逐格時間戳，不冒充自動測試或 LINE API 回執。
+- **圖像版本：** [正式薄荷綠 Life Omni 圖](https://drive.google.com/file/d/1mLdH02yUSubIW_Gha9IzcU5Cbb0nLYEd/view) 經先前 Drive metadata 讀回 PASS；右下「Life Omni」圖示採 Owner 提供的雙生獸意象，標註版僅核對熱區。
+- **驗收界線：** Owner 未分別指出 iOS 與 Android 各自測試、LIFF 登入後返回結果，也未在本輪提供 Colab API `richMenuId`／預設 ID 讀回收據；故六格操作 subcase PASS，**U16 完整跨平台／登入返回矩陣仍 NOT VERIFIED**。不憑 Owner 操作回報推定 LINE Production Cloud Run/Hosting 已部署。
+- **CI 問題與排除：** `main` 在本次回報前的 [CI #40841479917](https://github.com/tommylin15/life_assistant/actions/runs/40841479917) = FAIL，backend 契約測試 `test_push_does_not_enter_mutation_steps_and_legacy_is_manual` 因早前 `line-u16-apply-once.yml` 使用 push 而失敗；同檔 [套用 Run #40838851219](https://github.com/tommylin15/life_assistant/actions/runs/40838851219) = FAIL，缺少 `secretmanager.versions.access`，**它沒有成功套用選單**。既已採 Owner Colab 途徑完成真人六格操作，該舊一次性 GitHub Workflow 已從 `main` 移除；新 SHA CI 結果須另核對，不能把舊 FAIL 寫成 PASS。
+- **下一唯一入口：** U17 Reply 失敗、連線中斷與 UNKNOWN 回執的有界驗收；補 U01–U07 的特定邊界路徑及 U16 尚未明確記錄的跨手機平台／登入返回子項。**整體 PARTIAL；LINE Production NOT VERIFIED，不標 DONE**。
+
 ## WI-06：停用與復原
 先在後台將 line 設為 hidden，或正常 V3 部署 enable_line=false。LINE session 每次請求會重查綁定與 rollout。保留 0023/0024 資料表；不執行 downgrade、不清空 Life。正式發版仍依既有 V3 gates，CI 綠燈不代表真人 LINE 整合完成。

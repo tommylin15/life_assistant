@@ -5,6 +5,23 @@
 - **GitHub 現行實作基線：** `backend/app/api/line.py`、`backend/app/services/line_channel.py`、`web/line/*`、`scripts/line_rich_menu.py`、`backend/app/api/curated.py`、`backend/app/api/curated_actions.py`、`backend/app/api/inbox.py`。本規格**取代 v1「六格全部跳 LIFF 頁面」的未來產品方向**，不否定 v1 已驗收功能、資料或原先的安全契約。
 - **交付原則：** 本輪只完成規格與工作入口；不更動現行 OA 預設選單、Webhook、LIFF、正式 Life Web、資料庫、Cloud Run 或使用者紀錄。產圖與上架另立執行／驗收證據。
 
+## 0. V2-01 工程收據（2026-10-29；Source 已提交，發布獨立驗收）
+
+**本節更新「實際已寫入 main 的程式」狀態，但不改變第 1–9 節的 v2 產品決策。** 八格圖面、Life 手機首頁、待辦／購物／日曆完整聊天卡片、AI 在 LINE 裡的確認流程仍屬後續 V2-02～05，**不是 V2-01 已完成項**。
+
+| 層面 | 本輪實際內容／證據邊界 |
+|---|---|
+| 主程式 | `backend/app/services/line_v2.py`：Postback command 白名單、HMAC 簽名短期動作 token（按 namespace／Life sub／LINE user ID 綁定，7 天期限）、活動最新／已收藏／category 子選單、6 張 Carousel、下一批分頁、來源白名單 HTTPS、顯式收藏狀態 |
+| Webhook 接線 | `backend/app/api/line.py`：維持既有 LINE HMAC、Active Binding、FeatureRollout、`webhookEventId` 去重、先保存再 Reply；新增 `postback` 導向 v2。現在也可直接傳「活動」「最新活動」「活動分類」「已收藏活動」測試，不需先換舊六格 Rich Menu |
+| 共用資料 | v2 直接呼叫既有 curated `list_curated(..., entry=explore, quick=latest)`、`CuratedPersonalAction` 的 `set_action` 路徑，不新增 DB 表、不動 crawler；分類只讀現有上架活動 `category` 真值 |
+| 測試 | `backend/tests/test_line_v2.py`：簽章／跨帳號／跨環境／過期／非法動作、Flex 限額與安全連結、分類分頁／收藏顯式狀態；`backend/tests/test_line_channel.py`：真實 ASGI LINE HMAC Webhook 串接、postback 重送不重複回覆、文字指令不當草稿 |
+| 部署 | 僅 main source 提交；CI 應以最新 commit 的 workflow run 獨立讀回。**LINE-enabled Staging、真 LINE Flex 及 Owner 收藏 E2E 未驗證前：v2 runtime / integration = NOT VERIFIED** |
+| 舊版影響 | 現有 OA 六格、v1 LIFF 與 Life 網站不更換；U16 已回報的六格操作 PASS 僅限 v1，不拿來代表 v2 |
+
+**動作契約：** 未來八格中的「活動」用 `postback.data=v=2&cmd=events.latest`，其他測試可用 v1 OA 聊天文字「活動」；回應 Flex 最多 6 張、分頁按鈕帶簽署的 snapshot 微秒時間、offset 與 category hash。Tag 為**既有 category 單選**。收藏用 server-side 寫入目標 `active=true/false`、不是 toggle；跨帳號、過期 token、未授權 rollout、已結束活動拒絕。LIFF 跳轉 fallback 不會承諾已完成的功能。
+
+**下一工程入口判定：** 若本輪 main CI PASS，下一步先按 WI-05G 在真正 `enable_line=true` 的 staging 跑 Owner 活動 Flex／Tag／收藏讀回。上述全 PASS 才能將 V2-01 標 DONE，接著進 V2-02 八格設計與 Rich Menu 上架；否則 V2-01 維持 PARTIAL。
+
 ## 1. 決策摘要與非目標
 
 ### 1.1 產品決策

@@ -1,3 +1,10 @@
+## 2026-10-29｜LINE 第三輪 Staging 驗收 U12–U15 PASS；U16 六格選單尚未做／U17 未驗證（最新）
+
+- **Owner 確認：** U12 跨帳號隔離、U13 群組防洩漏、U14 解除綁定／封鎖、U15 功能權限共四項 Staging 真人 **PASS**。僅為 Owner 回報，未附逐案 trace／截圖；先前 U08–U11 四項 PASS 及六項核心成功路徑 PASS 保留。
+- **U16 非「已做待測」，而是「LINE OA 聊天室六格 Rich Menu 尚未製作／套用」：** `scripts/line_rich_menu.py` 可產生六格 actions JSON 並在明確加 `--image … --apply` 後套用，但主倉庫沒有六格圖檔；LIFF 內部八個 tab 不是 OA Rich Menu。**驗收 NOT VERIFIED，實作／套用尚未完成。** `--apply` 影響 OA 所有好友，應先做圖片、預覽六個 LIFF 頁面與還原方案、核對唯一 OA 的 Staging/Production 對應，不能未核對就改預設選單。
+- **U17：NOT VERIFIED**，需驗證 Reply 失敗後草稿保留及 UNKNOWN receipt 不重複寫入；已有單元測試不代替受控真實故障驗收。U01–U07 具體例外邊界仍需補驗。
+- **唯一下一工程入口：** U16 先製作六格圖像／JSON／預覽／safe-apply WI（不直接套用官方帳號），再做 U17 有界故障測試與未覆蓋例外；完成後重新跑當時最新 SHA 的 LINE-enabled Staging → 確保同 SHA proof → 才評估 Production promotion 及 OA Webhook／LIFF／Rich Menu 切換。**整體 PARTIAL；Production NOT VERIFIED**。詳細：[LINE WI-05C](line_integration_b_wi.md#wi-05c2026-10-29-第三輪-owner-回報與六格選單現況更正)。
+
 ## 2026-10-29｜LINE B Staging 六項真人功能 PASS；正式發布仍 PARTIAL
 
 - 已核對同一 `main` SHA `31326e856ffddd8504ae39260cf7c5facb7a2826` 的 [V3 Staging #40827872508](https://github.com/tommylin15/life_assistant/actions/runs/40827872508) SUCCESS，候選 LINE 設定、固定 staging、DB revision 0024 readback job 與 staging bundle proof artifact SUCCESS；**該 run 未 promote，不能標 Production PASS**。

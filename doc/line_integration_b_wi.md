@@ -104,5 +104,13 @@
 
 **安全執行：** 先看 [素材與安全套用 WI](../assets/line/README.md)，驗證 `python scripts/line_rich_menu.py --liff-id <REAL_LIFF_ID>` 的六個連結再決定是否套用。此輪沒有讀取／旋轉憑證、沒有呼叫 LINE 修改 OA。**U16 仍 NOT VERIFIED；LINE 整體維持 PARTIAL**。U17 及 U01–U07 邊界仍列待辦。
 
+## WI-05E：U16 最終薄荷綠 Life Omni 六格圖片與 Colab 手動套用（2026-10-29）
+
+- **Owner 最新要求優先：** 六格背景維持薄荷綠；右下「Life Omni」使用 Owner 提供的金白與深藍雙生獸意象圖。Owner 已明確選擇**直接覆蓋 LINE 官方帳號預設選單**，不要求舊選單備份／回復方案；不可將本節誤認為已完成套用。
+- **正式圖面已上傳 Google Drive，且 metadata 讀回 PASS：** 位於唯一授權根 `life_assistantGPT/LINE_U16_六格選單`（folder ID `13hiG7BMsBiQuOyYygPdqIKF3mztJjPJN`）。LINE 用圖 `Life_Omni_LINE_RichMenu_U16.jpg`：`https://drive.google.com/file/d/1mLdH02yUSubIW_Gha9IzcU5Cbb0nLYEd/view`，2500×1686、447069 bytes、SHA256 `40025281328ae35cb905a40a6bad0ab9982e70995816673032a149d4bc608097`；有紅框的按鈕位置對照圖 `https://drive.google.com/file/d/1VCn88sMjAsd5LLLCFQmbuPghp6EzCY-X/view`，**僅供預覽，絕不能上傳此標註版到 LINE**。Drive 兩個檔案皆讀回 parent folder ID 與 image/jpeg MIME，非公開分享。
+- **六格實際按鈕（2500×1686 canvas，格式 x,y,width,height）：** 快速記錄 `163,239,716,563`；今日總覽 `915,239,675,563`；查我的資料 `1626,239,716,563`；待辦・購物 `163,848,716,563`；日曆・活動 `915,848,675,563`；Life Omni `1626,848,716,563`。LIFF pages 分別 `capture/today/search/tasks/calendar/home`。本版是實際卡片對應熱區，不沿用先前的整頁三等分 bounds。
+- **LINE 上架方式改為 Owner 直接執行 Google Colab：** Colab 以 Google Drive OAuth 唯讀和上述 image file ID 取得私人圖片，驗證 JPEG、尺寸、大小與 SHA256；Messaging API token 由 Colab `getpass()` 臨時輸入，不存 Drive/GitHub。已知 GitHub Actions 直接套用 run [#40838851219](https://github.com/tommylin15/life_assistant/actions/runs/40838851219) **FAIL**：部署身分缺 `secretmanager.versions.access`，流程在呼叫 LINE API 以前停止。不可因 GitHub CI 或上傳 Drive 成功聲稱 LINE OA 已套用。
+- **驗收：** `IMAGE IN DRIVE=PASS`；`COLAB API 實際套用=NOT VERIFIED`；`LINE 手機六格操作／LIFF 返回=NOT VERIFIED`；**U16 維持 NOT VERIFIED，整體 PARTIAL**。待 Owner 回報 Colab 所印的新 `richMenuId` 和 LINE default readback PASS，再進行行動裝置測試。
+  
 ## WI-06：停用與復原
 先在後台將 line 設為 hidden，或正常 V3 部署 enable_line=false。LINE session 每次請求會重查綁定與 rollout。保留 0023/0024 資料表；不執行 downgrade、不清空 Life。正式發版仍依既有 V3 gates，CI 綠燈不代表真人 LINE 整合完成。

@@ -287,6 +287,15 @@ async def build_reply(event, record, identity, cfg, db):
         # v1 binding, rollout gate, event receipt and reply deduplication.
         from app.services.line_v2 import handle_postback
         return await handle_postback(event, identity, cfg, user, db)
+    # V2-01 can be tested through the existing six-cell OA without replacing
+    # Rich Menu. Only exact, reserved chat commands enter the activity flow.
+    chat_events = {"活動": "events.latest", "最新活動": "events.latest",
+                   "活動分類": "events.tags", "已收藏活動": "events.saved"}
+    if event.get("type") == "message" and text_value in chat_events:
+        from app.services.line_v2 import handle_postback
+        return await handle_postback(
+            {"postback": {"data": "v=2&cmd=" + chat_events[text_value]}},
+            identity, cfg, user, db)
     if event.get("type") != "message" or (event.get("message") or {}).get("type") != "text":
         return message("目前支援文字與網址。圖片、語音請先轉成文字；尚未建立任何事項。", cfg)
     menus = {"快速記錄": "capture", "今日總覽": "today", "查我的資料": "search",

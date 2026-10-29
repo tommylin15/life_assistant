@@ -222,7 +222,7 @@ def _menu_actions(cfg, user, identity, *, tag_key=None, category=None, offset=0,
         postback_action("最新上架", make_token(cfg, user, identity, "events.latest")),
         postback_action("依分類看", make_token(cfg, user, identity, "events.tags")),
         postback_action("已收藏", make_token(cfg, user, identity, "events.saved")),
-        {"type": "uri", "label": "Life 更多活動", "uri": cfg["origin"] + "/"},
+        {"type": "uri", "label": "Life 更多活動", "uri": cfg["origin"] + "/more/explore"},
     ])
     return actions
 
@@ -274,7 +274,7 @@ async def _show_tags(cfg: dict, user: dict, identity: str, db: AsyncSession,
         choices.append(postback_action("更多分類", make_token(cfg, user, identity, "events.tags_page",
                                                              o=offset+len(batch))))
     choices.append(postback_action("最新活動", make_token(cfg, user, identity, "events.latest")))
-    choices.append({"type": "uri", "label": "Life 進階篩選", "uri": cfg["origin"] + "/"})
+    choices.append({"type": "uri", "label": "Life 進階篩選", "uri": cfg["origin"] + "/more/explore"})
     return _text_reply("請選活動分類；此選單取自 Life 已上架資料，不代表完整多標籤系統。"
                        if cats else "目前沒有可用的活動分類。", choices)
 

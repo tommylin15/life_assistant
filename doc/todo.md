@@ -1,3 +1,10 @@
+## 2026-10-29｜LINE U16 六格選單素材已產出，OA 尚未套用（PARTIAL）
+
+- **SOURCE PASS：** `assets/line/rich_menu_v1.svg`、`scripts/build_line_rich_menu.py`、`tests/test_line_rich_menu_art.py`、`assets/line/README.md` 已建立；維持現有 `scripts/line_rich_menu.py` 的六個 deep-link action 與 2500×1686 全覆蓋 bounds。生成的本地 PNG 為 2500×1686、198056 bytes（未加入 GitHub 二進位檔；可由 renderer 重產）。圖片僅在本地生成與驗證，產圖依賴 CairoSVG 僅為設計工具，不新增 Cloud Run 依賴。
+- **CI / OA / 實機：** 新 SHA CI 需獨立核對；OA 預設 richMenuId、真實 LIFF ID、`--apply`、iOS／Android 六格驗收均 **NOT VERIFIED**。本次沒有改 LINE Console、Webhook、Secret、DB、production traffic 或 OA 預設選單。
+- **下一工程入口：** 先依 [U16 安全套用 WI](../assets/line/README.md) 唯讀核對真實 OA channel、LIFF ID、舊選單及恢復方案，再有界套用六格選單、行動裝置逐格驗收；其後是 U17 Reply／UNKNOWN 異常恢復及 U01–U07 未覆蓋邊界。不能以圖片完成推定 U16 PASS 或 LINE 整體 DONE。
+- **人工回報保留：** U08–U15 Staging PASS（Owner 回報）；原六項核心成功路徑 PASS。**整體 PARTIAL，Production NOT VERIFIED**。後續 production promotion 需最新 main 同 SHA 成功 LINE-enabled Staging proof。
+
 ## 2026-10-29｜LINE 第三輪 Staging 驗收 U12–U15 PASS；U16 六格選單尚未做／U17 未驗證（最新）
 
 - **Owner 確認：** U12 跨帳號隔離、U13 群組防洩漏、U14 解除綁定／封鎖、U15 功能權限共四項 Staging 真人 **PASS**。僅為 Owner 回報，未附逐案 trace／截圖；先前 U08–U11 四項 PASS 及六項核心成功路徑 PASS 保留。

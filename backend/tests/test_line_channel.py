@@ -134,6 +134,19 @@ class LineAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.json()['items'][0]['text'],'買牛奶')
         self.assertEqual(self.reply.await_count,2) # link acknowledgment + capture acknowledgment
 
+    async def test_v2_activity_chat_alias_is_not_saved_as_a_draft(self):
+        await self.bind()
+        with patch('app.services.line_v2.handle_postback',
+                   AsyncMock(return_value=[{'type': 'text', 'text': '活動摘要測試'}])) as handler:
+            result = await self.send('活動', event_id='v2-activity-chat')
+            self.assertEqual(result.status_code, 200, result.text)
+            handler.assert_awaited_once()
+            self.assertEqual(handler.await_args.args[0]['postback']['data'],
+                             'v=2&cmd=events.latest')
+        draft_list = await self.client.get('/api/v1/line/drafts')
+        self.assertEqual(draft_list.status_code, 200)
+        self.assertEqual(draft_list.json()['items'], [])
+
     async def test_v2_postback_reuses_authenticated_binding_and_event_dedupe(self):
         await self.bind()
         raw = json.dumps({'events': [{'type': 'postback',

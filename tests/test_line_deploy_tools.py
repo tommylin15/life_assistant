@@ -1,8 +1,10 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -74,6 +76,24 @@ class LineDeployTests(unittest.TestCase):
                         {**proof,'project':'other'}):
             with self.assertRaises(ValueError):
                 mod.receipt_version(invalid,sha,'life-project')
+
+    def test_metadata_failure_reports_operation_and_category_without_secret_content(self):
+        mod=load('resolve_life_bundle')
+        example=subprocess.CalledProcessError(
+            1, ['gcloud'], stderr=b'PERMISSION_DENIED: access denied to resource')
+        with patch.object(mod.subprocess, 'run', side_effect=example):
+            with self.assertRaises(mod.SecretMetadataError) as exc:
+                mod.gcloud_json('secrets', 'versions', 'list', 'life-assistant-bundle')
+        self.assertEqual(str(exc.exception), 'operation=versions_list category=PERMISSION_DENIED')
+
+    def test_metadata_other_failure_does_not_echo_raw_stderr(self):
+        mod=load('resolve_life_bundle')
+        example=subprocess.CalledProcessError(1, ['gcloud'], stderr=b'unexpected private diagnostic data')
+        with patch.object(mod.subprocess, 'run', side_effect=example):
+            with self.assertRaises(mod.SecretMetadataError) as exc:
+                mod.gcloud_json('secrets', 'versions', 'list', 'life-assistant-bundle')
+        self.assertEqual(str(exc.exception), 'operation=versions_list category=OTHER')
+        self.assertNotIn('private diagnostic', str(exc.exception))
 
     def test_six_menu_cells_cover_image(self):
         result=load('line_rich_menu').menu('123-abc')

@@ -71,10 +71,41 @@ def receipt_version(receipt, release_sha, project):
     return str(receipt["version"])
 
 
+class SecretMetadataError(ValueError):
+    pass
+
+
 def gcloud_json(*args):
-    result = subprocess.run(["gcloud", *args, "--format=json"],
-                            check=True, capture_output=True, text=True)
-    return json.loads(result.stdout)
+    operation = ("versions_list" if args[:3] == ("secrets", "versions", "list")
+                 else "versions_metadata" if args[:3] == ("secrets", "versions", "describe")
+                 else "cloud_run_metadata")
+    try:
+        result = subprocess.run(["gcloud", *args, "--format=json"],
+                                check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        # gcloud may include request metadata in stderr. Do not emit raw stderr
+        # and never access/print the Secret payload to debug metadata failures.
+        error = ((exc.stderr or b"").decode("utf-8", "replace")
+                 if isinstance(exc.stderr, bytes) else str(exc.stderr or "")).lower()
+        if any(s in error for s in ("permission_denied", "permission denied",
+                                    "does not have permission", "403", "not authorized")):
+            category = "PERMISSION_DENIED"
+        elif any(s in error for s in ("api has not been used", "api is disabled",
+                                      "service disabled")):
+            category = "API_DISABLED"
+        elif any(s in error for s in ("not found", "404")):
+            category = "NOT_FOUND"
+        elif any(s in error for s in ("unauthenticated", "invalid credentials", "401")):
+            category = "UNAUTHENTICATED"
+        elif any(s in error for s in ("unrecognized arguments", "invalid choice")):
+            category = "INVALID_COMMAND"
+        else:
+            category = "OTHER"
+        raise SecretMetadataError(f"operation={operation} category={category}") from None
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        raise SecretMetadataError(f"operation={operation} category=INVALID_JSON") from None
 
 
 def resolve(mode, project, region, service, release_sha="", receipt=None):
@@ -142,5 +173,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (ValueError, KeyError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
-        raise SystemExit("bundle_resolution=FAIL " + type(exc).__name__) from None
+    except SecretMetadataError as exc:
+        raise SystemExit("bundle_resolution=FAIL " + str(exc)) from None
+    except (ValueError, KeyError, json.JSONDecodeError) as exc:
+        raise SystemExit("bundle_resolution=FAIL category=" + type(exc).__name__) from None

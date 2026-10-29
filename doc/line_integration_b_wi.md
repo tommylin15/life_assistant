@@ -27,6 +27,8 @@
 
 正式發布另用 promote=true、publish_staging=true、enable_line=true，採 PROD 非機密 variables，bundle 自動沿用成功 Staging Run 的版本（不得自動抓更新的 Key）。只有一個 OA 時，驗收後須同步將 webhook、LIFF endpoint、選單改成正式環境；同一 webhook 不同時服務兩個環境。Production candidate 同時供 staging 發布 gate 使用時，staging 的 LINE 頁可能因 PROD origin 不符而拒絕，不能把它當成獨立啟用的 stage LINE。
 
+**診斷權限**：自動解析時，GitHub Actions 的 `GCP_DEPLOY_SERVICE_ACCOUNT` 需要對 `life-assistant-bundle` 具有 `secretmanager.versions.list` 中繼資料權限。原有 Cloud Run Runtime 的 Secret Accessor 權限並不等於 GitHub 部署者可查版本。若 CI 顯示 `bundle_resolution=FAIL operation=versions_list category=PERMISSION_DENIED`，請先確認部署者身分，再於**單一 Secret** 層級授予必要版本中繼資料讀取權限（例如 `roles/secretmanager.viewer`），不得授予專案級廣泛權限，也不得因排錯而在 CI 輸出 Secret 值。此權限變更需由有權管理 IAM 者核准並執行；未確認前保持 fail-closed。
+
 **共用 bundle 輪替**：在 Secret Manager 將新增版本設為 ENABLED 即可，不必修改 GitHub Variable；執行新 Staging V3 Release 讓新版本被解析並鎖定。正式發版採同 SHA 的 Staging Artifact 版本，若最新版本已變更不會偷換。既有一般 `Deploy Cloud Run` Workflow 保留正式服務目前使用的數字版，不會藉部署意外切換到新 Key。若正式服務仍是歷史 `:latest`，第一次轉換會解析為當下最新 ENABLED 版；此轉換需人工核對服務。需要更新的 Key 仍需透過 Staging 驗收後發布才能在正式環境生效。原 `LINE_STAGE_BUNDLE_REF`、`LINE_PROD_BUNDLE_REF` 可刪除，其他四個 STAGE／PROD 設定保留。此版本證明只有 30 天保存期，過期需重新發布 Staging。
 
 ## WI-03：綁定

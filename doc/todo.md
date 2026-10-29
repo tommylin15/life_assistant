@@ -1,3 +1,9 @@
+## 2026-10-29｜LINE B Staging 六項真人功能 PASS；正式發布仍 PARTIAL
+
+- 已核對同一 `main` SHA `31326e856ffddd8504ae39260cf7c5facb7a2826` 的 [V3 Staging #40827872508](https://github.com/tommylin15/life_assistant/actions/runs/40827872508) SUCCESS，候選 LINE 設定、固定 staging、DB revision 0024 readback job 與 staging bundle proof artifact SUCCESS；**該 run 未 promote，不能標 Production PASS**。
+- Owner 在 2026-10-29 回報 LINE Staging：身分綁定、快速記錄、解析、正式新增、Life 查詢、重複新增防護，六項 **PASS**。僅作成功路徑回報，不自動等同 [WI U01–U17](line_integration_b_wi.md) 每個例外案例 PASS。
+- **唯一下一入口：** 依 [WI-05A](line_integration_b_wi.md#wi-05a2026-10-29-staging-實機回報依-owner-明確確認) 完成 U01–U17 尚未覆蓋的真人案例（重點：U08–U11 實際資料讀回、U12–U15 權限／撤銷、U16–U17 手機／失敗恢復）；完成且證據充分後，再依 V3 gate 執行正式 promotion、Production Hosting 與 LINE Console webhook／LIFF／選單切換驗收。Production **NOT VERIFIED**，不得單憑 staging 成功宣稱 DONE。
+
 ## 2026-10-28｜原版 LINE 方案 B 已恢復為優先基線
 
 依 Owner 最新指示，以本對話工作副本的 `api/line.py` 與 `web/line/` 為準。原版 manifest、patch 與 153/15 測試收據已保存於 doc/evidence、doc/archive。保留舊 0023 資料表，以 0024 向前遷移；舊 bridge router 不註冊。現行規格：[LINE B](line_integration_b.md)，設定與真人驗收：[WI](line_integration_b_wi.md)。下方舊「原版未找到／停止線」是歷史查核，已由本次找回證據及 Owner 指示取代。CI／部署／真人整合依當次證據分別判定。

@@ -99,6 +99,7 @@ class HandlerContracts(unittest.IsolatedAsyncioTestCase):
         actions = [x["action"] for x in messages[0]["quickReply"]["items"]]
         next_page = v2.read_token(actions[0]["data"], CFG, USER, IDENTITY)
         self.assertEqual((next_page["a"], next_page["o"], next_page["s"]), ("events.page", 6, 1800000000000000))
+        self.assertEqual(actions[-1]["uri"], "https://life.example.test/more/explore")
         query.assert_awaited_once()
 
     async def test_existing_curated_group_query_is_reused_and_duplicate_children_collapsed(self):

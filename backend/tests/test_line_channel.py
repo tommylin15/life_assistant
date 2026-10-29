@@ -134,6 +134,30 @@ class LineAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.json()['items'][0]['text'],'買牛奶')
         self.assertEqual(self.reply.await_count,2) # link acknowledgment + capture acknowledgment
 
+    async def test_v2_postback_reuses_authenticated_binding_and_event_dedupe(self):
+        await self.bind()
+        raw = json.dumps({'events': [{'type': 'postback',
+            'webhookEventId': 'v2-activity-1',
+            'timestamp': int(channel.utcnow().timestamp() * 1000),
+            'source': {'type': 'user', 'userId': IDENTITY},
+            'replyToken': 'v2-reply',
+            'postback': {'data': 'v=2&cmd=events.latest'}}]}).encode()
+        signature = base64.b64encode(hmac.new(
+            ENV['LIFE_LINE_CHANNEL_SECRET'].encode(), raw, hashlib.sha256).digest()).decode()
+        with patch('app.services.line_v2.handle_postback',
+                   AsyncMock(return_value=[{'type': 'text', 'text': 'LINE v2 activity fixture'}])) as handler:
+            first = await self.client.post('/api/v1/line/webhook', content=raw,
+                                           headers={'x-line-signature': signature})
+            second = await self.client.post('/api/v1/line/webhook', content=raw,
+                                            headers={'x-line-signature': signature})
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual(second.status_code, 200, second.text)
+            handler.assert_awaited_once()
+        async with self.sessions() as db:
+            rows = (await db.scalars(select(LineEvent).where(LineEvent.text == ''))).all()
+            self.assertEqual(len(rows), 2)  # link + one deduplicated postback
+        self.assertEqual(self.reply.await_count, 2)  # link + one postback reply
+
     async def test_reply_failure_keeps_draft_for_retrieval(self):
         await self.bind()
         self.reply.side_effect=HTTPException(503,'LINE unavailable')

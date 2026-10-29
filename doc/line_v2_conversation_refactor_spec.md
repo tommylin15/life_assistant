@@ -2,7 +2,7 @@
 
 - **版本：** SPEC v2.0 / 2026-10-29（Asia/Taipei）
 - **狀態：** DESIGN APPROVED BY OWNER REQUEST（範圍與產品方向）；**SOURCE / TEST / CI / STAGING / PRODUCTION 均非本規格的功能實作證據**
-- **GitHub 現行實作基線：** \`backend/app/api/line.py\`、\`backend/app/services/line_channel.py\`、\`web/line/*\`、\`scripts/line_rich_menu.py\`、\`backend/app/api/curated.py\`、\`backend/app/api/curated_actions.py\`、\`backend/app/api/inbox.py\`。本規格**取代 v1「六格全部跳 LIFF 頁面」的未來產品方向**，不否定 v1 已驗收功能、資料或原先的安全契約。
+- **GitHub 現行實作基線：** `backend/app/api/line.py`、`backend/app/services/line_channel.py`、`web/line/*`、`scripts/line_rich_menu.py`、`backend/app/api/curated.py`、`backend/app/api/curated_actions.py`、`backend/app/api/inbox.py`。本規格**取代 v1「六格全部跳 LIFF 頁面」的未來產品方向**，不否定 v1 已驗收功能、資料或原先的安全契約。
 - **交付原則：** 本輪只完成規格與工作入口；不更動現行 OA 預設選單、Webhook、LIFF、正式 Life Web、資料庫、Cloud Run 或使用者紀錄。產圖與上架另立執行／驗收證據。
 
 ## 1. 決策摘要與非目標
@@ -24,32 +24,32 @@
 
 | 項目 | GitHub v1 已有／可驗證的行為 | v2 目標（**未實作**） |
 |---|---|---|
-| Rich Menu | 六格 URI → 同一個 \`/line/index.html?page=…\` LIFF | 八格 2×4：前七格 Postback/必要 Message，最後一格 Life HTTPS URI |
+| Rich Menu | 六格 URI → 同一個 `/line/index.html?page=…` LIFF | 八格 2×4：前七格 Postback/必要 Message，最後一格 Life HTTPS URI |
 | 聊天回覆 | 一般文字與附「開啟 Life」Quick Reply；直接傳訊先保存草稿 | Flex 卡、狀態操作、查詢導引、分類確認；只有少數情境跳 LIFF |
-| 活動 | LIFF 查 \`/free-events/curated\`、關鍵字／收藏／分頁 | LINE 最新上架 Carousel、依分類／Tag 子選單、LINE 內收藏切換 |
+| 活動 | LIFF 查 `/free-events/curated`、關鍵字／收藏／分頁 | LINE 最新上架 Carousel、依分類／Tag 子選單、LINE 內收藏切換 |
 | 待辦、購物 | LIFF 頁面編輯；聊天「待辦」「購物」回前五筆文字 | LINE 內清單 Flex／逐項 Postback 完成／新增；複雜編輯開 Life |
 | 日曆 | LIFF 日期範圍及 Google Calendar API | LINE 內近期行程摘要；授權／複雜新增開 Life／LIFF |
-| 內容解析 | Webhook 不做 AI；LIFF 手動 \`/inbox/interpret\`→\`commit\` | 保存草稿後、使用者明確觸發的有界分類→Flex 候選→確認寫入 |
-| Life App | LIFF \`home\` 再按「開啟完整 Life」 | Rich Menu 第八格直接到 Life 手機入口（登入沿用視瀏覽器 Session） |
+| 內容解析 | Webhook 不做 AI；LIFF 手動 `/inbox/interpret`→`commit` | 保存草稿後、使用者明確觸發的有界分類→Flex 候選→確認寫入 |
+| Life App | LIFF `home` 再按「開啟完整 Life」 | Rich Menu 第八格直接到 Life 手機入口（登入沿用視瀏覽器 Session） |
 
-**相容條件：** 維持 v1 既有 \`line_bindings/line_sessions/line_events\`、訊息草稿、Inbox action_id receipt、FeatureRollout、舊六格 URI 的生命週期；新版本 staged rollout 可退回 v1 入口。不刪除 v1 使用者資料或做 destructive migration。
+**相容條件：** 維持 v1 既有 `line_bindings/line_sessions/line_events`、訊息草稿、Inbox action_id receipt、FeatureRollout、舊六格 URI 的生命週期；新版本 staged rollout 可退回 v1 入口。不刪除 v1 使用者資料或做 destructive migration。
 
 ## 3. 八格 Rich Menu IA、圖片與點擊契約
 
 最終圖面採 **2500×1686，2 列×4 欄**；左右欄寬各 625，列高各 843；圖像與 bounds 一律由同一配置輸出並有測試，熱區須涵蓋圖片內完整對應按鈕。採不超過 1 MB 的合規 PNG/JPEG；圖中不可用假按鈕當未定義熱區。
 
-| # | 列/欄 | 名稱 | bounds \`x,y,width,height\` | 動作／指令 | 下一步 |
+| # | 列/欄 | 名稱 | bounds `x,y,width,height` | 動作／指令 | 下一步 |
 |---|---|---|---|---|---|
-| 1 | 上 1 | 快速記錄 | 0,0,625,843 | postback \`v2.capture.start\` | 引導在當前對話輸入文字；已輸入者保留原草稿 |
-| 2 | 上 2 | 今日總覽 | 625,0,625,843 | postback \`v2.today.view\` | 今日待辦＋今日行程 Flex 摘要 |
-| 3 | 上 3 | 查我的資料 | 1250,0,625,843 | postback \`v2.search.start\` | Quick Reply 選筆記／待辦／購物，接收關鍵字 |
-| 4 | 上 4 | 待辦 | 1875,0,625,843 | postback \`v2.tasks.list\` | 未完成待辦 Flex、標記完成、更多 |
-| 5 | 下 1 | 購物 | 0,843,625,843 | postback \`v2.shopping.list\` | 清單／品項 Flex、勾選、新增 |
-| 6 | 下 2 | 日曆 | 625,843,625,843 | postback \`v2.calendar.today\` | 今日／近期 Google 行程摘要 |
-| 7 | 下 3 | 活動 | 1250,843,625,843 | postback \`v2.events.latest\` | 最新 Flex Carousel；附「依 Tag 看」子選單 |
-| 8 | 下 4 | Life Omni | 1875,843,625,843 | URI \`<verified Life origin>/\` | 直接開完整 Life Web 行動入口 |
+| 1 | 上 1 | 快速記錄 | 0,0,625,843 | postback `v2.capture.start` | 引導在當前對話輸入文字；已輸入者保留原草稿 |
+| 2 | 上 2 | 今日總覽 | 625,0,625,843 | postback `v2.today.view` | 今日待辦＋今日行程 Flex 摘要 |
+| 3 | 上 3 | 查我的資料 | 1250,0,625,843 | postback `v2.search.start` | Quick Reply 選筆記／待辦／購物，接收關鍵字 |
+| 4 | 上 4 | 待辦 | 1875,0,625,843 | postback `v2.tasks.list` | 未完成待辦 Flex、標記完成、更多 |
+| 5 | 下 1 | 購物 | 0,843,625,843 | postback `v2.shopping.list` | 清單／品項 Flex、勾選、新增 |
+| 6 | 下 2 | 日曆 | 625,843,625,843 | postback `v2.calendar.today` | 今日／近期 Google 行程摘要 |
+| 7 | 下 3 | 活動 | 1250,843,625,843 | postback `v2.events.latest` | 最新 Flex Carousel；附「依 Tag 看」子選單 |
+| 8 | 下 4 | Life Omni | 1875,843,625,843 | URI `<verified Life origin>/` | 直接開完整 Life Web 行動入口 |
 
-- 上述 \`v2.*\` 是**邏輯命令名稱**，LINE \`postback.data\` 實際採有版本的精簡白名單，例如 \`v=2&cmd=events.latest\`，不是公開可寫的 REST API。每項傳入 ID／cursor 必須走受控 server-side state／不可猜測的短期 action token。
+- 上述 `v2.*` 是**邏輯命令名稱**，LINE `postback.data` 實際採有版本的精簡白名單，例如 `v=2&cmd=events.latest`，不是公開可寫的 REST API。每項傳入 ID／cursor 必須走受控 server-side state／不可猜測的短期 action token。
 - 同一張圖片不要沿用 v1 2500×1686 的「六格狹小卡片座標」；新版圖檔、八個 bounds、Colab 發布 JSON 皆應一同版控與檢查。**先前建立的八格構想圖若未通過尺寸與熱區對照驗證，僅可作設計參考，不能聲稱上線。**
 - 按鈕 1–7 優先 Postback，不讓用戶看到一堆系統命令文字；LINE 用戶端或回覆能力不足時退回簡短文字指引＋安全 LIFF 連結。
 - 按鈕 8 必須用白名單站台 URI，不能拼接使用者可控的 arbitrary return URL。
@@ -64,30 +64,30 @@
 每張 Flex bubble 最多呈現：
 - 活動標題（最多兩行，溢出縮略）、活動日期／期間（**未提供不亂填**）、縣市、1–2 個真實分類標籤、費用（免費／明確金額／未知）、核證狀態（已核證／待核／未知）。
 - 額外短摘要或主辦來源，不放大段文章；**無授權圖片或無可信 HTTPS 圖片時，用文字 Flex bubble，不做圖片自動抓取**。
-- 底部 \`收藏\`／\`取消收藏\`（postback 以目前 DB 讀回狀態判定）、\`看來源\`（已存在的 \`original_url\` 且 HTTPS）、\`Life 詳情／更多\`（受控 Life 路由，避免任意 URL）。
-- 顯示「本次顯示前 N 個；按『下一批』繼續」，並附 \`下一批\` Postback；沒有結果時回「目前沒有符合條件的活動」，保留進階搜尋入口。
+- 底部 `收藏`／`取消收藏`（postback 以目前 DB 讀回狀態判定）、`看來源`（已存在的 `original_url` 且 HTTPS）、`Life 詳情／更多`（受控 Life 路由，避免任意 URL）。
+- 顯示「本次顯示前 N 個；按『下一批』繼續」，並附 `下一批` Postback；沒有結果時回「目前沒有符合條件的活動」，保留進階搜尋入口。
 
 LINE 官方 Flex Carousel 最多 **12 個 bubble／50 KB JSON**，實作預設每批 6 張（可配置 6–10），必須同時檢查 bubble 數與 JSON UTF-8 大小，超限縮減筆數／文字，不能送到 LINE 才失敗。單次 Reply 最多 5 message objects；減少無用重複回覆。
 
 ### 4.2 最新「上架」排序契約（不與活動日期混淆）
 
-- 現有 \`GET /free-events/curated?entry=explore&quick=latest\` 會按**分組後最早 \`CuratedActivity.created_at\` 倒序**，再按群組鍵固定排序；這代表**資料初次納入 Life 池的時間近似值**，**不是活動官方發佈日期、報名日期或活動開始日期**。
-- v2 第一輪可直接重用 \`quick=latest\` 的既有排序，UI 標記為「Life 最新上架」；不得硬稱「官方最新發佈」。若日後要求追官方發布時間，需先驗證來源 schema 是否有可用 \`published_at\`，不能假造。
-- 使用既有 \`snapshot/as_of\` 進行跨批分頁；同組只顯示一張主活動卡，避免子場次重複。快照不代表 DB 在修改後完全靜止；如分頁中內容已變，提示「清單已更新」並從第一頁重載。
-- 只展示可由現有 activity filter 證明可見、符合 \`entry=explore\` 條件的資料，保留 verification、fee_kind（缺值如實顯示）。
+- 現有 `GET /free-events/curated?entry=explore&quick=latest` 會按**分組後最早 `CuratedActivity.created_at` 倒序**，再按群組鍵固定排序；這代表**資料初次納入 Life 池的時間近似值**，**不是活動官方發佈日期、報名日期或活動開始日期**。
+- v2 第一輪可直接重用 `quick=latest` 的既有排序，UI 標記為「Life 最新上架」；不得硬稱「官方最新發佈」。若日後要求追官方發布時間，需先驗證來源 schema 是否有可用 `published_at`，不能假造。
+- 使用既有 `snapshot/as_of` 進行跨批分頁；同組只顯示一張主活動卡，避免子場次重複。快照不代表 DB 在修改後完全靜止；如分頁中內容已變，提示「清單已更新」並從第一頁重載。
+- 只展示可由現有 activity filter 證明可見、符合 `entry=explore` 條件的資料，保留 verification、fee_kind（缺值如實顯示）。
 
 ### 4.3 「依 Tag 看」第二層選單（不是第 9 格）
 
-按「依 Tag 看」→ 顯示 Quick Reply／Flex 分類選項 → 選一個分類 → 回帶相同 \`quick=latest\` 排序的篩選 Carousel → 可「下一批／換分類／回最新／開 Life」。
+按「依 Tag 看」→ 顯示 Quick Reply／Flex 分類選項 → 選一個分類 → 回帶相同 `quick=latest` 排序的篩選 Carousel → 可「下一批／換分類／回最新／開 Life」。
 
-**資料能力邊界：** 目前 \`curated_activities\` 有 \`category\` 與 \`handoff_details\`，\`GET /free-events/curated/filters\` 有真實 \`category\` 值；尚未證實有泛用的多值 \`tags\` 欄位。v2 第一版將**可用 \`category\` 映射為單選 Tag 選單**（只顯示 DB 真實存在、允許展示的值）；不得預設產生「音樂、親子、戶外」等八個固定 Tag，除非資料存在且已建立明確映射。第二版若要多 Tag、階層 Tag 或同義字，需獨立設計 schema／migration／索引／回填／驗收；先不做。
+**資料能力邊界：** 目前 `curated_activities` 有 `category` 與 `handoff_details`，`GET /free-events/curated/filters` 有真實 `category` 值；尚未證實有泛用的多值 `tags` 欄位。v2 第一版將**可用 `category` 映射為單選 Tag 選單**（只顯示 DB 真實存在、允許展示的值）；不得預設產生「音樂、親子、戶外」等八個固定 Tag，除非資料存在且已建立明確映射。第二版若要多 Tag、階層 Tag 或同義字，需獨立設計 schema／migration／索引／回填／驗收；先不做。
 - 類別數超過一頁時以 Flex 分頁或「更多分類」處理；Quick Reply 上限 13 個（包含返回、更多等，單次建議 8–10 個分類）。
 - Tag selection token 必須與使用者及 namespace 綁定並有短 TTL；過期給出重新選擇入口，不套用先前權限。
 
 ### 4.4 收藏操作與資料一致性
 
-- 重用既有 \`PUT /free-events/curated/{activity_id}/actions/save\` 的 ownership 與 parent-group collapsing 行為，但**Webhook 不直接呼叫需要瀏覽器 Cookie 的 API**；應抽取可重用 Domain Service，在已驗證 LINE 綁定 \`user_sub\`、活動可見及 \`events/explore\` rollout 之後呼叫。
-- Postback 先依 server state 找到活動，讀回當前 \`saved\`，使用者明確選 \`save=true/false\`；重複投遞應收斂到相同狀態，不能因重複 click 反覆反轉。動作成功後回覆結果卡或狀態文字；先 DB commit／readback 再宣稱已收藏。
+- 重用既有 `PUT /free-events/curated/{activity_id}/actions/save` 的 ownership 與 parent-group collapsing 行為，但**Webhook 不直接呼叫需要瀏覽器 Cookie 的 API**；應抽取可重用 Domain Service，在已驗證 LINE 綁定 `user_sub`、活動可見及 `events/explore` rollout 之後呼叫。
+- Postback 先依 server state 找到活動，讀回當前 `saved`，使用者明確選 `save=true/false`；重複投遞應收斂到相同狀態，不能因重複 click 反覆反轉。動作成功後回覆結果卡或狀態文字；先 DB commit／readback 再宣稱已收藏。
 - 跨帳號或過期、已下架活動一律拒絕，不回傳他人收藏與資料；403/404 不等於「活動不存在於世界」。
 - 卡片與原 Life 網站共用唯一 PostgreSQL source；網頁刷新應能讀回相同收藏狀態。
 
@@ -104,44 +104,44 @@ LINE 官方 Flex Carousel 最多 **12 個 bubble／50 KB JSON**，實作預設�
 | 活動 | 最新 Carousel、分類 Tag 子選單、已收藏、收藏開關 | 進階地區／日期／多分類篩選、活動完整詳情 |
 | Life Omni | **直接連 Life HTTPS 手機入口**，不得先繞回 LIFF 八功能首頁 | 主站完整操作 |
 
-**快速記錄效能設計：** 維持 webhook 原則「先持久化，再回覆」；第一次回覆「已保存草稿」＋「分類並確認」Quick Reply；分類在使用者下一次 Postback 才透過既有 \`inbox/interpret\` Domain Service 進行有界執行。若解析耗時、失敗或需要 OAuth，保留草稿並回 LIFF 深連結，不在 Webhook 同步等待無界 AI，也不新增默默推播的常駐 Agent。正式新增始終明確確認、固定 \`action_id\`；UNKNOWN 先查 receipt／原 Life 或 Google 資料，**不換 ID 自動重建**。
+**快速記錄效能設計：** 維持 webhook 原則「先持久化，再回覆」；第一次回覆「已保存草稿」＋「分類並確認」Quick Reply；分類在使用者下一次 Postback 才透過既有 `inbox/interpret` Domain Service 進行有界執行。若解析耗時、失敗或需要 OAuth，保留草稿並回 LIFF 深連結，不在 Webhook 同步等待無界 AI，也不新增默默推播的常駐 Agent。正式新增始終明確確認、固定 `action_id`；UNKNOWN 先查 receipt／原 Life 或 Google 資料，**不換 ID 自動重建**。
 
 ## 6. 架構、授權與 API 設計
 
 ### 6.1 端到端路徑
 
-\`Rich Menu Postback / 私聊文字 → LINE Webhook（簽章）→ Auth Binding + FeatureRollout → 對話命令路由（白名單）→ Life Domain Services（Curated / Inbox / Tasks / Shopping / Calendar）→ PostgreSQL／既有 Google adapter → Messaging API Reply (Flex / Quick Reply)\`
+`Rich Menu Postback / 私聊文字 → LINE Webhook（簽章）→ Auth Binding + FeatureRollout → 對話命令路由（白名單）→ Life Domain Services（Curated / Inbox / Tasks / Shopping / Calendar）→ PostgreSQL／既有 Google adapter → Messaging API Reply (Flex / Quick Reply)`
 
-LIFF 仍走 \`Firebase Hosting /line/index.html → FastAPI → PostgreSQL\`，完整版 Life 仍走 Flutter Web。**不新增 LINE 專用 database、不複製 Business Rules、不讓 webhook 以 Admin 權限讀取 Life 或繞過現有 API policy。**
+LIFF 仍走 `Firebase Hosting /line/index.html → FastAPI → PostgreSQL`，完整版 Life 仍走 Flutter Web。**不新增 LINE 專用 database、不複製 Business Rules、不讓 webhook 以 Admin 權限讀取 Life 或繞過現有 API policy。**
 
 ### 6.2 建議拆檔（下一輪實作，不是當前程式）
 
-- \`backend/app/services/line_conversation.py\`：命令／狀態機、讀取者權限、出錯狀態、回覆型態選擇。
-- \`backend/app/services/line_flex.py\`：純函式 Flex bubble/carousel、大小／文字／連結／數量檢查、文字 fallback；不接 DB。
-- \`backend/app/services/line_activity.py\`：用 Curated Domain 查詢 latest/tag/saved、去重主活動、cursor、安全收藏。
-- \`backend/app/services/line_action_state.py\`（如需）：短期 Postback state／user/namespace/expiry／nonce，優先沿用 PostgreSQL；確有新增持久表才用 additive Alembic migration、PG readback。
-- \`backend/app/api/line.py\`：維持唯一既有 Webhook 入口，新增有限 Postback 路由；絕不重新引入舊 \`line_bridge\` 為雙寫源。
-- \`scripts/line_rich_menu.py\`：八格 actions 配置，圖片製作與 bounds contract test。舊 v1 可重產供回退，但新八格上架需另記 LINE API ID。
-- \`web/line/*\`：只留補充編輯、draft confirmation、綁定與授權提示，不與 Web App 全站 UI 雙重維護。
-- \`lib/web/*\`：行動版 Life 首頁、入口與登入回導另作獨立功能卡；不把這次規格誤認為已完成 UI 重構。
+- `backend/app/services/line_conversation.py`：命令／狀態機、讀取者權限、出錯狀態、回覆型態選擇。
+- `backend/app/services/line_flex.py`：純函式 Flex bubble/carousel、大小／文字／連結／數量檢查、文字 fallback；不接 DB。
+- `backend/app/services/line_activity.py`：用 Curated Domain 查詢 latest/tag/saved、去重主活動、cursor、安全收藏。
+- `backend/app/services/line_action_state.py`（如需）：短期 Postback state／user/namespace/expiry／nonce，優先沿用 PostgreSQL；確有新增持久表才用 additive Alembic migration、PG readback。
+- `backend/app/api/line.py`：維持唯一既有 Webhook 入口，新增有限 Postback 路由；絕不重新引入舊 `line_bridge` 為雙寫源。
+- `scripts/line_rich_menu.py`：八格 actions 配置，圖片製作與 bounds contract test。舊 v1 可重產供回退，但新八格上架需另記 LINE API ID。
+- `web/line/*`：只留補充編輯、draft confirmation、綁定與授權提示，不與 Web App 全站 UI 雙重維護。
+- `lib/web/*`：行動版 Life 首頁、入口與登入回導另作獨立功能卡；不把這次規格誤認為已完成 UI 重構。
 
 ### 6.3 協議與資料契約
 
 | 對象 | 來源／契約 |
 |---|---|
-| LINE webhook | 驗 \`X-Line-Signature\` 原始 body；只接受 \`source.type=user\`，拒群組／多人私人資料操作 |
-| 身分 | \`(namespace, line_user_id) → active LineBinding.user_sub\`；每次 postback 重查，絕不信任傳入 user_sub |
-| 入口命令 | \`v=2&cmd=<allowlisted>\`；未知、超長、篡改、過期一律安全失敗並引導重開選單 |
-| 狀態 | \`action_state_id / cursor\` 為伺服器產生且限時，綁 user_sub + namespace + feature + 目標 ID + 版本；不在 LINE \`data\` 暴露內部 email／Google token |
-| 活動列表 | 重用 curated \`entry=explore&quick=latest&category=...&saved_only=...&as_of=...\` 的 **Domain Service**，遵守資料可見性與 page snapshot |
-| 收藏寫入 | 重用 \`CuratedPersonalAction\` 的 \`save\` service，顯式目標狀態，讀回後回覆 |
-| 草稿/確認 | \`LineEvent\` + Inbox interpret/commit/receipt；stable action_id，不能因重送或快速重點產生兩次資料 |
-| feature policy | 入口 \`line\` 及目標 \`life_inbox / tasks / shopping / calendar / explore\` 等 server-side gate 都須驗證，不僅隱藏按鈕 |
+| LINE webhook | 驗 `X-Line-Signature` 原始 body；只接受 `source.type=user`，拒群組／多人私人資料操作 |
+| 身分 | `(namespace, line_user_id) → active LineBinding.user_sub`；每次 postback 重查，絕不信任傳入 user_sub |
+| 入口命令 | `v=2&cmd=<allowlisted>`；未知、超長、篡改、過期一律安全失敗並引導重開選單 |
+| 狀態 | `action_state_id / cursor` 為伺服器產生且限時，綁 user_sub + namespace + feature + 目標 ID + 版本；不在 LINE `data` 暴露內部 email／Google token |
+| 活動列表 | 重用 curated `entry=explore&quick=latest&category=...&saved_only=...&as_of=...` 的 **Domain Service**，遵守資料可見性與 page snapshot |
+| 收藏寫入 | 重用 `CuratedPersonalAction` 的 `save` service，顯式目標狀態，讀回後回覆 |
+| 草稿/確認 | `LineEvent` + Inbox interpret/commit/receipt；stable action_id，不能因重送或快速重點產生兩次資料 |
+| feature policy | 入口 `line` 及目標 `life_inbox / tasks / shopping / calendar / explore` 等 server-side gate 都須驗證，不僅隱藏按鈕 |
 | 外連 | 僅 https 正式站／已允許來源；網址檢查、跳轉不暴露 session/token；Life Google OAuth 沿用自身登入流程 |
 
 ### 6.4 錯誤與隱私
 
-- Reply token **只能使用一次，且一般須在收到 webhook 後 1 分鐘內使用**；不得將 AI 長任務綁在 webhook 等待。LINE redelivery 以 \`webhookEventId\` 去重，重新送達可能亂序；以 event timestamp 和既有 event ledger 收斂狀態。
+- Reply token **只能使用一次，且一般須在收到 webhook 後 1 分鐘內使用**；不得將 AI 長任務綁在 webhook 等待。LINE redelivery 以 `webhookEventId` 去重，重新送達可能亂序；以 event timestamp 和既有 event ledger 收斂狀態。
 - 回复失敗／UNKNOWN 不可盲目 Push 或使用新 token 猜測重發已寫入動作；訊息可顯示「結果尚未確認，請查回執」，資料仍保留。
 - 私人筆記全文、精確地點、敏感資訊預設不在聊天室卡片完整展示；卡片為短摘要，需要更多在有身分驗證頁查看。聊天記錄可出現在通知預覽。
 - 未經授權的 Google Calendar 錯誤顯示「需要授權」，不可顯示「今天沒有行程」。
@@ -158,8 +158,8 @@ LIFF 仍走 \`Firebase Hosting /line/index.html → FastAPI → PostgreSQL\`，�
 | V2-05 | 今日／日曆 | 時區正確、沒有授權正確報錯；跨來源部分故障不誤報空值 |
 | V2-06 | 搜尋資料 | 查筆記／待辦／購物只屬本人，缺值與無結果明確、更多分頁正常 |
 | V2-07 | 待辦／購物 Postback | 前後資料一致，項目不存在或已完成為安全冪等或明確拒絕 |
-| V2-08 | 活動最新輪播 | 真實 Life \`created_at\` 排序、同主活動一張、Carousel 可左右滑、每批上限與下一批正常 |
-| V2-09 | Tag 子選單 | 僅來源中實際 \`category\`，選類別有命中／無命中，且可換分類及恢復最新 |
+| V2-08 | 活動最新輪播 | 真實 Life `created_at` 排序、同主活動一張、Carousel 可左右滑、每批上限與下一批正常 |
+| V2-09 | Tag 子選單 | 僅來源中實際 `category`，選類別有命中／無命中，且可換分類及恢復最新 |
 | V2-10 | 收藏與取消收藏 | LINE 操作→PG→Life Web 真實讀回，重點兩次不變成反向，跨帳號隔離 |
 | V2-11 | 安全／功能關閉 | unbind/unfollow/hidden/錯誤 token/跨 namespace 與 group 皆拒絕私人資料 |
 | V2-12 | Flex 渲染與降級 | iOS/Android bubble 不嚴重溢出；12 bubbles／50 KB／5 msg／13 Quick Reply 規格守門與純文字 fallback |
@@ -167,19 +167,19 @@ LIFF 仍走 \`Firebase Hosting /line/index.html → FastAPI → PostgreSQL\`，�
 | V2-14 | U17 異常恢復回歸 | Reply/網路故障時草稿／回執保留、UNKNOWN 不雙重建立，人工與受控故障分別取證 |
 | V2-15 | 同 SHA 發布驗收 | tests、CI、GHCR image、Cloud Run／Staging、LIFF 靜態頁、OA Menu、Production runtime/PG/Google 分層取證 |
 
-任何單一 v2 功能只標 \`PASS / FAIL / NOT VERIFIED\`；Docs 完成不等於 Source PASS。U16 既有 Owner「六格操作 PASS」只適用 v1，不自動繼承八格 V2-02；U17 在 v1 仍 NOT VERIFIED，後續須補。
+任何單一 v2 功能只標 `PASS / FAIL / NOT VERIFIED`；Docs 完成不等於 Source PASS。U16 既有 Owner「六格操作 PASS」只適用 v1，不自動繼承八格 V2-02；U17 在 v1 仍 NOT VERIFIED，後續須補。
 
 ## 8. 工程執行卡（依序，一次只有一個下一入口）
 
 | SEQ | 工作卡 | 文件設計 | 程式開發 | 測試驗收 | 發布 | 模型建議 |
 |---|---|---|---|---|---|---|
-| V2-01 | LINE 對話核心＋活動 Carousel | Postback/Activity mapping、LINE state | \`line_conversation\`、\`line_flex\`、\`line_activity\`；latest/tags/saved，維持原 API | unit/contract、PG multiuser、真人 carousel／tag／收藏 | Staging-only，**不先換 OA 預設八格** | GPT-6 High |
+| V2-01 | LINE 對話核心＋活動 Carousel | Postback/Activity mapping、LINE state | `line_conversation`、`line_flex`、`line_activity`；latest/tags/saved，維持原 API | unit/contract、PG multiuser、真人 carousel／tag／收藏 | Staging-only，**不先換 OA 預設八格** | GPT-6 High |
 | V2-02 | 八格圖面＋Rich Menu switch | 2×4 座標／Life 正式 URI／雙生獸風格 | 8-grid generator、JSON、圖片位置 contract、手動上架程式 | 靜態規格／LINE API ID readback／iOS Android 八格 | Staging 驗收後切 OA 選單 | GPT-6 Medium + 製圖 |
 | V2-03 | 快速記錄與日常卡片 | 分類確認、Today、Tasks/Shopping、Calendar fallback | Domain service reuse、receipt/state、Flex/Quick Reply、LIFF 單任務導引 | 重送、UNKNOWN、缺值、Google 授權、讀寫回執 | Staging，再受控正式發布 | GPT-6 High |
 | V2-04 | Life App 手機首頁與認證體驗 | 首頁最常用資料、Life 按鈕登入流程 | Flutter Web 手機資訊層次、共用登入改善（不自動 SSO） | iOS/Android、LINE內建瀏覽器／外部瀏覽器登入、手機性能 | 同 SHA App Release/Hosting | GPT-6 High |
 | V2-05 | U17／完整正式整合驗收 | 上述矩陣、WI 補完 | 缺口修正；必要 additive migration | v1 regression、全部 v2、CI、候選、外部整合、Runtime | 正式發版／LINE Console readback | GPT-6 High |
 
-**唯一下一工程入口：\`V2-01 | 對話命令核心＋活動 Flex Carousel\`**。先完成文件與 source diff、程式、離線測試、提交 main；Owner 在 Staging 用真 LINE 人工驗收；圖面上架等後續獨立卡處理。既有六格 OA 與 Life production 目前不得因規格文件自動切換。
+**唯一下一工程入口：`V2-01 | 對話命令核心＋活動 Flex Carousel`**。先完成文件與 source diff、程式、離線測試、提交 main；Owner 在 Staging 用真 LINE 人工驗收；圖面上架等後續獨立卡處理。既有六格 OA 與 Life production 目前不得因規格文件自動切換。
 
 ## 9. 狀態、文件、來源與差異清單
 

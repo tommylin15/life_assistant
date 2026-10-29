@@ -120,5 +120,36 @@
 - **CI 問題與排除：** `main` 在本次回報前的 [CI #40841479917](https://github.com/tommylin15/life_assistant/actions/runs/40841479917) = FAIL，backend 契約測試 `test_push_does_not_enter_mutation_steps_and_legacy_is_manual` 因早前 `line-u16-apply-once.yml` 使用 push 而失敗；同檔 [套用 Run #40838851219](https://github.com/tommylin15/life_assistant/actions/runs/40838851219) = FAIL，缺少 `secretmanager.versions.access`，**它沒有成功套用選單**。既已採 Owner Colab 途徑完成真人六格操作，該舊一次性 GitHub Workflow 已從 `main` 移除；新 SHA CI 結果須另核對，不能把舊 FAIL 寫成 PASS。
 - **下一唯一入口：** U17 Reply 失敗、連線中斷與 UNKNOWN 回執的有界驗收；補 U01–U07 的特定邊界路徑及 U16 尚未明確記錄的跨手機平台／登入返回子項。**整體 PARTIAL；LINE Production NOT VERIFIED，不標 DONE**。
 
+## WI-05G｜LINE V2-01 活動 Flex 真人驗收（2026-10-29）
+
+**目前僅建立 Source 與測試；以下是 Staging／Owner 人工驗收指示，不是已執行結果。** 正式規格：[LINE v2 重構規格](line_v2_conversation_refactor_spec.md)。
+
+### 準備
+
+- 先核對最新 `main` SHA 的 Backend／Flutter／PostgreSQL／部署 CI 全 PASS，確認有新版本部署到 **enable_line=true 的 Staging**，不是自動 Staging 預設 `enable_line=false` 的部署。V3 手動發布要保留 `promote=false`、`publish_staging=true`、`enable_line=true` 與同 SHA bundle proof；**本輪不切 Production、不改目前六格 OA**。
+- 既有 LINE OA 若仍指向 Stage，確認其真實 Webhook／LIFF origin 與測試帳號綁定仍有效；不可因 GitHub source 已寫好就假設真 LINE 已更新。
+- 此版無需替換 OA Rich Menu。從 LINE 官方帳號一對一聊天直接送出確切文字「**活動**」「**活動分類**」「**已收藏活動**」；這三個指令應直接回卡片，不應存成草稿。將來八格圖面的「活動」入口應用 `postback.data=v=2&cmd=events.latest`，目前不先套用。
+
+### 真人操作紀錄（每項 PASS／FAIL／NOT VERIFIED）
+
+| 驗收項 | 操作／預期 | 狀態 |
+|---|---|---|
+| V2-01-A 最新上架 | 發「活動」→ 回 Flex Carousel，左右滑；每批最多 6 張，依 Life **初次收錄 created_at** 近到遠，活動／官方發佈日期不可假冒 | NOT VERIFIED |
+| V2-01-B 欄位與空值 | 各卡片顯示日期／地點／原始 category／費用／核證狀態；缺資料顯示未知，連結只開既有 HTTPS 來源 | NOT VERIFIED |
+| V2-01-C 分類 | 發「活動分類」→ 只顯示 Life 真實 category，點選回同分類最新卡片；換分類、更多分類及零結果可操作 | NOT VERIFIED |
+| V2-01-D 下一批 | Flex Quick Reply「下一批」→ 不重複同活動主群組、排序固定，結果更新能安全提示重新開始 | NOT VERIFIED |
+| V2-01-E 收藏 | 卡片按「收藏」→ 再按「已收藏活動」可看到，登入 Life Explore/收藏清單核對 PG 狀態；再取消收藏讀回一致 | NOT VERIFIED |
+| V2-01-F 再按與防重 | 重複點同一張舊卡片「收藏」不能反覆反轉；WebHook 重送同 event ID 在單元／整合測試僅一次 Reply，原資料不重建 | NOT VERIFIED |
+| V2-01-G 權限 | 不同 Life/LINE 帳號的收藏隔離、解除綁定/封鎖、功能 hidden、過期操作按鈕應拒絕；群組不可洩漏私有內容 | NOT VERIFIED |
+| V2-01-H 不破壞 v1 | 原六格 URI/LIFF、快速記錄、草稿、查詢、既有 Staging 簽章／登入運作仍正常 | NOT VERIFIED |
+| V2-01-I 異常情境 | 無活動、無來源、未授權、外部來源連線問題、Reply 未送達皆不謊稱資料已寫入，結果不明不自動重建 | NOT VERIFIED |
+
+### 故障與恢復
+
+- Flex 只是活動資料呈現；所有資料仍在 Life PostgreSQL。LINE 卡片未到時，不代表收藏／新增失敗，先回 Life 確認。
+- 只有 `source.type=user` 且已綁定、line/Explore feature 可用才執行；跨帳號 Postback 會拒絕，無權限不給資料。
+- 不在 LINE Webhook 做泛用 Agent loop、任意 Google OAuth、無界重試、群組私有查詢。U17 的 UNKNOWN receipt／Reply fault-injection **另依 v1 WI 做完整驗收**。
+- Owner 回報以上實機結果後再分別標記；**無收據不把 V2-01 標 DONE**。下一步才是 V2-02 八格圖片／Rich Menu 設定。
+
 ## WI-06：停用與復原
 先在後台將 line 設為 hidden，或正常 V3 部署 enable_line=false。LINE session 每次請求會重查綁定與 rollout。保留 0023/0024 資料表；不執行 downgrade、不清空 Life。正式發版仍依既有 V3 gates，CI 綠燈不代表真人 LINE 整合完成。

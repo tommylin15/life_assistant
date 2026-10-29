@@ -4,6 +4,12 @@
 - Owner 在 2026-10-29 回報 LINE Staging：身分綁定、快速記錄、解析、正式新增、Life 查詢、重複新增防護，六項 **PASS**。僅作成功路徑回報，不自動等同 [WI U01–U17](line_integration_b_wi.md) 每個例外案例 PASS。
 - **唯一下一入口：** 依 [WI-05A](line_integration_b_wi.md#wi-05a2026-10-29-staging-實機回報依-owner-明確確認) 完成 U01–U17 尚未覆蓋的真人案例（重點：U08–U11 實際資料讀回、U12–U15 權限／撤銷、U16–U17 手機／失敗恢復）；完成且證據充分後，再依 V3 gate 執行正式 promotion、Production Hosting 與 LINE Console webhook／LIFF／選單切換驗收。Production **NOT VERIFIED**，不得單憑 staging 成功宣稱 DONE。
 
+## 2026-10-29｜LINE 第二輪 Staging Owner 驗收 U08–U11 PASS；下一入口 U12–U17
+
+- Owner 明確回報 `U08–U11 PASS`：U08 筆記／待辦／購物修改與 Life 讀回、U09 Google 日曆真實查詢／新增讀回、U10 日曆撤銷授權後正確報錯、U11 活動搜尋／收藏／分頁。已於 [LINE WI-05／05B](line_integration_b_wi.md) 逐項登錄；這是 Owner 實機報告，沒有新增逐案截圖、trace 或 Production 收據。
+- 原有六項核心成功路徑 PASS 保留；原本 [Staging #40827872508](https://github.com/tommylin15/life_assistant/actions/runs/40827872508) 對應 SHA `31326e8`，不能當作更新文件後的最新 main SHA production proof。前輪文件 commit `c44bb6c` 的 [CI #40832037200](https://github.com/tommylin15/life_assistant/actions/runs/40832037200) 為 SUCCESS；此行不推定本次新 commit 的 CI 已通過。
+- **唯一下一入口：** U12–U15（另一帳號草稿／私人資訊隔離、群組忽略、解除綁定或封鎖後存取失效、hidden／目的功能關閉拒絕）；U16–U17（六格選單 iOS／Android、Reply／網路故障後草稿與回執），並補 U01–U07 尚未涵蓋的邊界。完成前 Production `NOT VERIFIED`，所有 LINE 正式 OA webhook、LIFF 與 rich menu 不切換；正式 promotion 需重新以當時最新 main SHA 跑 Staging 取得同 SHA bundle proof 並完成發布 gate。
+
 ## 2026-10-28｜原版 LINE 方案 B 已恢復為優先基線
 
 依 Owner 最新指示，以本對話工作副本的 `api/line.py` 與 `web/line/` 為準。原版 manifest、patch 與 153/15 測試收據已保存於 doc/evidence、doc/archive。保留舊 0023 資料表，以 0024 向前遷移；舊 bridge router 不註冊。現行規格：[LINE B](line_integration_b.md)，設定與真人驗收：[WI](line_integration_b_wi.md)。下方舊「原版未找到／停止線」是歷史查核，已由本次找回證據及 Owner 指示取代。CI／部署／真人整合依當次證據分別判定。

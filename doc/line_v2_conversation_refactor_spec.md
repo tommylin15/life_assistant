@@ -5,6 +5,17 @@
 - **GitHub 現行實作基線：** `backend/app/api/line.py`、`backend/app/services/line_channel.py`、`web/line/*`、`scripts/line_rich_menu.py`、`backend/app/api/curated.py`、`backend/app/api/curated_actions.py`、`backend/app/api/inbox.py`。本規格**取代 v1「六格全部跳 LIFF 頁面」的未來產品方向**，不否定 v1 已驗收功能、資料或原先的安全契約。
 - **交付原則：** 本輪只完成規格與工作入口；不更動現行 OA 預設選單、Webhook、LIFF、正式 Life Web、資料庫、Cloud Run 或使用者紀錄。產圖與上架另立執行／驗收證據。
 
+## 0A. V2-02 工程收據（2026-10-29｜八格設計／Drive 素材 SOURCE PASS）
+
+> **這是規格和可重現的上架工具，不是 OA 已經套用。** Owner 已要求接續 V2-02，惟 V2-01 真 LINE Flex/Tag/收藏仍無 Owner 實機 PASS；因此 V2-02 source 可以先做，切 OA 預設仍需驗證同環境 LINE Backend。
+
+- **八格正式圖：** [Google Drive](https://drive.google.com/file/d/1mB_15NAsxDyj3ZGikP4x7FT30Mf4gx2O/view)（ID `1mB_15NAsxDyj3ZGikP4x7FT30Mf4gx2O`，2500×1686 JPEG／289918 bytes／SHA256 `33b2460021d41c71ba56cbd90830361205f01c46d30623f60d4e413e4c794f86`）；[紅框座標對照](https://drive.google.com/file/d/1yxrBJBiroarM0yXJE01Eg8Qr2cjAscdU/view)（僅核對）。兩張素材均已從 Drive 讀回位於 `life_assistantGPT/LINE_U16_六格選單`，保留歷史資料夾名稱。
+- **主視覺：** 薄荷綠卡片、四欄兩列，右下 Life Omni 圖示採 Owner 提供的金白／深藍雙生獸意象。正式圖不是先前的 AI 概念參考圖，八個熱區直接符合圖上八格，覆蓋整張 2500×1686。
+- **GitHub 程式：** `scripts/line_rich_menu_v2.py`（精確 actions 與八格 bounds，7 個 Postback／1 個 HTTPS Life Web /today）、`scripts/build_line_rich_menu_v2.py`（可重製圖面，Owner 雙生獸為可選來源）、`tests/test_line_rich_menu_v2.py`（bounds、命令／後端 allowlist、URL 及圖片規格）。原 `scripts/line_rich_menu.py` 六格保留，不破壞 v1。
+- **Colab 部署工具：** `Life_Omni_LINE_V2_02_Eight_Grid_Apply.ipynb` 作為此輪可下載 artifact；自私人 Drive 固定 ID 讀 JPEG 並檢核 SHA256，使用隱藏 `getpass` 貼 LINE Messaging API Token；同環境 `/api/v1/line/config` HTTP 200／origin/LIFF 正確才准 OA 名稱確認→建選單→上圖→直接覆蓋 default→GET `richMenuId` 讀回。不開放任意 URL，也不把 Token 存檔。
+- **執行限制／規格差異：** GitHub V2-01 後端已寫活動 Flex；前六格命令仍在 `DEFERRED_MENU`，返回原 LIFF，不可宣稱前六格已有完整 Flex。成功的 [V3 #40852323202](https://github.com/tommylin15/life_assistant/actions/runs/40852323202) 日誌明示 `LINE_ENABLED=false`，所以不能憑那次 Staging success 就換全好友預設選單。
+- **驗收：** 素材尺寸／大小／SHA 與 Drive 存放 = PASS；本輪最新 main 同 SHA 完整 CI 需當次查核；LINE-enabled Staging、LINE OA default 讀回、手機八格、V2-01 真人 Flex／收藏、Production = NOT VERIFIED。按 [WI-05H](line_integration_b_wi.md) 執行，狀態維持 **PARTIAL**。上架實機 PASS 後唯一下一開發入口為 **V2-03 快速記錄與日常五格的對話卡片**，同時保留 U17／V2-01 尚待驗收。
+
 ## 0. V2-01 工程收據（2026-10-29；Source 已提交，發布獨立驗收）
 
 **本節更新「實際已寫入 main 的程式」狀態，但不改變第 1–9 節的 v2 產品決策。** 八格圖面、Life 手機首頁、待辦／購物／日曆完整聊天卡片、AI 在 LINE 裡的確認流程仍屬後續 V2-02～05，**不是 V2-01 已完成項**。

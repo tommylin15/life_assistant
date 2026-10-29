@@ -3,6 +3,8 @@
 日期：2026-10-28（Asia/Taipei）
 狀態：開發候選；真人驗收由 Owner 執行。文件、原始碼及自動測試不等於 LINE 已啟用。
 
+> **2026-10-29 v2 方向已獨立立案：** 本文件保留 **v1 六格 LIFF 實作／歷史驗收基線**，不因規格重整而改寫已驗證事實。下一版正式設計見 [LINE v2｜八格選單與對話式操作重構規格](line_v2_conversation_refactor_spec.md)：八格（拆開待辦／購物、日曆／活動），前七格以 LINE Flex／Quick Reply／Postback 對話操作，第八格直接開 Life Omni Web；活動以 Life 最新收錄排序的 Flex Carousel 與實際 category Tag 子選單。v2 **規格已寫，不等於現有 source、OA 選單或 production 已修改。**
+
 ## 1. 決策與工程基線
 
 Owner 已選 B「聊天快速記錄＋LINE 內管理頁面」，並明確指定以本對話原版優先。原版已於 `/workspace/scratch/ce8451bfc5e6/life-line` 找回；其前進整合使用 `backend/app/api/line.py`、`models/line.py`、`services/line_channel.py` 與 `web/line/`。

@@ -108,6 +108,24 @@
       "reason": "OVERSEAS_CONNECTION_TIMEOUT",
       "marked_at": "2026-10-28T10:11:45.872652+08:00",
       "note": "Auto-learned by router"
+    },
+    "kktix.cc": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-29T04:10:00.609637+08:00",
+      "note": "Auto-learned by router"
+    },
+    "eventgo.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-29T04:10:07.564971+08:00",
+      "note": "Auto-learned by router"
+    },
+    "ezgo.ardswc.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-29T04:10:30.694559+08:00",
+      "note": "Auto-learned by router"
     }
   }
 }

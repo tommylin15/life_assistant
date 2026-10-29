@@ -89,7 +89,7 @@ class TokenContracts(unittest.TestCase):
 
 class HandlerContracts(unittest.IsolatedAsyncioTestCase):
     async def test_latest_renders_six_and_signed_next_page(self):
-        page = {"items": [item("a" * 64)], "snapshot_unix": 1800000000, "has_more": True}
+        page = {"items": [item("a" * 64)], "snapshot_us": 1800000000000000, "has_more": True}
         with patch.object(v2, "_activity_access", AsyncMock()) as access, \
              patch.object(v2, "_activity_page", AsyncMock(return_value=page)) as query:
             messages = await v2.handle_postback(event("v=2&cmd=events.latest"), IDENTITY, CFG, USER, object())
@@ -98,8 +98,22 @@ class HandlerContracts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(messages[0]["altText"], "Life 最新上架活動（左右滑動查看）")
         actions = [x["action"] for x in messages[0]["quickReply"]["items"]]
         next_page = v2.read_token(actions[0]["data"], CFG, USER, IDENTITY)
-        self.assertEqual((next_page["a"], next_page["o"], next_page["s"]), ("events.page", 6, 1800000000))
+        self.assertEqual((next_page["a"], next_page["o"], next_page["s"]), ("events.page", 6, 1800000000000000))
         query.assert_awaited_once()
+
+    async def test_existing_curated_group_query_is_reused_and_duplicate_children_collapsed(self):
+        main = item("a" * 64)
+        child = {**item("b" * 64), "parent_event_key": "parent-A", "handoff_event_key": None}
+        another = {**item("c" * 64), "handoff_event_key": "parent-B"}
+        with patch.object(v2.curated, "list_curated", AsyncMock(return_value={
+            "items": [main, child, another], "has_more": False, "snapshot": "ignored"})) as query:
+            result = await v2._activity_page(object(), USER, category="美術", offset=6, snapshot=1800000000000000)
+        self.assertEqual([r["identity_key"] for r in result["items"]], ["a" * 64, "c" * 64])
+        self.assertEqual(query.await_args.kwargs["category"], "美術")
+        self.assertEqual(query.await_args.kwargs["quick"], "latest")
+        self.assertEqual(query.await_args.kwargs["entry"], "explore")
+        self.assertEqual(query.await_args.kwargs["offset"], 6)
+        self.assertEqual(result["snapshot_us"], 1800000000000000)
 
     async def test_category_is_real_db_category_and_not_a_guess(self):
         with patch.object(v2, "_activity_access", AsyncMock()), \
@@ -111,7 +125,7 @@ class HandlerContracts(unittest.IsolatedAsyncioTestCase):
 
     async def test_tag_selection_resolves_existing_category_and_preserves_filter(self):
         token = v2.make_token(CFG, USER, IDENTITY, "events.tag", k=v2._category_key("講座"))
-        page = {"items": [item()], "snapshot_unix": 1800000000, "has_more": False}
+        page = {"items": [item()], "snapshot_us": 1800000000000000, "has_more": False}
         with patch.object(v2, "_activity_access", AsyncMock()), \
              patch.object(v2, "_categories", AsyncMock(return_value=["講座"])), \
              patch.object(v2, "_activity_page", AsyncMock(return_value=page)) as query:

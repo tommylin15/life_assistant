@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2500" height="1686" viewBox="0 0 2500 1686">
+<rect width="2500" height="1686" fill="#E1EBE6"/>
+<rect x="0" y="0" width="833" height="843" fill="#175A48"/>
+<path d="M38 40h120" stroke="#D7EBDF" stroke-width="8" stroke-linecap="round" opacity="0.55"/>
+<circle cx="416.5" cy="272" r="122" fill="#2A735C"/>
+<g transform="translate(340.5 196) scale(6.333333)" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 11-11-3-3L5 16l-1 4z M14 7l3 3"/></g>
+<text x="416.5" y="543" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="100" font-weight="800" fill="#FFFFFF">快速記錄</text>
+<text x="416.5" y="645" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="56" font-weight="400" fill="#D7EBDF">隨手記下靈感</text>
+<text x="416.5" y="762" text-anchor="middle" font-family="sans-serif" font-size="29" letter-spacing="7" font-weight="700" fill="#D7EBDF" opacity="0.75">LIFE  /  01</text>
+<rect x="833" y="0" width="833" height="843" fill="#EAF2ED"/>
+<path d="M871 40h120" stroke="#537168" stroke-width="8" stroke-linecap="round" opacity="0.55"/>
+<circle cx="1249.5" cy="272" r="122" fill="#D8E9DD"/>
+<g transform="translate(1173.5 196) scale(6.333333)" fill="none" stroke="#236B55" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v16H4z M8 2v6 M16 2v6 M4 11h16 M8 15h3 M14 15h3 M8 18h3"/></g>
+<text x="1249.5" y="543" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="100" font-weight="800" fill="#163D36">今日總覽</text>
+<text x="1249.5" y="645" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="56" font-weight="400" fill="#537168">掌握今天安排</text>
+<text x="1249.5" y="762" text-anchor="middle" font-family="sans-serif" font-size="29" letter-spacing="7" font-weight="700" fill="#537168" opacity="0.75">LIFE  /  02</text>
+<rect x="1666" y="0" width="834" height="843" fill="#F7FAF8"/>
+<path d="M1704 40h120" stroke="#537168" stroke-width="8" stroke-linecap="round" opacity="0.55"/>
+<circle cx="2083" cy="272" r="122" fill="#D8E9DD"/>
+<g transform="translate(2007 196) scale(6.333333)" fill="none" stroke="#236B55" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 1 0 0 14z M16.5 16.5L21 21"/></g>
+<text x="2083" y="543" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="100" font-weight="800" fill="#163D36">查我的資料</text>
+<text x="2083" y="645" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="56" font-weight="400" fill="#537168">搜尋個人紀錄</text>
+<text x="2083" y="762" text-anchor="middle" font-family="sans-serif" font-size="29" letter-spacing="7" font-weight="700" fill="#537168" opacity="0.75">LIFE  /  03</text>
+<rect x="0" y="843" width="833" height="843" fill="#EAF2ED"/>
+<path d="M38 883h120" stroke="#537168" stroke-width="8" stroke-linecap="round" opacity="0.55"/>
+<circle cx="416.5" cy="1115" r="122" fill="#D8E9DD"/>
+<g transform="translate(340.5 1039) scale(6.333333)" fill="none" stroke="#236B55" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l2 2 4-4 M12 7h9 M3 17l2 2 4-4 M12 17h9"/></g>
+<text x="416.5" y="1386" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="100" font-weight="800" fill="#163D36">待辦・購物</text>
+<text x="416.5" y="1488" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="56" font-weight="400" fill="#537168">清單一次管理</text>
+<text x="416.5" y="1605" text-anchor="middle" font-family="sans-serif" font-size="29" letter-spacing="7" font-weight="700" fill="#537168" opacity="0.75">LIFE  /  04</text>
+<rect x="833" y="843" width="833" height="843" fill="#F7FAF8"/>
+<path d="M871 883h120" stroke="#537168" stroke-width="8" stroke-linecap="round" opacity="0.55"/>
+<circle cx="1249.5" cy="1115" r="122" fill="#D8E9DD"/>
+<g transform="translate(1173.5 1039) scale(6.333333)" fill="none" stroke="#236B55" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v16H4z M8 2v6 M16 2v6 M4 11h16 M9 16l2 2 4-4"/></g>
+<text x="1249.5" y="1386" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="100" font-weight="800" fill="#163D36">日曆・活動</text>
+<text x="1249.5" y="1488" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="56" font-weight="400" fill="#537168">查看行程與探索</text>
+<text x="1249.5" y="1605" text-anchor="middle" font-family="sans-serif" font-size="29" letter-spacing="7" font-weight="700" fill="#537168" opacity="0.75">LIFE  /  05</text>
+<rect x="1666" y="843" width="834" height="843" fill="#EAF2ED"/>
+<path d="M1704 883h120" stroke="#537168" stroke-width="8" stroke-linecap="round" opacity="0.55"/>
+<circle cx="2083" cy="1115" r="122" fill="#D8E9DD"/>
+<g transform="translate(2007 1039) scale(6.333333)" fill="none" stroke="#236B55" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13a5 5 0 1 0 0-10 5 5 0 1 0 0 10z M3 21c0-7 18-7 18 0"/></g>
+<text x="2083" y="1386" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="100" font-weight="800" fill="#163D36">我的 Life</text>
+<text x="2083" y="1488" text-anchor="middle" font-family="Noto Sans CJK TC,Noto Sans TC,sans-serif" font-size="56" font-weight="400" fill="#537168">回到生活中心</text>
+<text x="2083" y="1605" text-anchor="middle" font-family="sans-serif" font-size="29" letter-spacing="7" font-weight="700" fill="#537168" opacity="0.75">LIFE  /  06</text>
+<path d="M833 0V1686 M1666 0V1686 M0 843H2500" fill="none" stroke="#C9DAD0" stroke-width="4"/>
+</svg>

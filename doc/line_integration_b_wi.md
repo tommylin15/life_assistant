@@ -68,5 +68,14 @@
 
 每項記錄：環境、Git SHA、台北時間、案例 ID、PASS/FAIL、實際結果與截圖（遮蔽 token/碼/個資）。遇 UNKNOWN 先查看回執和 Life／Google 原資料，不換 action ID 盲目重建。
 
+## WI-05A：2026-10-29 Staging 實機回報（依 Owner 明確確認）
+
+- **版本／環境：** `main` SHA `31326e856ffddd8504ae39260cf7c5facb7a2826`；[V3 Staging Run #40827872508](https://github.com/tommylin15/life_assistant/actions/runs/40827872508) conclusion=success，`promote=false`，Production 切流未執行。
+- **機器證據：** Candidate LINE config、migration job、DB schema readback job、固定 Staging Preview／發布與 LINE staging bundle proof artifact 均為 Actions 成功；artifact 名稱 `line-stage-31326e856ffddd8504ae39260cf7c5facb7a2826`，有效期限依 Actions 為 2026-11-28 06:23 UTC。這不是 Production runtime 或 LINE Console 的驗證。
+- **真人功能回報（6/6 PASS；非 U01–U17 全案）：** 身分綁定、LINE 快速記錄、內容解析、經確認正式新增 Life 資料、Life 個人查詢、重複新增防護。上述結果依 Owner 在 2026-10-29 的 Staging 實機回報登錄；未附逐項時間戳及遮蔽截圖，不推定所有例外路徑完成。
+- **驗收映射：** 以上功能橫跨 U02／U03／U05／U07 的*一般成功路徑*，但不等於 U02 的「重用綁定碼」、U03 的「草稿先保存」、U05 的「重新開頁與回執」、U07 的「各類查詢與跨帳號隔離」等完整測試已 PASS。因此上表 U01–U17 的特定案例仍保持 `NOT VERIFIED`，待逐案實測後再更新。
+- **下一階段唯一入口：** 完成 Staging U01–U17 的未涵蓋情境，優先 U08–U11（筆記／待辦／購物／日曆／活動正向讀回）、U12–U15（帳號隔離／群組忽略／撤銷／功能關閉），以及 U16–U17（六格選單、iOS／Android、Reply/UNKNOWN 恢復）。尤其 U09 Google Calendar 的真實寫入與讀回、U12 另一帳號隔離不可用其他 PASS 代替。U01–U07 其餘具體邊界仍需補驗。
+- **發布停止線：** 正式 LINE OA webhook／LIFF endpoint／rich menu 切到 Production 前，須先完成 WI-05 發布所需案例、確認同 SHA staging proof、`LINE_PROD_*` 配置、共享 Secret 版本與 Production 發布 gate。只有一個官方帳號時，切換 endpoint 時 staging 不再假設與正式同時可收訊；Production 正式切流、Hosting、LINE Console 與真人驗收目前全部 `NOT VERIFIED`。不刪舊資料、不重建 LINE 綁定或重新旋轉憑證。
+
 ## WI-06：停用與復原
 先在後台將 line 設為 hidden，或正常 V3 部署 enable_line=false。LINE session 每次請求會重查綁定與 rollout。保留 0023/0024 資料表；不執行 downgrade、不清空 Life。正式發版仍依既有 V3 gates，CI 綠燈不代表真人 LINE 整合完成。

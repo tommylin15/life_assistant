@@ -1,0 +1,109 @@
+name: LINE U16 - Apply Six-Grid Default Menu (Owner-Approved One-Time)
+
+# Owner approved direct replacement of the LINE OA default rich menu on 2026-10-29.
+# Trigger once when this workflow file is first added to main.
+# Subsequent normal source/docs pushes do not retrigger this.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/line-u16-apply-once.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: life-line-oa-default-rich-menu
+  cancel-in-progress: false
+
+jobs:
+  apply-line-rich-menu:
+    if: github.repository == 'tommylin15/life_assistant'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: dev-test
+    env:
+      LINE_LIFF_ID: ${{ vars.LINE_STAGE_LIFF_ID }}
+      GCP_PROJECT_ID: gen-lang-client-0593591102
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Render verified six-cell PNG
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk > /dev/null
+          python -m pip install --disable-pip-version-check cairosvg==2.8.2
+          python -m unittest discover -s tests -p 'test_line_rich_menu_art.py' -v
+          python scripts/build_line_rich_menu.py --out "$RUNNER_TEMP/life-line-rich-menu.png"
+
+      - name: Authenticate existing GCP WIF deployer (no new IAM grants)
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: access_token
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Directly replace OA default rich menu, then read back
+        env:
+          BUNDLE_PATH: ${{ runner.temp }}/life-line-u16-bundle.json
+          IMAGE_PATH: ${{ runner.temp }}/life-line-rich-menu.png
+        shell: bash
+        run: |
+          set -euo pipefail
+          # If this deployer cannot access the bundle, stop without changing IAM.
+          # Never echo the bundle or any LINE bearer token to logs.
+          test -n "$LINE_LIFF_ID"
+          gcloud secrets versions access latest \
+            --secret life-assistant-bundle \
+            --project "$GCP_PROJECT_ID" > "$BUNDLE_PATH"
+          chmod 600 "$BUNDLE_PATH"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+          from urllib.request import Request, urlopen
+
+          bundle = json.loads(Path(os.environ["BUNDLE_PATH"]).read_text())
+          token = bundle.get("LIFE_LINE_ACCESS_TOKEN")
+          if not isinstance(token, str) or not token.strip():
+              raise SystemExit("line_u16=FAIL category=MISSING_LINE_TOKEN")
+          token = token.strip()
+          env = dict(os.environ)
+          env["LIFE_LINE_ACCESS_TOKEN"] = token
+          args = [sys.executable, "scripts/line_rich_menu.py",
+                  "--liff-id", os.environ["LINE_LIFF_ID"],
+                  "--image", os.environ["IMAGE_PATH"], "--apply"]
+          result = subprocess.run(args, text=True, capture_output=True, env=env)
+          if result.returncode != 0:
+              # The helper deliberately emits only HTTP codes, never token contents.
+              print("line_u16=FAIL category=MENU_APPLY " +
+                    ("HTTP_ERROR" if "LINE API HTTP" in result.stderr else "OTHER"))
+              raise SystemExit(1)
+          match = re.search(r"Created richMenuId=(richmenu-[A-Za-z0-9_-]+)", result.stdout)
+          if not match:
+              raise SystemExit("line_u16=FAIL category=NO_MENU_ID")
+          menu_id = match.group(1)
+          request = Request("https://api.line.me/v2/bot/user/all/richmenu",
+                            headers={"Authorization": "Bearer " + token})
+          with urlopen(request, timeout=15) as response:
+              actual = json.load(response).get("richMenuId")
+          if actual != menu_id:
+              raise SystemExit("line_u16=FAIL category=DEFAULT_MENU_READBACK_MISMATCH")
+          print("line_u16=PASS applied_default_rich_menu=" + menu_id)
+          PY
+          rm -f "$BUNDLE_PATH"
+          echo "LINE default six-grid menu replacement=PASS (LINE API readback)" >> "$GITHUB_STEP_SUMMARY"

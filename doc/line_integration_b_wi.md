@@ -151,5 +151,40 @@
 - 不在 LINE Webhook 做泛用 Agent loop、任意 Google OAuth、無界重試、群組私有查詢。U17 的 UNKNOWN receipt／Reply fault-injection **另依 v1 WI 做完整驗收**。
 - Owner 回報以上實機結果後再分別標記；**無收據不把 V2-01 標 DONE**。下一步才是 V2-02 八格圖片／Rich Menu 設定。
 
+## WI-05H｜LINE-V2-02 八格 Rich Menu 製作與上架驗收（2026-10-29）
+
+> 八格**圖面已製作、程式已提交、Drive 讀回 PASS**；這不等於已呼叫 LINE API 上架。原六格操作 Owner PASS 僅屬 v1；本版要求獨立的 OA API 與手機驗收。完整素材／點擊表見 [V2-02 Asset WI](../assets/line/README_V2.md)。
+
+### 圖面、區域與行為
+
+- **正式圖 Drive：** `life_assistantGPT/LINE_U16_六格選單/life_omni_v2_eight_grid.jpg`，檔案 ID `1mB_15NAsxDyj3ZGikP4x7FT30Mf4gx2O`，JPEG 2500×1686、289918 bytes、SHA256 `33b2460021d41c71ba56cbd90830361205f01c46d30623f60d4e413e4c794f86`；Drive metadata 讀回符合資料夾／MIME／檔案大小。
+- **核對圖（不可上傳）：** `1yxrBJBiroarM0yXJE01Eg8Qr2cjAscdU`；紅框只供確認 8 區。
+- **八格順序與座標：** 上排 (1) 快速記錄 `0,0,625,843`，(2) 今日總覽 `625,0,625,843`，(3) 查我的資料 `1250,0,625,843`，(4) 待辦 `1875,0,625,843`；下排 (5) 購物 `0,843,625,843`，(6) 日曆 `625,843,625,843`，(7) 活動 `1250,843,625,843`，(8) Life Omni `1875,843,625,843`。
+- **動作：** 前七格 `postback`：`v=2&cmd=capture.start`、`today.view`、`search.start`、`tasks.list`、`shopping.list`、`calendar.today`、`events.latest`；第八格 `uri` 直接 Life Hosting `/today`。目前只有活動對話卡屬 V2-01 實作；前六格需等 V2-03，**這版先沿用 LIFF fallback**，不可誤標功能已升級。
+- **GitHub：** `scripts/line_rich_menu_v2.py`、`scripts/build_line_rich_menu_v2.py`、`tests/test_line_rich_menu_v2.py`；原 v1 六格程式與表、資料保留。
+
+### 正式上架程序（Owner Colab）
+
+1. 先看最新 main SHA 的 GitHub CI，必要時先完成修正；確定該 SHA 已部署到 `enable_line=true` 的相符環境，且 **GET /api/v1/line/config HTTP 200 + 正確 origin／LIFF ID**。前輪 [V3 #40852323202](https://github.com/tommylin15/life_assistant/actions/runs/40852323202) 雖 `success`，讀到 `LINE_ENABLED=false`，**不能當作 LINE-enabled 證據**。
+2. 開啟本輪 `Life_Omni_LINE_V2_02_Eight_Grid_Apply.ipynb` Colab Notebook（下載後用 Colab 開啟）；設定 `TARGET=stage/prod`。程式用 Google Drive 身分下載固定 ID 的私人 JPEG，驗證 **SHA256／尺寸／<=1MB**，打印八格熱區及實際 postback。
+3. 在 `getpass()` 隱藏輸入框貼 LINE **Messaging API Channel Access Token**（非 Channel Secret），先透過 LINE `/v2/bot/info` 看 OA 名稱；Colab 確認同環境 Backend 200 後，輸入 OA 名稱才執行。
+4. Colab 依序建新 Menu、上傳 JPEG、直接覆蓋全好友 OA 預設、GET `/v2/bot/user/all/richmenu` 讀回；Owner 已允許直接覆蓋、不要求舊選單備份。不可在登入失效或 LINE backend `503` 時強制改預設選單。
+5. 只有輸出 `LINE_V2_DEFAULT_MENU_API=PASS` 和真實 `richMenuId`，才能標示 **LINE OA API 套用=PASS**；否則 **NOT VERIFIED/FAIL**。Token 不記錄到 CI、Drive、GitHub 或回報訊息。
+
+### 手機與整合驗收矩陣
+
+| 案例 | 預期 | 本輪證據 |
+|---|---|---|
+| V2-02-A 圖面／熱區 | 8 個獨立可點區，0–2500、0–1686 全涵蓋、圖文一致 | **SOURCE PASS；官方套用 NOT VERIFIED** |
+| V2-02-B 後端前置條件 | LINE-enabled 同環境、OA webhook 可回 Postback，綁定/授權正常 | NOT VERIFIED |
+| V2-02-C OA API | 新 `richMenuId`、圖片成功上傳、default ID 讀回相同 | NOT VERIFIED |
+| V2-02-D 前六格 | 在 LINE 內按 1–6 格有正確 LIFF fallback，不誤當 v2 卡片已完成 | NOT VERIFIED |
+| V2-02-E 活動 | 按 7 格真的顯示最新 Flex Carousel，分類、收藏、下一批可用 | NOT VERIFIED |
+| V2-02-F Life Omni | 第 8 格直達 Life Web `/today`；有／無既有 Google Session 皆正確 | NOT VERIFIED |
+| V2-02-G 手機 | iOS/Android 分別檢查圖片、八格命中、文字顯示、登入與返回 | NOT VERIFIED |
+| V2-02-H 回歸 | 舊 v1 草稿／綁定／已有正式資料保留，操作新選單不刪資料 | NOT VERIFIED |
+
+**本輪狀態：** V2-02 source／圖檔／Drive PASS；OA default API、手機、全功能整合 = NOT VERIFIED。不得因文書或 GitHub CI 就標 DONE。V2-01 的真 LINE Flex 驗收 WI-05G 與 v1 U17 異常驗收仍保留。
+
 ## WI-06：停用與復原
 先在後台將 line 設為 hidden，或正常 V3 部署 enable_line=false。LINE session 每次請求會重查綁定與 rollout。保留 0023/0024 資料表；不執行 downgrade、不清空 Life。正式發版仍依既有 V3 gates，CI 綠燈不代表真人 LINE 整合完成。

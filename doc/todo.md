@@ -1,3 +1,11 @@
+## 2026-10-29｜LINE-V2-02 八格 Rich Menu 正式素材與上架工具（最新，PARTIAL）
+
+- **SOURCE PASS：** 2×4 八格（2500×1686，前七 Postback／右下 Life Omni Web `/today`）正式圖與紅框定位圖完成；Drive `life_assistantGPT/LINE_U16_六格選單` metadata 讀回 **PASS**，正式圖 [ID 1mB_15NAsxDyj3ZGikP4x7FT30Mf4gx2O](https://drive.google.com/file/d/1mB_15NAsxDyj3ZGikP4x7FT30Mf4gx2O/view)／289918 bytes／SHA256 `33b2460021d41c71ba56cbd90830361205f01c46d30623f60d4e413e4c794f86`；定位圖 [ID 1yxrBJBiroarM0yXJE01Eg8Qr2cjAscdU](https://drive.google.com/file/d/1yxrBJBiroarM0yXJE01Eg8Qr2cjAscdU/view) 不可上傳 LINE。
+- **程式與 WI：** `scripts/line_rich_menu_v2.py`、`scripts/build_line_rich_menu_v2.py`、`tests/test_line_rich_menu_v2.py`；Colab Notebook `Life_Omni_LINE_V2_02_Eight_Grid_Apply.ipynb` 以私人 Drive File ID 讀圖、SHA 與規格檢查、Token getpass、LINE API 建圖／全好友預設覆蓋／讀回。指引 [V2-02 Asset WI](../assets/line/README_V2.md) 與 [WI-05H](line_integration_b_wi.md)；Owner 已允許直接覆蓋舊預設選單，不需要額外備份舊選單。
+- **安全門檻與差異：** V2-01 後端已提供活動 Carousel，但前六格 Postback 仍是 LIFF fallback（待 V2-03），不得宣稱已完成 LINE 內對話卡片。已核對成功的 V3 [#40852323202](https://github.com/tommylin15/life_assistant/actions/runs/40852323202) `LINE_ENABLED=false`，**不能當作 LINE 可回覆八格 Postback 的部署驗收**。未取得 Token／真實 LINE default `richMenuId` 讀回與手機操作收據前，**OA 上架／Staging/Production／iOS/Android = NOT VERIFIED**；不假稱已上線。
+- **另補既有 V2-01 CI 缺口：** 原 backend `test_tampered_and_expired_tokens_rejected` 因 Base64 非 canonical 尾位可改寫而 FAIL；修正 `backend/app/services/line_v2.py` 以 canonical signature 檢查，不放寬測試，最新 CI 另讀回。
+- **下一工程行動：** 最新 main 全 CI PASS → LINE-enabled Staging `enable_line=true` 同 SHA → Owner Colab 執行，回報 `LINE_V2_DEFAULT_MENU_API=PASS`／`richMenuId` 並完成手機八格、活動 Flex 收藏、Life Web 登入回讀。V2-02 全部實測 PASS 再進 V2-03 快速記錄／今日總覽／搜尋／待辦／購物／日曆對話卡片。v1 六格及歷史資料保留；v1 U17 仍待故障驗收。**整體 PARTIAL。**
+
 ## 2026-10-29｜LINE-V2-01 對話核心＋活動 Carousel：Source 已提交；Staging／真人驗收待辦（最新）
 
 - **GitHub 實作：** [LINE v2 工程規格](line_v2_conversation_refactor_spec.md#0-v2-01-工程收據2026-10-29source-已提交發布獨立驗收)、`backend/app/services/line_v2.py`、既有 `backend/app/api/line.py`；LINE HMAC＋Binding＋FeatureRollout＋事件去重保留，新增 Postback 白名單、7 日簽名 user/namespace 動作 token、活動 Flex（6 張／最新 Life created_at 排序）、真實分類 Tag、已收藏／下一批及明確 active 收藏。與原 Explore Domain Service 共用資料，不新增 DB/migration。

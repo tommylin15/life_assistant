@@ -71,6 +71,10 @@ def read_token(token: str, cfg: dict, user: dict, identity: str) -> dict:
         encoded, signature = token[3:].split(".", 1)
         expected = hmac.new(cfg["channel_secret"].encode(), encoded.encode(), hashlib.sha256).digest()[:16]
         actual = base64.urlsafe_b64decode(signature + "=" * (-len(signature) % 4))
+        # Require canonical URL-safe base64; a modified last character can
+        # otherwise decode to the same bytes because of unused pad bits.
+        if base64.urlsafe_b64encode(actual).decode().rstrip("=") != signature:
+            raise ValueError("Non-canonical postback signature")
         if not hmac.compare_digest(expected, actual):
             raise ValueError("Invalid postback signature")
         data = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))

@@ -4,6 +4,7 @@ This module adds no new database, push channel, external crawler, or public API.
 Rich Menu v1 still works unchanged until Owner accepts the v2 eight-grid release.
 """
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -73,7 +74,7 @@ def read_token(token: str, cfg: dict, user: dict, identity: str) -> dict:
         if not hmac.compare_digest(expected, actual):
             raise ValueError("Invalid postback signature")
         data = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-    except (ValueError, TypeError, UnicodeDecodeError) as exc:
+    except (ValueError, TypeError, UnicodeDecodeError, binascii.Error) as exc:
         raise ValueError("Invalid postback payload") from exc
     if (not isinstance(data, dict) or data.get("a") not in ALLOWED_COMMANDS
             or data.get("u") != _binding_scope(cfg, user, identity)
@@ -143,7 +144,10 @@ async def _activity_page(db: AsyncSession, user: dict, *, category: str | None =
                          saved_only: bool = False, offset: int = 0, snapshot: int | None = None) -> dict:
     if not isinstance(offset, int) or offset < 0 or offset > 50000:
         raise ValueError("Invalid page offset")
-    as_of = datetime.fromtimestamp(snapshot, tz=timezone.utc) if snapshot else datetime.now(timezone.utc)
+    # Microsecond precision avoids moving page boundaries backwards when an
+    # initial request and a new import land in the same second.
+    as_of = (datetime.fromtimestamp(snapshot / 1_000_000, tz=timezone.utc)
+             if snapshot is not None else datetime.now(timezone.utc))
     # Reuse the EXISTING PostgreSQL group query and permissions, never copy its
     # filter/sort/verification logic into an ad-hoc LINE SQL statement.
     page = await curated.list_curated(
@@ -161,7 +165,7 @@ async def _activity_page(db: AsyncSession, user: dict, *, category: str | None =
             continue
         seen.add(key)
         items.append(row)
-    return {**page, "items": items[:CAROUSEL_LIMIT], "snapshot_unix": int(as_of.timestamp())}
+    return {**page, "items": items[:CAROUSEL_LIMIT], "snapshot_us": int(as_of.timestamp() * 1_000_000)}
 
 
 def _safe_source(url: str | None) -> str | None:
@@ -249,7 +253,7 @@ async def _show_page(cfg: dict, user: dict, identity: str, db: AsyncSession,
     data = await _activity_page(db, user, category=category, saved_only=saved,
                                 offset=offset, snapshot=snapshot)
     actions = _menu_actions(cfg, user, identity, tag_key=_category_key(category) if category else None,
-                            offset=offset, snapshot=data["snapshot_unix"], saved=saved,
+                            offset=offset, snapshot=data["snapshot_us"], saved=saved,
                             has_more=bool(data.get("has_more")))
     title = "Life 已收藏活動" if saved else "Life 最新上架活動"
     if category:

@@ -1,3 +1,9 @@
+## 2026-10-29｜LINE U16 六格操作 Owner 驗收 PASS（最新）；完整 LINE 仍 PARTIAL
+
+- **已證實：** Owner 2026-10-29 明確回報「六格操作驗收完成」，官方帳號六格 Rich Menu 真人操作子項 **PASS／Owner reported**；無逐項截圖、API `richMenuId`／default 讀回、iOS／Android 雙平台分項及登入返回紀錄。因此按完整 U16 原案，未核證平台子項保持 **NOT VERIFIED**，不得將六格通過包裝成完整矩陣或 Production DONE。正式圖片與位置已在 [LINE WI-05E/05F](line_integration_b_wi.md)。
+- **前次 CI FAIL 根因已處理：** [CI #40841479917](https://github.com/tommylin15/life_assistant/actions/runs/40841479917) 的 backend 測試失敗，是 `.github/workflows/line-u16-apply-once.yml` push 觸發不符舊 CI 契約；早前 Actions 套用亦因缺少 `secretmanager.versions.access` [#40838851219](https://github.com/tommylin15/life_assistant/actions/runs/40838851219) FAIL。改採 Owner Colab 完成後，已**移除該多餘 workflow**，不擴 IAM、不接觸生產 Secret；修正後同 SHA CI 需依當次結果判定。
+- **唯一下一入口：** U17 Reply API 故障、網路中斷、UNKNOWN 回執且不可重複建立；之後補 U01–U07 例外路徑及 U16 未提供證據的 iOS/Android／登入返回細項。核心成功路徑及 U08–U15 PASS 回報保持原樣。**整體 PARTIAL／Production NOT VERIFIED**。
+
 ## 2026-10-29｜LINE U16 六格選單素材已產出，OA 尚未套用（PARTIAL）
 
 - **SOURCE PASS：** `assets/line/rich_menu_v1.svg`、`scripts/build_line_rich_menu.py`、`tests/test_line_rich_menu_art.py`、`assets/line/README.md` 已建立；維持現有 `scripts/line_rich_menu.py` 的六個 deep-link action 與 2500×1686 全覆蓋 bounds。生成的本地 PNG 為 2500×1686、198056 bytes（未加入 GitHub 二進位檔；可由 renderer 重產）。圖片僅在本地生成與驗證，產圖依賴 CairoSVG 僅為設計工具，不新增 Cloud Run 依賴。

@@ -1,3 +1,11 @@
+## 2026-10-29｜LINE v2 八格選單＋對話式 Flex Carousel｜DESIGN APPROVED，待工程實作（最新）
+
+- **正式規格：** [LINE v2 重構規格](line_v2_conversation_refactor_spec.md) 已建立；這是 **v2 產品方向與執行卡的文件成果**，非 v2 已部署。保留 v1 [LINE B](line_integration_b.md) 及 [WI](line_integration_b_wi.md) 的實際測試／歷史狀態。
+- **八格**（2500×1686，2×4）：快速記錄、今日總覽、查我的資料、待辦、購物、日曆、活動、Life Omni。前七格是 LINE Postback／Flex／Quick Reply 對話操作；最後一格直接到完整 Life Web。新圖需要製作、八格 bounds 校驗及手機驗收；舊六格實機 PASS 不可沿用到 v2。
+- **活動優先：** `entry=explore&quick=latest` 的 Life `created_at` 倒序分組去重，Flex Carousel 橫移，顯示日期／城市／真實類別與缺值、可收藏；「依 Tag 看」在活動內做第二層選單，首版用現有 `category` 真值，沒有證據支持任意多值 Tag。下一批分頁，進階篩選引導 Life；不新增爬蟲。
+- **唯一下一工程入口：** `LINE-V2-01｜對話命令核心＋活動 Flex Carousel／Tag／收藏`；按正式規格差異檢查→程式→離線／PostgreSQL 測試→main CI→Staging 真 LINE 驗收，**本輪不啟動 v2 code、deployment 或 OA 選單替換**。後續依序 V2-02 八格圖面／Rich Menu、V2-03 待辦購物／摘要／分類、V2-04 Life Web 手機首頁、V2-05 U17／Production 整合驗收。
+- **狀態：** 設計／文件交付可各自 PASS（依 GitHub／Drive 讀回）；v2 implementation/tests/CI/deploy/runtime/integration **NOT VERIFIED**；v1 U17 未驗證且完整 LINE **PARTIAL**。不將文件完成宣稱功能 DONE。
+
 ## 2026-10-29｜LINE U16 六格操作 Owner 驗收 PASS（最新）；完整 LINE 仍 PARTIAL
 
 - **已證實：** Owner 2026-10-29 明確回報「六格操作驗收完成」，官方帳號六格 Rich Menu 真人操作子項 **PASS／Owner reported**；無逐項截圖、API `richMenuId`／default 讀回、iOS／Android 雙平台分項及登入返回紀錄。因此按完整 U16 原案，未核證平台子項保持 **NOT VERIFIED**，不得將六格通過包裝成完整矩陣或 Production DONE。正式圖片與位置已在 [LINE WI-05E/05F](line_integration_b_wi.md)。

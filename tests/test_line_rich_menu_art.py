@@ -24,6 +24,10 @@ class SixGridArtworkTests(unittest.TestCase):
         self.assertEqual(len(texts), 18)
         self.assertEqual(len(ART.ICONS), 6)
 
+    def test_committed_svg_matches_generator(self):
+        expected = (ROOT / "assets" / "line" / "rich_menu_v1.svg").read_text(encoding="utf-8")
+        self.assertEqual(expected, ART.svg_markup())
+
     def test_image_cells_match_action_grid(self):
         root = ET.fromstring(ART.svg_markup())
         rectangles = root.findall("{http://www.w3.org/2000/svg}rect")[1:]

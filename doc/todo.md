@@ -1,3 +1,11 @@
+## 2026-10-29｜LINE-V2-01 對話核心＋活動 Carousel：Source 已提交；Staging／真人驗收待辦（最新）
+
+- **GitHub 實作：** [LINE v2 工程規格](line_v2_conversation_refactor_spec.md#0-v2-01-工程收據2026-10-29source-已提交發布獨立驗收)、`backend/app/services/line_v2.py`、既有 `backend/app/api/line.py`；LINE HMAC＋Binding＋FeatureRollout＋事件去重保留，新增 Postback 白名單、7 日簽名 user/namespace 動作 token、活動 Flex（6 張／最新 Life created_at 排序）、真實分類 Tag、已收藏／下一批及明確 active 收藏。與原 Explore Domain Service 共用資料，不新增 DB/migration。
+- **不換選單即可測：** 在原有 LINE OA 直接送出「活動」「最新活動」「活動分類」「已收藏活動」，不會當成草稿。後續八格 Rich Menu 的活動格對應 `v=2&cmd=events.latest`；本輪不更換 v1 六格、不直接改 Life App 登入。
+- **測試：** `backend/tests/test_line_v2.py` 新增簽名、跨帳號、逾期、Flex、Tag、分類、收藏及分組測試；`backend/tests/test_line_channel.py` 新增真 Webhook Postback 去重與文字指令不誤存。**本輪最新 main SHA 的 CI、LINE-enabled staging、實機 Flex/Tag/收藏均須獨立驗收**，不能將前輪 CI PASS 延伸至最新 SHA。
+- **唯一下一操作：** 最新 main CI PASS → 手動 V3 `promote=false / publish_staging=true / enable_line=true` 的同 SHA Staging（一般 Auto Staging 預設 LINE 關閉，不可作 LINE 實機證據）→ Owner 依 [WI-05G](line_integration_b_wi.md#wi-05gline-v2-01-活動-flex-真人驗收2026-10-29) 完成 LINE Flex 橫移、Tag 分類、收藏／取消且 Life 讀回、跨帳號及回覆異常。全部 PASS 才能 V2-01 DONE，然後唯一下一工程入口 V2-02 八格 Rich Menu 圖面與上架。
+- **驗收判定：** Source=PASS（GitHub 寫入）；完整 CI=依新 SHA；staging/runtime=NOT VERIFIED；Owner v2 integration=NOT VERIFIED；總體=PARTIAL。v1 六格真人 PASS、U17 NOT VERIFIED 保留，Production 不切流。
+
 ## 2026-10-29｜LINE v2 八格選單＋對話式 Flex Carousel｜DESIGN APPROVED，待工程實作（最新）
 
 - **正式規格：** [LINE v2 重構規格（GitHub）](line_v2_conversation_refactor_spec.md) 與 [Google Drive 正式文件](https://docs.google.com/document/d/1bwKQZC8Bh9cZS5vbIlrv8toI7qY5mjlieVPG22mvIa8/edit) 已建立並讀回；Drive 位於授權根資料夾 `life_assistantGPT`，這是 **v2 產品方向與執行卡的文件成果**，非 v2 已部署。保留 v1 [LINE B](line_integration_b.md) 及 [WI](line_integration_b_wi.md) 的實際測試／歷史狀態。

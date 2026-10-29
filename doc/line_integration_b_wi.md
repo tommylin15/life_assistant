@@ -42,6 +42,8 @@
 ## WI-04：六格選單
 圖像為 2500×1686 PNG/JPEG，最多 1 MB。上下各三格：快速記錄／今日總覽／查我的資料；待辦・購物／日曆・活動／我的 Life。
 
+**現況更正（2026-10-29 Owner）：官方帳號下方的六格 Rich Menu 尚未做完，也尚未套用。** GitHub 僅有 `scripts/line_rich_menu.py` 的六格 JSON／API 套用工具；目前主倉庫沒有配套的六格 2500×1686 圖片檔，不能因 LIFF `web/line/index.html` 具有內部八個分頁就稱 U16 已實作或通過。執行 `--apply` 會更換**整個官方帳號所有好友的預設選單**；若同一 OA 仍供 Staging 使用，正式 OA 切換前不得未經核對就執行。應先完成設計圖、JSON 與 deep link 預覽、經 Owner 核對當前 OA 環境後再套用，最後在實際 iOS／Android LINE 測六格與登入返回。
+
 先執行 `python scripts/line_rich_menu.py --liff-id <ID>` 檢查 JSON。要套用時，在安全終端以環境變數提供 LIFE_LINE_ACCESS_TOKEN，再加 `--image <圖片> --apply`。工具會建立、上傳並套用預設選單；記下回傳 menu ID，舊選單不自動刪除。既有 per-user menu 可能優先，需另行核對。
 
 ## WI-05：人工驗收表
@@ -59,11 +61,11 @@
 | U09 | 查 Google 行程並新增行程 | 真實 Google 日曆可讀回 | PASS（Owner 2026-10-29 Staging 實機回報；未附逐案截圖） |
 | U10 | Google 授權撤銷後查日曆 | 顯示需授權或錯誤，不假報空清單 | PASS（Owner 2026-10-29 Staging 實機回報；未附逐案截圖） |
 | U11 | 搜尋活動、收藏／取消、分頁 | 與 Life 一致，保留待核／費用未知標示 | PASS（Owner 2026-10-29 Staging 實機回報；未附逐案截圖） |
-| U12 | 另一帳號查草稿 ID／個人資料 | 404／拒絕，不洩漏他人內容 | NOT VERIFIED |
-| U13 | 群組傳訊息 | 不保存、不回覆私人資訊 | NOT VERIFIED |
-| U14 | 解除綁定／封鎖後，用舊頁查資料 | 舊登入失效；Life 原資料保留 | NOT VERIFIED |
-| U15 | LINE 功能 hidden，或目的功能關閉 | API 拒絕，不僅隱藏按鈕 | NOT VERIFIED |
-| U16 | iOS/Android 開所有六格與登入返回 | 頁面可操作、無溢出；核對外部瀏覽器綁定流程 | NOT VERIFIED |
+| U12 | 另一帳號查草稿 ID／個人資料 | 404／拒絕，不洩漏他人內容 | PASS（Owner 2026-10-29 Staging 回報；無附逐案截圖） |
+| U13 | 群組傳訊息 | 不保存、不回覆私人資訊 | PASS（Owner 2026-10-29 Staging 回報；無附逐案截圖） |
+| U14 | 解除綁定／封鎖後，用舊頁查資料 | 舊登入失效；Life 原資料保留 | PASS（Owner 2026-10-29 Staging 回報；無附逐案截圖） |
+| U15 | LINE 功能 hidden，或目的功能關閉 | API 拒絕，不僅隱藏按鈕 | PASS（Owner 2026-10-29 Staging 回報；無附逐案截圖） |
+| U16 | 官方帳號六格 Rich Menu（完成製圖／套用）及 iOS/Android 開啟與登入返回 | 應先有 OA 六格選單、六個 LIFF deep links；頁面可操作、無溢出 | NOT VERIFIED（Owner 明確更正：六格 Rich Menu 尚未製作／套用；不能以 LIFF 內部導航代替） |
 | U17 | Reply 失敗／連線中斷後查看草稿與回執 | 草稿保留，結果不明不重複建立 | NOT VERIFIED |
 
 每項記錄：環境、Git SHA、台北時間、案例 ID、PASS/FAIL、實際結果與截圖（遮蔽 token/碼/個資）。遇 UNKNOWN 先查看回執和 Life／Google 原資料，不換 action ID 盲目重建。
@@ -83,6 +85,13 @@
 - **證據界線：** 人工驗收依 Owner 回報成立；沒有新增個別截圖、HTTP trace 或測試執行時間，故不將其冒充自動化測試或 Production 驗證。前輪 Staging release [#40827872508](https://github.com/tommylin15/life_assistant/actions/runs/40827872508) 僅證明當時的 SHA `31326e856ffddd8504ae39260cf7c5facb7a2826`，不能拿來證明後續文件 commit 的新 SHA 已完成 LINE staging release。
 - **下一工程入口：** U12 身分／草稿隔離、U13 群組防洩漏、U14 unlink／unfollow 失效、U15 hidden／目的功能權限強制；接續 U16 全選單與行動裝置、U17 Reply 故障與 UNKNOWN 收據恢復。對 U01–U07 尚未測到的重用綁定碼、日期跨日、重開頁、網址及錯誤路徑進行有界補驗。
 - **正式上線條件仍未達成：** 尚無完整 U12–U17、必要 U01–U07 邊界及 Production Hosting／Cloud Run／LINE Console 實機讀回收據；維持 `PARTIAL`，不提前變更 OA Webhook 或正式導流。正式發布須符合最新 main SHA 與成功 Staging bundle proof 的同 SHA gate。
+
+## WI-05C：2026-10-29 第三輪 Owner 回報與六格選單現況更正
+
+- **Owner Staging 回報：** U12 跨帳號隔離、U13 群組防洩漏、U14 解除綁定／封鎖、U15 功能權限，分別 **PASS（Owner reported）**。此證據來自 Owner 實機回報，沒有逐案 HTTP trace／遮蔽截圖；不當成新的自動化或正式環境 PASS。
+- **U16：NOT VERIFIED，且不能說已做完。** Owner 明確指出官方帳號的「六格 Rich Menu 還沒有做」。主倉庫只有 `scripts/line_rich_menu.py`，沒有六格圖片素材；LIFF 網頁內有八個功能 tab，但那不是 OA 聊天室底部的六格選單。需要先完成 2500×1686 圖檔及六個 deep-link，核對目前 OA/LIFF 對應的是哪一環境，再有界套用、手機驗收。若同一 OA 為 Staging 和 Production 共用，`--apply` 會影響所有好友，不可在缺乏環境核對與恢復方案時直接執行。
+- **U17：NOT VERIFIED。** 行動網路斷線後草稿讀回、Reply API 失敗與 UNKNOWN receipt，需分辨人工作業和受控注入測試。已有單元測試不等於真實 LINE Reply 故障路徑全部通過。
+- **唯一下一工程入口：** 六格 Rich Menu 視覺素材／配置／驗證（U16，先安全製作不套用）＋ U17 有界故障驗收；同時補驗 WI U01–U07 尚未涵蓋的特定邊界。正式發布仍是 `PARTIAL`，Production Cloud Run／Hosting／LINE Console 全部 `NOT VERIFIED`。原成功 Staging #40827872508 僅適用 SHA `31326e8`，之後新的 `main` 必須重新取得同 SHA staging bundle proof 才能正式 promotion。
 
 ## WI-06：停用與復原
 先在後台將 line 設為 hidden，或正常 V3 部署 enable_line=false。LINE session 每次請求會重查綁定與 rollout。保留 0023/0024 資料表；不執行 downgrade、不清空 Life。正式發版仍依既有 V3 gates，CI 綠燈不代表真人 LINE 整合完成。

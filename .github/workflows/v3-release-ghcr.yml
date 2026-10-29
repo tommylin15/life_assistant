@@ -193,6 +193,50 @@ jobs:
       - name: Install gcloud
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Resolve and pin Life bundle version without reading secret values
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.enable_line }}" == "true" && "${{ inputs.promote }}" == "true" ]]; then
+            # Promotion reuses the same immutable version proven by a successful
+            # staging run for this exact SHA, even if a newer bundle now exists.
+            NAME="line-stage-$RELEASE_SHA"
+            META="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$NAME&per_page=100")"
+            RUN_ID="$(jq -r '[.artifacts[] | select(.expired==false) |
+                        select(.name=="'"$NAME"'") |
+                        select(.workflow_run.id!=null)] |
+                        sort_by(.created_at) | last | .workflow_run.id // empty' <<< "$META")"
+            if [[ ! "$RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::No successful staging LINE proof for this SHA"; exit 1
+            fi
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" |
+              jq -e --arg sha "$RELEASE_SHA" '
+                .status=="completed" and .conclusion=="success" and
+                .head_sha==$sha and .head_branch=="main" and
+                .path==".github/workflows/v3-release-ghcr.yml"
+              ' >/dev/null
+            mkdir -p "$RUNNER_TEMP/line-stage-proof"
+            gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "$NAME" --dir "$RUNNER_TEMP/line-stage-proof"
+            VERSION="$(python scripts/resolve_life_bundle.py --mode staged \
+              --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+              --release-sha "$RELEASE_SHA" \
+              --receipt "$RUNNER_TEMP/line-stage-proof/line-stage-proof.json")"
+            echo "bundle_source=PRIOR_SUCCESSFUL_STAGING run=$RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "${{ inputs.enable_line }}" == "true" ]]; then
+            VERSION="$(python scripts/resolve_life_bundle.py --mode latest \
+              --project "$GCP_PROJECT_ID" --region "$GCP_REGION")"
+            echo "bundle_source=LATEST_ENABLED_FOR_STAGING" >> "$GITHUB_STEP_SUMMARY"
+          else
+            VERSION="$(python scripts/resolve_life_bundle.py --mode preserve-live \
+              --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --service "$CLOUD_RUN_SERVICE")"
+            echo "bundle_source=PRESERVE_LIVE_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          [[ "$VERSION" =~ ^[1-9][0-9]*$ ]]
+          echo "LINE_BUNDLE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "LINE_BUNDLE_REF=life-assistant-bundle:$VERSION" >> "$GITHUB_ENV"
+          echo "bundle_pin=PASS secret=life-assistant-bundle version=$VERSION" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Capture pre-promotion traffic, service identity and images
         run: |
           set -euo pipefail
@@ -224,7 +268,6 @@ jobs:
           LINE_ORIGIN: ${{ vars[format('LINE_{0}_ORIGIN', inputs.promote && 'PROD' || 'STAGE')] }}
           LINE_LIFF_ID: ${{ vars[format('LINE_{0}_LIFF_ID', inputs.promote && 'PROD' || 'STAGE')] }}
           LINE_LOGIN_CHANNEL_ID: ${{ vars[format('LINE_{0}_LOGIN_CHANNEL_ID', inputs.promote && 'PROD' || 'STAGE')] }}
-          LINE_BUNDLE_REF: ${{ vars[format('LINE_{0}_BUNDLE_REF', inputs.promote && 'PROD' || 'STAGE')] }}
         shell: bash
         run: |
           set -euo pipefail
@@ -336,6 +379,21 @@ jobs:
           fi
           echo "candidate_http=PASS health,ready,401,oauth-redirect" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Verify LINE candidate configuration is actually usable
+        if: ${{ inputs.enable_line }}
+        shell: bash
+        env:
+          EXPECTED_LINE_ORIGIN: ${{ vars[format('LINE_{0}_ORIGIN', inputs.promote && 'PROD' || 'STAGE')] }}
+          EXPECTED_LIFF_ID: ${{ vars[format('LINE_{0}_LIFF_ID', inputs.promote && 'PROD' || 'STAGE')] }}
+        run: |
+          set -euo pipefail
+          URL="${{ steps.candidate.outputs.url }}"
+          curl --fail --silent --show-error --max-time 20 \
+            --output "$RUNNER_TEMP/v3-line-config.json" "$URL/api/v1/line/config"
+          jq -e --arg id "$EXPECTED_LIFF_ID" --arg origin "$EXPECTED_LINE_ORIGIN" \
+            '.liff_id==$id and .origin==$origin' "$RUNNER_TEMP/v3-line-config.json" >/dev/null
+          echo "line_candidate_config=PASS bundle_loaded=true origin_and_liff_match=true" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Pin migration job to same immutable release digest (do not execute)
         if: ${{ inputs.promote || inputs.publish_staging }}
         shell: bash
@@ -343,7 +401,8 @@ jobs:
           set -euo pipefail
           gcloud run jobs update life-assistant-db-migrate \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
-            --image "$IMAGE_REF" --quiet
+            --image "$IMAGE_REF" \
+            --update-secrets "LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:$LINE_BUNDLE_VERSION" --quiet
           gcloud run jobs describe life-assistant-db-migrate \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
             > "$RUNNER_TEMP/v3-migration-job.json"
@@ -807,3 +866,23 @@ jobs:
           echo "production_hosting_runtime=NOT_VERIFIED until Hosting live readback PASS" >> "$GITHUB_STEP_SUMMARY"
 
 
+
+      # A successful non-promotion staging run provides a non-secret, immutable
+      # version proof for later promotion of exactly the same Git SHA.
+      - name: Prepare successful LINE staging bundle proof
+        if: ${{ success() && inputs.enable_line && inputs.publish_staging && !inputs.promote }}
+        shell: bash
+        run: |
+          python scripts/resolve_life_bundle.py --mode write-proof \
+            --project "$GCP_PROJECT_ID" --release-sha "$RELEASE_SHA" \
+            --version "$LINE_BUNDLE_VERSION" \
+            --output "$RUNNER_TEMP/line-stage-proof.json"
+
+      - name: Save LINE staging bundle proof for production promotion
+        if: ${{ success() && inputs.enable_line && inputs.publish_staging && !inputs.promote }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: line-stage-${{ github.sha }}
+          path: ${{ runner.temp }}/line-stage-proof.json
+          retention-days: 30
+          if-no-files-found: error

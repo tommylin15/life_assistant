@@ -54,6 +54,17 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Preserve existing production Life bundle version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(python scripts/resolve_life_bundle.py --mode preserve-live \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --service "$CLOUD_RUN_SERVICE")"
+          [[ "$VERSION" =~ ^[1-9][0-9]*$ ]]
+          echo "LIFE_BUNDLE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "bundle_pin=PASS secret=life-assistant-bundle version=$VERSION source=SERVING_LIVE" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Grant bounded runtime ID-token mint on dedicated Codex caller
         run: |
           # Inspect the actual serving identity. Do not conflate the GitHub CI
@@ -158,7 +169,7 @@ jobs:
             --max-retries 0 \
             --task-timeout 10m \
             --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,ALEMBIC_METADATA_BOOTSTRAP_APPROVED_REVISION=$ALEMBIC_METADATA_BOOTSTRAP_APPROVED_REVISION" \
-            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --update-secrets "LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:$LIFE_BUNDLE_VERSION" \
             --wait \
             --quiet
 
@@ -232,7 +243,7 @@ jobs:
             --allow-unauthenticated \
             --timeout 600 \
             --update-env-vars "DATABASE_HOST=$DATABASE_HOST,DATABASE_PORT=$DATABASE_PORT,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER,DATABASE_SSLMODE=$DATABASE_SSLMODE,FRONTEND_URL=$FRONTEND_URL,GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI,GOOGLE_PICKER_APP_ID=$GOOGLE_PICKER_APP_ID,CODEX_PRIMARY_ENABLED=true" \
-            --update-secrets LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:latest \
+            --update-secrets "LIFE_ASSISTANT_BUNDLE=life-assistant-bundle:$LIFE_BUNDLE_VERSION" \
             --quiet
 
       - name: Resolve Cloud Run service URL

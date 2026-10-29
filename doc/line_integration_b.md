@@ -81,7 +81,7 @@ Webhook 為有界同步處理，與原方案中「耗時工作非同步」相容
 
 ## 6. 安全、保留與故障處理
 
-1. LINE 的 `LIFE_LINE_CHANNEL_SECRET`、`LIFE_LINE_ACCESS_TOKEN` 由現有 `life-assistant-bundle` JSON Secret（目前第 9 版）在 Cloud Run 啟動時解析；V3 Release 以 `LINE_STAGE_BUNDLE_REF`／`LINE_PROD_BUNDLE_REF` 選擇明確數字版本，不建立獨立 LINE Secret。frontend/config/log 不含 channel secret、access token、ID token、綁定碼。
+1. LINE 的 `LIFE_LINE_CHANNEL_SECRET`、`LIFE_LINE_ACCESS_TOKEN` 由現有 `life-assistant-bundle` JSON Secret（目前第 9 版）在 Cloud Run 啟動時解析；V3 Staging 自動解析最新 ENABLED 數字版本並釘選到候選 Revision，成功後將 SHA＋版本記入保留 30 天的 Actions Artifact；正式發布只接受同 SHA 成功 Staging 的版本證明，不重新抓 latest。既有一般部署保留目前正式服務的釘選版本，不建立獨立 LINE Secret。frontend/config/log 不含 channel secret、access token、ID token、綁定碼。
 2. Server 驗證 LINE ID token；不信任 LIFF 解碼 profile、名字或 email。Google 既有帳號是 Life ownership 來源。
 3. 兩端握手，綁定碼 192-bit 隨機且雜湊儲存。確認前比較 LINE 尾碼；唯一約束防止競爭綁定。
 4. LINE session 使用 HttpOnly/Secure/SameSite=Lax 的 `__session` cookie；每次 request 重查 binding、expiry、namespace、rollout。Owner 的 LINE session 也不能存取 admin、Drive、Gmail、connector。
@@ -94,7 +94,7 @@ Webhook 為有界同步處理，與原方案中「耗時工作非同步」相容
 
 ## 7. 部署、版本及回滾
 
-候選版 `0.6.0+6`，公告 featureKey=`line`。V3 原有 tests/build/migration/staging/live/rollback gates 保留。新增 `enable_line`，預設 false；每次需要 LINE 的手動 staging／promotion 必須勾選，並配置對應 STAGE／PROD variables 與現有 `life-assistant-bundle` 的指定數字版本（不另建 LINE Secret）。發布 gate 須核對 candidate revision 的 bundle reference。完整配置見 [WI](line_integration_b_wi.md)。
+候選版 `0.6.0+6`，公告 featureKey=`line`。V3 原有 tests/build/migration/staging/live/rollback gates 保留。新增 `enable_line`，預設 false；每次需要 LINE 的手動 staging／promotion 必須勾選，並配置對應 STAGE／PROD 非機密 variables；不必填版本號。流程解析最新 ENABLED `life-assistant-bundle` 數字版本，成功 Staging Run 產生非機密版本證明，正式發布沿用該版本（不另建 LINE Secret）。發布 gate 須核對 candidate revision 的 bundle reference 與真實 LINE config。完整配置見 [WI](line_integration_b_wi.md)。
 
 正式與測試應使用不同 LINE channel/LIFF、不同 namespace；同一 OA webhook 只能指向一個環境。只有一個 OA 時，應先在 staging 驗收，切正式時同步替換 endpoint、webhook、menu 及配置，不同時假裝兩環境都可用。
 

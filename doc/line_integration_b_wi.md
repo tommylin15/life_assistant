@@ -17,15 +17,17 @@
 | ORIGIN | 該環境 Hosting HTTPS origin，無尾斜線 |
 | LIFF_ID | Console 顯示的 LIFF ID |
 | LOGIN_CHANNEL_ID | LINE Login channel 數字 ID |
-| BUNDLE_REF | 現有 Secret Manager bundle 名稱:數字版本，例如 `life-assistant-bundle:9`（STAGE/PROD 各自明確填寫，需先讀回確認） |
+（無需 BUNDLE_REF）部署流程自動解析 Secret Manager 的版本，不需在 GitHub 設任何版本號。
 
-執行 V3 Release workflow：先選 promote=false、publish_staging=true、enable_line=true；Gmail ONNX 選項維持目前正式需求。CI 執行時檢查候選 revision 的 `LIFE_ASSISTANT_BUNDLE` 確實指向指定數字版本，且不使用獨立的 `LINE_*_SECRET_REF` / `LINE_*_ACCESS_TOKEN_REF`。確認同 SHA CI、真實 DB migration 0024、candidate、Hosting staging gates PASS。GitHub Variables 只保存名稱與版本，不保存 Secret 內容。
+執行 V3 Release workflow：先選 promote=false、publish_staging=true、enable_line=true；Gmail ONNX 選項維持目前正式需求。流程自動選取**最新 ENABLED 數字版本**，且在同一輪固定注入 `LIFE_ASSISTANT_BUNDLE`，候選 revision 讀回版本並透過 `/api/v1/line/config` 驗證啟用值。成功的 Staging Run 儲存 30 天非機密的 SHA／版本證明（Actions Artifact）；正式 `promote=true` 只能取用同 SHA、已成功 Staging Run 的版本，無法取得證明即停止。正式發布前仍需 Owner 完成 U01–U17。確認 CI、真實 DB migration 0024、candidate、Hosting staging gates PASS。GitHub Variables 不保存 Secret 版本或內容。
 
 後台將 line、life_inbox 與需要的目的功能對 Owner 開放。預設 line 為 beta/owner。一般使用者需另行開放；不可只開 LINE 而忽略目的功能權限。
 
 每次部署要啟用 LINE 都必須選 enable_line=true；預設 false。自動 staging 會建立 LINE 關閉的候選，測試時需手動部署啟用候選。
 
-正式發布另用 promote=true、publish_staging=true、enable_line=true，採 PROD variables。只有一個 OA 時，驗收後須同步將 webhook、LIFF endpoint、選單改成正式環境；同一 webhook 不同時服務兩個環境。Production candidate 同時供 staging 發布 gate 使用時，staging 的 LINE 頁可能因 PROD origin 不符而拒絕，不能把它當成獨立啟用的 stage LINE。
+正式發布另用 promote=true、publish_staging=true、enable_line=true，採 PROD 非機密 variables，bundle 自動沿用成功 Staging Run 的版本（不得自動抓更新的 Key）。只有一個 OA 時，驗收後須同步將 webhook、LIFF endpoint、選單改成正式環境；同一 webhook 不同時服務兩個環境。Production candidate 同時供 staging 發布 gate 使用時，staging 的 LINE 頁可能因 PROD origin 不符而拒絕，不能把它當成獨立啟用的 stage LINE。
+
+**共用 bundle 輪替**：在 Secret Manager 將新增版本設為 ENABLED 即可，不必修改 GitHub Variable；執行新 Staging V3 Release 讓新版本被解析並鎖定。正式發版採同 SHA 的 Staging Artifact 版本，若最新版本已變更不會偷換。既有一般 `Deploy Cloud Run` Workflow 保留正式服務目前使用的數字版，不會藉部署意外切換到新 Key。若正式服務仍是歷史 `:latest`，第一次轉換會解析為當下最新 ENABLED 版；此轉換需人工核對服務。需要更新的 Key 仍需透過 Staging 驗收後發布才能在正式環境生效。原 `LINE_STAGE_BUNDLE_REF`、`LINE_PROD_BUNDLE_REF` 可刪除，其他四個 STAGE／PROD 設定保留。此版本證明只有 30 天保存期，過期需重新發布 Staging。
 
 ## WI-03：綁定
 1. 用外部 Chrome/Safari 開 `/line/link.html`，登入原有 Google Life 帳號；登入後重新開此頁。

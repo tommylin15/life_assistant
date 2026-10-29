@@ -31,6 +31,8 @@
 
 **共用 bundle 輪替**：在 Secret Manager 將新增版本設為 ENABLED 即可，不必修改 GitHub Variable；執行新 Staging V3 Release 讓新版本被解析並鎖定。正式發版採同 SHA 的 Staging Artifact 版本，若最新版本已變更不會偷換。既有一般 `Deploy Cloud Run` Workflow 保留正式服務目前使用的數字版，不會藉部署意外切換到新 Key。若正式服務仍是歷史 `:latest`，第一次轉換會解析為當下最新 ENABLED 版；此轉換需人工核對服務。需要更新的 Key 仍需透過 Staging 驗收後發布才能在正式環境生效。原 `LINE_STAGE_BUNDLE_REF`、`LINE_PROD_BUNDLE_REF` 可刪除，其他四個 STAGE／PROD 設定保留。此版本證明只有 30 天保存期，過期需重新發布 Staging。
 
+**GHCR 映像 digest 驗證**：GitHub 發布使用固定 GHCR index digest（`IMAGE_REF`）；Cloud Run 公開映像快取有可能把 Revision 的 `spec.image`／`status.imageDigest` 表示為 index 內的 `linux/amd64` child digest。V3 workflow 必須從該固定 GHCR digest 取得上游 manifest，驗證 Cloud Run 的 digest 僅能是 index 本身或其中唯一合法 `linux/amd64` 子映像，且 Revision `Ready=True`。無法核對則 FAIL，不得只移除 digest gate。若部署發生 `deployed container image is not the pinned GHCR index or linux/amd64 child`，請比對該次 GHCR manifest 與 Candidate metadata，不要自行將任意 digest 加入白名單。
+
 ## WI-03：綁定
 1. 用外部 Chrome/Safari 開 `/line/link.html`，登入原有 Google Life 帳號；登入後重新開此頁。
 2. 核對顯示 email，產生綁定碼，將完整「綁定 …」文字傳到自己的官方帳號私聊。

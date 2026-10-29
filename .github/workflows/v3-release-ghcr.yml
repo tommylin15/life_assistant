@@ -234,8 +234,13 @@ jobs:
         run: |
           set -euo pipefail
           ANON_CONFIG="$(mktemp -d)"
-          DOCKER_CONFIG="$ANON_CONFIG" docker manifest inspect "$IMAGE_REF" >/dev/null
-          echo "ghcr_anonymous_pull=PASS" >> "$GITHUB_STEP_SUMMARY"
+          # Fetch the immutable upstream manifest (not a mutable tag).
+          # Cloud Run may record its linux/amd64 child rather than the GHCR
+          # index digest. Subsequent gates prove that exact parent-child link.
+          DOCKER_CONFIG="$ANON_CONFIG" docker manifest inspect "$IMAGE_REF" \
+            > "$RUNNER_TEMP/v3-ghcr-manifest.json"
+          python -m json.tool "$RUNNER_TEMP/v3-ghcr-manifest.json" > /dev/null
+          echo "ghcr_anonymous_pull=PASS pinned_manifest_proof=CAPTURED" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Capture pre-promotion traffic, service identity and images
         run: |
@@ -309,6 +314,7 @@ jobs:
           python .github/scripts/v3_image_identity.py \
             --resource revision \
             --json "$RUNNER_TEMP/v3-candidate-revision.json" \
+            --manifest-json "$RUNNER_TEMP/v3-ghcr-manifest.json" \
             --expected "$IMAGE_REF"
           echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
@@ -409,6 +415,7 @@ jobs:
           python .github/scripts/v3_image_identity.py \
             --resource job \
             --json "$RUNNER_TEMP/v3-migration-job.json" \
+            --manifest-json "$RUNNER_TEMP/v3-ghcr-manifest.json" \
             --expected "$IMAGE_REF"
           echo "migration_job_image=PASS no_migration_executed image=$IMAGE_REF" \
             >> "$GITHUB_STEP_SUMMARY"
@@ -852,6 +859,7 @@ jobs:
             > "$RUNNER_TEMP/hosting-dispatch-live-revision.json"
           python .github/scripts/v3_image_identity.py --resource revision \
             --json "$RUNNER_TEMP/hosting-dispatch-live-revision.json" \
+            --manifest-json "$RUNNER_TEMP/v3-ghcr-manifest.json" \
             --expected "$IMAGE_REF"
           # Never enqueue again for this SHA, even if a prior Hosting failed.
           HOSTING_RUNS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-firebase-hosting.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"

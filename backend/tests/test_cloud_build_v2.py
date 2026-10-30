@@ -310,6 +310,29 @@ class CloudBuildV2Tests(unittest.TestCase):
                                   'gcloud run services update-traffic',
                                   'add-iam-policy-binding', '--raw-field promote=true'):
                     self.assertNotIn(forbidden, source)
+            elif workflow.name == 'life-line-v2-production-once-20261030.yml':
+                # Owner-authorized single Production continuation only after
+                # successful exact-SHA LINE-enabled staging bundle proof.
+                self.assertIn('workflow_run:', source)
+                self.assertIn('workflows: ["V3 Release - GHCR to Cloud Run"]', source)
+                self.assertIn("workflow_run.conclusion == 'success'", source)
+                self.assertIn("workflow_run.event == 'workflow_dispatch'", source)
+                self.assertIn('APPROVED_FEATURE_SHA:', source)
+                self.assertIn('line-stage-$RELEASE_SHA', source)
+                self.assertIn('PINNED_PARENT: $PARENT', source)
+                self.assertIn('unique | length==5', source)
+                self.assertIn('length==1 and .[0].id==$id', source)
+                self.assertIn('gh workflow run v3-release-ghcr.yml', source)
+                for mandatory in ('--raw-field promote=true',
+                                  '--raw-field publish_staging=true',
+                                  '--raw-field enable_line=true'):
+                    self.assertIn(mandatory, source)
+                for forbidden in ('schedule:', 'push:',
+                                  'gcloud run services update-traffic',
+                                  'gcloud run services deploy',
+                                  'gcloud run jobs execute', 'firebase deploy',
+                                  'add-iam-policy-binding', 'force: true'):
+                    self.assertNotIn(forbidden, source)
             elif workflow.name == 'life-line-v2-staging-once-20261030.yml':
                 # Single exact-child staging continuation for LINE V2 cards.
                 # The five-job main CI gate precedes the normal V3 Staging.

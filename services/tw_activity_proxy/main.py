@@ -96,7 +96,7 @@ def proxy_request(req):
     try:
         with httpx.Client(timeout=timeout, follow_redirects=False, verify=True,
                           trust_env=False,
-                          transport=httpx.HTTPTransport(local_address="0.0.0.0", retries=1)) as client:
+                          transport=httpx.HTTPTransport(verify=True, trust_env=False, local_address="0.0.0.0", retries=1)) as client:
             with client.stream("GET", data["url"], headers=headers) as upstream:
                 if 300 <= upstream.status_code < 400:
                     return jsonify({"error": "upstream_redirect_rejected"}), 502

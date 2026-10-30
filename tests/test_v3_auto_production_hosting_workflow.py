@@ -66,6 +66,18 @@ class AutoProductionHostingContractTests(unittest.TestCase):
                 self.assertIn(required, self.handoff)
         self.assertEqual(self.handoff.count("gh workflow run deploy-firebase-hosting.yml"), 1)
 
+    def test_production_playwright_155_runner_is_supported(self):
+        # Hosting #40988859804 failed because ubuntu-latest resolved to
+        # Ubuntu 26.04, which Playwright 1.55.0 cannot install Chromium on.
+        # Keep real Chromium UI acceptance rather than weakening the gate.
+        self.assertIn("    runs-on: ubuntu-24.04", self.hosting)
+        self.assertNotIn("    runs-on: ubuntu-latest", self.hosting)
+        self.assertIn("npm install --no-save playwright@1.55.0", self.hosting)
+        self.assertIn("npx playwright install", self.hosting)
+        self.assertIn("Run Task UI production acceptance", self.hosting)
+        self.assertIn("Run Project UI production acceptance", self.hosting)
+        self.assertIn("Restore previous production Hosting on failed readback", self.hosting)
+
     def test_existing_hosting_readback_and_rollback_unchanged(self):
         h = self.hosting
         for marker in ('workflow_dispatch:',

@@ -1,3 +1,11 @@
+## 2026-10-30｜Hosting #40988859804 Playwright／Ubuntu 26.04 衝突修復（最新）
+
+- **已驗證根因：** [Firebase Hosting #40988859804](https://github.com/tommylin15/life_assistant/actions/runs/40988859804)，`Install production UI acceptance tooling` 與 `Run Project UI production acceptance` FAIL。官方錯誤：`Playwright does not support chromium on ubuntu26.04-x64`；`playwright@1.55.0` 的 Chromium 未安裝成功，後續 Project UI 缺 `chromium_headless_shell-1187`。本輪既有版本／OAuth／圖示／manifest 等靜態 Hosting readback PASS，**不得因此把 UI E2E 說成 PASS**。
+- **實際修復：** `.github/workflows/deploy-firebase-hosting.yml` 將 production Hosting `runs-on: ubuntu-latest` 改為**固定 `ubuntu-24.04`**，避免 runner 自動升級至 Playwright 1.55 不支援的 Ubuntu 26.04；保留安裝重試與 Task/Project UI 及失敗 rollback gate，不跳過或降低驗收。 `tests/test_v3_auto_production_hosting_workflow.py` 新增 runner／Chromium／UI 驗收／rollback 不變的 contract test，已提交 `main`。
+- **獨立驗收：** 原 Run 的 `Restore previous production Hosting on failed readback` 步驟為 **success**，但生產站最後可用版與 App 真人操作需以最新 release 與 live 讀回另判。新 SHA 的 CI、同 SHA V3 Backend Promotion、Production Firebase Hosting、真正 Chromium Task/Project UI E2E，仍須有各自 run 收據；不可重跑舊 SHA 取代新 release。
+- **下一入口：** 最新 `main` 五項 CI PASS → 依原 V3 Release gate 同 SHA 執行受控發布（需要時）→ 由官方 `Deploy Firebase Hosting` 執行新 SHA，要求 `install_playwright=PASS`、Task/Project UI acceptance、Hosting readback、rollback 狀態的實際證據。**LINE V2-02 並未因本項修復而完成上架**，仍需獨立恢復 `enable_line=true` Staging、Colab `LINE_BACKEND_READY=PASS`、OA API readback 和手機驗收。
+- **狀態：** 原因 PASS；Source／contract TEST 已提交；完整 CI、同 SHA Release、Hosting Production runtime **待當輪讀回（NOT VERIFIED）**，整體 PARTIAL。
+
 ## 2026-10-30｜LINE Staging 503／自動 CI 關閉 LINE｜雙層保護修復（最新）
 
 - **根因（證據 PASS）：** Owner Colab `LINE_OA_AUTH=PASS` 但 `/api/v1/line/config` 為 503，沒有更換 OA 預設八格。原 LINE-enabled [V3 #40857785208](https://github.com/tommylin15/life_assistant/actions/runs/40857785208) 是 `LINE_ENABLED=true`，後續自動 [#40981334221](https://github.com/tommylin15/life_assistant/actions/runs/40981334221) 和 [#40982431521](https://github.com/tommylin15/life_assistant/actions/runs/40982431521) `LINE_ENABLED=false`，覆蓋固定 Staging，故後端 configuration() 503。非 LINE token/圖片/Secret IAM 問題。

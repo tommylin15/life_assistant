@@ -106,7 +106,7 @@ def _preview(session, cfg, user, identity, make_token, postback_action, quick_re
     restart = postback_action("重新開始", make_token(cfg, user, identity, "capture.reset"))
 
     def reply(text, actions, *, confirm=None):
-        return reply(text, [*actions, restart], quick_reply, confirm=confirm)
+        return _reply(text, [*actions, restart], quick_reply, confirm=confirm)
     if session.status == "confirmed":
         return reply("已確認新增至 Life。請到相應頁面查看實際資料。", [
             _direct(cfg, {"shopping": "/more/shopping", "task": "/tasks",

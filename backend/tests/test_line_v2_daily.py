@@ -20,7 +20,7 @@ class DailyMenuContract(IsolatedAsyncioTestCase):
             messages = await handle("capture.start")
         self.assertIn("草稿", messages[0]["text"])
         self.assertIn("不會直接新增", messages[0]["text"])
-        self.assertIn("page=capture", messages[0]["quickReply"]["items"][0]["action"]["uri"])
+        self.assertEqual(messages[0]["quickReply"]["items"][0]["action"]["uri"], "https://life.example.test/capture")
 
     async def test_search_choices_are_signed_owner_scoped(self):
         messages = await handle("search.start")

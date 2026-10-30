@@ -17,6 +17,7 @@ from app.api.auth import current_user, SESSION_COOKIE
 from app.api.ui_policies import feature_gate, _audit
 from app.db.session import get_db
 from app.models.line import LineBinding, LineLinkTicket, LineSession, LineEvent
+from app.models.line_capture import LineCapture
 from app.models.note import Note
 from app.models.task import Task
 from app.models.shopping import ShoppingList, ShoppingItem
@@ -245,7 +246,8 @@ async def archive_draft(event_id: str, request: Request, user: dict = Depends(li
 async def cleanup_expired(db):
     # Bounded opportunistic maintenance; no permanent in-process scheduler.
     for model, key in ((LineEvent, LineEvent.id), (LineSession, LineSession.token_hash),
-                       (LineLinkTicket, LineLinkTicket.token_hash)):
+                       (LineLinkTicket, LineLinkTicket.token_hash),
+                        (LineCapture, LineCapture.id)):
         expired = (await db.scalars(select(key).where(model.expires_at < utcnow()).limit(100))).all()
         if expired:
             await db.execute(delete(model).where(key.in_(expired)))
@@ -281,7 +283,7 @@ async def build_reply(event, record, identity, cfg, db):
     await feature_gate("line")(user=user, db=db)
     record.binding_id, record.user_sub = binding.id, binding.user_sub
     if event.get("type") == "follow":
-        return message("歡迎使用 Life。直接傳文字可保留草稿；輸入「查 筆記 關鍵字」、「待辦」或「購物」查詢。", cfg)
+        return message("歡迎使用 Life。傳「牛奶」即可選擇購物／待辦／行程／筆記並在 LINE 確認新增；也可以輸入「查 筆記 關鍵字」查資料。", cfg)
     if event.get("type") == "postback":
         # LINE v2 is additive: signed, actor-scoped postbacks reuse the existing
         # v1 binding, rollout gate, event receipt and reply deduplication.

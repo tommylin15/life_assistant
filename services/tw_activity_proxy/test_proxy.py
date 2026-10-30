@@ -128,3 +128,20 @@ def test_native_trusted_ssl_context_keeps_hostname_verification():
         assert ctx.check_hostname is True
         assert transport.call_args.kwargs["trust_env"] is False
         assert transport.call_args.kwargs["local_address"] == "0.0.0.0"
+
+
+def test_only_official_tourism_host_uses_legacy_ski_interoperability():
+    import ssl
+    from services.tw_activity_proxy.main import _origin_tls_context
+    generic = ssl.create_default_context()
+    tourism = _origin_tls_context("media.taiwan.net.tw")
+    mis = _origin_tls_context("mis.twse.com.tw")
+    unrelated_life = _origin_tls_context("cloud.culture.tw")
+    for ctx in (tourism, mis, unrelated_life):
+        assert ctx.verify_mode == ssl.CERT_REQUIRED
+        assert ctx.check_hostname is True
+        assert ctx.minimum_version >= ssl.TLSVersion.TLSv1_2
+    if hasattr(ssl, "VERIFY_X509_STRICT"):
+        assert tourism.verify_flags == (generic.verify_flags & ~ssl.VERIFY_X509_STRICT)
+        assert mis.verify_flags == generic.verify_flags
+        assert unrelated_life.verify_flags == generic.verify_flags

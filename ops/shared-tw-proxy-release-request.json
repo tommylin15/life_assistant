@@ -7,6 +7,6 @@
   ],
   "traffic_policy": "candidate-smoke-before-promotion",
   "rollback": "last-serving-revision",
-  "attempt": 3,
-  "purpose": "IPv4 bounded source fix and mandatory Life official ZIP + Janus MIS candidate gate; only promote if both pass"
+  "attempt": 4,
+  "purpose": "Classify official Life tourism ConnectError into safe machine-only DNS/TCP/TLS categories; keep 0%-candidate fail-closed if official source unavailable; MIS and auth gates required."
 }

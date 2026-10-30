@@ -1,6 +1,6 @@
 # Life／Janus 共用台灣出口通道
 
-狀態：**Proxy 已完成安全發布與 Live 正向驗收**；Janus API 新版、Life VM 新 client 的端到端任務仍須個別驗收。Live 收據：[Actions #41010462296](https://github.com/tommylin15/life_assistant/actions/runs/41010462296)。
+狀態：**共用 Proxy 的私有 IAM、安全發布與 MIS 正向測試 PASS；Life 活動來源整合 PARTIAL（觀光署 ZIP 502 ConnectError）**；Janus API 與 Life VM 的完整端到端須另驗收。Live 收據：[Actions #41010462296](https://github.com/tommylin15/life_assistant/actions/runs/41010462296)。
 
 ## 已有資產
 
@@ -35,3 +35,12 @@
 - 本次正式 Workflow [#41010462296](https://github.com/tommylin15/life_assistant/actions/runs/41010462296) 所有 steps PASS：測試、Cloud Run 私有 IAM baseline、Life/Janus Invoker、受控候選、無 token 未授權拒絕、metadata URL 負向 400、台灣 MIS `rtcode=0000`、切流後單一 100% readback、無公開 Invoker。部署指令移除舊共享 credential 環境變數；其值仍曾存在 Git 歷史，不能再使用。
 - 由 Janus 現有 CI 在特定 Life 服務上建立一次性 `janus-user-api` 的 `roles/run.invoker`；已獨立 IAM readback PASS。Life 原部署者缺少 `run.services.setIamPolicy`，因此新流程僅作權限核對，避免引入不必要的 project-wide 擴權。
 - 不包含：Life VM 現行 cron 是否已取得新版 client、台灣政府活動所有 host 的真實 end-to-end、Janus 最新 GHCR API deployment、Owner 持股日期與當日損益。這些不能因 Proxy 正向驗收當作 PASS。
+
+## 2026-10-30 新一輪查核與未完成事項
+
+- [#41011056509](https://github.com/tommylin15/life_assistant/actions/runs/41011056509) 正式代理讀回 Life 觀光署 ZIP 得到 HTTP 502 `upstream_unavailable`。
+- 針對早期 Life 網站 IPv6 問題，已將代理 outbound 限縮到 IPv4（HTTPX 官方 `HTTPTransport(local_address="0.0.0.0")`）、維持 CA 驗證與 SSL TLS、避免環境任意 proxy、Life timeout 有界延長；仍不允許使用 `verify=False` 退回不安全 TLS。
+- 新候選執行 [#41011718029](https://github.com/tommylin15/life_assistant/actions/runs/41011718029) 中，MIS 與私有 IAM／SSRF 閘門 PASS，但觀光署 ZIP **HTTP 502 / `ConnectError`**，因此發布 FAIL，**沒有提升新候選到 100% 流量**；現役安全版 `tw-activity-proxy-00006-dep` 保留。
+- 對 Life 既有 VM 與所有官方網站來源的整合仍 **PARTIAL**。缺值需保留，不得因 MIS 正向成功冒充所有 Life 活動來源成功。
+- IPv4/TLS 設定及分類測試在 [Taiwan proxy safe CI #41012113664](https://github.com/tommylin15/life_assistant/actions/runs/41012113664) PASS；此結果是離線測試，不代表 Live 活動下載可用。
+- 後續排查 TLS 鏈、網站封鎖或 TCP 連線重置原因，尋找具官方授權與 TLS 正常的替代來源，維持少量有界探測，不新增付費資源；只在活動來源 Live 正向驗證 PASS 後切換。

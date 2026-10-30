@@ -186,5 +186,29 @@
 
 **本輪狀態：** V2-02 source／圖檔／Drive PASS；OA default API、手機、全功能整合 = NOT VERIFIED。不得因文書或 GitHub CI 就標 DONE。V2-01 的真 LINE Flex 驗收 WI-05G 與 v1 U17 異常驗收仍保留。
 
+## WI-05I｜2026-10-30：LINE Staging 遭自動發布關閉的根因與修復
+
+**Owner 實測：** LINE Channel Access Token 驗證 `LINE_OA_AUTH=PASS`，但 V2-02 Colab `GET https://life-assistant-v3-stage-tl15.web.app/api/v1/line/config` 為 **503**，因此 Colab 依保護門檻停止，**沒有更換 OA 預設八格選單**。
+
+**可追溯根因：** [V3 #40857785208](https://github.com/tommylin15/life_assistant/actions/runs/40857785208) 曾以 `LINE_ENABLED=true` 通過同版 Staging；但後續 [V3 #40981334221](https://github.com/tommylin15/life_assistant/actions/runs/40981334221)、[V3 #40982431521](https://github.com/tommylin15/life_assistant/actions/runs/40982431521) 自動 Staging 以 `LINE_ENABLED=false` 發布，令原先 LINE-enabled 的固定 Staging 被覆蓋。現有 `line_channel.configuration()` 當 `LIFE_LINE_ENABLED != true` 或缺必要設定時回傳應用程式 `503 {"detail":"LINE integration is not configured"}`。這是**部署與測試環境衝突**，不是 LINE Token、Rich Menu 圖片或額外 Secret/IAM 權限問題。
+
+**防護修復（Source 已提交、CI 依最新 main 獨立判定）：**
+
+- `scripts/line_staging_guard.py`：只讀固定 Staging 的公開 `/api/v1/line/config`；HTTP 200、未知 HTTP、網路故障或非標準 503 → `HOLD`，**禁止一般自動部署**；只有連續兩次讀回應用程式**精確** `503 {"detail":"LINE integration is not configured"}` → `ALLOW`。
+- `.github/workflows/v3-auto-staging-after-ci.yml`：原 CI/sha/GitHub Gate 通過後，先跑 LINE guard；若 `HOLD` 則不 dispatch V3。若 `ALLOW`，以 `auto_staging=true, enable_line=false, promote=false, publish_staging=true` dispatch，便於 V3 識別機器自動作業。
+- `.github/workflows/v3-release-ghcr.yml`：增加僅供自動派工識別的 `auto_staging` bool；當自動 Staging 要以 `enable_line=false` 覆蓋時，在 **Cloud Run 候選建立之前** 重查相同 guard；LINE 若在派工後才變成啟用，V3 提前 FAIL 且不變更候選或流量。**人工明確選擇 `enable_line=false` 的維護作業不被偷改語意**。
+- `tests/test_line_staging_guard.py`：覆蓋 LINE enabled／明確 disabled／網路與 503 誤判／派工與發版競態，以及 workflow 靜態契約。原有 `test_cloud_build_v2.py` 仍約束不自動 Production promote。
+- 代價：**當 LINE 測試環境正在使用時，一般程式提交不再自動更新固定 Staging**；要在保留 LINE 的前提取得新版功能，需人工使用同 SHA `enable_line=true` 進行 Staging Release。這比暗中覆蓋 LINE 環境安全，也不擴權。
+
+**本次回復操作（只限 Staging）：**
+
+1. 等待最新 main 同 SHA CI（backend／flutter／deployment-scripts／free-events-postgres／gmail-onnx-image）完全 PASS，確認沒有其他更舊的 V3 自動發布正在競逐 staging。
+2. GitHub → `V3 Release - GHCR to Cloud Run` → `Run workflow`：branch `main`；`promote=false`、`publish_staging=true`、`enable_line=true`，`enable_gmail_onnx` 保持原本產品需要的設定，`auto_staging=false`（預設）。
+3. Release 必須有 `candidate_health/ready=PASS`、`line_candidate_config=PASS`、`preview=PASS`、`staging_live=PASS`；**成功的 Staging Hosting PASS 仍不表示 OA Console Webhook 已指向 Stage**。
+4. Colab **只重跑原第 3 格**：`LINE_OA_AUTH=PASS`、`LINE_BACKEND_READY=PASS` 且 origin／LIFF ID 與 Staging 一致，並確認 LINE OA Webhook 入口也為相同環境；才可執行第 4 格套用八格並核實 `LINE_V2_DEFAULT_MENU_API=PASS`、`richMenuId` 與 LINE 手機八格實測。
+5. 檢查後續任一 CI 的 `V3 Auto Staging After CI` 摘要：LINE active 應有 `line_staging_guard=HOLD` 和 `auto_staging=SKIP existing_LINE_staging_or_unknown_status`；不能把 skip 當成新功能已部署。
+
+**狀態：** 根因（GitHub logs）PASS；guard implementation（GitHub readback）PASS；完整 CI／自動派工 guard 實際執行／LINE-enabled Staging 恢復／OA default Menu／真手機操作應各按當輪證據標 `PASS / FAIL / NOT VERIFIED`。只因文件、CI 或沒有驗證的舊 release，不得宣稱 V2-02 DONE；原 v1 草稿、綁定、資料不得清除。
+
 ## WI-06：停用與復原
 先在後台將 line 設為 hidden，或正常 V3 部署 enable_line=false。LINE session 每次請求會重查綁定與 rollout。保留 0023/0024 資料表；不執行 downgrade、不清空 Life。正式發版仍依既有 V3 gates，CI 綠燈不代表真人 LINE 整合完成。

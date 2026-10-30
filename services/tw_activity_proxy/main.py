@@ -57,7 +57,7 @@ def _validate_target(raw):
     # Resolve before access; only global addresses are eligible for outbound
     # calls. No redirect is ever followed. URL host is still TLS-verified.
     try:
-        addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+        addresses = socket.getaddrinfo(host, 443, family=socket.AF_INET, type=socket.SOCK_STREAM)
         if not addresses or any(
             not ipaddress.ip_address(item[4][0]).is_global for item in addresses
         ):
@@ -89,13 +89,14 @@ def proxy_request(req):
     if host == JANUS_HOST:
         headers["Referer"] = "https://mis.twse.com.tw/stock/index.jsp"
     try:
-        timeout = max(1.0, min(20.0, float(data.get("timeout", 8.0))))
+        timeout = max(1.0, min(20.0, float(data.get("timeout", 18.0 if host != JANUS_HOST else 8.0))))
     except (ValueError, TypeError):
         timeout = 8.0
     limit = MAX_JANUS_BYTES if host == JANUS_HOST else MAX_BODY_BYTES
     try:
         with httpx.Client(timeout=timeout, follow_redirects=False, verify=True,
-                          trust_env=False) as client:
+                          trust_env=False,
+                          transport=httpx.HTTPTransport(local_address="0.0.0.0", retries=1)) as client:
             with client.stream("GET", data["url"], headers=headers) as upstream:
                 if 300 <= upstream.status_code < 400:
                     return jsonify({"error": "upstream_redirect_rejected"}), 502
@@ -112,5 +113,11 @@ def proxy_request(req):
                     .split(";")[0])
                 return Response(bytes(body), status=200, mimetype=mimetype,
                                 headers={"Cache-Control": "no-store"})
-    except (httpx.HTTPError, OSError, ValueError):
-        return jsonify({"error": "upstream_unavailable"}), 502
+    except (httpx.HTTPError, OSError, ValueError) as error:
+        # Only a fixed exception class is returned; no upstream URL, body,
+        # credentials or arbitrary exception messages are exposed.
+        category = type(error).__name__
+        if category not in {"ConnectError", "ConnectTimeout", "ReadTimeout", "WriteTimeout",
+                            "ReadError", "RemoteProtocolError", "PoolTimeout", "OSError", "ValueError"}:
+            category = "Unclassified"
+        return jsonify({"error": "upstream_unavailable", "kind": category}), 502

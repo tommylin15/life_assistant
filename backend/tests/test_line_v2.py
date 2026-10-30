@@ -111,7 +111,7 @@ class HandlerContracts(unittest.IsolatedAsyncioTestCase):
             result = await v2._activity_page(object(), USER, category="美術", offset=6, snapshot=1800000000000000)
         self.assertEqual([r["identity_key"] for r in result["items"]], ["a" * 64, "c" * 64])
         self.assertEqual(query.await_args.kwargs["category"], "美術")
-        self.assertEqual(query.await_args.kwargs["quick"], "latest")
+        self.assertEqual(query.await_args.kwargs["quick"], "all_latest")
         self.assertEqual(query.await_args.kwargs["entry"], "explore")
         self.assertEqual(query.await_args.kwargs["offset"], 6)
         self.assertEqual(result["snapshot_us"], 1800000000000000)
@@ -154,10 +154,33 @@ class HandlerContracts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(write.await_count, 2)
         self.assertTrue(all(call.args[2].active is True for call in write.await_args_list))
 
-    async def test_deferred_command_uses_v1_liff_without_db(self):
-        response = await v2.handle_postback(event("v=2&cmd=tasks.list"), IDENTITY, CFG, USER, object())
-        self.assertEqual(response[0]["quickReply"]["items"][0]["action"]["uri"],
-                         "https://liff.line.me/123-test?page=tasks")
+    async def test_six_menu_entries_use_daily_card_handler(self):
+        with patch("app.services.line_v2_daily.handle_daily", AsyncMock(
+            return_value=[{"type": "text", "text": "可操作"}])) as daily:
+            for cmd in ("capture.start", "today.view", "search.start", "tasks.list",
+                        "shopping.list", "calendar.today"):
+                response = await v2.handle_postback(event("v=2&cmd=" + cmd),
+                                                    IDENTITY, CFG, USER, object())
+                self.assertEqual(response[0]["text"], "可操作")
+            self.assertEqual(daily.await_count, 6)
+
+    async def test_three_day_filter_and_collected_sort_are_distinct(self):
+        page = {"items": [item()], "snapshot_us": 1800000000000000, "has_more": False}
+        with patch.object(v2, "_activity_access", AsyncMock()), patch.object(
+            v2, "_activity_page", AsyncMock(return_value=page)) as query:
+            all_collected = await v2.handle_postback(event("v=2&cmd=events.latest"),
+                                                    IDENTITY, CFG, USER, object())
+            recent = await v2.handle_postback(event("v=2&cmd=events.recent"),
+                                              IDENTITY, CFG, USER, object())
+        self.assertFalse(query.await_args_list[0].kwargs["recent"])
+        self.assertTrue(query.await_args_list[1].kwargs["recent"])
+        choices = [x["action"]["label"] for x in all_collected[0]["quickReply"]["items"]]
+        self.assertEqual(choices, ["最近三天", "七大類", "已收錄", "已收藏", "Life 更多活動"])
+        self.assertIn("最近三天", recent[0]["altText"])
+
+    async def test_seven_macro_categories_match_life(self):
+        self.assertEqual(await v2._categories(object()),
+                         list(v2.curated.MACRO_CATEGORIES))
 
 
 if __name__ == "__main__":

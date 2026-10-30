@@ -231,3 +231,12 @@ LIFF 仍走 `Firebase Hosting /line/index.html → FastAPI → PostgreSQL`，完
 - LINE Messaging API reference (12 bubbles, 50 KB, Reply token): https://developers.line.biz/en/reference/messaging-api/
 - Project: [Life v1 LINE spec](line_integration_b.md) / [WI](line_integration_b_wi.md) / [Project Rules](PROJECT_RULES.md) / [TODO](todo.md)。
 
+
+
+## 2026-10-30｜V2-03 共用 Life 行動能力（Source 增補）
+
+- Owner 回報八格 OA API 建立、圖片上傳、預設選單讀回 PASS（Rich Menu ID `richmenu-0ba0109d112dca29bbf231b0ac7a687d`），但前六格收到分階段開發提示。原因：舊 `line_v2.py` 的 `DEFERRED_MENU` 是刻意設的 placeholder，屬程式功能缺口，不是上架失敗。
+- 本次 Source 接線：前六格改由 `backend/app/services/line_v2_daily.py` 重用 LINE Binding／FeatureRollout、Life Inbox 草稿與 LIFF 明確確認、本人搜尋、待辦 Domain 完成、購物 Domain 已購買、Google 日曆只讀，維持既有 DB、Google OAuth 與風險邊界。完整編輯／新增／授權仍採 LIFF 原有可用流程，不能假稱全部能在 LINE 對話直接完成。沒有新增個人資料欄位或 migration。
+- 活動：LINE 預設 `events.latest` 使用 `all_latest`（不再意外限制三天）並以 Life 原 `CuratedActivity.created_at` 分組最早收錄時間倒序；「最近三天」單獨用 Life `latest_3d`，「七大類」共用 Life `MACRO_CATEGORIES` 七個宏分類，「已收錄」顯示所有可見活動，「已收藏」保留個人存檔，不將兩者混稱。現有事件開始日、官方發布日不得取代收錄時間。
+- LIFF：維持需驗證 LINE Login 與 Life 綁定的既有 capture/search/tasks/shopping/calendar/today/activities 流程；強化入口對應最新版 Life 功能 route 與七分類／收錄時間選項，簡單操作在 LINE 完成，複雜作業回 Life，不再用 placeholder 佔滿聊天室。
+- **完成判定**：Source／CI 與 Staging／手機實機分開驗收。新 Source commit 後先確定同 SHA CI PASS，再走 `enable_line=true,promote=false,publish_staging=true` 且固定 Staging `/api/v1/line/config` 200、實際 Rich Menu 操作讀回；Production／Google 授權、跨帳號、重送、收藏與 UI 真機不得未驗先宣稱 PASS。

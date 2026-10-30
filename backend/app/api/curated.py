@@ -352,9 +352,9 @@ async def list_curated(
     snapshot = as_of or datetime.now(timezone.utc)
     today = datetime.now(TAIPEI).date()
     if quick and quick not in (
-        {"latest", "latest_3d", "opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"}
+        {"all_latest", "latest", "latest_3d", "opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"}
         if entry == "opportunities"
-        else {"latest", "latest_3d", "ongoing", "weekend", "next_7", "next_30", "free",
+        else {"all_latest", "latest", "latest_3d", "ongoing", "weekend", "next_7", "next_30", "free",
               "opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"}
     ):
         raise HTTPException(422, "Unsupported quick filter")

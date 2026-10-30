@@ -25,21 +25,18 @@ MAX_ACTION_BYTES = 300
 CAROUSEL_LIMIT = 6
 MAX_CAROUSEL_BYTES = 48_000  # Leave room below LINE's 50 KB JSON limit.
 TOKEN_TTL = timedelta(days=7)
-SUPPORTED_MENU = frozenset(("events.latest", "events.tags", "events.saved"))
+SUPPORTED_MENU = frozenset((
+    "events.latest", "events.recent", "events.tags", "events.saved",
+    "capture.start", "today.view", "search.start", "tasks.list",
+    "shopping.list", "calendar.today",
+))
 ALLOWED_COMMANDS = frozenset((
     "events.latest", "events.tags", "events.saved", "events.page",
-    "events.tag", "events.tags_page", "events.save",
+    "events.tag", "events.tags_page", "events.save", "events.recent",
+    "tasks.complete", "shopping.set", "search.kind",
 ))
-# Other eight-grid entries are explicitly deferred to V2-03; the old LIFF
-# functionality remains reachable as a safe fallback until implemented.
-DEFERRED_MENU = {
-    "capture.start": "capture",
-    "today.view": "today",
-    "search.start": "search",
-    "tasks.list": "tasks",
-    "shopping.list": "shopping",
-    "calendar.today": "calendar",
-}
+# The six everyday Rich Menu actions are handled by line_v2_daily.
+# LIFF remains the authenticated editing and confirmation surface.
 
 
 def _binding_scope(cfg: dict, user: dict, identity: str) -> str:
@@ -51,7 +48,7 @@ def make_token(cfg: dict, user: dict, identity: str, action: str, **fields) -> s
     """Short signed, expiring, actor-scoped LINE postback (no bearer/session)."""
     if action not in ALLOWED_COMMANDS:
         raise ValueError("Unknown action")
-    if any(k not in {"o", "s", "k", "i", "b", "m"} for k in fields):
+    if any(k not in {"o", "s", "k", "i", "b", "m", "r"} for k in fields):
         raise ValueError("Unknown token attribute")
     payload = {"a": action, "e": int((datetime.now(timezone.utc) + TOKEN_TTL).timestamp()),
                "u": _binding_scope(cfg, user, identity), **fields}
@@ -95,7 +92,7 @@ def _menu_command(data: str) -> str | None:
     if len(pairs) != 2 or set(pairs) != {("v", "2"), ("cmd", dict(pairs).get("cmd"))}:
         return None
     cmd = dict(pairs).get("cmd")
-    return cmd if cmd in SUPPORTED_MENU or cmd in DEFERRED_MENU else None
+    return cmd if cmd in SUPPORTED_MENU else None
 
 
 def postback_action(label: str, data: str) -> dict:
@@ -128,15 +125,9 @@ async def _activity_access(db: AsyncSession, user: dict) -> None:
 
 
 async def _categories(db: AsyncSession) -> list[str]:
-    # Limit the in-chat selector; the Life App retains the complete filter UI.
-    today = datetime.now(curated.TAIPEI).date()
-    query = (select(CuratedActivity.category)
-             .where(CuratedActivity.category.is_not(None),
-                    CuratedActivity.category != "",
-                    curated._active_activity_predicate(today, "explore"))
-             .distinct().order_by(CuratedActivity.category).limit(200))
-    result = (await db.scalars(query)).all()
-    return [value for value in result if isinstance(value, str) and value.strip()]
+    # Reuse Life Explore's seven canonical macro categories, not arbitrary
+    # raw DB tags. Each macro uses the SAME curated SQL filter as the App.
+    return list(curated.MACRO_CATEGORIES)
 
 
 def _group_id(row: dict) -> str:
@@ -145,7 +136,8 @@ def _group_id(row: dict) -> str:
 
 
 async def _activity_page(db: AsyncSession, user: dict, *, category: str | None = None,
-                         saved_only: bool = False, offset: int = 0, snapshot: int | None = None) -> dict:
+                         saved_only: bool = False, recent: bool = False,
+                         offset: int = 0, snapshot: int | None = None) -> dict:
     if not isinstance(offset, int) or offset < 0 or offset > 50000:
         raise ValueError("Invalid page offset")
     # Microsecond precision avoids moving page boundaries backwards when an
@@ -157,7 +149,8 @@ async def _activity_page(db: AsyncSession, user: dict, *, category: str | None =
     page = await curated.list_curated(
         response=Response(), limit=CAROUSEL_LIMIT, offset=offset,
         city=None, category=category, starts_from=None, min_importance=1,
-        _user=user, db=db, entry="explore", keyword=None, quick="latest",
+        _user=user, db=db, entry="explore", keyword=None,
+        quick="latest_3d" if recent else "all_latest",
         region=None, district=None, fee_kind=None, saved_only=saved_only,
         verification_status=None, as_of=as_of,
     )
@@ -215,16 +208,18 @@ def _bubble(row: dict, cfg: dict, user: dict, identity: str) -> dict:
 
 
 def _menu_actions(cfg, user, identity, *, tag_key=None, category=None, offset=0,
-                  snapshot=None, saved=False, has_more=False) -> list[dict]:
+                  snapshot=None, saved=False, recent=False, has_more=False) -> list[dict]:
     actions = []
     if has_more:
-        fields = {"o": offset + CAROUSEL_LIMIT, "s": snapshot, "m": int(saved)}
+        fields = {"o": offset + CAROUSEL_LIMIT, "s": snapshot, "m": int(saved),
+                  "r": int(recent)}
         if tag_key:
             fields["k"] = tag_key
         actions.append(postback_action("下一批", make_token(cfg, user, identity, "events.page", **fields)))
     actions.extend([
-        postback_action("最新上架", make_token(cfg, user, identity, "events.latest")),
-        postback_action("依分類看", make_token(cfg, user, identity, "events.tags")),
+        postback_action("最近三天", make_token(cfg, user, identity, "events.recent")),
+        postback_action("七大類", make_token(cfg, user, identity, "events.tags")),
+        postback_action("已收錄", make_token(cfg, user, identity, "events.latest")),
         postback_action("已收藏", make_token(cfg, user, identity, "events.saved")),
         {"type": "uri", "label": "Life 更多活動", "uri": cfg["origin"] + "/more/explore"},
     ])
@@ -253,13 +248,13 @@ def _carousel(rows: list[dict], cfg: dict, user: dict, identity: str,
 
 async def _show_page(cfg: dict, user: dict, identity: str, db: AsyncSession,
                      *, category: str | None = None, saved: bool = False,
-                     offset: int = 0, snapshot: int | None = None) -> list[dict]:
+                     offset: int = 0, snapshot: int | None = None, recent: bool = False) -> list[dict]:
     data = await _activity_page(db, user, category=category, saved_only=saved,
-                                offset=offset, snapshot=snapshot)
+                                offset=offset, snapshot=snapshot, recent=recent)
     actions = _menu_actions(cfg, user, identity, tag_key=_category_key(category) if category else None,
-                            offset=offset, snapshot=data["snapshot_us"], saved=saved,
+                            offset=offset, snapshot=data["snapshot_us"], saved=saved, recent=recent,
                             has_more=bool(data.get("has_more")))
-    title = "Life 已收藏活動" if saved else "Life 最新上架活動"
+    title = "Life 已收藏活動" if saved else ("Life 最近三天收錄" if recent else "Life 最新上架活動")
     if category:
         title += " · " + category[:30]
     return _carousel(data["items"], cfg, user, identity, options=actions, title=title)
@@ -271,13 +266,13 @@ async def _show_tags(cfg: dict, user: dict, identity: str, db: AsyncSession,
     if not isinstance(offset, int) or offset < 0 or offset >= max(len(cats), 1):
         return _text_reply("分類清單已更新，請重新選擇。",
                            [postback_action("重新選分類", make_token(cfg, user, identity, "events.tags"))])
-    batch = cats[offset:offset+8]
+    batch = cats[offset:offset+7]
     choices = [postback_action(cat[:20],
                make_token(cfg, user, identity, "events.tag", k=_category_key(cat))) for cat in batch]
     if offset + len(batch) < len(cats):
         choices.append(postback_action("更多分類", make_token(cfg, user, identity, "events.tags_page",
                                                              o=offset+len(batch))))
-    choices.append(postback_action("最新活動", make_token(cfg, user, identity, "events.latest")))
+    choices.append(postback_action("已收錄", make_token(cfg, user, identity, "events.latest")))
     choices.append({"type": "uri", "label": "Life 進階篩選", "uri": cfg["origin"] + "/more/explore"})
     return _text_reply("請選活動分類；此選單取自 Life 已上架資料，不代表完整多標籤系統。"
                        if cats else "目前沒有可用的活動分類。", choices)
@@ -289,9 +284,6 @@ async def handle_postback(event: dict, identity: str, cfg: dict,
     if not isinstance(data, str) or len(data.encode()) > MAX_ACTION_BYTES:
         return _text_reply("選單指令無效。請重新開啟選單。")
     public = _menu_command(data)
-    if public in DEFERRED_MENU:
-        return _text_reply("這項功能的 LINE 卡片正在分階段開發，可先使用原 Life 頁面。",
-                           [{"type": "uri", "label": "開啟 Life", "uri": liff_url(cfg, page=DEFERRED_MENU[public])}])
     if public is None:
         try:
             command = read_token(data, cfg, user, identity)
@@ -299,12 +291,20 @@ async def handle_postback(event: dict, identity: str, cfg: dict,
             return _text_reply("此按鈕已失效或與目前帳號不符，請從選單重新開始。")
     else:
         command = {"a": public}
-    if command["a"] not in ALLOWED_COMMANDS:
+    cmd = command["a"]
+    if cmd in ("capture.start", "today.view", "search.start", "search.kind",
+               "tasks.list", "tasks.complete", "shopping.list",
+               "shopping.set", "calendar.today"):
+        from app.services.line_v2_daily import handle_daily
+        return await handle_daily(cmd, command, identity, cfg, user, db,
+                                  make_token, postback_action, _text_reply, quick_reply)
+    if cmd not in ALLOWED_COMMANDS:
         return _text_reply("尚未支援這項操作。")
     await _activity_access(db, user)
-    cmd = command["a"]
     if cmd == "events.latest":
         return await _show_page(cfg, user, identity, db)
+    if cmd == "events.recent":
+        return await _show_page(cfg, user, identity, db, recent=True)
     if cmd == "events.saved":
         return await _show_page(cfg, user, identity, db, saved=True)
     if cmd == "events.tags":
@@ -324,7 +324,8 @@ async def handle_postback(event: dict, identity: str, cfg: dict,
             return await _show_page(cfg, user, identity, db, category=category)
         return await _show_page(cfg, user, identity, db, category=category,
                                 offset=command.get("o", 0), snapshot=command.get("s"),
-                                saved=bool(command.get("m", 0)))
+                                saved=bool(command.get("m", 0)),
+                                recent=bool(command.get("r", 0)))
     if cmd == "events.save":
         activity_id, active = command.get("i"), command.get("b")
         if not isinstance(activity_id, str) or not re.fullmatch(r"[0-9a-f]{64}", activity_id) or type(active) is not bool:

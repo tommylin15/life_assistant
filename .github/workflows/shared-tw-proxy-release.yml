@@ -107,6 +107,7 @@ jobs:
               print("life_activity_proxy_reason=" + str(body.get("error","unknown")))
               print("life_activity_proxy_kind=" + str(body.get("kind","unknown")))
               if "status" in body: print("life_activity_upstream_http=" + str(body["status"]))
+              if "tls_verify_code" in body: print("life_activity_tls_verify_code=" + str(body["tls_verify_code"]))
           except (ValueError, UnicodeError):
               print("life_activity_proxy_reason=non_json")
           PY

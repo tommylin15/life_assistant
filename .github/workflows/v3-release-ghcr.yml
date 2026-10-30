@@ -18,6 +18,11 @@ on:
         required: true
         default: false
         type: boolean
+      auto_staging:
+        description: "Internal: auto-CI dispatch; protect an existing LINE-enabled staging site"
+        required: false
+        default: false
+        type: boolean
       enable_gmail_onnx:
         description: "Enable offline Gmail ONNX image with 2Gi/2vCPU/one concurrency for staging and promotion"
         required: true
@@ -139,6 +144,24 @@ jobs:
 
       - name: Install gcloud
         uses: google-github-actions/setup-gcloud@v2
+
+      # Backstop for queued auto releases: LINE may have become enabled
+      # after the auto-dispatch preflight. This runs before any Cloud Run /
+      # Firebase mutation, using the fixed Staging public config endpoint.
+      # Manual enable_line=false dispatch is an explicit operator choice and
+      # remains possible; only auto_staging=true is subject to this backstop.
+      - name: Block automatic overwrite of LINE-enabled staging
+        if: ${{ inputs.auto_staging && inputs.publish_staging && !inputs.promote && !inputs.enable_line }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/line_staging_guard.py --github-output "$RUNNER_TEMP/line-guard.env" |
+            tee -a "$GITHUB_STEP_SUMMARY"
+          if grep -Fxq "protect=true" "$RUNNER_TEMP/line-guard.env"; then
+            echo "::error::Auto staging blocked: LINE is active or config is uncertain; use manual enable_line=true after same-SHA CI"
+            exit 1
+          fi
+          echo "auto_line_staging_protection=PASS stage_explicitly_disabled" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Resolve and pin Life bundle version without reading secret values
         shell: bash

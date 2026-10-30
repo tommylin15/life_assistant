@@ -1,0 +1,91 @@
+# One-time, strict-parent CI-gated staging release for LINE V2 native cards.
+# This is NOT generic auto-staging and NEVER promotes production traffic.
+# Owner's existing Rich Menu is retained; V3 handles release/migration/readback.
+name: Life LINE V2 Native Cards One-Time Staging
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: life-line-v2-staging-once-20261030
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      CI_RUN_ID: ${{ github.event.workflow_run.id }}
+      PINNED_PARENT: 506937c02ff2057488aeaeb5e52b2d8a8f17fdff
+    steps:
+      - name: Verify one-time commit, current main and all five CI checks
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "dispatch=false" >> "$GITHUB_OUTPUT"
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          MAIN_SHA="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+          if [[ "$MAIN_SHA" != "$RELEASE_SHA" ]]; then
+            echo "line_v2_once=SKIP stale_sha=$RELEASE_SHA current_main=$MAIN_SHA" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA?per_page=100")"
+          if ! jq -e --arg parent "$PINNED_PARENT" '
+            (.parents | length) == 1 and .parents[0].sha == $parent and
+            ([.files[].filename] | sort) ==
+              ([".github/workflows/life-line-v2-staging-once-20261030.yml"] | sort)
+          ' <<< "$COMMIT" >/dev/null; then
+            echo "line_v2_once=SKIP not_exact_approved_child" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          CI="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID")"
+          jq -e --arg sha "$RELEASE_SHA" --arg repo "$GITHUB_REPOSITORY" '
+            .status == "completed" and .conclusion == "success" and
+            .head_sha == $sha and .head_branch == "main" and
+            .event == "push" and .head_repository.full_name == $repo
+          ' <<< "$CI" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID/jobs?per_page=100" |
+            jq -e '
+              [.jobs[] | select(.name=="flutter" or .name=="backend" or
+                 .name=="deployment-scripts" or .name=="free-events-postgres" or
+                 .name=="gmail-onnx-image") |
+                 select(.conclusion=="success") | .name] |
+              unique | length == 5
+            ' >/dev/null
+
+          RELEASES="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
+          if jq -e --arg sha "$RELEASE_SHA" 'any(.workflow_runs[]; .head_sha==$sha)' <<< "$RELEASES" >/dev/null; then
+            echo "line_v2_once=SKIP already_dispatched_sha=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "dispatch=true" >> "$GITHUB_OUTPUT"
+          echo "line_v2_once=READY sha=$RELEASE_SHA five_ci=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dispatch existing V3 with LINE enabled in staging only
+        if: steps.gate.outputs.dispatch == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
+          gh workflow run v3-release-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            --raw-field promote=false --raw-field publish_staging=true \
+            --raw-field enable_line=true --raw-field auto_staging=false \
+            --raw-field enable_gmail_onnx=false
+          echo "line_v2_once=DISPATCHED sha=$RELEASE_SHA staging=true line=true production=false" >> "$GITHUB_STEP_SUMMARY"
+          echo "CI/dispatch success is not staging PASS: verify V3 candidate, 0025 migration, Preview, fixed staging, LINE config and real LINE/DB readbacks." >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,6 @@
 # Life／Janus 共用台灣出口通道
 
-狀態：設計與來源盤點完成；尚未完成安全修復、部署與跨專案實測。
+狀態：受限來源代理與 Life 身分呼叫端已實作且單元測試通過；受控 Live 發布進行中，實際 Janus／Life 整合尚未驗收。發布證據見 Life Actions #41010130172，不能提前判 PASS。
 
 ## 已有資產
 
@@ -19,3 +19,12 @@
 ## 驗收
 
 依序記錄安全測試、Life 既有活動來源回歸、Janus MIS 讀取、CI、Cloud Run 100% revision、兩個服務身分的正向／未授權的負向請求、最終持股畫面及價格日期；任一缺證維持 PARTIAL／BLOCKED。
+
+## 2026-10-30 跨專案交付索引
+
+- 已變更 Life `services/tw_activity_proxy/main.py`：HTTPS host/path allowlist、僅 GET、DNS 公網檢查、禁轉址、TLS、回應 32MB / MIS 2MB 上限與逾時；原先驗證 shared secret 的程式已移除，**前提是 Cloud Run IAM 必須保持 private**。
+- 已變更 Life `backend/app/services/tw_request_router.py`：採 VM 服務身分 ID Token，缺 token 拒絕，不再攜帶公開靜態 token。
+- 舊的自動來源部署 workflow 已退役為 CI；新的 `.github/workflows/shared-tw-proxy-release.yml` 才是受控部署，要求 CI、舊 revision 回復基線、正式服務 IAM、無公開 Invoker、0% Candidate、未認證負向、SSRF 負向、MIS 正向及必要時 rollback。
+- Janus `services/api/tw_proxy_client.py` / `services/api/intraday_quotes.py` 添加只有來源 403/5xx 才嘗試台灣代理的 read-only 備援（429 不備援）；Janus 權威規格見 `tommylin15/janus-omniforge/doc/spec/shared-taiwan-egress.md`。
+- 既有 Live 核對曾見 `tw-activity-proxy-00005-c8k`／IAM public invoker 0；該版本由舊 workflow 發布，不視為新安全發布的整合 PASS。不能沿用已曝光的舊共享金鑰；新候選要求移除舊環境變數。
+- **跨專案核准範圍**：本次僅對既有 proxy、Life caller、Janus API 與必要 service-specific Invoker 授權進行一次性工程，不新增第二個台灣代理、付費 API 或新 GCP 資源。

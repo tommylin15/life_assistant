@@ -10,8 +10,15 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.config import settings
 
-EXPECTED_HEAD = "20261028_0024"
+EXPECTED_HEAD = "20261030_0025"
 EXPECTED_COLUMNS = {
+    # LINE's additive migration is now the Alembic head. Validate its
+    # owner-scoped pending-session schema without reading private records.
+    "line_capture_sessions": {
+        "namespace", "line_user_id", "user_sub", "source_event_id",
+        "source_text", "target", "fields", "awaiting", "status",
+        "revision", "created_at", "expires_at",
+    },
     "gmail_radar_items": {
         "classifier_version", "classification_source", "reason_code",
         "due_date", "due_text", "user_sub", "gmail_message_id", "status",

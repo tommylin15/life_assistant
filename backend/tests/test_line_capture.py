@@ -205,6 +205,41 @@ class CaptureFlow(IsolatedAsyncioTestCase):
         cancelled = await self.post("capture.cancel")
         self.assert_no_confirm(cancelled)
 
+    async def test_restart_once_clears_all_pending_drafts_without_formal_writes(self):
+        first = await self.message("牛奶")
+        self.assertIn("重新開始", str(first))
+        await self.post("capture.kind", {"k": "shopping"})
+        await self.message("提醒繳費")  # A second unfinished session.
+        with patch.object(capture.inbox, "commit", new=AsyncMock()) as write:
+            cleared = await self.post("capture.reset")
+            stale = await self.post("capture.confirm")
+        self.assertIn("未送出的 LINE 暫存內容已清除", str(cleared))
+        self.assertIn("已取消", str(stale))
+        write.assert_not_awaited()
+        drafts = (await self.db.scalars(select(LineCapture))).all()
+        self.assertEqual(len(drafts), 2)
+        for draft in drafts:
+            self.assertEqual(draft.status, "cancelled")
+            self.assertEqual(draft.source_text, "")
+            self.assertEqual(draft.fields, {})
+            self.assertIsNone(draft.awaiting)
+            self.assertIsNone(draft.target)
+        fresh = await self.message("買水")
+        self.assertIn("要新增到哪裡", str(fresh))
+
+    async def test_restart_is_actor_scoped_and_never_clears_unknown(self):
+        await self.message("測試記事")
+        session = await self.session()
+        with patch.object(capture.inbox, "commit", new=AsyncMock()) as write:
+            denied = await self.post("capture.reset", actor="U" + "b" * 32)
+            self.assertIn("失效", str(denied))
+            self.assertEqual(session.status, "pending")
+            session.status = "unknown"
+            await self.db.commit()
+            await self.post("capture.reset")
+            self.assertEqual(session.status, "unknown")
+            write.assert_not_awaited()
+
     async def test_cancel_never_creates_formal_data(self):
         await self.message("牛奶")
         with patch.object(capture.inbox, "commit", new=AsyncMock()) as write:

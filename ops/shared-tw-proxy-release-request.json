@@ -1,0 +1,7 @@
+{
+  "intent": "shared-tw-proxy-secure-release-v1",
+  "scope": "existing-asia-east1-service-only",
+  "callers": ["life", "janus"],
+  "traffic_policy": "candidate-smoke-before-promotion",
+  "rollback": "last-serving-revision"
+}

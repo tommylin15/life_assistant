@@ -73,9 +73,9 @@ def test_ipv4_only_public_destination_and_safe_error_class():
     from services.tw_activity_proxy import main
     app = Flask(__name__)
     target = "https://media.taiwan.net.tw/XMLReleaseAll_public/v2.0/Zh_tw/Event-json.zip"
-    with patch.object(main.socket, "getaddrinfo",
-                      return_value=[(socket.AF_INET, 1, 6, "", ("8.8.8.8", 443))]) as lookup, \\
-         patch.object(main.httpx, "Client") as client:
+    dns_patch = patch.object(main.socket, "getaddrinfo",
+                             return_value=[(socket.AF_INET, 1, 6, "", ("8.8.8.8", 443))])
+    with dns_patch as lookup, patch.object(main.httpx, "Client") as client:
         client.return_value.__enter__.return_value.stream.side_effect = httpx.ConnectTimeout("sensitive destination details")
         with app.test_request_context("/", method="POST", json={"url": target}):
             response, status = proxy_request(request)

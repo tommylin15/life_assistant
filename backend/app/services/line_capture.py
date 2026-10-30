@@ -13,6 +13,7 @@ from app.api.ui_policies import feature_gate
 from app.models.line_capture import LineCapture
 from app.models.shopping import ShoppingList
 from app.services.ownership import visible_clause
+from app.services.line_channel import aware
 
 TAIPEI = ZoneInfo("Asia/Taipei")
 SESSION_TTL = timedelta(hours=24)
@@ -57,7 +58,7 @@ async def _owner_session(db, sid, identity, cfg, user):
     session = await db.scalar(select(LineCapture).where(LineCapture.id == sid).with_for_update())
     if (session is None or session.namespace != cfg["namespace"] or
         session.line_user_id != identity or session.user_sub != user["sub"] or
-        session.expires_at <= datetime.now(timezone.utc)):
+        aware(session.expires_at) <= datetime.now(timezone.utc)):
         return None
     return session
 

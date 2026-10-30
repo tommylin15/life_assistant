@@ -1,3 +1,11 @@
+## 2026-10-30｜LINE Staging 503／自動 CI 關閉 LINE｜雙層保護修復（最新）
+
+- **根因（證據 PASS）：** Owner Colab `LINE_OA_AUTH=PASS` 但 `/api/v1/line/config` 為 503，沒有更換 OA 預設八格。原 LINE-enabled [V3 #40857785208](https://github.com/tommylin15/life_assistant/actions/runs/40857785208) 是 `LINE_ENABLED=true`，後續自動 [#40981334221](https://github.com/tommylin15/life_assistant/actions/runs/40981334221) 和 [#40982431521](https://github.com/tommylin15/life_assistant/actions/runs/40982431521) `LINE_ENABLED=false`，覆蓋固定 Staging，故後端 configuration() 503。非 LINE token/圖片/Secret IAM 問題。
+- **修復程式：** `scripts/line_staging_guard.py` 只讀固定 Stage；僅 **連續兩次**讀回確切應用層 `503 {"detail":"LINE integration is not configured"}` 才允許一般自動發布，200／網路失敗／未知 503 均 `HOLD`。在 `v3-auto-staging-after-ci.yml` dispatch 前，以及 `v3-release-ghcr.yml` 的 `auto_staging=true` 且 `enable_line=false` 部署前**雙層保護**。一般用戶手動 V3 Release 功能不受此 gate 擅自變更；沒有 GCP IAM/Secret 變更、沒有清除 v1 資料。
+- **測試與 WI：** `tests/test_line_staging_guard.py` 覆蓋各種 HTTP/error、競態與 workflow 契約；[WI-05I](line_integration_b_wi.md) 記載完整證據與回復程序。**GitHub Source 已提交**；CI、實際 auto-skip、Staging 再啟用與 OA Menu 仍須依最新 main 實際讀回判定。
+- **唯一下一操作：** 最新 main 全 CI PASS 且舊 V3 執行停止 → 人工 V3 `promote=false,publish_staging=true,enable_line=true,auto_staging=false`，保留原 `enable_gmail_onnx` 設定 → Staging `line_candidate_config`、Preview、`staging_live` PASS → Owner Colab 第三格 `LINE_BACKEND_READY=PASS`，確認 LINE Console Webhook 相同環境後再套用第 4 格八格選單；讀回 `richMenuId` 與手機實測。LINE enabled 時未來一般 auto Staging 預期 `HOLD`；新的 App 改動改走明確手動 Staging。
+- **狀態：** root cause=PASS；code submitted=PASS；CI/Staging runtime/LINE OA default/readback/mobile **NOT VERIFIED**，LINE-V2-02 **PARTIAL**。勿跳過安全門檻或假稱已上架。
+
 ## 2026-10-29｜LINE-V2-02 八格 Rich Menu 正式素材與上架工具（最新，PARTIAL）
 
 - **SOURCE PASS：** 2×4 八格（2500×1686，前七 Postback／右下 Life Omni Web `/today`）正式圖與紅框定位圖完成；Drive `life_assistantGPT/LINE_U16_六格選單` metadata 讀回 **PASS**，正式圖 [ID 1mB_15NAsxDyj3ZGikP4x7FT30Mf4gx2O](https://drive.google.com/file/d/1mB_15NAsxDyj3ZGikP4x7FT30Mf4gx2O/view)／289918 bytes／SHA256 `33b2460021d41c71ba56cbd90830361205f01c46d30623f60d4e413e4c794f86`；定位圖 [ID 1yxrBJBiroarM0yXJE01Eg8Qr2cjAscdU](https://drive.google.com/file/d/1yxrBJBiroarM0yXJE01Eg8Qr2cjAscdU/view) 不可上傳 LINE。

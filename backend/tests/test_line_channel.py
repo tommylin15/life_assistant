@@ -65,6 +65,7 @@ class LineAPITests(unittest.IsolatedAsyncioTestCase):
         async with self.engine.begin() as connection:
             await connection.run_sync(lambda c: Base.metadata.create_all(c, tables=[
                 ExecutionLog.__table__, LineBinding.__table__, LineEvent.__table__, LineLinkTicket.__table__, LineSession.__table__,
+                __import__("app.models.line_capture", fromlist=["LineCapture"]).LineCapture.__table__,
                 FeatureRollout.__table__, Project.__table__, Note.__table__, Task.__table__,
                 ShoppingList.__table__, ShoppingItem.__table__]))
         async def db_override():

@@ -247,3 +247,14 @@ LIFF 仍走 `Firebase Hosting /line/index.html → FastAPI → PostgreSQL`，完
 - LIFF 不建立第二套資料系統：繼續沿用已可用的 Life Inbox Interpret／Commit／Receipt、查詢、待辦、購物、日曆、收藏流程；首頁導向最新 Life `ui_policies.FEATURES` 所列 `/today`、`/tasks`、`/calendar`、`/capture`、`/more/notes`、`/more/shopping`、`/more/explore`、`/integrations` 路由。
 - 活動 LIFF 選項增加「已收錄（全部）」「最近三天」「七大類」與個人收藏開關；API 本來就按分組最早 `created_at` 倒序。UI 明確區分收錄時間和活動日期。未新增分類資料或侵入修改正式 Life 排序。
 - LINE 聊天優先簡單操作，LIFF 保留複雜編輯、日期補全、正式新增確認與 Google 授權入口，皆沿用原 Life 的本人權限與執行回執。CI／Staging／真人跨手機及 Google 授權仍須另行驗證。
+
+
+## 2026-10-30 LINE-V2-03B 智慧即時記錄與 Life 直接導覽
+
+**Owner 核准四卡一次交付**：LINE 對話完成分類與必要欄位、使用者最後確認後直接存入 Life；「查看完整／更多」導向固定 Life Flutter 路由，不再中轉 LIFF。Rich Menu 八格不變，單一 LINE OA 不可同時假設 staging 與 prod webhook 可用。
+
+- Source：`line_capture_sessions`（additive 0025）只存本人短期待確認內容及狀態，不是正式資料；依 LINE user / namespace / Life sub 三重檢查與過期時間控制。原 LINE Event / reply receipt 不刪除，歷史草稿保留可讀。
+- 簡短字詞如「牛奶」只提供購物建議；四類由使用者決定，不以 AI 預測直接新增。使用既有 Life deterministic rule 候選提示，保留含多意圖語句的顯式歧義提醒；不在 8 秒 Webhook 跑無界模型呼叫。
+- LINE Quick Reply / Postback：購物清單真實本人列表、待辦日期、行程開始與結束時間（Datetime picker 不含時區，後端以 Asia/Taipei 解釋）、標題／備註聊天編輯與取消；購物分類選填。確認前不能對 Life 做正式寫入。若 Google 授權缺失、時間不完整或未選購物清單，必須先補足／報明確錯誤。
+- 確認後共用 `inbox.commit` 的後端驗證與 `inbox.create` execution/action id 回執；同 session 固定 action id，不把 UNKNOWN 當失敗後自行重試。帳號撤銷、跨帳號卡片、跨 namespace、舊版本 revision 全部失效。失敗／UNKNOWN 留待本人查核收據。
+- 預設不刪除／旋轉任何 Production secrets、不執行 destructive migration。Source、tests、CI、同版 Staging、OA iOS/Android、Production Cloud Run／Hosting、Webhook/LINE Console、真人資料寫入讀回依序用 PASS/FAIL/NOT VERIFIED，證據不齊標 PARTIAL。

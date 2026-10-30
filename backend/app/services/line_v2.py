@@ -35,6 +35,9 @@ ALLOWED_COMMANDS = frozenset((
     "events.tag", "events.tags_page", "events.save", "events.recent",
     "tasks.list", "tasks.complete", "shopping.list", "shopping.set",
     "search.kind",
+    "capture.kind", "capture.preview", "capture.list", "capture.pick_list",
+    "capture.edit", "capture.due", "capture.start_at", "capture.end_at",
+    "capture.confirm", "capture.cancel", "capture.receipt",
 ))
 # The six everyday Rich Menu actions are handled by line_v2_daily.
 # LIFF remains the authenticated editing and confirmation surface.
@@ -293,6 +296,10 @@ async def handle_postback(event: dict, identity: str, cfg: dict,
     else:
         command = {"a": public}
     cmd = command["a"]
+    if cmd.startswith("capture.") and cmd != "capture.start":
+        from app.services.line_capture import handle_capture_postback
+        return await handle_capture_postback(event, command, identity, cfg, user,
+                                             db, make_token, postback_action, quick_reply)
     if cmd in ("capture.start", "today.view", "search.start", "search.kind",
                "tasks.list", "tasks.complete", "shopping.list",
                "shopping.set", "calendar.today"):

@@ -316,7 +316,8 @@ async def build_reply(event, record, identity, cfg, db):
     if not text_value or len(text_value) > 1200:
         return message("請使用 1–1200 字的文字；本則尚未儲存，請分段傳送。", cfg)
     record.text = text_value
-    return message("已保留文字草稿，尚未新增正式事項或設定提醒。請開啟確認分類、日期及清單。", cfg, draft=record.id)
+    from app.services.line_capture import begin_capture
+    return await begin_capture(text_value, record, identity, cfg, user, db)
 
 
 @router.post("/webhook")

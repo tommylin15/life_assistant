@@ -17,8 +17,14 @@ TAIPEI = ZoneInfo("Asia/Taipei")
 LIMIT = 5
 
 
+LIFE_PATHS = {"capture": "/capture", "today": "/today", "search": "/more/notes",
+              "notes": "/more/notes", "tasks": "/tasks", "shopping": "/more/shopping",
+              "calendar": "/calendar", "activities": "/more/explore"}
+
+
 def _link(cfg, page, label="在 Life 編輯"):
-    return {"type": "uri", "label": label, "uri": liff_url(cfg, page=page)}
+    """Current environment's real Flutter route, never LIFF intermediary."""
+    return {"type": "uri", "label": label, "uri": cfg["origin"] + LIFE_PATHS[page]}
 
 
 def _card(title, detail, action=None):
@@ -83,10 +89,10 @@ async def handle_daily(cmd, command, identity, cfg, user, db: AsyncSession,
     if cmd == "capture.start":
         await feature_gate("life_inbox")(user=user, db=db)
         return text_reply(
-            "請直接在聊天室輸入要記錄的文字或網址；Life 會先保存草稿，"
-            "不會直接新增待辦、購物或日曆。點選下方「分類並確認」可在 LIFF "
-            "檢查日期、類型與內容後才正式儲存。",
-            [_link(cfg, "capture", "分類並確認")])
+            "請直接輸入內容，例如「牛奶」或「明天下午三點看牙醫」。"
+            "我會在 LINE 裡提供購物／待辦／行程／筆記的分類和欄位，"
+            "最後由你點選確認才會真正寫入 Life。",
+            [_link(cfg, "capture", "Life 進階新增")])
 
     if cmd == "search.start":
         return text_reply("選擇要查詢的資料類型；也可輸入「查 筆記 關鍵字」、"
@@ -94,7 +100,7 @@ async def handle_daily(cmd, command, identity, cfg, user, db: AsyncSession,
             postback_action("筆記", token("search.kind", k="notes")),
             postback_action("待辦", token("search.kind", k="tasks")),
             postback_action("購物", token("search.kind", k="shopping")),
-            _link(cfg, "search", "進階搜尋")])
+            _link(cfg, "notes", "在 Life 搜尋")])
 
     if cmd in ("search.kind", "tasks.list", "shopping.list"):
         kind = (command.get("k") if cmd == "search.kind" else
@@ -115,7 +121,7 @@ async def handle_daily(cmd, command, identity, cfg, user, db: AsyncSession,
             if item.get("date"):
                 details += " · " + _ts_label(item["date"])
             rows.append(_card(item["title"], details, action))
-        pages = {"notes": "search", "tasks": "tasks", "shopping": "shopping"}
+        pages = {"notes": "notes", "tasks": "tasks", "shopping": "shopping"}
         labels = {"notes": "筆記", "tasks": "待辦", "shopping": "購物"}
         return _cards(rows, "我的" + labels[kind], [
             _link(cfg, pages[kind], "查看／新增更多"),

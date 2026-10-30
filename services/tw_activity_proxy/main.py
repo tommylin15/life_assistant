@@ -120,4 +120,20 @@ def proxy_request(req):
         if category not in {"ConnectError", "ConnectTimeout", "ReadTimeout", "WriteTimeout",
                             "ReadError", "RemoteProtocolError", "PoolTimeout", "OSError", "ValueError"}:
             category = "Unclassified"
-        return jsonify({"error": "upstream_unavailable", "kind": category}), 502
+        # Restrict the diagnostic to fixed machine categories. Never echo
+        # an exception message (which can include URLs or HTTP headers).
+        failure = "unknown"
+        if isinstance(error, httpx.ConnectError):
+            lower = str(error).lower()
+            if "certificate_verify_failed" in lower or "certificate verify failed" in lower:
+                failure = "tls_certificate"
+            elif "connection refused" in lower:
+                failure = "tcp_refused"
+            elif "reset by peer" in lower:
+                failure = "tcp_reset"
+            elif "name or service not known" in lower or "temporary failure in name resolution" in lower:
+                failure = "dns"
+            else:
+                failure = "connect_other"
+        return jsonify({"error": "upstream_unavailable", "kind": category,
+                        "reason": failure}), 502

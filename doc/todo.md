@@ -1,7 +1,9 @@
-## 2026-10-30｜Life 官方觀光署來源 TLS：私有代理保護性阻擋｜PARTIAL
+## 2026-10-30｜Life 官方觀光署可信 TLS 連線｜CLOSED／LIVE PASS
 
-- 0% 候選 [#41012831462](https://github.com/tommylin15/life_assistant/actions/runs/41012831462) 確認 Cloud Run 到 `media.taiwan.net.tw` 為 `tls_certificate` 類別；GitHub runner 官方端 TLS [#41012955722](https://github.com/tommylin15/life_assistant/actions/runs/41012955722) PASS。改用系統 CA context 仍保有憑證與 hostname 驗證，[#41013128130](https://github.com/tommylin15/life_assistant/actions/runs/41013128130) Life ZIP 502、MIS PASS，沒有切流。現役 `tw-activity-proxy-00006-dep` 保持安全私有狀態。
-- 下一項：有界比較 TLS 鏈／IP 對照，找可信官方來源或受控 CA 修正；不得 `verify=False`。在 Life VM／來源 ZIP 正向驗收前維持 BLOCKED。規格：[共用台灣出口](shared-taiwan-egress-janus-life.md)。
+- **根因確認**：[TLS 比對 #41014131479](https://github.com/tommylin15/life_assistant/actions/runs/41014131479) Python CA/Certifi 嚴格檢查報 X.509 code 86（Missing Subject Key Identifier）；[相容性測試 #41014255690](https://github.com/tommylin15/life_assistant/actions/runs/41014255690) 只移除 X509_STRICT 可驗證官方 TWCA 鏈且 CA／hostname 驗證仍啟用。
+- **修復與安全**：`_origin_tls_context(host)` 對 `media.taiwan.net.tw` 精確網域允許舊式 SKI 缺值，其餘所有來源仍嚴格；TLS、CA、hostname、來源白名單、私有 Cloud Run IAM、SSRF 防護保留，沒有 `verify=False`。
+- **CI／Release／Live**：專用 CI [#41014344340](https://github.com/tommylin15/life_assistant/actions/runs/41014344340) PASS；受控發布 [#41014398927](https://github.com/tommylin15/life_assistant/actions/runs/41014398927) 兩來源 gate PASS → 100% `tw-activity-proxy-00011-zip`；獨立 [Live readback #41014672520](https://github.com/tommylin15/life_assistant/actions/runs/41014672520) 官方 ZIP HTTP 200、503922 bytes、格式有效；MIS PASS、IAM private、舊 secret 缺席。
+- **剩餘邊界**：Life VM 定時任務、下載後寫入、其他 Life 來源仍 **NOT VERIFIED**，不是此 TLS 連線工項的完成條件；原來 502／BLOCKED 為歷史階段，不再列為當前阻塞。正式規格及收據：[共用台灣出口](shared-taiwan-egress-janus-life.md)。
 
 ## 2026-10-30｜Life／Janus 共用台灣出口安全發布與來源整合｜PARTIAL
 

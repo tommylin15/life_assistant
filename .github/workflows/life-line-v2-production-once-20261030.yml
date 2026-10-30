@@ -1,0 +1,113 @@
+# Owner-approved, one-time LINE V2 production continuation.
+# Only a successful, same-SHA, LINE-enabled V3 Staging release with a
+# pinned bundle-proof artifact may dispatch the existing guarded V3 promotion.
+# Never update Cloud Run/Firebase directly from this workflow.
+name: Life LINE V2 One-Time Production Continuation
+
+on:
+  workflow_run:
+    workflows: ["V3 Release - GHCR to Cloud Run"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: life-line-v2-production-once-20261030
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'workflow_dispatch' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      STAGE_RUN: ${{ github.event.workflow_run.id }}
+      APPROVED_FEATURE_SHA: 7385f9307fc21f538f9ff173912852d7b911dd60
+    steps:
+      - name: Require exact LINE staged artifact and one-time commit shape
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "dispatch=false" >> "$GITHUB_OUTPUT"
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$STAGE_RUN" =~ ^[1-9][0-9]*$ ]]
+          MAIN="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+          if [[ "$MAIN" != "$RELEASE_SHA" ]]; then
+            echo "line_prod_once=SKIP superseded_main" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          STAGE="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGE_RUN")"
+          jq -e --arg sha "$RELEASE_SHA" --arg repo "$GITHUB_REPOSITORY" '
+            .head_sha==$sha and .head_branch=="main" and
+            .head_repository.full_name==$repo and .event=="workflow_dispatch" and
+            .name=="V3 Release - GHCR to Cloud Run" and
+            .status=="completed" and .conclusion=="success"
+          ' <<< "$STAGE" >/dev/null
+
+          # The staging workflow is a single-file exact-child commit. Both the
+          # feature and production bridge predate it; no arbitrary future SHA
+          # can enter through this workflow_run event.
+          COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA?per_page=100")"
+          PARENT="$(jq -r '.parents[0].sha // empty' <<< "$COMMIT")"
+          [[ "$PARENT" =~ ^[0-9a-f]{40}$ ]]
+          jq -e '
+            (.parents | length)==1 and
+            ([.files[].filename] | sort) ==
+              ([".github/workflows/life-line-v2-staging-once-20261030.yml"] | sort)
+          ' <<< "$COMMIT" >/dev/null
+          STAGING_FILE="$(gh api "repos/$GITHUB_REPOSITORY/contents/.github/workflows/life-line-v2-staging-once-20261030.yml?ref=$RELEASE_SHA" |
+            jq -r '.content' | base64 --decode)"
+          grep -Fq "PINNED_PARENT: $PARENT" <<< "$STAGING_FILE"
+          grep -Fq -- '--raw-field enable_line=true' <<< "$STAGING_FILE"
+          grep -Fq -- '--raw-field promote=false' <<< "$STAGING_FILE"
+          FEATURE="$(gh api "repos/$GITHUB_REPOSITORY/compare/$APPROVED_FEATURE_SHA...$RELEASE_SHA")"
+          jq -e '.status=="ahead" and .ahead_by>=1 and .ahead_by<=12' <<< "$FEATURE" >/dev/null
+
+          # LINE staging bundle proof is created exclusively on successful
+          # enable_line=true, publish_staging=true, promote=false V3 runs.
+          ARTIFACTS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGE_RUN/artifacts?per_page=100")"
+          jq -e --arg name "line-stage-$RELEASE_SHA" '
+            [.artifacts[] | select(.name==$name and .expired==false)] | length==1
+          ' <<< "$ARTIFACTS" >/dev/null
+
+          CHECKS="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/check-runs?per_page=100")"
+          jq -e '
+            [.check_runs[] | select(.name=="backend" or .name=="flutter" or
+                 .name=="deployment-scripts" or .name=="free-events-postgres" or
+                 .name=="gmail-onnx-image") |
+                 select(.conclusion=="success") | .name] | unique | length==5
+          ' <<< "$CHECKS" >/dev/null
+
+          # Only one V3 invocation may have existed for this SHA until now:
+          # the successful Staging run. Replays and previous promote attempts
+          # are ineligible, even if their traffic changes were rolled back.
+          RELEASES="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
+          jq -e --arg sha "$RELEASE_SHA" --argjson id "$STAGE_RUN" '
+            [.workflow_runs[] | select(.head_sha==$sha)] |
+              length==1 and .[0].id==$id
+          ' <<< "$RELEASES" >/dev/null
+          echo "dispatch=true" >> "$GITHUB_OUTPUT"
+          echo "line_prod_once=READY sha=$RELEASE_SHA staging_run=$STAGE_RUN bundle_proof=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dispatch production promotion via existing V3 live gates
+        if: steps.gate.outputs.dispatch == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
+          gh workflow run v3-release-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            --raw-field promote=true --raw-field publish_staging=true \
+            --raw-field enable_line=true --raw-field auto_staging=false \
+            --raw-field enable_gmail_onnx=false
+          echo "line_prod_once=DISPATCHED sha=$RELEASE_SHA stage=$STAGE_RUN" >> "$GITHUB_STEP_SUMMARY"
+          echo "NOT DONE until V3 production traffic, Hosting and runtime readback PASS." >> "$GITHUB_STEP_SUMMARY"

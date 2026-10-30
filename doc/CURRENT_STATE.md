@@ -67,6 +67,9 @@
 - **Not yet complete:** offline semantic checkpoint/dependencies not shipped (rules-only production Docker), Traditional-Chinese semantic quality/perf/RAM, actual Gmail human readback and per-user database receipts, cross-account E2E, direct database 0022 revision readback. Mark overall **PARTIAL**.
 - **Evidence correction:** V3 workflow migration step/summary still labels 0018; release runner code targets 0022. Do not interpret the outdated summary wording as actual DB revision proof.
 
+## 2026-10-30｜台灣活動探索納入 Google Search 智慧語意補漏
+- **補漏能力升級：** 為解決固定 A/B 類網站改版、單站防護或特定偏鄉/專題缺口問題，正式在探索 SOP（`02-discovery.md`）與 runner 腳本中引入 Google Search（`search_web`）智慧語意補漏。由 Agent 根據最新「滾動 7 日五區九主題」與「滾動 14 日 22 縣市」缺口統計，自適應推導自然語言查詢，並穿透至官方或具名報名單頁完成 03 核證與 04 去重入庫。
+
 ## 2026-10-26｜台灣活動探索排程整併為 Linux systemd 系統排程
 - **排程收斂：** 台灣活動探索自原先分散的 GAS 04:30、外部 06:00 探索與 GAS 07:30 觸發 Cloud Run 入庫，統一整併為目前 VM 的 Linux 系統級排程（`tw-activity-discovery.timer`，Asia/Taipei 每日 04:00，UTC 20:00 喚醒，調用 `agy` 搭載 `Gemini 3.8 Flash (Medium)`）。完全獨立於任何對話視窗。
 - **單一寫入者保護：** 2026-10-26 使用者確認外部舊 06:00 探索排程與 GAS 07:30 定時接收觸發器已正式停用，消除跨排程時間差與 Sheet 競態風險。串行完成 01快照 → 02探索 → 03核證 → 04入池與READY → 04.5 Life入庫與ACK → 05結報。

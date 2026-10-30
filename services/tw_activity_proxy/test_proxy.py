@@ -65,3 +65,25 @@ def test_known_mis_channel_validates_and_does_not_forward_caller_auth():
             response = proxy_request(request)
             assert response.status_code == 200
             assert b'"rtcode":"0000"' in response.data
+
+
+def test_ipv4_only_public_destination_and_safe_error_class():
+    import socket
+    import httpx
+    from services.tw_activity_proxy import main
+    app = Flask(__name__)
+    target = "https://media.taiwan.net.tw/XMLReleaseAll_public/v2.0/Zh_tw/Event-json.zip"
+    with patch.object(main.socket, "getaddrinfo",
+                      return_value=[(socket.AF_INET, 1, 6, "", ("8.8.8.8", 443))]) as lookup, \\
+         patch.object(main.httpx, "Client") as client:
+        client.return_value.__enter__.return_value.stream.side_effect = httpx.ConnectTimeout("sensitive destination details")
+        with app.test_request_context("/", method="POST", json={"url": target}):
+            response, status = proxy_request(request)
+            assert status == 502
+            body = response.get_json()
+            assert body == {"error": "upstream_unavailable", "kind": "ConnectTimeout"}
+            assert "sensitive" not in str(body) and "media.taiwan" not in str(body)
+        assert lookup.call_args.kwargs["family"] == socket.AF_INET
+        assert client.call_args.kwargs["transport"] is not None
+        assert client.call_args.kwargs["verify"] is True
+        assert client.call_args.kwargs["trust_env"] is False

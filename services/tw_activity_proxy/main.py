@@ -136,5 +136,19 @@ def proxy_request(req):
                 failure = "dns"
             else:
                 failure = "connect_other"
+        # A verification code identifies the CA-chain problem without
+        # returning the certificate, URL, credentials or raw exception text.
+        verify_code = None
+        cursor = error
+        seen = set()
+        for _ in range(8):
+            if cursor is None or id(cursor) in seen:
+                break
+            seen.add(id(cursor))
+            if isinstance(cursor, ssl.SSLCertVerificationError):
+                code = cursor.verify_code
+                verify_code = code if isinstance(code, int) and 0 <= code <= 100 else None
+                break
+            cursor = cursor.__cause__ or cursor.__context__
         return jsonify({"error": "upstream_unavailable", "kind": category,
-                        "reason": failure}), 502
+                        "reason": failure, "tls_verify_code": verify_code}), 502

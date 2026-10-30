@@ -36,6 +36,17 @@ class LifeReleaseNote {
 /// Never claim unrelated / unverified candidate fixes are production releases.
 const lifeReleaseNotes = <LifeReleaseNote>[
   LifeReleaseNote(
+    id: 'web-0.6.1-line-native-capture',
+    version: '0.6.1',
+    title: 'LINE 記錄操作更快速',
+    featureKey: 'line',
+    changes: <String>[
+      '確認新增改為唯一醒目的橘色按鈕，必要欄位完整時才顯示。',
+      '新增「重新開始」，清除尚未送出的 LINE 暫存操作，不影響 Life 正式資料。',
+      '待辦、購物、筆記與行程可在 LINE 原生卡片操作，完整內容直接開啟 Life。',
+    ],
+  ),
+  LifeReleaseNote(
     id: 'web-0.6.0-line-life',
     version: '0.6.0',
     title: 'LINE 生活助手',

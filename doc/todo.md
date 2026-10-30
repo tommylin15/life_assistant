@@ -1,3 +1,8 @@
+## 2026-10-30｜Life 官方觀光署來源 TLS：私有代理保護性阻擋｜PARTIAL
+
+- 0% 候選 [#41012831462](https://github.com/tommylin15/life_assistant/actions/runs/41012831462) 確認 Cloud Run 到 `media.taiwan.net.tw` 為 `tls_certificate` 類別；GitHub runner 官方端 TLS [#41012955722](https://github.com/tommylin15/life_assistant/actions/runs/41012955722) PASS。改用系統 CA context 仍保有憑證與 hostname 驗證，[#41013128130](https://github.com/tommylin15/life_assistant/actions/runs/41013128130) Life ZIP 502、MIS PASS，沒有切流。現役 `tw-activity-proxy-00006-dep` 保持安全私有狀態。
+- 下一項：有界比較 TLS 鏈／IP 對照，找可信官方來源或受控 CA 修正；不得 `verify=False`。在 Life VM／來源 ZIP 正向驗收前維持 BLOCKED。規格：[共用台灣出口](shared-taiwan-egress-janus-life.md)。
+
 ## 2026-10-30｜Life／Janus 共用台灣出口安全發布與來源整合｜PARTIAL
 
 - **安全發布已驗證**：沿用台灣既有 `tw-activity-proxy`，不新建 Cloud Run 或額外付費服務；[#41010462296](https://github.com/tommylin15/life_assistant/actions/runs/41010462296) 正式 100% `tw-activity-proxy-00006-dep`、未授權拒絕、私有 IAM、SSRF 拒絕、官方 MIS `rtcode=0000` PASS；Janus API 服務身分已授予 scoped Invoker。

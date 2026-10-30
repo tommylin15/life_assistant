@@ -62,7 +62,7 @@ class _CuratedEventsPageState extends ConsumerState<CuratedEventsPage> {
 
   // Keep the discovery shortcuts in priority order.
   static const explorationChips = {
-    'latest': '最新收錄', 'ongoing': '正在進行',
+    'latest_3d': '最近三日收錄', 'ongoing': '正在進行',
     'weekend': '本週末',
   };
   // Secondary shortcuts live in the "更多" menu without changing API keys.

@@ -171,6 +171,16 @@ REGIONS = {
     "islands": ("澎湖縣", "金門縣", "連江縣"),
 }
 
+MACRO_CATEGORIES = {
+    "需報名": ["需報名", "報名", "限額", "抽籤", "預約"],
+    "親子適合": ["親子", "幼兒", "兒童", "繪本", "說故事", "共學", "家庭"],
+    "地方創生": ["創生", "地方創生", "社造", "農遊", "食農", "小農", "農特產", "市集", "部落", "客庄", "客家", "茶席", "茶博", "漁港"],
+    "藝文展演": ["藝文", "展演", "展覽", "文化", "音樂", "演唱會", "戲劇", "特展", "古蹟", "走讀", "文資", "書寫", "美術館", "陶藝"],
+    "戶外休閒": ["戶外", "健行", "步道", "單車", "生態", "運動", "露營", "水域", "衝浪"],
+    "學習講座": ["講座", "論壇", "研討", "工作坊", "AI", "科技", "科普", "學習", "閱讀", "樂齡", "培力"],
+    "節慶觀光": ["節慶", "觀光", "燈會", "萬聖", "溫泉", "花季", "民俗", "信仰", "廟會"],
+}
+
 def _group_key(model=CuratedActivity):
     parent = func.coalesce(model.parent_event_key, model.handoff_event_key)
     return case(
@@ -241,12 +251,20 @@ def _activity_filters(statement, *, entry, quick, keyword, region, city, distric
     if district:
         statement = statement.where(CuratedActivity.handoff_details["district"].as_string() == district)
     if category:
-        statement = statement.where(CuratedActivity.category == category)
+        if category in MACRO_CATEGORIES:
+            kws = MACRO_CATEGORIES[category]
+            statement = statement.where(or_(*(CuratedActivity.category.ilike(f"%{kw}%") for kw in kws)))
+        else:
+            statement = statement.where(CuratedActivity.category == category)
     if fee_kind:
         statement = statement.where(CuratedActivity.fee_kind == fee_kind)
     if starts_from:
         statement = statement.where(or_(end >= starts_from, and_(end.is_(None), start >= starts_from)))
-    if quick == "latest" or not quick:
+    if quick in ("latest_3d", "latest"):
+        three_days_ago_tpe = (datetime.now(TAIPEI) - timedelta(days=3)).replace(hour=0, minute=0, second=0, microsecond=0)
+        statement = statement.where(CuratedActivity.created_at >= three_days_ago_tpe.astimezone(timezone.utc))
+        return statement
+    if not quick:
         return statement
     if quick in ("opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"):
         if quick == "opening_soon":
@@ -328,9 +346,9 @@ async def list_curated(
     snapshot = as_of or datetime.now(timezone.utc)
     today = datetime.now(TAIPEI).date()
     if quick and quick not in (
-        {"latest", "opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"}
+        {"latest", "latest_3d", "opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"}
         if entry == "opportunities"
-        else {"latest", "ongoing", "weekend", "next_7", "next_30", "free",
+        else {"latest", "latest_3d", "ongoing", "weekend", "next_7", "next_30", "free",
               "opening_soon", "opening_today", "closing_soon", "limited", "unknown_time"}
     ):
         raise HTTPException(422, "Unsupported quick filter")
@@ -391,10 +409,8 @@ async def list_curated(
         group.label("g"), order_day.label("day"),
         func.min(CuratedActivity.created_at).label("created"),
     ).group_by(group).subquery()
-    if quick == "latest":
-        sorting = (grouped.c.created.desc(), grouped.c.g.asc())
-    else:
-        sorting = (grouped.c.day.asc().nulls_last(), grouped.c.g.asc())
+    # 預設排序：全部活動皆以最新上架（created_at 遞減）在最上方
+    sorting = (grouped.c.created.desc(), grouped.c.g.asc())
     selected = (await db.execute(
         select(grouped.c.g, grouped.c.day, grouped.c.created)
         .order_by(*sorting).offset(offset).limit(limit + 1)
@@ -460,9 +476,8 @@ async def curated_filters(
     cities = (await db.scalars(select(CuratedActivity.city).distinct()
         .where(CuratedActivity.city.is_not(None))
         .order_by(CuratedActivity.city))).all()
-    categories = (await db.scalars(select(CuratedActivity.category).distinct()
-        .where(CuratedActivity.category.is_not(None))
-        .order_by(CuratedActivity.category))).all()
+    # 濃縮為使用者角度的大類別（例如：需報名、親子適合、地方創生等）
+    categories = list(MACRO_CATEGORIES.keys())
     response.headers["Cache-Control"] = "no-store"
     return {"cities": cities, "categories": categories}
 

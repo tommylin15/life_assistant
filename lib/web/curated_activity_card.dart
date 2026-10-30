@@ -273,7 +273,7 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
                 if (urgent && activityDisplayDate(registrationDeadline) != null)
                   _EventChip(Icons.event_busy_outlined, '截止：${activityDisplayDate(registrationDeadline)}'),
                 if (!urgent && activityDisplayDate(item['starts_on']) != null)
-                  _EventChip(Icons.event_outlined, '活動：${activityDisplayDate(item['starts_on'])}'),
+                  _EventChip(Icons.event_outlined, '活動：${activityDisplayDate(item['starts_on'])}${activityDisplayDate(item['ends_on']) != null && activityDisplayDate(item['ends_on']) != activityDisplayDate(item['starts_on']) ? ' ～ ${activityDisplayDate(item['ends_on'])}' : ''}'),
                 _EventChip(Icons.place_outlined, item['city']?.toString() ?? '地區待確認'),
                 if (d['verification_status'] == 'pending_review')
                   const _EventChip(Icons.fact_check_outlined, '資訊待確認'),

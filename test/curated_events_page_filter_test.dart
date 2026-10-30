@@ -30,7 +30,7 @@ class _FakeApi extends PlatformApi {
 }
 
 void main() {
-  testWidgets('discovery shortcuts lead with latest and keep three filters in More',
+  testWidgets('discovery shortcuts lead with latest_3d and keep three filters in More',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1200, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -45,9 +45,9 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('最新收錄'), findsOneWidget);
+    expect(find.text('最近三日收錄'), findsOneWidget);
     expect(find.text('正在進行'), findsOneWidget);
-    expect(tester.getTopLeft(find.text('最新收錄')).dx,
+    expect(tester.getTopLeft(find.text('最近三日收錄')).dx,
         lessThan(tester.getTopLeft(find.text('正在進行')).dx));
     expect(find.text('本週末'), findsOneWidget);
     expect(find.text('7 天內開始'), findsNothing);

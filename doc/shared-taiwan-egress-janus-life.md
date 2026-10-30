@@ -1,12 +1,27 @@
 # Life／Janus 共用台灣出口通道
 
-狀態：**共用 Proxy 的私有 IAM、安全發布與 MIS 正向測試 PASS；Life 活動來源整合 PARTIAL（觀光署 ZIP 502 ConnectError）**；Janus API 與 Life VM 的完整端到端須另驗收。Live 收據：[Actions #41010462296](https://github.com/tommylin15/life_assistant/actions/runs/41010462296)。
+**最新狀態（2026-10-30）：Life 觀光署來源經既有台灣 Proxy 的可信 TLS 連線已恢復，Cloud Run 正式流量與雙來源 Live readback PASS。** 現役 `tw-activity-proxy-00011-zip`；安全發布 [#41014398927](https://github.com/tommylin15/life_assistant/actions/runs/41014398927)，獨立正式讀回 [#41014672520](https://github.com/tommylin15/life_assistant/actions/runs/41014672520)。Life VM 排程是否已使用新版 caller 與端到端匯入仍 NOT VERIFIED；下文舊 502／BLOCKED 內容是歷史診斷，均由本節新證據取代。
+
+
+## 2026-10-30｜觀光署可信 TLS 連線修復：CLOSED／LIVE PASS
+
+### 根因與最小修正
+- [TLS 證據 #41014131479](https://github.com/tommylin15/life_assistant/actions/runs/41014131479)：同一官方網站使用 Python 系統 CA 與 Certifi，嚴格 X.509 驗證皆報 `verify_code=86 / Missing Subject Key Identifier`；較寬鬆的一般 OpenSSL verify 可以通過，並非服務端必然沒有可信 CA。
+- [精確相容性驗證 #41014255690](https://github.com/tommylin15/life_assistant/actions/runs/41014255690)：只移除 `ssl.VERIFY_X509_STRICT` 旗標後，Python 握手 PASS；憑證 Subject 為 `media.taiwan.net.tw`、Issuer `TWCA Secure SSL Certification Authority`；`ssl.CERT_REQUIRED` 與 `check_hostname=True` 保持開啟。
+- `services/tw_activity_proxy/main.py` 新增 `_origin_tls_context(host)`：**僅**對精確主機 `media.taiwan.net.tw` 略過這項舊憑證延伸欄位的 RFC 5280 嚴格格式檢查；其餘所有 Life host 和 `mis.twse.com.tw` 不動。CA 鏈、簽章、有效期限、Hostname 與 HTTPS 仍由 OpenSSL 驗證，沒有 `verify=False`、加載未知根憑證或取消 IAM。
+- 測試 `test_only_official_tourism_host_uses_legacy_ski_interoperability` 覆蓋 scope、TLS >= 1.2、CERT_REQUIRED、Hostname。專用 CI [#41014344340](https://github.com/tommylin15/life_assistant/actions/runs/41014344340) PASS。
+
+### 真實驗收
+- [受控發布 #41014398927](https://github.com/tommylin15/life_assistant/actions/runs/41014398927)：0% Candidate 當輪 Life 官方 ZIP `HTTP 200` 且 `zipfile.is_zipfile=true`、MIS `rtcode=0000`、未授權拒絕與 SSRF 負向 PASS，然後才切 100% `tw-activity-proxy-00011-zip`，有既有回復基線。
+- [Live 唯讀驗收 #41014672520](https://github.com/tommylin15/life_assistant/actions/runs/41014672520)：正式服務現役 revision `tw-activity-proxy-00011-zip`、100% traffic、IAM 無公開 Invoker、`TW_PROXY_SECRET` 環境變數不存在、未登入拒絕；官方觀光署 ZIP `HTTP 200`／**503922 bytes**／ZIP 格式 PASS；MIS HTTP 200／rtcode=0000 PASS。
+- **完成範圍**：本項「Life 官方觀光署資料來源經共用 Cloud Run 代理的可信 TLS 連線」可結案。**未包含**：Life VM 現行定時任務的實際部署版本、全來源覆蓋、下載後的 PostgreSQL/Drive 匯入與活動 UI，這些仍各自 NOT VERIFIED。
+- **持續安全條件**：此 compatibility exception 是精確主機的可追蹤例外；官方更新符合 RFC 5280 的憑證鏈時應回到 `VERIFY_X509_STRICT`，不能擴散到其他網域。
 
 ## 已有資產
 
 - 共用既有 `tw-activity-proxy`，GCP `gen-lang-client-0593591102`，`asia-east1`。
 - Janus API 位於 `us-central1`；Life 在既有 VM 透過 `TWRequestRouter` 使用代理。
-- 現有 Cloud Run IAM 唯讀讀回：無公開 `allUsers` Invoker；僅授權 Life VM 服務帳號。這不代表程式層的公開原始碼／舊靜態密鑰已安全。
+- 現有 Cloud Run IAM 唯讀讀回：無公開 `allUsers`／`allAuthenticatedUsers` Invoker；已授權 Life VM 與 Janus API 兩個既有服務身分。舊靜態密鑰曾存在公開 Git 歷史，已於本次服務部署移除且不再使用。
 
 ## 必要安全修復
 

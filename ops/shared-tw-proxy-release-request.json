@@ -7,6 +7,6 @@
   ],
   "traffic_policy": "candidate-smoke-before-promotion",
   "rollback": "last-serving-revision",
-  "attempt": 5,
-  "purpose": "Safe native OS CA SSLContext for official media.taiwan.net.tw cert; test both Life ZIP and Janus MIS in no-traffic candidate, promote only if both pass, preserve prior serving revision."
+  "attempt": 6,
+  "purpose": "Host-scoped TWCA X509 strict Subject Key Identifier compatibility; preserve verified CA and hostname, Life tourism ZIP + MIS on zero-traffic candidate before any promotion."
 }

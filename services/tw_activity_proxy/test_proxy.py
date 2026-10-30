@@ -81,9 +81,27 @@ def test_ipv4_only_public_destination_and_safe_error_class():
             response, status = proxy_request(request)
             assert status == 502
             body = response.get_json()
-            assert body == {"error": "upstream_unavailable", "kind": "ConnectTimeout"}
+            assert body == {"error": "upstream_unavailable", "kind": "ConnectTimeout", "reason": "unknown"}
             assert "sensitive" not in str(body) and "media.taiwan" not in str(body)
         assert lookup.call_args.kwargs["family"] == socket.AF_INET
         assert client.call_args.kwargs["transport"] is not None
         assert client.call_args.kwargs["verify"] is True
         assert client.call_args.kwargs["trust_env"] is False
+
+
+def test_ssl_certificate_error_is_categorized_without_secret_leakage():
+    import socket
+    import httpx
+    from services.tw_activity_proxy import main
+    app = Flask(__name__)
+    with patch.object(main.socket, "getaddrinfo",
+                      return_value=[(socket.AF_INET, 1, 6, "", ("8.8.8.8", 443))]), patch.object(main.httpx, "Client") as client:
+        client.return_value.__enter__.return_value.stream.side_effect = httpx.ConnectError(
+            "[SSL: CERTIFICATE_VERIFY_FAILED] sensitive authorization=secret")
+        with app.test_request_context("/", method="POST", json={
+            "url": "https://media.taiwan.net.tw/XMLReleaseAll_public/v2.0/Zh_tw/Event-json.zip"}):
+            response, status = proxy_request(request)
+            assert status == 502
+            body = response.get_json()
+            assert body["reason"] == "tls_certificate"
+            assert "authorization" not in str(body) and "secret" not in str(body)

@@ -1,7 +1,7 @@
 """Local security contracts; never contact real external sites."""
 from unittest.mock import patch
 
-from flask import Flask
+from flask import Flask, request
 from services.tw_activity_proxy.main import _validate_target, proxy_request
 
 
@@ -16,7 +16,7 @@ def test_rejects_metadata_private_and_arbitrary_domains():
     ]
     for url in urls:
         with app.test_request_context("/", method="POST", json={"url": url}):
-            assert proxy_request(None)[1] == 400
+            assert proxy_request(request)[1] == 400
 
 
 def test_rejects_private_dns_and_redirects():
@@ -62,6 +62,6 @@ def test_known_mis_channel_validates_and_does_not_forward_caller_auth():
             "url": "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_2382.tw&json=1&delay=0",
             "headers": {"Authorization": "some-user-token", "Cookie": "private"},
         }):
-            response = proxy_request(None)
+            response = proxy_request(request)
             assert response.status_code == 200
             assert b'"rtcode":"0000"' in response.data

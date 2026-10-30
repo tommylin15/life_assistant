@@ -71,3 +71,17 @@ jobs:
           assert zipfile.is_zipfile(p), 'Life activity payload is not ZIP'
           print('life_official_activity_proxy=PASS, bytes=',p.stat().st_size)
           PY
+
+      - name: Check the serving proxy still returns official MIS through private identity
+        env:
+          TOKEN: ${{ steps.identity.outputs.id_token }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$TOKEN"
+          url=https://tw-activity-proxy-2oo7qbkd5q-de.a.run.app
+          anonymous="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' -X POST "$url" -H 'Content-Type: application/json' -d '{"url":"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_2382.tw&json=1&delay=0"}')"
+          test "$anonymous" = 401 -o "$anonymous" = 403
+          status="$(curl -sS --max-time 25 -o /tmp/live-mis.json -w '%{http_code}' -X POST "$url" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"url":"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_2382.tw&json=1&delay=0"}')"
+          test "$status" = 200
+          jq -e '.rtcode=="0000" and (.msgArray|type=="array")' /tmp/live-mis.json >/dev/null
+          echo "live_proxy_mis=PASS, no_anonymous_invocation=PASS"

@@ -44,3 +44,11 @@
 - 對 Life 既有 VM 與所有官方網站來源的整合仍 **PARTIAL**。缺值需保留，不得因 MIS 正向成功冒充所有 Life 活動來源成功。
 - IPv4/TLS 設定及分類測試在 [Taiwan proxy safe CI #41012113664](https://github.com/tommylin15/life_assistant/actions/runs/41012113664) PASS；此結果是離線測試，不代表 Live 活動下載可用。
 - 後續排查 TLS 鏈、網站封鎖或 TCP 連線重置原因，尋找具官方授權與 TLS 正常的替代來源，維持少量有界探測，不新增付費資源；只在活動來源 Live 正向驗證 PASS 後切換。
+
+## 2026-10-30 TLS 根因進一步定位與安全停損
+
+- [候選診斷 #41012831462](https://github.com/tommylin15/life_assistant/actions/runs/41012831462) 從 0% 私有候選讀回：觀光署 ZIP `502 upstream_unavailable`、`ConnectError`、`reason=tls_certificate`；MIS 正向與私有 IAM 未受影響。
+- [外部憑證驗證 #41012955722](https://github.com/tommylin15/life_assistant/actions/runs/41012955722)：GitHub runner 上的 OpenSSL `-verify_return_error` 為 PASS；證明從該 runner 的連線可驗證，不等於 Cloud Run 取得相同 TLS 鏈。
+- 進一步把 HTTPX transport 改成 `ssl.create_default_context()`，依 OS 可信 CA 驗證，`CERT_REQUIRED` 與 hostname check 維持開啟；[Taiwan proxy safe CI #41013076822](https://github.com/tommylin15/life_assistant/actions/runs/41013076822) PASS。
+- [嚴格雙來源候選 #41013128130](https://github.com/tommylin15/life_assistant/actions/runs/41013128130) MIS PASS、觀光署 ZIP 仍 HTTP 502／`ConnectError`，**發布 FAIL 且沒有切換 100%**。Life 來源未恢復，現役私有代理維持 `tw-activity-proxy-00006-dep`。
+- 後續應有界比較 **Cloud Run 連到官方來源時所見 TLS 憑證鏈／目的 IP** 與 GitHub runner 可信驗證結果；僅在確認合法官方可驗證 CA 或合規替代入口時才調整。不可開 `verify=False`、跳過 hostname check 或把未知憑證加入 trust root；若無可信修復，該來源維持來源端 BLOCKED，Life 既有已核准快照／直接連線策略另行評估。

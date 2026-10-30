@@ -1,0 +1,35 @@
+name: Official tourism TLS chain diagnostic
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/shared-tw-proxy-upstream-tls-check.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate public official server certificate without downloading data
+        shell: bash
+        run: |
+          set -uo pipefail
+          host=media.taiwan.net.tw
+          set +e
+          output="$(timeout 18 bash -c 'echo | openssl s_client -brief -connect media.taiwan.net.tw:443 -servername media.taiwan.net.tw -verify_return_error 2>&1')"
+          code=$?
+          set -e
+          # Only publish fixed diagnostic classes, no request tokens or response bodies.
+          echo "tls_probe_exit=$code"
+          if [[ "$output" == *"Verification: OK"* || "$output" == *"CONNECTION ESTABLISHED"* && "$output" == *"Verification: OK"* ]]; then
+            echo 'tls_external_verification=PASS'
+          elif [[ "$output" == *"certificate verify failed"* || "$output" == *"verify error"* ]]; then
+            echo 'tls_external_verification=CERTIFICATE_INVALID'
+          elif [[ "$output" == *"Connection refused"* || "$output" == *"connection refused"* ]]; then
+            echo 'tls_external_verification=TCP_REFUSED'
+          elif [[ "$code" == "124" ]]; then
+            echo 'tls_external_verification=TIMEOUT'
+          else
+            echo 'tls_external_verification=UNCLASSIFIED'
+          fi
+          echo "openssl_version=$(openssl version | cut -d' ' -f1-2)"

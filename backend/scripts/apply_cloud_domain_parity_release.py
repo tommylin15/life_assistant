@@ -69,6 +69,9 @@ RELEASE_REVISION_EXIT_CODES = {
     "revision_row_count": EXIT_RELEASE_REVISION_ROW_COUNT,
 }
 RELEASE_REQUIRED_TABLES = {
+    "line_capture_sessions",
+    "line_bindings",
+    "line_events",
     "line_account_links",
     "line_capture_drafts",
     "tasks",

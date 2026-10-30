@@ -66,6 +66,36 @@ jobs:
               except (OSError,TimeoutError) as e:
                   print(name+"_ssl=NETWORK_ERROR class="+type(e).__name__)
           PY
+      - name: Verify X509 strict flag compatibility without disabling trust
+        shell: bash
+        run: |
+          python - <<'PY'
+          import ssl, socket, hashlib
+          host = "media.taiwan.net.tw"
+          context = ssl.create_default_context()
+          strict = getattr(ssl, "VERIFY_X509_STRICT", None)
+          print("python_openssl=", ssl.OPENSSL_VERSION)
+          print("tls_original_flags=", int(context.verify_flags))
+          print("strict_flag_available=", strict is not None)
+          print("strict_flag_set=", bool(strict and (context.verify_flags & strict)))
+          if strict is not None:
+              context.verify_flags &= ~strict
+          print("tls_compatibility_flags=", int(context.verify_flags))
+          print("tls_compatibility_verify_mode=", context.verify_mode == ssl.CERT_REQUIRED)
+          print("tls_compatibility_hostname_check=", context.check_hostname)
+          try:
+              with socket.create_connection((host,443),timeout=12) as sock:
+                  with context.wrap_socket(sock,server_hostname=host) as tls:
+                      cert=tls.getpeercert()
+                      print("tls_compatibility_connection=PASS")
+                      print("tls_compatibility_issuer=",str(cert.get("issuer",()))[:400])
+                      print("tls_compatibility_subject=",str(cert.get("subject",()))[:400])
+                      print("tls_compatibility_peer_sha256=",hashlib.sha256(tls.getpeercert(binary_form=True)).hexdigest())
+          except ssl.SSLCertVerificationError as exc:
+              print("tls_compatibility_connection=VERIFY_FAIL code="+str(exc.verify_code)+" reason="+str(exc.verify_message)[:80])
+          except Exception as exc:
+              print("tls_compatibility_connection=NETWORK_FAIL class="+type(exc).__name__)
+          PY
           # OpenSSL chain records are public certificates; only print issuer/subject
           # and sha256 digest, never dump raw HTTP content.
           echo | timeout 18 openssl s_client -showcerts -connect media.taiwan.net.tw:443 -servername media.taiwan.net.tw 2>/tmp/openssl-summary | awk '/BEGIN CERTIFICATE/{n++} END{print "peer_sent_cert_count=" n+0}'

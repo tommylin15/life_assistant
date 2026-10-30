@@ -129,7 +129,7 @@ def _preview(session, cfg, user, identity, make_token, postback_action, quick_re
                 if inbox.rule_candidates(session.source_text, session.created_at.astimezone(TAIPEI).isoformat()) and
                 len(inbox.rule_candidates(session.source_text, session.created_at.astimezone(TAIPEI).isoformat())["candidates"]) > 1 else "")
         return reply(note + "「" + session.source_text[:100] +
-                      "」\n要新增到哪裡？不會自動儲存。", actions, quick_reply)
+                      "」\n要新增到哪裡？不會自動儲存。", actions)
 
     f = session.fields or {}
     if session.target == "shopping":

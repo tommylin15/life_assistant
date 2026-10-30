@@ -24,7 +24,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_SHA: ${{ github.sha }}
-      PINNED_PARENT: c6d5c42e650123765e59b4d9173fcf30ba30913b
+      PINNED_PARENT: 35abbb886b93a98adf0bb92861adf5bf35fcf6eb
     steps:
       - name: Require unique authorized main child
         shell: bash

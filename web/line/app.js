@@ -30,7 +30,51 @@ async function editNote(id,parent){const n=await api('/api/v1/notes/'+encodeURIC
 async function taskPage(){const s=el('section');el('h2','未完成待辦',s);button('新增待辦',()=>{params.delete('draft');return show('capture');},s);const d=await api('/api/v1/line/search?kind=tasks');for(const t of d.items){const a=el('article',undefined,s);el('h2',t.title,a);el('p',dateLabel(t.date),a);if(t.detail)el('p',t.detail,a);button('標記完成',async()=>{await api('/api/v1/tasks/'+encodeURIComponent(t.id)+'/complete','POST',{});await show('tasks');},a,true);button('編輯',async()=>{const title=field('事項',t.title,a),due=field('截止時間（台北）',localInput(t.date),a,'datetime-local');button('儲存',async()=>{await api('/api/v1/tasks/'+encodeURIComponent(t.id),'PATCH',{title:title.value,due_at:instant(due.value)});await show('tasks');},a,true);},a);}if(!d.items.length)el('p','沒有未完成待辦。',s);if(d.has_more)button('查看更多待辦',()=>{params.set('kind','tasks');return show('search');},s);}
 async function shoppingPage(){const s=el('section');el('h2','購物清單',s);const name=field('新清單名稱','',s);button('建立清單',async()=>{if(!name.value.trim())throw Error('請填清單名稱。');await api('/api/v1/shopping-lists','POST',{name:name.value});await show('shopping');},s);const lists=await api('/api/v1/shopping-lists');for(const list of lists){const a=el('article',undefined,s);el('h2',list.name,a);for(const item of list.items||[]){const label=el('label',undefined,a),check=el('input',undefined,label);check.type='checkbox';check.checked=item.is_done;el('span',item.name,label);check.onchange=()=>run(async()=>{check.disabled=true;try{await api('/api/v1/shopping-items/'+encodeURIComponent(item.id),'PATCH',{is_done:check.checked});}catch(e){check.checked=!check.checked;throw e;}finally{check.disabled=false;}});}const item=field('新增品項','',a);button('新增',async()=>{if(!item.value.trim())throw Error('請填品項。');await api('/api/v1/shopping-lists/'+encodeURIComponent(list.id)+'/items','POST',{name:item.value});await show('shopping');},a);}}
 async function calendarPage(){const s=el('section');el('h2','日曆',s);el('p','以台北時間顯示。授權失效會顯示錯誤，不會當作沒有行程。',s);const from=field('開始日期',day(),s,'date'),to=field('結束日期（不包含當日）',new Date(Date.now()+8*3600000+7*86400000).toISOString().slice(0,10),s,'date');const results=el('div',undefined,s);async function load(){if(!from.value||to.value<=from.value)throw Error('請選擇有效日期範圍。');const d=await api('/api/v1/integrations/google/calendar/events?'+new URLSearchParams({time_min:from.value+'T00:00:00+08:00',time_max:to.value+'T00:00:00+08:00',limit:'100'}));results.replaceChildren();for(const e of d.events){const a=el('article',undefined,results);el('h2',e.summary||'未命名行程',a);el('p',e.start?.dateTime?dateLabel(e.start.dateTime):e.start?.date,a);if(e.htmlLink)safeLink('在 Google 日曆查看／編輯',e.htmlLink,a);}if(!d.events.length)el('p','此範圍沒有行程。',results);if(d.events.length===100)el('p','已顯示前 100 筆，請縮小日期範圍。',results);}button('查看行程',load,s,true);button('新增行程',()=>{params.delete('draft');return show('capture');},s);await load();}
-async function activitiesPage(){const s=el('section');el('h2','活動探索',s);const q=field('活動關鍵字','',s),saved=field('只看已收藏',null,s,'checkbox');const result=el('div',undefined,s);let offset=0,snapshot='';async function load(reset){if(reset){offset=0;snapshot='';result.replaceChildren();}const query=new URLSearchParams({entry:'explore',limit:'10',offset:String(offset),keyword:q.value,saved_only:String(saved.checked)});if(snapshot)query.set('as_of',snapshot);const d=await api('/api/v1/free-events/curated?'+query);snapshot=d.snapshot||snapshot;for(const e of d.items){const a=el('article',undefined,result);el('h2',e.title,a);el('p',[e.starts_on,e.city,e.summary].filter(Boolean).join('\n'),a);el('p','核證狀態：'+(e.verification_status==='verified'?'已核證':'待核對')+'；費用：'+(e.fee_kind||'未知'),a);safeLink('查看活動來源',e.original_url,a);button(e.saved?'取消收藏':'收藏',async()=>{await api('/api/v1/free-events/curated/'+encodeURIComponent(e.identity_key)+'/actions/save','PUT',{active:!e.saved});$('status').textContent=e.saved?'已取消收藏。':'已收藏。';e.saved=!e.saved;},a);}if(!d.items.length&&offset===0)el('p','沒有符合條件的活動。',result);offset+=10;more.hidden=!d.has_more;}button('查詢活動',()=>load(true),s,true);const more=button('更多活動',()=>load(false),s);await load(true);}
+async function activitiesPage(){
+ const s=el('section');el('h2','活動探索 · 依收錄時間',s);
+ el('p','與 Life 活動池同步；「已收錄」顯示全部仍可查看的活動，與個人的「已收藏」不同。排序使用首次收錄時間，不是活動開始日。',s);
+ const q=field('活動關鍵字','',s),filter=el('select',undefined,s),saved=field('只看已收藏',null,s,'checkbox');
+ const choices=[['all','已收錄（全部）'],['latest_3d','最近三天'],...['需報名','親子適合','地方創生','藝文展演','戶外休閒','學習講座','節慶觀光'].map(x=>['cat:'+x,x])];
+ for(const [value,title] of choices){const o=el('option',title,filter);o.value=value;}
+ const result=el('div',undefined,s);let offset=0,snapshot='';
+ async function load(reset){
+  if(reset){offset=0;snapshot='';result.replaceChildren();}
+  const selection=filter.value;
+  const query=new URLSearchParams({entry:'explore',limit:'10',offset:String(offset),
+                                  keyword:q.value,saved_only:String(saved.checked)});
+  if(selection==='latest_3d')query.set('quick','latest_3d');
+  if(selection.startsWith('cat:'))query.set('category',selection.slice(4));
+  if(snapshot)query.set('as_of',snapshot);
+  const d=await api('/api/v1/free-events/curated?'+query);snapshot=d.snapshot||snapshot;
+  for(const e of d.items){
+   const a=el('article',undefined,result);el('h2',e.title,a);
+   el('p',[e.starts_on?'活動日：'+e.starts_on:null,e.city,e.summary].filter(Boolean).join('\n'),a);
+   el('p','收錄：'+dateLabel(e.created_at)+' · '+(e.category||'未分類'),a);
+   el('p','核證：'+(e.verification_status==='verified'?'已核證':'待核對')+' · 費用：'+(e.fee_kind||'未知'),a);
+   safeLink('活動來源',e.original_url,a);
+   button(e.saved?'取消收藏':'收藏',async()=>{
+    const result=await api('/api/v1/free-events/curated/'+encodeURIComponent(e.identity_key)+'/actions/save','PUT',{active:!e.saved});
+    e.saved=Boolean(result.active);$('status').textContent=e.saved?'已收藏。':'已取消收藏。';
+    await load(true);
+   },a);
+  }
+  if(!d.items.length&&offset===0)el('p','此條件下沒有符合的活動。可切換七大類或最近三天。',result);
+  offset+=10;more.hidden=!d.has_more;
+ }
+ button('查看活動',()=>load(true),s,true);
+ const more=button('載入更多收錄活動',()=>load(false),s);more.hidden=true;
+ filter.onchange=()=>run(()=>load(true));saved.onchange=()=>run(()=>load(true));
+ await load(true);
+}
 async function todayPage(){const s=el('section');el('h2','今日總覽',s);el('p',day()+' · 台北時間',s);const tasks=await api('/api/v1/line/search?kind=tasks');const due=tasks.items.filter(t=>t.date&&localInput(t.date).slice(0,10)<=day());el('h2','已到期／今日到期待辦（前 20 筆中）',s);for(const t of due)el('p','• '+t.title+' · '+dateLabel(t.date),s);if(!due.length)el('p','目前查到的待辦沒有今日到期項目。',s);button('全部待辦',()=>show('tasks'),s);el('h2','今日行程',s);try{const tomorrow=new Date(Date.now()+8*3600000+86400000).toISOString().slice(0,10);const d=await api('/api/v1/integrations/google/calendar/events?'+new URLSearchParams({time_min:day()+'T00:00:00+08:00',time_max:tomorrow+'T00:00:00+08:00',limit:'50'}));for(const e of d.events)el('p','• '+(e.summary||'未命名')+' · '+(e.start?.dateTime?dateLabel(e.start.dateTime):'全天'),s);if(!d.events.length)el('p','今日沒有行程。',s);}catch(e){el('p',e.message,s).className='error';}button('查看日曆',()=>show('calendar'),s);button('待確認草稿',()=>{params.delete('draft');return show('capture');},s);}
-async function home(){const s=el('section');el('h2','我的 Life',s);el('p','LINE 可查詢與管理自己的生活資料。帳號連結與 Google 授權請在外部瀏覽器登入 Life 操作。',s);safeLink('開啟完整 Life',config.origin+'/',s);el('p','',s);safeLink('管理 LINE 綁定（外部瀏覽器）',config.origin+'/line/link.html',s);button('登出此頁',async()=>{await api('/auth/logout','POST',{});root.replaceChildren();$('status').textContent='已登出。關閉此頁即可。';},s);}
+async function home(){
+ const s=el('section');el('h2','Life Omni 行動入口',s);
+ el('p','LINE 適合快速查詢與接收卡片，LIFF 用來確認、編輯與完成較複雜的操作。資料與 Life App 共用，不另複製一份。',s);
+ const links=[['Life 今日首頁','/today'],['待辦','/tasks'],['日曆','/calendar'],['生活收件匣／快速新增','/capture'],['筆記','/more/notes'],['購物','/more/shopping'],['活動探索','/more/explore'],['Google 整合與授權','/integrations']];
+ const wrap=el('div',undefined,s);wrap.className='life-links';
+ for(const [name,path] of links)safeLink(name,config.origin+path,wrap);
+ el('p','授權、登入與跨瀏覽器操作以 Life 原站為準；LIFF 不會自行擴大 Google 權限。',s);
+ safeLink('管理 LINE 帳號綁定',config.origin+'/line/link.html',s);
+ button('登出此頁',async()=>{await api('/auth/logout','POST',{});root.replaceChildren();$('status').textContent='已登出。關閉此頁即可。';},s);
+}
 run(async()=>{config=await api('/api/v1/line/config');if(location.origin!==config.origin)throw Error('此頁與 LINE 設定環境不同，請使用正確的 LIFF 連結。');if(!window.liff)throw Error('LINE 元件載入失敗，請重新開啟。');await liff.init({liffId:config.liff_id});if(!liff.isLoggedIn()){liff.login({redirectUri:location.href});return;}const token=liff.getIDToken();if(!token)throw Error('請確認 LIFF 已開啟 openid 權限。');const d=await api('/api/v1/line/session','POST',{id_token:token});$('identity').textContent=d.name?`你好，${d.name}`:'已連結你的 Life';await show(page);}).then(()=>{if(!root.children.length){const s=el('section');el('p','首次使用請先連結既有 Life 帳號。',s);safeLink('開啟綁定頁（請用外部瀏覽器）',(config?.origin||location.origin)+'/line/link.html',s);}});

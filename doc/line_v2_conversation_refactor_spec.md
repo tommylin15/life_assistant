@@ -240,3 +240,10 @@ LIFF 仍走 `Firebase Hosting /line/index.html → FastAPI → PostgreSQL`，完
 - 活動：LINE 預設 `events.latest` 使用 `all_latest`（不再意外限制三天）並以 Life 原 `CuratedActivity.created_at` 分組最早收錄時間倒序；「最近三天」單獨用 Life `latest_3d`，「七大類」共用 Life `MACRO_CATEGORIES` 七個宏分類，「已收錄」顯示所有可見活動，「已收藏」保留個人存檔，不將兩者混稱。現有事件開始日、官方發布日不得取代收錄時間。
 - LIFF：維持需驗證 LINE Login 與 Life 綁定的既有 capture/search/tasks/shopping/calendar/today/activities 流程；強化入口對應最新版 Life 功能 route 與七分類／收錄時間選項，簡單操作在 LINE 完成，複雜作業回 Life，不再用 placeholder 佔滿聊天室。
 - **完成判定**：Source／CI 與 Staging／手機實機分開驗收。新 Source commit 後先確定同 SHA CI PASS，再走 `enable_line=true,promote=false,publish_staging=true` 且固定 Staging `/api/v1/line/config` 200、實際 Rich Menu 操作讀回；Production／Google 授權、跨帳號、重送、收藏與 UI 真機不得未驗先宣稱 PASS。
+
+
+### 2026-10-30 LIFF 與最新版 Life App 一致化
+
+- LIFF 不建立第二套資料系統：繼續沿用已可用的 Life Inbox Interpret／Commit／Receipt、查詢、待辦、購物、日曆、收藏流程；首頁導向最新 Life `ui_policies.FEATURES` 所列 `/today`、`/tasks`、`/calendar`、`/capture`、`/more/notes`、`/more/shopping`、`/more/explore`、`/integrations` 路由。
+- 活動 LIFF 選項增加「已收錄（全部）」「最近三天」「七大類」與個人收藏開關；API 本來就按分組最早 `created_at` 倒序。UI 明確區分收錄時間和活動日期。未新增分類資料或侵入修改正式 Life 排序。
+- LINE 聊天優先簡單操作，LIFF 保留複雜編輯、日期補全、正式新增確認與 Google 授權入口，皆沿用原 Life 的本人權限與執行回執。CI／Staging／真人跨手機及 Google 授權仍須另行驗證。

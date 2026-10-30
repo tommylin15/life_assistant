@@ -33,7 +33,8 @@ SUPPORTED_MENU = frozenset((
 ALLOWED_COMMANDS = frozenset((
     "events.latest", "events.tags", "events.saved", "events.page",
     "events.tag", "events.tags_page", "events.save", "events.recent",
-    "tasks.complete", "shopping.set", "search.kind",
+    "tasks.list", "tasks.complete", "shopping.list", "shopping.set",
+    "search.kind",
 ))
 # The six everyday Rich Menu actions are handled by line_v2_daily.
 # LIFF remains the authenticated editing and confirmation surface.

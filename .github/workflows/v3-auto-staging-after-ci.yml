@@ -133,15 +133,39 @@ jobs:
           echo "dispatch=true" >> "$GITHUB_OUTPUT"
           echo "auto_staging=READY sha=$RELEASE_SHA ci_run=$CI_RUN_ID four_jobs=PASS" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Dispatch staging-only existing V3 release
+      # A previously enabled LINE test environment must not be replaced by
+      # this workflow's default enable_line=false release. No GCP privilege
+      # expansion: inspect the fixed public staging LINE config, fail closed.
+      - name: Checkout exact source for LINE staging protection
         if: ${{ steps.gate.outputs.dispatch == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          persist-credentials: false
+
+      - name: Preserve LINE-enabled staging before auto dispatch
+        id: line_staging
+        if: ${{ steps.gate.outputs.dispatch == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/line_staging_guard.py --github-output "$GITHUB_OUTPUT" |
+            tee -a "$GITHUB_STEP_SUMMARY"
+          if [[ "$(sed -n 's/^protect=//p' "$GITHUB_OUTPUT" | tail -n 1)" == "true" ]]; then
+            echo "auto_staging=SKIP existing_LINE_staging_or_unknown_status" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Dispatch staging-only existing V3 release
+        if: ${{ steps.gate.outputs.dispatch == 'true' && steps.line_staging.outputs.protect == 'false' }}
         shell: bash
         run: |
           set -euo pipefail
           test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
           gh workflow run v3-release-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref main \
             --raw-field promote=false \
-            --raw-field publish_staging=true
+            --raw-field publish_staging=true \
+            --raw-field enable_line=false \
+            --raw-field auto_staging=true
           echo "auto_staging=DISPATCHED sha=$RELEASE_SHA promote=false publish_staging=true" >> "$GITHUB_STEP_SUMMARY"
           echo "The V3 workflow independently checks exact source SHA, Preview, staging live," >> "$GITHUB_STEP_SUMMARY"
           echo "owner Google OAuth evidence and staging-only rollback; CI success is not deployment PASS." >> "$GITHUB_STEP_SUMMARY"

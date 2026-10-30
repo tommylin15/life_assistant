@@ -456,7 +456,7 @@ jobs:
             --task-timeout 10m --wait --quiet
           echo "migration_job=PASS (DB revision independently checked below)" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify Gmail V2 actual PostgreSQL schema readback
+      - name: Verify Gmail V2 and LINE capture PostgreSQL schema readback
         if: ${{ inputs.promote || inputs.publish_staging }}
         shell: bash
         run: |
@@ -466,7 +466,7 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --args=-m,scripts.gmail_v2_db_acceptance \
             --task-timeout 5m --wait --quiet
-          echo "life_db_readback=PASS revision=20261028_0024 (job exit only)" >> "$GITHUB_STEP_SUMMARY"
+          echo "life_db_readback=PASS revision=20261030_0025 gmail_and_line_schema (job exit only)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Flutter for candidate Hosting Preview
         uses: subosito/flutter-action@v2

@@ -218,7 +218,8 @@ jobs:
             .github/scripts/v3_revision_retention.py \
             .github/scripts/v3_gcp_inventory.py \
             .github/scripts/v3_free_event_retirement_readback.py \
-            .github/scripts/v3_staging_gate.py
+            .github/scripts/v3_staging_gate.py \
+            scripts/line_staging_guard.py
 
       - uses: ./.github/actions/setup-playwright
 
@@ -239,6 +240,7 @@ jobs:
             tests/test_v3_revision_retention.py \
             tests/test_life_cloud_run_retirement.py \
             tests/test_v3_staging_gate.py \
+            tests/test_line_staging_guard.py \
             tests/test_v3_workflow_consolidation.py \
             tests/test_v3_auto_production_hosting_workflow.py \
             tests/test_v3_release_no_oauth_gate.py \

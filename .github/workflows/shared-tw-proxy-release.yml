@@ -1,0 +1,109 @@
+name: Secure Life-Janus Taiwan proxy release
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/shared-tw-proxy-release-request.json'
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: shared-tw-proxy-release
+  cancel-in-progress: false
+
+jobs:
+  secure-release:
+    runs-on: ubuntu-latest
+    environment: dev-test
+    timeout-minutes: 25
+    env:
+      PROJECT: gen-lang-client-0593591102
+      REGION: asia-east1
+      SERVICE: tw-activity-proxy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test proxy and existing Life client
+        run: |
+          python -m pip install -r services/tw_activity_proxy/requirements.txt pytest requests
+          PYTHONPATH=backend python -m pytest -q services/tw_activity_proxy/test_proxy.py backend/tests/test_tw_request_router.py
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - id: preflight
+        name: Verify existing private service and capture rollback revision
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format=json >/tmp/service-before.json
+          old="$(jq -r '[.status.traffic[]?|select((.percent//0)>0)]|if length==1 and .[0].percent==100 then .[0].revisionName else empty end' /tmp/service-before.json)"
+          test -n "$old"
+          echo "revision=$old" >> "$GITHUB_OUTPUT"
+          gcloud run services get-iam-policy "$SERVICE" --project="$PROJECT" --region="$REGION" --format=json >/tmp/iam-before.json
+          jq -e '[.bindings[]?|select(.role=="roles/run.invoker")|.members[]?|select(.=="allUsers" or .=="allAuthenticatedUsers")]|length==0' /tmp/iam-before.json
+      - name: Grant least-privilege caller access
+        run: |
+          set -Eeuo pipefail
+          for principal in janus-user-api postgres-vm; do
+            gcloud run services add-iam-policy-binding "$SERVICE" --project="$PROJECT" --region="$REGION" --role=roles/run.invoker --member="serviceAccount:${principal}@${PROJECT}.iam.gserviceaccount.com" --quiet >/dev/null
+          done
+          gcloud run services add-iam-policy-binding "$SERVICE" --project="$PROJECT" --region="$REGION" --role=roles/run.invoker --member="serviceAccount:${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}" --quiet >/dev/null
+      - id: candidate
+        name: Deploy no-traffic candidate, remove obsolete credential
+        run: |
+          set -Eeuo pipefail
+          tag="shared-tw-$(echo "$GITHUB_SHA" | cut -c1-10)"
+          gcloud run deploy "$SERVICE" --project="$PROJECT" --region="$REGION" \
+            --source=services/tw_activity_proxy --no-traffic --tag="$tag" \
+            --no-allow-unauthenticated --remove-env-vars=TW_PROXY_SECRET \
+            --timeout=30s --memory=512Mi --min-instances=0 --max-instances=5 --quiet >/dev/null
+          gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format=json >/tmp/service-candidate.json
+          jq -e --arg old "${{ steps.preflight.outputs.revision }}" '[.status.traffic[]?|select((.percent//0)>0)]|length==1 and .[0].revisionName==$old and .[0].percent==100' /tmp/service-candidate.json
+          url="$(jq -r --arg tag "$tag" '[.status.traffic[]?|select(.tag==$tag)|.url]|first//empty' /tmp/service-candidate.json)"
+          revision="$(jq -r --arg tag "$tag" '[.status.traffic[]?|select(.tag==$tag)|.revisionName]|first//empty' /tmp/service-candidate.json)"
+          test -n "$url" && test -n "$revision"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - id: smoke-identity
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://tw-activity-proxy-2oo7qbkd5q-de.a.run.app
+      - name: Verify private caller, SSRF rejection and actual MIS source
+        env:
+          TOKEN: ${{ steps.smoke-identity.outputs.id_token }}
+          URL: ${{ steps.candidate.outputs.url }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$TOKEN"
+          bad="$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$URL" -H 'Content-Type: application/json' -d '{"url":"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_2382.tw&json=1&delay=0"}')"
+          test "$bad" = 401 -o "$bad" = 403
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$URL" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"url":"http://169.254.169.254/latest/meta-data/"}')"
+          test "$code" = 400
+          status="$(curl -sS -o /tmp/mis.json -w '%{http_code}' -X POST "$URL" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"url":"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_2382.tw&json=1&delay=0"}')"
+          test "$status" = 200
+          jq -e '.rtcode=="0000" and (.msgArray|type=="array")' /tmp/mis.json >/dev/null
+          echo "private_boundary=PASS, SSRF_rejection=PASS, MIS_response=PASS"
+      - name: Promote tested candidate with rollback
+        run: |
+          set -Eeuo pipefail
+          old="${{ steps.preflight.outputs.revision }}"
+          new="${{ steps.candidate.outputs.revision }}"
+          rollback() { gcloud run services update-traffic "$SERVICE" --project="$PROJECT" --region="$REGION" --to-revisions="$old=100" --quiet; }
+          trap rollback ERR
+          gcloud run services update-traffic "$SERVICE" --project="$PROJECT" --region="$REGION" --to-revisions="$new=100" --quiet
+          gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format=json >/tmp/service-after.json
+          jq -e --arg rev "$new" '[.status.traffic[]?|select((.percent//0)>0)]|length==1 and .[0].revisionName==$rev and .[0].percent==100' /tmp/service-after.json
+          gcloud run services get-iam-policy "$SERVICE" --project="$PROJECT" --region="$REGION" --format=json >/tmp/iam-after.json
+          jq -e '[.bindings[]?|select(.role=="roles/run.invoker")|.members[]?|select(.=="allUsers" or .=="allAuthenticatedUsers")]|length==0' /tmp/iam-after.json
+          trap - ERR
+          echo "shared_proxy_release=PASS revision=$new"

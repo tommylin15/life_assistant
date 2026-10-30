@@ -1,5 +1,14 @@
 ## 2026-10-30｜LINE 統一四卡：智慧即時記錄／Life 深連結／整合測試／正式發布（ACTIVE）
 
+## 2026-10-30｜LINE V2 單一確認／重新開始／同版 Staging→Production（ACTIVE）
+
+- **本輪 Owner 決策：** 已回報前版 LINE 手機真人驗收 PASS；智慧快速記錄只顯示一顆橘色「確認新增」，放在 Flex 卡片第一個操作位，不再於 Quick Reply 重複；欄位未符合 Life 寫入契約時不顯示。購物需有本人清單及品項，待辦需有效標題（日期可選），筆記需內容，行程需標題與有效開始/結束時間，未知時不猜時間。
+- **新增重新開始：** 在原生記錄卡片及補欄位操作提供「重新開始」，一鍵失效同一 LINE 身分／namespace／Life owner 的所有 `pending` 暫存並清除草稿欄位；`submitting/unknown/confirmed` 與正式 Life 資料不變。LINE 官方帳號無法代替使用者刪除手機聊天室歷史；不能把此功能描述為刪除 LINE 訊息。
+- **程式與測試：** `backend/app/services/line_capture.py`、`line_v2.py`、`backend/tests/test_line_capture.py`；仍以 `inbox.commit` 的權限檢查、合法資料及 action-id 防重為最終寫入權威。注意確認卡片 UI 只顯示一次，過期卡片不能新增。新測試需覆蓋重複確認、各分類條件、清除其他 pending、不碰 unknown、跨帳號隔離。
+- **正式發佈意圖：** Owner 明確要求同輪 Staging 通過後接續 Production。使用一次性、固定 parent main + 五項同版 CI 的 `life-line-v2-staging-once-20261030.yml` 發布 `enable_line=true,promote=false,publish_staging=true`；僅成功 V3 Staging 與該 SHA 唯一的 `line-stage-$SHA` artifact，可由 `life-line-v2-production-once-20261030.yml` 觸發原始 V3 Release，`enable_line=true,promote=true,publish_staging=true`。該 Production workflow 必須自行核驗 stage、OAuth、traffic、Hosting、readback，任一 FAIL 不得稱為 DONE。
+- **驗收狀態：** 本輪最新 SHA CI、Staging、Production、手機操作仍依實際收據回報 PASS／FAIL／NOT VERIFIED；不得把先前 Staging/手機的 PASS 當成本輪新版的 Production PASS。不重套八格 Rich Menu，不刪正式資料。
+
+
 - **Owner 最新決策：** 四張工程卡一次完成、集中驗收；普通 LINE 聊天內輸入短語（如「牛奶」）選擇購物／待辦／行程／筆記，補選本人清單、標題、日期與分類；明確確認後才寫入 Life。所有「完整／更多」直接連向同一環境 Flutter Life 路由，不再經過 LIFF。保留 LIFF 綁定與必要 legacy fallback，不強制刪除資料。
 - **Source 實作：** 新增 `line_capture_sessions` 及 additive migration `20261030_0025`（暫存 TTL 24 小時，僅本人/namespace 可用）；`line_capture.py` 使用 Life 既有 `rule_candidates` 提示、signed postback、LINE datetimepicker、真購物清單、編輯／取消、`inbox.commit` action_id 收據和 UNKNOWN 防重，不在 Webhook 做無界 AI 呼叫。既有 LINE Event 與 LIFF 功能保留，UI「查看完整」改為 Life Hosting 直接頁面。
 - **CI／驗收：** `backend/tests/test_line_capture.py`、`backend/tests/test_line_v2_daily.py`、舊 LINE 回歸及 Postgres migration head 測試；以最新 SHA 五項 CI PASS 才能執行新候選。真 LINE／Google／iOS Android／Life 資料讀回尚需 LINE-enabled Staging + Production 自動驗收及 Owner 手機整合驗收。**目前不是 DONE**。

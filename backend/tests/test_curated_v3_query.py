@@ -144,6 +144,28 @@ class CuratedV3UnitTest(unittest.TestCase):
         chosen = ActionWrite(active=True, task_due_choice="deadline")
         self.assertEqual(_task_due(item, chosen), item.registration_deadline)
 
+    def test_macro_category_filter_checks_tags_and_keywords(self):
+        stmt = _activity_filters(
+            select(CuratedActivity), entry="explore", quick=None,
+            keyword=None, region=None, city=None, district=None,
+            category="地方創生", fee_kind=None, starts_from=None,
+            today=date(2026, 10, 11), saved_only=False, user_sub="owner",
+        )
+        sql = str(stmt.whereclause.compile(dialect=postgresql.dialect()))
+        self.assertIn("handoff_details", sql)
+        self.assertIn("category", sql)
+        self.assertIn("ILIKE", sql.upper())
+
+    def test_latest_3d_quick_filter(self):
+        stmt = _activity_filters(
+            select(CuratedActivity), entry="explore", quick="latest_3d",
+            keyword=None, region=None, city=None, district=None,
+            category=None, fee_kind=None, starts_from=None,
+            today=date(2026, 10, 11), saved_only=False, user_sub="owner",
+        )
+        sql = str(stmt.whereclause.compile(dialect=postgresql.dialect()))
+        self.assertIn("created_at >=", sql)
+
 
 if __name__ == "__main__":
     unittest.main()

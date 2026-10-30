@@ -179,4 +179,27 @@ void main() {
     expect(api.calls, hasLength(2));
     expect(api.calls.last['active'], false);
   });
+
+  testWidgets('card displays category tags as chips and in details', (tester) async {
+    final api = _Api();
+    await tester.pumpWidget(ProviderScope(overrides: [
+      platformApiProvider.overrideWithValue(api),
+      sessionIdentityProvider.overrideWithValue('sample@tests.local'),
+    ], child: const MaterialApp(home: Scaffold(body: SingleChildScrollView(
+      child: CuratedActivityCard(items: [
+        {'identity_key': 'tag-test', 'title': '創生農遊體驗',
+         'starts_on': '2026-10-25', 'ends_on': '2026-11-15',
+         'tags': ['需報名', '地方創生'],
+         'handoff_details': {'tags': ['需報名', '地方創生']},
+         'original_url': 'https://example.org/farm'},
+      ]),
+    )))));
+    await tester.pumpAndSettle();
+    expect(find.text('需報名'), findsOneWidget);
+    expect(find.text('地方創生'), findsOneWidget);
+    expect(find.text('活動：2026/10/25 ～ 2026/11/15'), findsOneWidget);
+    await tester.tap(find.text('查看詳情與操作'));
+    await tester.pumpAndSettle();
+    expect(find.text('分類標籤：需報名、地方創生'), findsOneWidget);
+  });
 }

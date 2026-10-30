@@ -14,7 +14,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import case, func, select, or_
+from sqlalchemy import case, func, select, or_, cast, String
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -253,9 +253,15 @@ def _activity_filters(statement, *, entry, quick, keyword, region, city, distric
     if category:
         if category in MACRO_CATEGORIES:
             kws = MACRO_CATEGORIES[category]
-            statement = statement.where(or_(*(CuratedActivity.category.ilike(f"%{kw}%") for kw in kws)))
+            statement = statement.where(or_(
+                cast(CuratedActivity.handoff_details, String).ilike(f'%"{category}"%'),
+                *(CuratedActivity.category.ilike(f"%{kw}%") for kw in kws)
+            ))
         else:
-            statement = statement.where(CuratedActivity.category == category)
+            statement = statement.where(or_(
+                cast(CuratedActivity.handoff_details, String).ilike(f'%"{category}"%'),
+                CuratedActivity.category == category
+            ))
     if fee_kind:
         statement = statement.where(CuratedActivity.fee_kind == fee_kind)
     if starts_from:
@@ -448,6 +454,7 @@ async def list_curated(
                 "registration_deadline", "created_at", "updated_at",
                 "handoff_event_key", "parent_event_key", "handoff_details",
             )},
+            "tags": (row.handoff_details or {}).get("tags", []),
             "verification_status": (row.handoff_details or {}).get(
                 "verification_status", "unknown"),
             "saved": ((_group_key_value(row)) in saved_page),

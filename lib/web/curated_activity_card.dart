@@ -244,6 +244,8 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
         registrationDeadline.length >= 10 &&
         DateTime.tryParse(registrationDeadline.substring(0, 10)) != null &&
         registrationDeadline.substring(0, 10).compareTo(today) < 0;
+    final rawTags = item['tags'] as List? ?? (d['tags'] as List? ?? []);
+    final tags = rawTags.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList();
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -275,6 +277,8 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
                 if (!urgent && activityDisplayDate(item['starts_on']) != null)
                   _EventChip(Icons.event_outlined, '活動：${activityDisplayDate(item['starts_on'])}${activityDisplayDate(item['ends_on']) != null && activityDisplayDate(item['ends_on']) != activityDisplayDate(item['starts_on']) ? ' ～ ${activityDisplayDate(item['ends_on'])}' : ''}'),
                 _EventChip(Icons.place_outlined, item['city']?.toString() ?? '地區待確認'),
+                for (final tag in tags)
+                  _TagChip(tag),
                 if (d['verification_status'] == 'pending_review')
                   const _EventChip(Icons.fact_check_outlined, '資訊待確認'),
                 if (d['verification_status'] == 'verified')
@@ -408,7 +412,35 @@ class _CuratedActivityCardState extends ConsumerState<CuratedActivityCard> {
     rows.add('費用：$fee');
     final eligibility = activityPublicEligibility(d['eligibility_limit']);
     if (eligibility != null) rows.add('報名條件：$eligibility');
+    final rawTags = item['tags'] as List? ?? (d['tags'] as List? ?? []);
+    final tags = rawTags.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList();
+    if (tags.isNotEmpty) rows.add('分類標籤：${tags.join("、")}');
     return rows;
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  const _TagChip(this.label);
+  final String label;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: .5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.label_outline, size: 13, color: theme.colorScheme.onPrimaryContainer),
+        const SizedBox(width: 4),
+        Text(label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onPrimaryContainer,
+            fontWeight: FontWeight.w600,
+          )),
+      ]),
+    );
   }
 }
 

@@ -33,3 +33,39 @@ jobs:
             echo 'tls_external_verification=UNCLASSIFIED'
           fi
           echo "openssl_version=$(openssl version | cut -d' ' -f1-2)"
+
+      - name: Compare public server chain with Python trust stores
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python -m pip install -q httpx certifi
+          python - <<'PY'
+          import hashlib, socket, ssl
+          from urllib.parse import urlsplit
+          import certifi, httpx
+          host="media.taiwan.net.tw"
+          url="https://media.taiwan.net.tw/XMLReleaseAll_public/v2.0/Zh_tw/Event-json.zip"
+          print("runner_ssl_default_paths=",ssl.get_default_verify_paths())
+          print("runner_certifi_bundle_sha256=",hashlib.sha256(open(certifi.where(),"rb").read()).hexdigest()[:16])
+          print("runner_ipv4_public_count=",len(socket.getaddrinfo(host,443,family=socket.AF_INET,type=socket.SOCK_STREAM)))
+          for name,context in [
+              ("system", ssl.create_default_context()),
+              ("certifi", ssl.create_default_context(cafile=certifi.where())),
+          ]:
+              try:
+                  with socket.create_connection((host,443),timeout=10) as sock:
+                      with context.wrap_socket(sock,server_hostname=host) as tls:
+                          cert=tls.getpeercert()
+                          print(name+"_ssl=PASS")
+                          print(name+"_tls_version="+tls.version())
+                          print(name+"_issuer="+str(cert.get("issuer",()))[:400])
+                          print(name+"_subject="+str(cert.get("subject",()))[:400])
+                          print(name+"_peer_sha256="+hashlib.sha256(tls.getpeercert(binary_form=True)).hexdigest())
+              except ssl.SSLCertVerificationError as e:
+                  print(name+"_ssl=VERIFY_FAILED code="+str(e.verify_code)+" reason="+str(e.verify_message)[:80])
+              except (OSError,TimeoutError) as e:
+                  print(name+"_ssl=NETWORK_ERROR class="+type(e).__name__)
+          PY
+          # OpenSSL chain records are public certificates; only print issuer/subject
+          # and sha256 digest, never dump raw HTTP content.
+          echo | timeout 18 openssl s_client -showcerts -connect media.taiwan.net.tw:443 -servername media.taiwan.net.tw 2>/tmp/openssl-summary | awk '/BEGIN CERTIFICATE/{n++} END{print "peer_sent_cert_count=" n+0}'

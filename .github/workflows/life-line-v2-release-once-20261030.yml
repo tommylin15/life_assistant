@@ -1,0 +1,195 @@
+# Single-use, exact-child owner-approved LINE V2 staged production release.
+# Never auto-promote unrelated pushes; all GCP writes remain inside existing V3.
+name: Life LINE V2 Exact-SHA One-Time Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/life-line-v2-release-once-20261030.yml"
+
+permissions:
+  contents: read
+  checks: read
+  actions: write
+
+concurrency:
+  group: life-line-v2-exact-sha-stage-then-prod-once
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ github.sha }}
+      PINNED_PARENT: 4e29a93dc03fbaae787dc1a26732b179aee5a673
+    steps:
+      - name: Require unique authorized main child
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
+          COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA?per_page=100")"
+          if ! jq -e --arg parent "$PINNED_PARENT" '
+            (.parents | length)==1 and .parents[0].sha==$parent and
+            ([.files[].filename] | sort) ==
+              ([".github/workflows/life-line-v2-release-once-20261030.yml"] | sort)
+          ' <<< "$COMMIT" >/dev/null; then
+            echo "::error::not_exact_one_time_child"
+            exit 1
+          fi
+          echo "line_release_auth=PASS exact_sha=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for five real same-SHA CI checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=false
+          for attempt in $(seq 1 120); do
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
+            CHECKS="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/check-runs?per_page=100")"
+            COUNT="$(jq '
+              [.check_runs[] | select(.name=="backend" or .name=="flutter" or
+                 .name=="deployment-scripts" or .name=="free-events-postgres" or
+                 .name=="gmail-onnx-image") | select(.conclusion=="success") | .name] |
+              unique | length' <<< "$CHECKS")"
+            CI="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=main&event=push&per_page=100")"
+            if [[ "$COUNT" == 5 ]] && jq -e --arg sha "$RELEASE_SHA" '
+              any(.workflow_runs[];
+                .name=="CI" and .head_sha==$sha and
+                .status=="completed" and .conclusion=="success")
+            ' <<< "$CI" >/dev/null; then
+              ready=true
+              break
+            fi
+            if jq -e --arg sha "$RELEASE_SHA" '
+              any(.workflow_runs[];
+                .name=="CI" and .head_sha==$sha and
+                .status=="completed" and .conclusion=="failure")
+            ' <<< "$CI" >/dev/null; then
+              echo "::error::Same-SHA CI failed; do not release"
+              exit 1
+            fi
+            sleep 10
+          done
+          test "$ready" = true
+          echo "five_ci=PASS sha=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dispatch single V3 LINE-enabled Staging release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
+          RELEASES="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
+          if jq -e --arg sha "$RELEASE_SHA" '
+            any(.workflow_runs[]; .head_sha==$sha)' <<< "$RELEASES" >/dev/null; then
+            echo "::error::V3 already dispatched for this SHA"
+            exit 1
+          fi
+          gh workflow run v3-release-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            --raw-field promote=false --raw-field publish_staging=true \
+            --raw-field enable_line=true --raw-field auto_staging=false \
+            --raw-field enable_gmail_onnx=false
+          echo "staging_dispatch=PASS sha=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require V3 Staging SUCCESS and pinned LINE bundle proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          success=false
+          stage_id=""
+          for attempt in $(seq 1 150); do
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
+            RELEASES="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
+            MATCH="$(jq -c --arg sha "$RELEASE_SHA" '
+              [.workflow_runs[] | select(.head_sha==$sha)] | sort_by(.created_at) | last // {}' <<< "$RELEASES")"
+            run_id="$(jq -r '.id // empty' <<< "$MATCH")"
+            status="$(jq -r '.status // empty' <<< "$MATCH")"
+            conclusion="$(jq -r '.conclusion // empty' <<< "$MATCH")"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then
+              if [[ "$conclusion" != "success" ]]; then
+                echo "::error::Staging V3 run $run_id conclusion=$conclusion"
+                exit 1
+              fi
+              stage_id="$run_id"
+              ARTIFACTS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$stage_id/artifacts?per_page=100")"
+              jq -e --arg name "line-stage-$RELEASE_SHA" '
+                [.artifacts[] | select(.name==$name and .expired==false)] | length==1
+              ' <<< "$ARTIFACTS" >/dev/null
+              success=true
+              break
+            fi
+            sleep 12
+          done
+          test "$success" = true
+          echo "STAGE_RUN_ID=$stage_id" >> "$GITHUB_ENV"
+          echo "staging_proof=PASS run=$stage_id sha=$RELEASE_SHA bundle=line-stage-$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dispatch original V3 guarded Production promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
+          RELEASES="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
+          jq -e --arg sha "$RELEASE_SHA" --argjson stage "$STAGE_RUN_ID" '
+            [.workflow_runs[] | select(.head_sha==$sha)] |
+              length==1 and .[0].id==$stage
+          ' <<< "$RELEASES" >/dev/null
+          gh workflow run v3-release-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            --raw-field promote=true --raw-field publish_staging=true \
+            --raw-field enable_line=true --raw-field auto_staging=false \
+            --raw-field enable_gmail_onnx=false
+          echo "production_dispatch=PASS same_sha=$RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require V3 Production SUCCESS and actual live version readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          success=false
+          prod_id=""
+          for attempt in $(seq 1 180); do
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
+            RELEASES="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
+            PROD="$(jq -c --arg sha "$RELEASE_SHA" --argjson stage "$STAGE_RUN_ID" '
+              [.workflow_runs[] | select(.head_sha==$sha and .id!=$stage)] |
+              sort_by(.created_at) | last // {}' <<< "$RELEASES")"
+            prod_id="$(jq -r '.id // empty' <<< "$PROD")"
+            status="$(jq -r '.status // empty' <<< "$PROD")"
+            conclusion="$(jq -r '.conclusion // empty' <<< "$PROD")"
+            if [[ -n "$prod_id" && "$status" == "completed" ]]; then
+              if [[ "$conclusion" != "success" ]]; then
+                echo "::error::Production V3 run $prod_id conclusion=$conclusion"
+                exit 1
+              fi
+              success=true
+              break
+            fi
+            sleep 12
+          done
+          test "$success" = true
+          echo "production_v3=PASS run=$prod_id" >> "$GITHUB_STEP_SUMMARY"
+
+          # Production Hosting may publish separately from Cloud Run promotion.
+          # Never equate a successful dispatch with a finished end-user release.
+          public_ok=false
+          for attempt in $(seq 1 60); do
+            got="$(curl --fail --silent --show-error --max-time 15 \
+              -H "Cache-Control: no-cache" \
+              "https://gen-lang-client-0593591102.web.app/release.txt?linev2=$RELEASE_SHA" 2>/dev/null | tr -d '\r\n')" || got=""
+            config="$(curl --fail --silent --show-error --max-time 15 \
+              -H "Cache-Control: no-cache" \
+              "https://gen-lang-client-0593591102.web.app/api/v1/line/config" 2>/dev/null)" || config=""
+            if [[ "$got" == "$RELEASE_SHA" ]] && jq -e '
+              .origin=="https://gen-lang-client-0593591102.web.app"
+              and (.liff_id|type=="string" and length>0)
+            ' <<< "$config" >/dev/null 2>&1; then
+              public_ok=true
+              break
+            fi
+            sleep 10
+          done
+          test "$public_ok" = true
+          echo "production_live=PASS sha=$RELEASE_SHA hosting=PINNED line_config=VALID v3_run=$prod_id" >> "$GITHUB_STEP_SUMMARY"

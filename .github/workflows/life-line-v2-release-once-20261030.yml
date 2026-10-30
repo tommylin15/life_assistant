@@ -24,7 +24,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_SHA: ${{ github.sha }}
-      PINNED_PARENT: 4e29a93dc03fbaae787dc1a26732b179aee5a673
+      PINNED_PARENT: c6d5c42e650123765e59b4d9173fcf30ba30913b
     steps:
       - name: Require unique authorized main child
         shell: bash
@@ -56,20 +56,21 @@ jobs:
                  .name=="deployment-scripts" or .name=="free-events-postgres" or
                  .name=="gmail-onnx-image") | select(.conclusion=="success") | .name] |
               unique | length' <<< "$CHECKS")"
-            CI="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=main&event=push&per_page=100")"
-            if [[ "$COUNT" == 5 ]] && jq -e --arg sha "$RELEASE_SHA" '
-              any(.workflow_runs[];
-                .name=="CI" and .head_sha==$sha and
-                .status=="completed" and .conclusion=="success")
-            ' <<< "$CI" >/dev/null; then
+            if [[ "$COUNT" == 5 ]] && gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=20" |
+              jq -e --arg sha "$RELEASE_SHA" '
+                any(.workflow_runs[];
+                  .head_sha==$sha and .status=="completed" and
+                  .conclusion=="success")
+              ' >/dev/null; then
               ready=true
               break
             fi
-            if jq -e --arg sha "$RELEASE_SHA" '
-              any(.workflow_runs[];
-                .name=="CI" and .head_sha==$sha and
-                .status=="completed" and .conclusion=="failure")
-            ' <<< "$CI" >/dev/null; then
+            if gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=20" |
+              jq -e --arg sha "$RELEASE_SHA" '
+                any(.workflow_runs[];
+                  .head_sha==$sha and .status=="completed" and
+                  .conclusion=="failure")
+              ' >/dev/null; then
               echo "::error::Same-SHA CI failed; do not release"
               exit 1
             fi
@@ -83,9 +84,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
-          RELEASES="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
-          if jq -e --arg sha "$RELEASE_SHA" '
-            any(.workflow_runs[]; .head_sha==$sha)' <<< "$RELEASES" >/dev/null; then
+          if gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=40" |
+            jq -e --arg sha "$RELEASE_SHA" '
+              any(.workflow_runs[]; .head_sha==$sha)' >/dev/null; then
             echo "::error::V3 already dispatched for this SHA"
             exit 1
           fi
@@ -103,9 +104,9 @@ jobs:
           stage_id=""
           for attempt in $(seq 1 150); do
             test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
-            RELEASES="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
-            MATCH="$(jq -c --arg sha "$RELEASE_SHA" '
-              [.workflow_runs[] | select(.head_sha==$sha)] | sort_by(.created_at) | last // {}' <<< "$RELEASES")"
+            MATCH="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=40" |
+              jq -c --arg sha "$RELEASE_SHA" '
+                [.workflow_runs[] | select(.head_sha==$sha)] | sort_by(.created_at) | last // {}')" 
             run_id="$(jq -r '.id // empty' <<< "$MATCH")"
             status="$(jq -r '.status // empty' <<< "$MATCH")"
             conclusion="$(jq -r '.conclusion // empty' <<< "$MATCH")"
@@ -133,11 +134,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
-          RELEASES="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
-          jq -e --arg sha "$RELEASE_SHA" --argjson stage "$STAGE_RUN_ID" '
-            [.workflow_runs[] | select(.head_sha==$sha)] |
-              length==1 and .[0].id==$stage
-          ' <<< "$RELEASES" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=40" |
+            jq -e --arg sha "$RELEASE_SHA" --argjson stage "$STAGE_RUN_ID" '
+              [.workflow_runs[] | select(.head_sha==$sha)] |
+                length==1 and .[0].id==$stage
+            ' >/dev/null
           gh workflow run v3-release-ghcr.yml --repo "$GITHUB_REPOSITORY" --ref main \
             --raw-field promote=true --raw-field publish_staging=true \
             --raw-field enable_line=true --raw-field auto_staging=false \
@@ -152,10 +153,10 @@ jobs:
           prod_id=""
           for attempt in $(seq 1 180); do
             test "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" = "$RELEASE_SHA"
-            RELEASES="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=100")"
-            PROD="$(jq -c --arg sha "$RELEASE_SHA" --argjson stage "$STAGE_RUN_ID" '
-              [.workflow_runs[] | select(.head_sha==$sha and .id!=$stage)] |
-              sort_by(.created_at) | last // {}' <<< "$RELEASES")"
+            PROD="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v3-release-ghcr.yml/runs?branch=main&event=workflow_dispatch&per_page=40" |
+              jq -c --arg sha "$RELEASE_SHA" --argjson stage "$STAGE_RUN_ID" '
+                [.workflow_runs[] | select(.head_sha==$sha and .id!=$stage)] |
+                sort_by(.created_at) | last // {}')" 
             prod_id="$(jq -r '.id // empty' <<< "$PROD")"
             status="$(jq -r '.status // empty' <<< "$PROD")"
             conclusion="$(jq -r '.conclusion // empty' <<< "$PROD")"

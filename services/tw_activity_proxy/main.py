@@ -1,111 +1,116 @@
+"""Bounded private Taiwan egress for the existing Life and Janus callers.
+
+Cloud Run Invoker IAM is the authentication boundary. Do not expose this
+service publicly or rely on a caller-provided shared header as authentication.
+"""
+import ipaddress
+import json
 import os
+import re
 import socket
+from urllib.parse import parse_qs, urlsplit
+
 import functions_framework
 import httpx
-from flask import Response, jsonify, request
+from flask import Response, jsonify
 
-# Prefer IPv4 over IPv6 to prevent hanging on broken IPv6 routes common in TW government servers
-orig_getaddrinfo = socket.getaddrinfo
+# These are explicit source hosts, not a suffix/domain wildcard. Expand only
+# when an approved Life source requires it and review the resulting diff.
+LIFE_HOSTS = frozenset({
+    "cloud.culture.tw", "media.taiwan.net.tw", "fae.moa.gov.tw",
+    "rse.ardswc.gov.tw", "event.hchcc.gov.tw",
+    "eservices.taichung.gov.tw", "www.forest.gov.tw",
+    "www.tyfa.org.tw", "www.hccg.gov.tw", "ccl.taitung.gov.tw",
+    "culture.gov.taipei", "www.culture.ntpc.gov.tw",
+    "travel.taichung.gov.tw", "www.twtainan.net",
+    "event.ner.gov.tw", "www.hakka.ntpc.gov.tw",
+    "www.agriculture.ntpc.gov.tw", "ntpc-farming.com",
+    "kktix.cc", "eventgo.tw", "ezgo.ardswc.gov.tw",
+    "www.tyfa.com.tw", "www.ardswc.gov.tw",
+    "tourism.hccg.gov.tw",
+})
+JANUS_HOST = "mis.twse.com.tw"
+ALLOWED_HOSTS = LIFE_HOSTS | {JANUS_HOST}
+CHANNEL = re.compile(r"^(?:tse|otc)_[A-Za-z0-9]{3,10}\.tw$")
+AGENT = "JanusLifeResearch/1.0"
+MAX_BODY_BYTES = 32 * 1024 * 1024
+MAX_JANUS_BYTES = 2 * 1024 * 1024
 
-def getaddrinfo_prefer_ipv4(host, port, family=0, type=0, proto=0, flags=0):
+
+def _validate_target(raw):
+    if not isinstance(raw, str) or len(raw) > 3000:
+        raise ValueError("invalid_target")
+    url = urlsplit(raw)
+    host = (url.hostname or "").lower()
+    if (url.scheme != "https" or host not in ALLOWED_HOSTS or url.port not in (None, 443)
+            or url.username or url.password or url.fragment):
+        raise ValueError("unapproved_target")
+    if host == JANUS_HOST:
+        if url.path != "/stock/api/getStockInfo.jsp":
+            raise ValueError("unapproved_quote_path")
+        q = parse_qs(url.query, keep_blank_values=True)
+        if set(q) != {"ex_ch", "json", "delay"} or q["json"] != ["1"] or q["delay"] != ["0"]:
+            raise ValueError("unapproved_quote_query")
+        channels = q["ex_ch"][0].split("|") if len(q["ex_ch"]) == 1 else []
+        if not 1 <= len(channels) <= 20 or any(not CHANNEL.fullmatch(ch) for ch in channels):
+            raise ValueError("unapproved_quote_channels")
+    # Resolve before access; only global addresses are eligible for outbound
+    # calls. No redirect is ever followed. URL host is still TLS-verified.
     try:
-        res = orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
-        if res:
-            return res
-    except Exception:
-        pass
-    return orig_getaddrinfo(host, port, family, type, proto, flags)
-
-socket.getaddrinfo = getaddrinfo_prefer_ipv4
-
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36 LifeAssistant/1.0"
-)
-
-PROXY_SECRET = os.environ.get("TW_PROXY_SECRET", "tw-life-assistant-proxy-20261028-secret")
-
-HOP_BY_HOP_HEADERS = {
-    "connection",
-    "keep-alive",
-    "proxy-authenticate",
-    "proxy-authorization",
-    "te",
-    "trailers",
-    "transfer-encoding",
-    "upgrade",
-    "content-length",
-    "content-encoding",
-}
+        addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+        if not addresses or any(
+            not ipaddress.ip_address(item[4][0]).is_global for item in addresses
+        ):
+            raise ValueError("nonpublic_destination")
+    except (OSError, ValueError) as exc:
+        raise ValueError("unresolvable_destination") from exc
+    return host
 
 
 @functions_framework.http
 def proxy_request(req):
-    """
-    Taiwan egress streaming proxy service for Life Assistant.
-    Deployed to asia-east1 to bypass overseas IP blocking for Taiwan government open data and sites.
-    """
-    if req.method == "OPTIONS":
-        return Response("", status=204)
-
-    # Application-layer authentication
-    incoming_token = req.headers.get("X-Proxy-Token") or req.headers.get("X-Proxy-Secret")
-    if incoming_token != PROXY_SECRET:
-        # Also check Authorization header bearer token
-        auth_hdr = req.headers.get("Authorization", "")
-        if not (auth_hdr.startswith("Bearer ") and (auth_hdr[7:].strip() == PROXY_SECRET or len(auth_hdr) > 50)):
-            return jsonify({"error": "Unauthorized: invalid or missing proxy token"}), 401
-
-    target_url = None
-    method = "GET"
-    custom_headers = {}
-    timeout = 60.0
-
-    if req.is_json:
-        data = req.get_json(silent=True) or {}
-        target_url = data.get("url")
-        method = data.get("method", "GET").upper()
-        custom_headers = data.get("headers", {})
-        timeout = float(data.get("timeout", 60.0))
-    else:
-        target_url = req.args.get("url")
-        method = req.args.get("method", "GET").upper()
-        timeout = float(req.args.get("timeout", 60.0))
-
-    if not target_url:
-        return jsonify({"error": "Missing 'url' parameter"}), 400
-
-    if not (target_url.startswith("http://") or target_url.startswith("https://")):
-        return jsonify({"error": "Invalid URL scheme; must be http or https"}), 400
-
-    headers = {"User-Agent": DEFAULT_USER_AGENT}
-    if custom_headers and isinstance(custom_headers, dict):
-        for k, v in custom_headers.items():
-            if k.lower() not in {"x-proxy-token", "x-proxy-secret"}:
-                headers[k] = v
-
+    # Cloud Run IAM must enforce the caller identity before the application.
+    # Do not reinstate the previously embedded/public bearer token.
+    if req.method != "POST" or not req.is_json:
+        return jsonify({"error": "POST JSON required"}), 405
+    data = req.get_json(silent=True)
+    if not isinstance(data, dict) or set(data) - {"url", "method", "timeout", "headers"}:
+        return jsonify({"error": "invalid_request"}), 400
+    if str(data.get("method", "GET")).upper() != "GET":
+        return jsonify({"error": "GET_only"}), 405
     try:
-        client = httpx.Client(timeout=timeout, follow_redirects=True, verify=False)
-        req_stream = client.build_request(method, target_url, headers=headers)
-        r = client.send(req_stream, stream=True)
+        host = _validate_target(data.get("url"))
+    except (ValueError, TypeError):
+        return jsonify({"error": "target_not_allowed"}), 400
 
-        def generate():
-            try:
-                for chunk in r.iter_bytes():
-                    yield chunk
-            finally:
-                r.close()
-                client.close()
-
-        res_headers = [
-            (k, v)
-            for k, v in r.headers.items()
-            if k.lower() not in HOP_BY_HOP_HEADERS
-        ]
-
-        return Response(generate(), status=r.status_code, headers=res_headers)
-    except httpx.TimeoutException as exc:
-        return jsonify({"error": f"Target timeout: {exc}", "target_url": target_url}), 504
-    except Exception as exc:
-        return jsonify({"error": f"Proxy request failed: {exc}", "target_url": target_url}), 502
+    # Ignore caller-supplied headers, including Authorization, Host and Cookie.
+    # Only fixed harmless request headers reach the public origin.
+    headers = {"User-Agent": AGENT, "Accept": "application/json, */*"}
+    if host == JANUS_HOST:
+        headers["Referer"] = "https://mis.twse.com.tw/stock/index.jsp"
+    try:
+        timeout = max(1.0, min(20.0, float(data.get("timeout", 8.0))))
+    except (ValueError, TypeError):
+        timeout = 8.0
+    limit = MAX_JANUS_BYTES if host == JANUS_HOST else MAX_BODY_BYTES
+    try:
+        with httpx.Client(timeout=timeout, follow_redirects=False, verify=True,
+                          trust_env=False) as client:
+            with client.stream("GET", data["url"], headers=headers) as upstream:
+                if 300 <= upstream.status_code < 400:
+                    return jsonify({"error": "upstream_redirect_rejected"}), 502
+                if upstream.status_code != 200:
+                    return jsonify({"error": "upstream_http_error",
+                                    "status": upstream.status_code}), 502
+                body = bytearray()
+                for part in upstream.iter_bytes():
+                    if len(body) + len(part) > limit:
+                        return jsonify({"error": "upstream_response_too_large"}), 502
+                    body.extend(part)
+                mimetype = "application/json" if host == JANUS_HOST else (
+                    upstream.headers.get("content-type", "application/octet-stream")
+                    .split(";")[0])
+                return Response(bytes(body), status=200, mimetype=mimetype,
+                                headers={"Cache-Control": "no-store"})
+    except (httpx.HTTPError, OSError, ValueError):
+        return jsonify({"error": "upstream_unavailable"}), 502

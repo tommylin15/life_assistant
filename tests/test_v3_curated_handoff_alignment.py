@@ -37,6 +37,21 @@ class CuratedAlignmentTests(unittest.TestCase):
     def test_verified_live_revision(self):
         self.assertEqual(validate_live(service(), revision(), REV, IMAGE)["status"], "PASS")
 
+    def test_verified_live_revision_with_upstream_manifest(self):
+        child_image = IMAGE.replace("f" * 64, "e" * 64)
+        child_rev = {"spec": {"containers": [{"image": child_image}]},
+                     "status": {"imageDigest": child_image, "conditions": [{"type": "Ready", "status": "True"}]}}
+        manifest = {
+            "schemaVersion": 2,
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "manifests": [{
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "digest": "sha256:" + "e" * 64,
+                "platform": {"os": "linux", "architecture": "amd64"},
+            }]
+        }
+        self.assertEqual(validate_live(service(), child_rev, REV, IMAGE, manifest)["status"], "PASS")
+
     def test_split_traffic_or_wrong_revision_rejected(self):
         split = service()
         split["status"]["traffic"] = [{"revisionName": REV, "percent": 60},

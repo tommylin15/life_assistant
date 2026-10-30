@@ -757,6 +757,7 @@ jobs:
           python .github/scripts/v3_curated_handoff_alignment.py \
             --mode live --json "$RUNNER_TEMP/handoff-live-service.json" \
             --revision-json "$RUNNER_TEMP/handoff-live-revision.json" \
+            --manifest-json "$RUNNER_TEMP/v3-ghcr-manifest.json" \
             --expected-revision "$CANDIDATE_REVISION" --expected-image "$IMAGE_REF"
           # Existing Job must be present; never create a new service or job.
           gcloud run jobs describe "$HANDOFF_JOB" \
@@ -773,6 +774,7 @@ jobs:
             > "$RUNNER_TEMP/handoff-job-after.json"
           python .github/scripts/v3_curated_handoff_alignment.py \
             --mode job --json "$RUNNER_TEMP/handoff-job-after.json" \
+            --manifest-json "$RUNNER_TEMP/v3-ghcr-manifest.json" \
             --expected-image "$IMAGE_REF"
           echo "curated_handoff_image=PASS source=promoted-production-digest job=$HANDOFF_JOB execution=NOT_RUN" >> "$GITHUB_STEP_SUMMARY"
 

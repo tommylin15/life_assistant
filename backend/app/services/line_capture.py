@@ -103,17 +103,21 @@ async def _owner_session(db, sid, identity, cfg, user):
 
 def _preview(session, cfg, user, identity, make_token, postback_action, quick_reply):
     button = _controls(session, cfg, user, identity, make_token, postback_action)
+    restart = postback_action("重新開始", make_token(cfg, user, identity, "capture.reset"))
+
+    def reply(text, actions, *, confirm=None):
+        return reply(text, [*actions, restart], quick_reply, confirm=confirm)
     if session.status == "confirmed":
-        return _reply("已確認新增至 Life。請到相應頁面查看實際資料。", [
+        return reply("已確認新增至 Life。請到相應頁面查看實際資料。", [
             _direct(cfg, {"shopping": "/more/shopping", "task": "/tasks",
                          "calendar": "/calendar", "note": "/more/notes"}[session.target])
-        ], quick_reply)
+        ])
     if session.status in ("submitting", "unknown"):
-        return _reply("結果待確認；請查詢既有寫入回執，不要重新新增。", [
+        return reply("結果待確認；請查詢既有寫入回執，不要重新新增。", [
             button("查詢回執", "capture.receipt")
-        ], quick_reply)
+        ])
     if session.status == "cancelled":
-        return _reply("已取消；沒有正式新增 Life 資料。", [], quick_reply)
+        return reply("已取消；沒有正式新增 Life 資料。", [])
     if not session.target:
         suggestion = _suggest(session.source_text, session.created_at.astimezone(TAIPEI).isoformat())
         proposed = suggestion["target"] if suggestion else ("shopping" if len(session.source_text) < 30 else None)
@@ -124,7 +128,7 @@ def _preview(session, cfg, user, identity, make_token, postback_action, quick_re
         note = ("偵測到多項可能的事項；請分次傳送、逐筆確認。\n"
                 if inbox.rule_candidates(session.source_text, session.created_at.astimezone(TAIPEI).isoformat()) and
                 len(inbox.rule_candidates(session.source_text, session.created_at.astimezone(TAIPEI).isoformat())["candidates"]) > 1 else "")
-        return _reply(note + "「" + session.source_text[:100] +
+        return reply(note + "「" + session.source_text[:100] +
                       "」\n要新增到哪裡？不會自動儲存。", actions, quick_reply)
 
     f = session.fields or {}
@@ -172,9 +176,9 @@ def _preview(session, cfg, user, identity, make_token, postback_action, quick_re
     confirm = button("確認新增", "capture.confirm") if ready else None
     actions += [button("改類型", "capture.preview"), button("取消", "capture.cancel"),
                 _direct(cfg, path)]
-    return _reply("類型：" + TYPES[session.target] + "\n" + summary +
+    return reply("類型：" + TYPES[session.target] + "\n" + summary +
                   ("\n\n欄位齊全，確認後才會新增。" if ready else
-                   "\n\n請補齊必要欄位。"), actions, quick_reply, confirm=confirm)
+                   "\n\n請補齊必要欄位。"), actions, confirm=confirm)
 
 
 async def begin_capture(text, record, identity, cfg, user, db: AsyncSession):
@@ -225,6 +229,25 @@ async def handle_capture_postback(event, command, identity, cfg, user, db: Async
     if session is None:
         return _reply("此卡片已過期或不屬於目前帳號，請重新輸入內容。", [], quick_reply)
     cmd = command["a"]
+    if cmd == "capture.reset":
+        # A one-click reset of only this actor's unfinished LINE drafts.
+        # Preserve finalized / unknown records and their idempotency receipts.
+        drafts = (await db.scalars(select(LineCapture).where(
+            LineCapture.namespace == cfg["namespace"],
+            LineCapture.line_user_id == identity,
+            LineCapture.user_sub == user["sub"],
+            LineCapture.status == "pending"
+        ).with_for_update())).all()
+        for draft in drafts:
+            draft.status = "cancelled"
+            draft.fields = {}
+            draft.target = None
+            draft.source_text = ""
+            draft.awaiting = None
+            draft.revision += 1
+        await db.flush()
+        return _reply("已重新開始。未送出的 LINE 暫存內容已清除；"
+                      "已存入 Life 的資料與 LINE 聊天室歷史不受影響。", [], quick_reply)
     if cmd == "capture.receipt" and session.status in ("unknown", "submitting", "confirmed"):
         try:
             receipt = await inbox.receipt("line.capture." + session.id, Response(), user=user, db=db)
@@ -267,9 +290,12 @@ async def handle_capture_postback(event, command, identity, cfg, user, db: Async
         session.awaiting = name
         session.revision += 1
         return _reply("請直接輸入新的" + {"title":"標題","body":"內容","note":"備註","category":"分類"}[name] +
-                      "，下一則訊息會更新目前卡片，不會立即新增 Life 資料。",
-                      [postback_action("取消", make_token(cfg, user, identity, "capture.cancel",
-                                                       i=session.id, r=session.revision))], quick_reply)
+                      "，下一則訊息會更新目前卡片，不會立即新增 Life 資料。", [
+                          postback_action("取消", make_token(cfg, user, identity, "capture.cancel",
+                                                           i=session.id, r=session.revision)),
+                          postback_action("重新開始", make_token(cfg, user, identity,
+                                                              "capture.reset"))
+                      ], quick_reply)
     elif cmd == "capture.back":
         return _preview(session, cfg, user, identity, make_token, postback_action, quick_reply)
     elif cmd == "capture.list" and session.target == "shopping":
@@ -279,10 +305,14 @@ async def handle_capture_postback(event, command, identity, cfg, user, db: Async
         button = _controls(session, cfg, user, identity, make_token, postback_action)
         if not lists:
             return _reply("尚無購物清單；請先到 Life 建立一份清單。", [
-                _direct(cfg, "/more/shopping", "建立購物清單")], quick_reply)
+                _direct(cfg, "/more/shopping", "建立購物清單"),
+                postback_action("重新開始", make_token(cfg, user, identity,
+                                                    "capture.reset"))], quick_reply)
         return _reply("選擇要加入的購物清單：", [
             button(v.name[:20], "capture.pick_list", k=v.id) for v in lists] +
-            [button("返回卡片", "capture.back")], quick_reply)
+            [button("返回卡片", "capture.back"),
+             postback_action("重新開始", make_token(cfg, user, identity, "capture.reset"))],
+            quick_reply)
     elif cmd == "capture.pick_list" and session.target == "shopping":
         await feature_gate("shopping")(user=user, db=db)
         list_id = command.get("k")

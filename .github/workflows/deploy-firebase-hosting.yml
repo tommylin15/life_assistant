@@ -127,8 +127,13 @@ jobs:
             DIGEST="$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE" | sed 's|^.*@||')"
             [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
             EXPECTED_IMAGE="ghcr.io/tommylin15/life_assistant-backend@$DIGEST"
+            MANIFEST_ARG=()
+            if docker manifest inspect "$EXPECTED_IMAGE" > "$RUNNER_TEMP/hosting-manifest.json" 2>/dev/null && [ -s "$RUNNER_TEMP/hosting-manifest.json" ]; then
+              MANIFEST_ARG=(--manifest-json "$RUNNER_TEMP/hosting-manifest.json")
+            fi
             if python .github/scripts/v3_image_identity.py --resource revision \
               --json "$RUNNER_TEMP/hosting-backend-revision.json" \
+              "${MANIFEST_ARG[@]}" \
               --expected "$EXPECTED_IMAGE"; then
               VERIFIED_IMAGE="$EXPECTED_IMAGE"
               echo "hosting_image_identity=PASS tag=$TAG digest=$DIGEST" >> "$GITHUB_STEP_SUMMARY"

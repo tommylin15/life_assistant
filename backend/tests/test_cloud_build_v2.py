@@ -333,6 +333,25 @@ class CloudBuildV2Tests(unittest.TestCase):
                                   'gcloud run jobs execute', 'firebase deploy',
                                   'add-iam-policy-binding', 'force: true'):
                     self.assertNotIn(forbidden, source)
+            elif workflow.name == 'life-line-v2-release-once-20261030.yml':
+                # Owner-authorized one-time push bridge: exact commit shape,
+                # five same-SHA CI checks, staging proof, then V3 production.
+                self.assertIn('push:', source)
+                self.assertIn('branches: [main]', source)
+                self.assertIn('PINNED_PARENT:', source)
+                self.assertIn('not_exact_one_time_child', source)
+                self.assertIn('five_ci=PASS', source)
+                self.assertIn('line-stage-$RELEASE_SHA', source)
+                self.assertIn('--raw-field promote=false', source)
+                self.assertIn('--raw-field enable_line=true', source)
+                self.assertIn('--raw-field promote=true', source)
+                self.assertIn('production_live=PASS', source)
+                self.assertNotIn('workflow_run:', source)
+                for forbidden in ('schedule:', 'gcloud run services update-traffic',
+                                  'gcloud run services deploy',
+                                  'gcloud run jobs execute', 'firebase deploy',
+                                  'add-iam-policy-binding', 'force: true'):
+                    self.assertNotIn(forbidden, source)
             elif workflow.name == 'life-line-v2-staging-once-20261030.yml':
                 # Single exact-child staging continuation for LINE V2 cards.
                 # The five-job main CI gate precedes the normal V3 Staging.

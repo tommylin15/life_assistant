@@ -258,3 +258,8 @@ LIFF 仍走 `Firebase Hosting /line/index.html → FastAPI → PostgreSQL`，完
 - LINE Quick Reply / Postback：購物清單真實本人列表、待辦日期、行程開始與結束時間（Datetime picker 不含時區，後端以 Asia/Taipei 解釋）、標題／備註聊天編輯與取消；購物分類選填。確認前不能對 Life 做正式寫入。若 Google 授權缺失、時間不完整或未選購物清單，必須先補足／報明確錯誤。
 - 確認後共用 `inbox.commit` 的後端驗證與 `inbox.create` execution/action id 回執；同 session 固定 action id，不把 UNKNOWN 當失敗後自行重試。帳號撤銷、跨帳號卡片、跨 namespace、舊版本 revision 全部失效。失敗／UNKNOWN 留待本人查核收據。
 - 預設不刪除／旋轉任何 Production secrets、不執行 destructive migration。Source、tests、CI、同版 Staging、OA iOS/Android、Production Cloud Run／Hosting、Webhook/LINE Console、真人資料寫入讀回依序用 PASS/FAIL/NOT VERIFIED，證據不齊標 PARTIAL。
+
+
+### V2-03B 可重跑核心測試
+
+`backend/tests/test_line_capture.py` 以 SQLite 及 mocked Life commit 測試：單字分類、購物清單本人挑選、固定 Action ID、重複確認不重建、不同帳號/namespace 過期拒絕、聊天修改標題、日期選擇器按台北 +08:00、行程缺值拒絕、取消與 UNKNOWN 止步查回執。真 PG／Google／LINE Reply、手機及 Production 必須另外讀回，不以 SQLite PASS 代替。

@@ -15,11 +15,11 @@ async def handle(name, command=None):
 
 
 class DailyMenuContract(IsolatedAsyncioTestCase):
-    async def test_capture_is_draft_first_and_requires_confirmation(self):
+    async def test_capture_is_chat_first_and_requires_confirmation(self):
         with patch.object(daily, "feature_gate", return_value=AsyncMock()):
             messages = await handle("capture.start")
-        self.assertIn("草稿", messages[0]["text"])
-        self.assertIn("不會直接新增", messages[0]["text"])
+        self.assertIn("在 LINE", messages[0]["text"])
+        self.assertIn("確認才會真正寫入", messages[0]["text"])
         self.assertEqual(messages[0]["quickReply"]["items"][0]["action"]["uri"], "https://life.example.test/capture")
 
     async def test_search_choices_are_signed_owner_scoped(self):

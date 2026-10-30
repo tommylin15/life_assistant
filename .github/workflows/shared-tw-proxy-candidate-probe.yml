@@ -1,0 +1,64 @@
+name: Read-only Life official source candidate diagnosis
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/shared-tw-proxy-candidate-probe.yml']
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    environment: dev-test
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: gen-lang-client-0593591102
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - id: candidate
+        name: Require unchanged zero-traffic diagnostic candidate
+        run: |
+          set -Eeuo pipefail
+          gcloud run services describe tw-activity-proxy --project=gen-lang-client-0593591102 --region=asia-east1 --format=json >/tmp/diag.json
+          jq -e '[.status.traffic[]? | select((.percent // 0)>0)] | length==1 and .[0].percent==100' /tmp/diag.json
+          tag=shared-tw-c25afefcd6
+          jq -e --arg tag "$tag" '[.status.traffic[]? | select(.tag==$tag)] | length==1 and (.[0].percent//0)==0' /tmp/diag.json
+          url="$(jq -r --arg tag "$tag" '[.status.traffic[]? | select(.tag==$tag) | .url] | first // empty' /tmp/diag.json)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - id: identity
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: gen-lang-client-0593591102
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://tw-activity-proxy-2oo7qbkd5q-de.a.run.app
+      - name: Read fixed safe TLS/DNS/TCP classification, no source body
+        env:
+          URL: ${{ steps.candidate.outputs.url }}
+          TOKEN: ${{ steps.identity.outputs.id_token }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$TOKEN"
+          status="$(curl -sS --max-time 28 -o /tmp/source-diagnostic -w '%{http_code}' -X POST "$URL" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"url":"https://media.taiwan.net.tw/XMLReleaseAll_public/v2.0/Zh_tw/Event-json.zip","method":"GET","timeout":20}')"
+          echo "candidate_official_source_http=$status"
+          if [ "$status" = 200 ]; then
+            python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          p=Path("/tmp/source-diagnostic")
+          print("source_zip_verified=", zipfile.is_zipfile(p))
+          PY
+          else
+            python - <<'PY'
+          from pathlib import Path
+          import json
+          obj=json.loads(Path("/tmp/source-diagnostic").read_text())
+          for k in ("error","kind","reason","status"):
+              if k in obj: print("source_"+k+"="+str(obj[k]))
+          PY
+          fi

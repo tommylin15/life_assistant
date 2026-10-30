@@ -310,6 +310,27 @@ class CloudBuildV2Tests(unittest.TestCase):
                                   'gcloud run services update-traffic',
                                   'add-iam-policy-binding', '--raw-field promote=true'):
                     self.assertNotIn(forbidden, source)
+            elif workflow.name == 'life-line-v2-staging-once-20261030.yml':
+                # Single exact-child staging continuation for LINE V2 cards.
+                # The five-job main CI gate precedes the normal V3 Staging.
+                self.assertIn('workflow_run:', source)
+                self.assertIn('workflows: ["CI"]', source)
+                self.assertIn("workflow_run.event == 'push'", source)
+                self.assertIn("workflow_run.conclusion == 'success'", source)
+                self.assertIn('PINNED_PARENT:', source)
+                self.assertIn('not_exact_approved_child', source)
+                self.assertIn('already_dispatched_sha', source)
+                self.assertIn('unique | length == 5', source)
+                self.assertIn('gh workflow run v3-release-ghcr.yml', source)
+                for mandatory in ('--raw-field promote=false',
+                                  '--raw-field publish_staging=true',
+                                  '--raw-field enable_line=true',
+                                  '--raw-field auto_staging=false'):
+                    self.assertIn(mandatory, source)
+                for forbidden in ('schedule:', '--raw-field promote=true',
+                                  'gcloud run services update-traffic',
+                                  'add-iam-policy-binding', 'force: true'):
+                    self.assertNotIn(forbidden, source)
             else:
                 self.assertIn('workflow_dispatch:', source)
                 self.assertNotIn('workflow_run:', source)

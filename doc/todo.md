@@ -5,12 +5,12 @@
 - **CI／Release／Live**：專用 CI [#41014344340](https://github.com/tommylin15/life_assistant/actions/runs/41014344340) PASS；受控發布 [#41014398927](https://github.com/tommylin15/life_assistant/actions/runs/41014398927) 兩來源 gate PASS → 100% `tw-activity-proxy-00011-zip`；獨立 [Live readback #41014672520](https://github.com/tommylin15/life_assistant/actions/runs/41014672520) 官方 ZIP HTTP 200、503922 bytes、格式有效；MIS PASS、IAM private、舊 secret 缺席。
 - **剩餘邊界**：Life VM 定時任務、下載後寫入、其他 Life 來源仍 **NOT VERIFIED**，不是此 TLS 連線工項的完成條件；原來 502／BLOCKED 為歷史階段，不再列為當前阻塞。正式規格及收據：[共用台灣出口](shared-taiwan-egress-janus-life.md)。
 
-## 2026-10-30｜Life／Janus 共用台灣出口安全發布與來源整合｜PARTIAL
+## 2026-10-30｜Life／Janus 共用台灣出口：Proxy TLS 已恢復，Life VM 整合仍待驗｜PARTIAL
 
 - **安全發布已驗證**：沿用台灣既有 `tw-activity-proxy`，不新建 Cloud Run 或額外付費服務；[#41010462296](https://github.com/tommylin15/life_assistant/actions/runs/41010462296) 正式 100% `tw-activity-proxy-00006-dep`、未授權拒絕、私有 IAM、SSRF 拒絕、官方 MIS `rtcode=0000` PASS；Janus API 服務身分已授予 scoped Invoker。
-- **來源負面證據**：Life 觀光署 `Event-json.zip` 經私有代理為 `502 ConnectError`；新 IPv4／TLS 候選 [#41011718029](https://github.com/tommylin15/life_assistant/actions/runs/41011718029) 因官方來源正向失敗而未切流；保留現役安全 revision，不能把 MIS PASS 當作 Life 所有來源 PASS。
+- **歷史來源負面證據（已被上方 Live 修復收據取代）**：Life 觀光署 `Event-json.zip` 經私有代理為 `502 ConnectError`；新 IPv4／TLS 候選 [#41011718029](https://github.com/tommylin15/life_assistant/actions/runs/41011718029) 因官方來源正向失敗而未切流；保留現役安全 revision，不能把 MIS PASS 當作 Life 所有來源 PASS。
 - **開發**：`services/tw_activity_proxy/main.py` 停用靜態秘密、限來源主機／GET／HTTPS／TLS、無任意 redirect、封鎖私有 IP，並新增有界 IPv4 與安全錯誤分類；`backend/app/services/tw_request_router.py` 改走 Service Identity ID Token。回歸 [#41012113664](https://github.com/tommylin15/life_assistant/actions/runs/41012113664) PASS。新一次來源連線分類仍依新候選實際讀回。
-- **待辦**：查官方來源 TLS/DNS/TCP 正向連線或合格官方替代來源，執行 Life VM 真實活動抓取／既有來源回歸（不允許 `verify=False`），再更新 Live readback 與本 TODO。詳細規格及證據：[共用台灣出口](shared-taiwan-egress-janus-life.md)。Janus API 已獨立完成 Release/Dev promotion；其 Owner 7 檔行情／當日損益是 Janus 獨立驗收，不由 Life 代判成功。
+- **剩餘待辦**：官方 ZIP 經 Proxy TLS 正向已在 [Live #41014672520](https://github.com/tommylin15/life_assistant/actions/runs/41014672520) PASS；僅 Life VM 真實定時活動抓取、既有其他來源與下載後資料匯入／讀回仍須另外驗收。正式規格：[共用台灣出口](shared-taiwan-egress-janus-life.md)。Janus API 已獨立完成 Release/Dev promotion；Owner 7 檔行情與當日損益是 Janus 獨立驗收。
 
 ## 2026-10-30｜Hosting #40988859804 Playwright／Ubuntu 26.04 衝突修復（最新）
 

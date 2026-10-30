@@ -14,7 +14,11 @@ concurrency:
 jobs:
   deploy:
     if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    # Playwright 1.55.0 ships Ubuntu 24.04 Chromium binaries; ubuntu-latest
+    # currently resolves to Ubuntu 26.04 and cannot install this browser.
+    # Keep the production UI gate enabled; retrying on an unsupported OS
+    # cannot make the browser available.
+    runs-on: ubuntu-24.04
     environment: dev-test
     env:
       GCP_PROJECT_ID: gen-lang-client-0593591102

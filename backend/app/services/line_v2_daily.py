@@ -11,7 +11,6 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.ui_policies import feature_gate
-from app.services.line_channel import liff_url
 
 TAIPEI = ZoneInfo("Asia/Taipei")
 LIMIT = 5

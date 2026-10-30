@@ -255,8 +255,14 @@ async def cleanup_expired(db):
 
 
 def message(text, cfg, page="capture", **params):
+    # Legacy replies must also lead directly to the matching Life App route.
+    # User-supplied params cannot change the approved destination path.
+    pages = {"capture": "/capture", "today": "/today", "search": "/more/notes",
+             "tasks": "/tasks", "shopping": "/more/shopping", "calendar": "/calendar",
+             "activities": "/more/explore", "home": "/today"}
+    uri = cfg["origin"] + pages.get(page, "/today")
     return [{"type": "text", "text": text[:4500], "quickReply": {"items": [
-        {"type": "action", "action": {"type": "uri", "label": "開啟 Life", "uri": liff_url(cfg, page=page, **params)}}]}}]
+        {"type": "action", "action": {"type": "uri", "label": "開啟 Life", "uri": uri}}]}}]
 
 
 async def build_reply(event, record, identity, cfg, db):

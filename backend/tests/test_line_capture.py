@@ -1,6 +1,7 @@
 """Bounded SQLite contract tests for LINE native capture and Life commit delegation."""
 import uuid
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, patch
@@ -139,6 +140,21 @@ class CaptureFlow(IsolatedAsyncioTestCase):
             after=await self.post("capture.confirm")
         self.assertIn("已取消",str(after))
         write.assert_not_awaited()
+
+    async def test_live_db_readback_covers_additive_line_capture_head(self):
+        root = Path(__file__).resolve().parents[1]
+        acceptance = (root / "scripts/gmail_v2_db_acceptance.py").read_text()
+        migration = (root / "alembic/versions/20261030_0025_line_capture.py").read_text()
+        release = (root.parent / ".github/workflows/v3-release-ghcr.yml").read_text()
+        self.assertIn('EXPECTED_HEAD = "20261030_0025"', acceptance)
+        self.assertIn('"line_capture_sessions": {', acceptance)
+        self.assertIn('Verify Gmail V2 and LINE capture PostgreSQL schema readback', release)
+        self.assertIn('life_db_readback=PASS revision=20261030_0025', release)
+        for name in ("namespace", "line_user_id", "user_sub", "source_event_id",
+                     "source_text", "fields", "status", "revision", "expires_at"):
+            with self.subTest(column=name):
+                self.assertIn('"' + name + '"', acceptance)
+                self.assertIn('sa.Column("' + name + '"', migration)
 
     async def test_unknown_status_uses_fixed_receipt_not_retry(self):
         await self.message("水電")

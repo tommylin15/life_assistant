@@ -37,7 +37,7 @@ ALLOWED_COMMANDS = frozenset((
     "search.kind",
     "capture.kind", "capture.preview", "capture.back", "capture.list", "capture.pick_list",
     "capture.edit", "capture.due", "capture.start_at", "capture.end_at",
-    "capture.confirm", "capture.cancel", "capture.receipt",
+    "capture.confirm", "capture.cancel", "capture.reset", "capture.receipt",
 ))
 # The six everyday Rich Menu actions are handled by line_v2_daily.
 # LIFF remains the authenticated editing and confirmation surface.

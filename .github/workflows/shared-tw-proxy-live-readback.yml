@@ -1,0 +1,60 @@
+name: Shared Taiwan proxy live readback
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/shared-tw-proxy-live-readback.yml'
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: dev-test
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: gen-lang-client-0593591102
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read private IAM, serving revision and removed secret
+        run: |
+          set -Eeuo pipefail
+          gcloud run services describe tw-activity-proxy --project=gen-lang-client-0593591102 --region=asia-east1 --format=json > /tmp/service.json
+          rev="$(jq -r '[.status.traffic[]?|select((.percent//0)>0)] | if length==1 and .[0].percent==100 then .[0].revisionName else empty end' /tmp/service.json)"
+          test -n "$rev"
+          gcloud run revisions describe "$rev" --project=gen-lang-client-0593591102 --region=asia-east1 --format=json >/tmp/revision.json
+          jq -e '[.spec.containers[]?.env[]?|select(.name=="TW_PROXY_SECRET")]|length==0' /tmp/revision.json
+          gcloud run services get-iam-policy tw-activity-proxy --project=gen-lang-client-0593591102 --region=asia-east1 --format=json >/tmp/iam.json
+          jq -e '[.bindings[]?|select(.role=="roles/run.invoker")|.members[]?] as $m |
+            ($m|index("allUsers")==null) and ($m|index("allAuthenticatedUsers")==null)
+            and ($m|index("serviceAccount:postgres-vm@gen-lang-client-0593591102.iam.gserviceaccount.com")!=null)
+            and ($m|index("serviceAccount:janus-user-api@gen-lang-client-0593591102.iam.gserviceaccount.com")!=null)' /tmp/iam.json
+          echo "private_live_configuration=PASS revision=$rev obsolete_secret_absent=true"
+      - id: identity
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: gen-lang-client-0593591102
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://tw-activity-proxy-2oo7qbkd5q-de.a.run.app
+      - name: Verify Life public activity source through private Taiwan proxy
+        env:
+          TOKEN: ${{ steps.identity.outputs.id_token }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$TOKEN"
+          url=https://tw-activity-proxy-2oo7qbkd5q-de.a.run.app
+          status="$(curl -sS --max-time 25 -o /tmp/activity.zip -w '%{http_code}' -X POST "$url" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"url":"https://media.taiwan.net.tw/XMLReleaseAll_public/v2.0/Zh_tw/Event-json.zip","method":"GET"}')"
+          test "$status" = 200
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          p=Path('/tmp/activity.zip')
+          assert p.stat().st_size>100
+          assert zipfile.is_zipfile(p), 'Life activity payload is not ZIP'
+          print('life_official_activity_proxy=PASS, bytes=',p.stat().st_size)
+          PY

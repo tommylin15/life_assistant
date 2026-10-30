@@ -24,11 +24,6 @@ METADATA_IDENTITY_URL = (
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity"
 )
 
-DEFAULT_PROXY_SECRET = os.environ.get(
-    "TW_PROXY_SECRET",
-    "tw-life-assistant-proxy-20261028-secret",
-)
-
 LOCAL_CACHE_PATH = Path("config/source_routing_cache.json")
 DRIVE_CACHE_PATH = Path(
     "/mnt/stateful_partition/antigravity/gdrive/life_assistantGPT/台灣活動探索｜排程步驟/台灣活動探索｜來源路由控制.json"
@@ -235,13 +230,15 @@ class TWRequestRouter:
         stream: bool = False,
         **kwargs: Any,
     ) -> requests.Response:
+        # Cloud Run IAM requires a service identity ID token. Never use a
+        # shared bearer secret or forward a user's Authorization header.
+        token = self.get_id_token(self.proxy_url)
+        if not token:
+            raise RuntimeError("Taiwan proxy service identity unavailable")
         proxy_headers = {
             "Content-Type": "application/json",
-            "X-Proxy-Token": DEFAULT_PROXY_SECRET,
+            "Authorization": f"Bearer {token}",
         }
-        token = self.get_id_token(self.proxy_url)
-        if token:
-            proxy_headers["Authorization"] = f"Bearer {token}"
 
         payload = {
             "url": target_url,

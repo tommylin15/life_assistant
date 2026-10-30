@@ -94,6 +94,31 @@ jobs:
           test "$status" = 200
           jq -e '.rtcode=="0000" and (.msgArray|type=="array")' /tmp/mis.json >/dev/null
           echo "private_boundary=PASS, SSRF_rejection=PASS, MIS_response=PASS"
+          # Validate the existing Life path as part of the release gate.
+          # Older official tourism endpoints may be IPv4-only or slow.
+          life_status="$(curl -sS --max-time 27 -o /tmp/tourism-response -w '%{http_code}' -X POST "$URL" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"url":"https://media.taiwan.net.tw/XMLReleaseAll_public/v2.0/Zh_tw/Event-json.zip","method":"GET","timeout":20}')"
+          echo "life_activity_proxy_http=$life_status"
+          if [ "$life_status" != 200 ]; then
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          try:
+              body=json.loads(Path("/tmp/tourism-response").read_text())
+              print("life_activity_proxy_reason=" + str(body.get("error","unknown")))
+              print("life_activity_proxy_kind=" + str(body.get("kind","unknown")))
+              if "status" in body: print("life_activity_upstream_http=" + str(body["status"]))
+          except (ValueError, UnicodeError):
+              print("life_activity_proxy_reason=non_json")
+          PY
+            exit 1
+          fi
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          p=Path("/tmp/tourism-response")
+          assert p.stat().st_size > 100 and zipfile.is_zipfile(p), "Life official ZIP invalid"
+          print("Life official source through private proxy=PASS")
+          PY
       - name: Promote tested candidate with rollback
         run: |
           set -Eeuo pipefail

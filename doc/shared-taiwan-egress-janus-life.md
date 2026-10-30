@@ -1,6 +1,6 @@
 # Life／Janus 共用台灣出口通道
 
-狀態：受限來源代理與 Life 身分呼叫端已實作且單元測試通過；受控 Live 發布進行中，實際 Janus／Life 整合尚未驗收。發布證據見 Life Actions #41010130172，不能提前判 PASS。
+狀態：**Proxy 已完成安全發布與 Live 正向驗收**；Janus API 新版、Life VM 新 client 的端到端任務仍須個別驗收。Live 收據：[Actions #41010462296](https://github.com/tommylin15/life_assistant/actions/runs/41010462296)。
 
 ## 已有資產
 
@@ -28,3 +28,10 @@
 - Janus `services/api/tw_proxy_client.py` / `services/api/intraday_quotes.py` 添加只有來源 403/5xx 才嘗試台灣代理的 read-only 備援（429 不備援）；Janus 權威規格見 `tommylin15/janus-omniforge/doc/spec/shared-taiwan-egress.md`。
 - 既有 Live 核對曾見 `tw-activity-proxy-00005-c8k`／IAM public invoker 0；該版本由舊 workflow 發布，不視為新安全發布的整合 PASS。不能沿用已曝光的舊共享金鑰；新候選要求移除舊環境變數。
 - **跨專案核准範圍**：本次僅對既有 proxy、Life caller、Janus API 與必要 service-specific Invoker 授權進行一次性工程，不新增第二個台灣代理、付費 API 或新 GCP 資源。
+
+## 2026-10-30 正式發布結果（附真實 gate 範圍）
+
+- 原 Live baseline：`tw-activity-proxy-00005-c8k`（之前的舊部署工作流）；新候選：`tw-activity-proxy-00006-dep`，採 0% 候選到 100% traffic promotion。
+- 本次正式 Workflow [#41010462296](https://github.com/tommylin15/life_assistant/actions/runs/41010462296) 所有 steps PASS：測試、Cloud Run 私有 IAM baseline、Life/Janus Invoker、受控候選、無 token 未授權拒絕、metadata URL 負向 400、台灣 MIS `rtcode=0000`、切流後單一 100% readback、無公開 Invoker。部署指令移除舊共享 credential 環境變數；其值仍曾存在 Git 歷史，不能再使用。
+- 由 Janus 現有 CI 在特定 Life 服務上建立一次性 `janus-user-api` 的 `roles/run.invoker`；已獨立 IAM readback PASS。Life 原部署者缺少 `run.services.setIamPolicy`，因此新流程僅作權限核對，避免引入不必要的 project-wide 擴權。
+- 不包含：Life VM 現行 cron 是否已取得新版 client、台灣政府活動所有 host 的真實 end-to-end、Janus 最新 GHCR API deployment、Owner 持股日期與當日損益。這些不能因 Proxy 正向驗收當作 PASS。

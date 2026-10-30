@@ -7,5 +7,6 @@
   ],
   "traffic_policy": "candidate-smoke-before-promotion",
   "rollback": "last-serving-revision",
-  "attempt": 2
+  "attempt": 3,
+  "purpose": "IPv4 bounded source fix and mandatory Life official ZIP + Janus MIS candidate gate; only promote if both pass"
 }

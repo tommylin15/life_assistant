@@ -30,7 +30,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
       CI_RUN_ID: ${{ github.event.workflow_run.id }}
-      PINNED_PARENT: b61178a6a30b897749403ba89df0a6d667c85543
+      PINNED_PARENT: 96f3dfd1a3d2135aedfd9829cfa6d64513bdee43
     steps:
       - name: Verify one-time commit, current main and all five CI checks
         id: gate

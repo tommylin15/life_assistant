@@ -47,13 +47,14 @@ jobs:
           echo "revision=$old" >> "$GITHUB_OUTPUT"
           gcloud run services get-iam-policy "$SERVICE" --project="$PROJECT" --region="$REGION" --format=json >/tmp/iam-before.json
           jq -e '[.bindings[]?|select(.role=="roles/run.invoker")|.members[]?|select(.=="allUsers" or .=="allAuthenticatedUsers")]|length==0' /tmp/iam-before.json
-      - name: Grant least-privilege caller access
+      - name: Verify Janus and Life callers are authorized (read-only)
         run: |
           set -Eeuo pipefail
-          for principal in janus-user-api postgres-vm; do
-            gcloud run services add-iam-policy-binding "$SERVICE" --project="$PROJECT" --region="$REGION" --role=roles/run.invoker --member="serviceAccount:${principal}@${PROJECT}.iam.gserviceaccount.com" --quiet >/dev/null
-          done
-          gcloud run services add-iam-policy-binding "$SERVICE" --project="$PROJECT" --region="$REGION" --role=roles/run.invoker --member="serviceAccount:${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}" --quiet >/dev/null
+          gcloud run services get-iam-policy "$SERVICE" --project="$PROJECT" --region="$REGION" --format=json >/tmp/iam-callers.json
+          jq -e '[.bindings[]?|select(.role=="roles/run.invoker")|.members[]?] as $all |
+            ($all | index("serviceAccount:janus-user-api@gen-lang-client-0593591102.iam.gserviceaccount.com")!=null) and
+            ($all | index("serviceAccount:postgres-vm@gen-lang-client-0593591102.iam.gserviceaccount.com")!=null) and
+            ($all | index("allUsers")==null) and ($all | index("allAuthenticatedUsers")==null)' /tmp/iam-callers.json
       - id: candidate
         name: Deploy no-traffic candidate, remove obsolete credential
         run: |

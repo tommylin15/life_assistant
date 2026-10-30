@@ -25,7 +25,7 @@ class DailyMenuContract(IsolatedAsyncioTestCase):
     async def test_search_choices_are_signed_owner_scoped(self):
         messages = await handle("search.start")
         actions = [x["action"] for x in messages[0]["quickReply"]["items"]]
-        self.assertEqual([a["label"] for a in actions], ["筆記", "待辦", "購物", "進階搜尋"])
+        self.assertEqual([a["label"] for a in actions], ["筆記", "待辦", "購物", "在 Life 搜尋"])
         claims = v2.read_token(actions[0]["data"], CFG, USER, IDENTITY)
         self.assertEqual((claims["a"], claims["k"]), ("search.kind", "notes"))
 

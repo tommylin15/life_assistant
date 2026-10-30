@@ -105,3 +105,26 @@ def test_ssl_certificate_error_is_categorized_without_secret_leakage():
             body = response.get_json()
             assert body["reason"] == "tls_certificate"
             assert "authorization" not in str(body) and "secret" not in str(body)
+
+
+def test_native_trusted_ssl_context_keeps_hostname_verification():
+    import socket
+    import ssl
+    from services.tw_activity_proxy import main
+    app = Flask(__name__)
+    dns_patch = patch.object(main.socket, "getaddrinfo",
+                             return_value=[(socket.AF_INET, 1, 6, "", ("8.8.8.8", 443))])
+    with dns_patch, patch.object(main.httpx, "HTTPTransport") as transport, patch.object(main.httpx, "Client") as client:
+        upstream = client.return_value.__enter__.return_value.stream.return_value.__enter__.return_value
+        upstream.status_code = 200
+        upstream.headers = {"content-type": "application/json"}
+        upstream.iter_bytes.return_value = iter([b'{"rtcode":"0000","msgArray":[]}'])
+        with app.test_request_context("/", method="POST", json={
+            "url": "https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_2382.tw&json=1&delay=0"}):
+            assert proxy_request(request).status_code == 200
+        ctx = transport.call_args.kwargs["verify"]
+        assert isinstance(ctx, ssl.SSLContext)
+        assert ctx.verify_mode == ssl.CERT_REQUIRED
+        assert ctx.check_hostname is True
+        assert transport.call_args.kwargs["trust_env"] is False
+        assert transport.call_args.kwargs["local_address"] == "0.0.0.0"

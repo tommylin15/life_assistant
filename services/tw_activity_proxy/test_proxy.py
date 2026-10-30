@@ -81,7 +81,7 @@ def test_ipv4_only_public_destination_and_safe_error_class():
             response, status = proxy_request(request)
             assert status == 502
             body = response.get_json()
-            assert body == {"error": "upstream_unavailable", "kind": "ConnectTimeout", "reason": "unknown"}
+            assert body == {"error": "upstream_unavailable", "kind": "ConnectTimeout", "reason": "unknown", "tls_verify_code": None}
             assert "sensitive" not in str(body) and "media.taiwan" not in str(body)
         assert lookup.call_args.kwargs["family"] == socket.AF_INET
         assert client.call_args.kwargs["transport"] is not None

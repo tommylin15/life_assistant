@@ -5,10 +5,13 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import Response
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import inbox
+from app.api.google_integrations import CalendarEventCreate
+from app.models.schemas import NoteCreate, TaskCreate
 from app.api.ui_policies import feature_gate
 from app.models.line_capture import LineCapture
 from app.models.shopping import ShoppingList
@@ -22,15 +25,50 @@ EDIT_FIELDS = {"title", "body", "note", "category"}
 DATETIME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")
 
 
-def _reply(text, actions, quick_reply):
-    # A rendered LINE Flex bubble, not an HTML/LIFF form.
+def _reply(text, actions, quick_reply, *, confirm=None):
+    """The one confirm action appears first in the Flex action area.
+
+    LINE Quick Reply buttons cannot have distinct colors, so never duplicate
+    the confirmation there. Existing edit/cancel actions stay in Quick Reply.
+    """
+    bubble = {"type": "bubble", "body": {"type": "box",
+        "layout": "vertical", "spacing": "md", "contents": [
+            {"type": "text", "text": "Life 智慧記錄", "size": "lg", "weight": "bold"},
+            {"type": "text", "text": text[:1500], "size": "sm", "wrap": True},
+        ]}}
+    if confirm is not None:
+        bubble["footer"] = {"type": "box", "layout": "vertical", "contents": [
+            {"type": "button", "style": "primary", "height": "sm",
+             "color": "#D35400", "action": confirm}
+        ]}
     return [{"type": "flex", "altText": "Life 智慧記錄",
-             "contents": {"type": "bubble", "body": {"type": "box",
-                 "layout": "vertical", "spacing": "md", "contents": [
-                     {"type": "text", "text": "Life 智慧記錄", "size": "lg", "weight": "bold"},
-                     {"type": "text", "text": text[:1500], "size": "sm", "wrap": True}
-                 ]}},
-             "quickReply": quick_reply(actions)}]
+             "contents": bubble, "quickReply": quick_reply(actions)}]
+
+
+def _can_confirm(target, fields):
+    """Shared visibility and submission requirements; Inbox validates again."""
+    if not isinstance(fields, dict):
+        return False
+    try:
+        if target == "shopping":
+            return (bool(fields.get("shopping_list_id")) and
+                    bool(inbox.SuggestedShopping.model_validate(
+                        {"items": fields.get("items")}).items))
+        if target == "task":
+            return (bool(str(fields.get("title") or "").strip()) and
+                    bool(TaskCreate.model_validate(fields)))
+        if target == "note":
+            return (bool(str(fields.get("body") or "").strip()) and
+                    bool(NoteCreate.model_validate(fields)))
+        if target == "calendar":
+            # Existing Life/Google contract requires paired start/end times.
+            if not str(fields.get("summary") or "").strip():
+                return False
+            CalendarEventCreate.model_validate(fields)
+            return bool(fields.get("start") and fields.get("end"))
+    except (ValidationError, TypeError, ValueError):
+        return False
+    return False
 
 
 def _controls(session, cfg, user, identity, make_token, postback_action):
@@ -96,7 +134,7 @@ def _preview(session, cfg, user, identity, make_token, postback_action, quick_re
         summary = "購物品項：" + (names or "待填") + "\n購物清單：" + (f.get("list_name") or "尚未選擇")
         summary += "\n分類：" + (entries[0].get("category") if entries and entries[0].get("category") else "未指定")
         actions = [button("選購物清單", "capture.list"), button("改分類", "capture.edit", k="category")]
-        ready = bool(f.get("shopping_list_id"))
+        ready = _can_confirm(session.target, f)
         path = "/more/shopping"
     elif session.target == "task":
         summary = "待辦：" + str(f.get("title") or "") + "\n截止：" + str(f.get("due_at") or "未指定")
@@ -106,7 +144,7 @@ def _preview(session, cfg, user, identity, make_token, postback_action, quick_re
                        cfg, user, identity, "capture.due", i=session.id, r=session.revision),
                     "mode": "datetime"},
                    button("改備註", "capture.edit", k="note")]
-        ready = bool(f.get("title"))
+        ready = _can_confirm(session.target, f)
         path = "/tasks"
     elif session.target == "calendar":
         summary = "行程：" + str(f.get("summary") or "") + "\n開始：" + str(f.get("start") or "尚未設定")
@@ -118,9 +156,7 @@ def _preview(session, cfg, user, identity, make_token, postback_action, quick_re
                    {"type": "datetimepicker", "label": "選結束時間", "data": make_token(
                        cfg, user, identity, "capture.end_at", i=session.id, r=session.revision),
                     "mode": "datetime"}]
-        ready = bool(f.get("summary") and f.get("start") and f.get("end"))
-        if ready:
-            ready = datetime.fromisoformat(f["end"]) > datetime.fromisoformat(f["start"])
+        ready = _can_confirm(session.target, f)
         path = "/calendar"
     else:
         summary = "筆記標題：" + str(f.get("title") or "")[:80]
@@ -129,15 +165,16 @@ def _preview(session, cfg, user, identity, make_token, postback_action, quick_re
         actions = [button("改標題", "capture.edit", k="title"),
                    button("改內容", "capture.edit", k="body"),
                    button("改分類", "capture.edit", k="category")]
-        ready = bool(f.get("body"))
+        ready = _can_confirm(session.target, f)
         path = "/more/notes"
-    if ready:
-        actions.append(button("確認新增", "capture.confirm"))
+    # One orange confirm button at the start of Flex footer only.
+    # No duplicate in the Quick Reply action strip.
+    confirm = button("確認新增", "capture.confirm") if ready else None
     actions += [button("改類型", "capture.preview"), button("取消", "capture.cancel"),
                 _direct(cfg, path)]
     return _reply("類型：" + TYPES[session.target] + "\n" + summary +
                   ("\n\n欄位齊全，確認後才會新增。" if ready else
-                   "\n\n請補齊必要欄位。"), actions, quick_reply)
+                   "\n\n請補齊必要欄位。"), actions, quick_reply, confirm=confirm)
 
 
 async def begin_capture(text, record, identity, cfg, user, db: AsyncSession):
@@ -283,6 +320,8 @@ async def handle_capture_postback(event, command, identity, cfg, user, db: Async
             return _reply("請先設定有效的行程開始與結束時間。", [], quick_reply)
         if target not in TYPES:
             return _reply("請先選擇類型。", [], quick_reply)
+        if not _can_confirm(target, fields):
+            return _reply("必要欄位不完整或無效，請補齊後再確認新增。", [], quick_reply)
         session.status = "submitting"
         await db.commit()  # Persist decision BEFORE any external Calendar effect.
         result = await inbox.commit(inbox.ConfirmBatch(items=[

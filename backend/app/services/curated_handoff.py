@@ -135,7 +135,7 @@ async def upsert_handoff(db, item: HandoffItem, version: str) -> str:
             if previous > item.handoff_updated_at_tpe or (previous == item.handoff_updated_at_tpe and row.content_hash != version):
                 raise ValueError("superseded_or_conflicting_handoff_version")
     if result == "UNCHANGED":
-        stored = {k: v for k, v in (row.handoff_details or {}).items() if k != "handoff_updated_at_tpe"}
+        stored = {k: v for k, v in (row.handoff_details or {}).items() if k in BUSINESS_FIELDS}
         # Pre-v2 rows do not have the optional verification status; their
         # absence is equivalent to unknown, not to a verified claim.
         stored.setdefault("verification_status", "unknown")

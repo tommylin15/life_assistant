@@ -33,14 +33,14 @@
     },
     "eservices.taichung.gov.tw": {
       "route": "TW_PROXY",
-      "reason": "OVERSEAS_BLOCKED",
-      "marked_at": "2026-10-28T04:10:00+08:00",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-30T08:38:23.138651+08:00",
       "note": "臺中市政府服務e櫃檯"
     },
     "www.forest.gov.tw": {
       "route": "TW_PROXY",
-      "reason": "OVERSEAS_BLOCKED",
-      "marked_at": "2026-10-28T04:10:00+08:00",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-30T08:38:23.142020+08:00",
       "note": "林業保育署"
     },
     "www.tyfa.org.tw": {
@@ -126,6 +126,24 @@
       "reason": "OVERSEAS_CONNECTION_TIMEOUT",
       "marked_at": "2026-10-29T04:10:30.694559+08:00",
       "note": "Auto-learned by router"
+    },
+    "www.tyfa.com.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-30T08:38:23.143658+08:00",
+      "note": "桃園市農會官方網站"
+    },
+    "www.ardswc.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-30T08:38:23.145235+08:00",
+      "note": "農村水保署官網"
+    },
+    "tourism.hccg.gov.tw": {
+      "route": "TW_PROXY",
+      "reason": "OVERSEAS_CONNECTION_TIMEOUT",
+      "marked_at": "2026-10-30T08:38:23.146822+08:00",
+      "note": "新竹市官方觀光旅遊網"
     }
   }
 }

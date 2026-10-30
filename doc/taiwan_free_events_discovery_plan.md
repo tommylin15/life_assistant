@@ -34,3 +34,18 @@
 2. **破除 `B-source-validation` 候選冷凍死鎖**：每日批次強制從 `B-source-validation`／`CANDIDATE`／`REVIEW_SOCIAL` 實測並晉升至少 2 個合格來源進入 `官網來源總表` 與 `每日探索來源管理`（`ACTIVE_ROTATION`），不再讓已具官方身分之報名網與局處粉專無限期排除於 `B_active` 之外。
 3. **官方粉專「三步雙入口探索協議」（Twin-Entry Binding）**：Meta（FB/IG）公開粉專首頁對未登入請求回傳 `/login/` 跳轉或隱藏貼文時間軸，屬平台匿名列表限制，**嚴禁直接視為權限牆放棄該主辦**；必須同時綁定其對應局處官網／報名網（經 `TW_PROXY` 抓取）並結合搜尋引擎發掘最新貼文與外部報名表單（Accupass、`forms.gle`）。
 4. **社群短網址 OpenGraph 解析、民國年換算與明確排除日誌**：對 `threads.com`／`facebook.com`／`instagram.com` 預設帶入 `User-Agent: facebookexternalhit/1.1` 以解析 `/share/` 302 轉址與 `og:description` 全文；強制支援政府網站民國年換算（$Y_{\text{CE}} = Y_{\text{ROC}} + 1911$，如 `115年` $\to$ `2026年`）；若解析後確認為非活動之個人日常貼文，明確記 `NON_EVENT_POST_EXCLUDED` 與原文摘要。
+
+## 2026-10-30｜批次常態受阻站點問題排除與常態治理（DNS失效、域名後綴、機關WAF與Cloudflare盾）
+
+針對日常自然批次標記為 `BLOCKED` 或暫時受阻之站點，完成專案級排查、入口修正與對應防線健全：
+1. **海外 IP 逾時自動解鎖（已全量走 `TW_PROXY` 成功取得 HTTP 200）**：
+   - **農業部食農教育資訊整合平臺 (`fae.moa.gov.tw`)**：台灣 Proxy 成功回傳 399KB 完整活動列表。
+   - **臺中市政府服務e櫃檯 (`eservices.taichung.gov.tw`)**：台灣 Proxy 成功回傳 58KB 完整線上申辦與市民活動頁。
+   - **林業及自然保育署全球資訊網 (`www.forest.gov.tw`)**：台灣 Proxy 成功回傳 489KB 生態活動與最新消息。
+2. **網域失效與域名後綴混淆修正**：
+   - **原農社企暨農村好物網 (`rse.ardswc.gov.tw`)**：經查該獨立子網域 DNS 已除役失效（HTTP 502 / Name or service not known）。依規格降級切換至主管機關正式專頁——**農業部農村發展及水土保持署最新消息專區 (`https://www.ardswc.gov.tw/Home/News/news_list`)**，走 `TW_PROXY` 成功讀回 108KB 當期公告。
+   - **桃園市農會**：來源表舊登載 `www.tyfa.org.tw` 存在 DNS 異常，修正為正式營運網址 **`https://www.tyfa.com.tw/article.php?cid=44&lang=tw&tb=2`**，走 `TW_PROXY` 成功取得 109KB 跨農會活動公告。
+3. **地方政府全站 WAF 阻擋應對**：
+   - **新竹市政府首頁 (`www.hccg.gov.tw`)**：市府主入口具備全站 WAF 盾（回應 HTTP 520 / Cloudflare 挑戰），正式替代入口切換為城銷處主管之**新竹市官方觀光旅遊網 (`https://tourism.hccg.gov.tw/`)**，經 `TW_PROXY` 成功取得 SPA 頁面並啟用搜尋輔助補漏。
+4. **BeClass 全站 Cloudflare Challenge 防線**：
+   - `www.beclass.com/default.php?name=ShowList` 經台灣節點仍遭遇 Cloudflare Challenge（HTTP 403 / Just a moment...）。依 `01-source-quality.md` 規範不得對受限頁暴力輪換工具或繞過，但亦不推論當日無活動；確立改採**「搜尋輔助定位具名主辦單頁（`site:beclass.com rid=*`）」＋「主辦公開活動表單核證」**，直達活動內頁完成 03 核證與入池。

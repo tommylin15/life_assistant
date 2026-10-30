@@ -41,9 +41,8 @@ class LineStagingGuardTests(unittest.TestCase):
             (503, b'{"detail":"other"}'),
             (503, b'{"detail":"LINE integration is not configured","extra":"ignored"}'),
         ]:
-            # An exact disabled detail is the only allowed shape.
-            expected = (status == 503 and body.startswith(
-                b'{"detail":"LINE integration is not configured"'))
+            # An exact one-field application response is the only allowed shape.
+            expected = status == 503 and body == DISABLED
             protect, _ = guard.should_protect(fetch=lambda: (status, body), sleep=lambda _: None)
             self.assertEqual(protect, not expected, (status, body))
 
@@ -52,6 +51,27 @@ class LineStagingGuardTests(unittest.TestCase):
             raise TimeoutError("private transport details must not escape")
         self.assertEqual(guard.should_protect(fetch=broken, sleep=lambda _: None),
                          (True, "unknown_config_response"))
+
+    def test_two_probe_logic_unknown_second_response_fails_closed(self):
+        checks = iter([(503, DISABLED), (503, b"gateway returned 503")])
+        self.assertEqual(guard.should_protect(fetch=lambda: next(checks),
+                                               sleep=lambda _: None),
+                         (True, "unknown_config_response"))
+
+    def test_ci_auto_dispatch_and_release_backstop_contract(self):
+        root = Path(__file__).resolve().parents[1]
+        auto = (root / ".github/workflows/v3-auto-staging-after-ci.yml").read_text()
+        release = (root / ".github/workflows/v3-release-ghcr.yml").read_text()
+        self.assertIn("scripts/line_staging_guard.py --github-output", auto)
+        self.assertIn("steps.line_staging.outputs.protect == 'false'", auto)
+        self.assertIn("--raw-field enable_line=false", auto)
+        self.assertIn("--raw-field auto_staging=true", auto)
+        self.assertIn("auto_staging:", release)
+        self.assertIn("inputs.auto_staging && inputs.publish_staging", release)
+        self.assertIn("Block automatic overwrite of LINE-enabled staging", release)
+        # Check that V3 backstop appears before candidate deployment/migration.
+        self.assertLess(release.index("Block automatic overwrite of LINE-enabled staging"),
+                        release.index("Create 0%-traffic digest-pinned candidate"))
 
     def test_exact_stage_url_only(self):
         self.assertEqual(guard.STAGING_LINE_URL,

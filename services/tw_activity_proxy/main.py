@@ -68,6 +68,20 @@ def _validate_target(raw):
     return host
 
 
+def _origin_tls_context(host):
+    """Keep certificate chain and hostname verification for every upstream.
+
+    media.taiwan.net.tw has an otherwise trusted TWCA chain whose older
+    certificate omits Subject Key Identifier (Python/OpenSSL verify code 86).
+    Only that exact official host may skip the RFC 5280 strict-extension check.
+    This does NOT disable CA validation, expiry or hostname verification.
+    """
+    context = ssl.create_default_context()
+    if host == "media.taiwan.net.tw" and hasattr(ssl, "VERIFY_X509_STRICT"):
+        context.verify_flags &= ~ssl.VERIFY_X509_STRICT
+    return context
+
+
 @functions_framework.http
 def proxy_request(req):
     # Cloud Run IAM must enforce the caller identity before the application.
@@ -97,7 +111,7 @@ def proxy_request(req):
     try:
         with httpx.Client(timeout=timeout, follow_redirects=False, verify=True,
                           trust_env=False,
-                          transport=httpx.HTTPTransport(verify=ssl.create_default_context(), trust_env=False, local_address="0.0.0.0", retries=1)) as client:
+                          transport=httpx.HTTPTransport(verify=_origin_tls_context(host), trust_env=False, local_address="0.0.0.0", retries=1)) as client:
             with client.stream("GET", data["url"], headers=headers) as upstream:
                 if 300 <= upstream.status_code < 400:
                     return jsonify({"error": "upstream_redirect_rejected"}), 502

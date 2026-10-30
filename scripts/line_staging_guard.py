@@ -40,7 +40,7 @@ def explicitly_disabled(status: int, body: bytes) -> bool:
         data = json.loads(body)
     except (ValueError, UnicodeDecodeError, TypeError):
         return False
-    return isinstance(data, dict) and data.get("detail") == DISABLED_RESPONSE
+    return isinstance(data, dict) and data == {"detail": DISABLED_RESPONSE}
 
 
 def should_protect(*, fetch=None, sleep=None) -> tuple[bool, str]:

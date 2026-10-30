@@ -1,4 +1,5 @@
 """Bounded SQLite contract tests for LINE native capture and Life commit delegation."""
+import json
 import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -132,6 +133,77 @@ class CaptureFlow(IsolatedAsyncioTestCase):
         self.assertIn("尚無購物清單",str(listing))
         back = await self.post("capture.back")
         self.assertIn("購物品項",str(back))
+
+    def assert_one_colored_confirm_first(self, response):
+        bubble = response[0]["contents"]
+        buttons = bubble["footer"]["contents"]
+        self.assertEqual(len(buttons), 1)
+        self.assertEqual(buttons[0]["style"], "primary")
+        self.assertEqual(buttons[0]["color"], "#D35400")
+        action = buttons[0]["action"]
+        self.assertEqual(action["label"], "確認新增")
+        self.assertEqual(v2.read_token(action["data"], CFG, USER, IDENTITY)["a"],
+                         "capture.confirm")
+        quick_labels = [item["action"]["label"] for item in
+                        response[0]["quickReply"]["items"]]
+        self.assertNotIn("確認新增", quick_labels)
+        self.assertEqual(json.dumps(response, ensure_ascii=False).count("確認新增"), 1)
+
+    def assert_no_confirm(self, response):
+        self.assertNotIn("footer", response[0]["contents"])
+        self.assertNotIn("確認新增", json.dumps(response, ensure_ascii=False))
+
+    async def test_shopping_confirm_is_unique_colored_and_requires_owned_list(self):
+        self.assert_no_confirm(await self.message("牛奶"))
+        self.assert_no_confirm(await self.post("capture.kind", {"k": "shopping"}))
+        self.db.add(ShoppingList(id="list-2", name="超市", user_sub="owner"))
+        await self.db.commit()
+        response = await self.post("capture.pick_list", {"k": "list-2"})
+        self.assert_one_colored_confirm_first(response)
+        self.assertIn("改分類", json.dumps(response, ensure_ascii=False))
+
+    async def test_task_and_note_confirm_no_duplicate_and_server_rejects_incomplete(self):
+        await self.message("提醒買書")
+        task = await self.post("capture.kind", {"k": "task"})
+        self.assert_one_colored_confirm_first(task)  # Optional task deadline.
+        await self.post("capture.edit", {"k": "title"})
+        self.assert_one_colored_confirm_first(await self.message("買參考書"))
+        session = await self.session()
+        session.fields = {"title": "   "}
+        await self.db.commit()
+        with patch.object(capture.inbox, "commit", new=AsyncMock()) as write:
+            out = await self.post("capture.confirm")
+        self.assertIn("必要欄位不完整", str(out))
+        write.assert_not_awaited()
+        self.assertEqual(session.status, "pending")
+
+        await self.post("capture.preview")
+        await self.post("capture.kind", {"k": "note"})
+        note = await self.post("capture.back")
+        self.assert_one_colored_confirm_first(note)
+
+    async def test_calendar_requires_real_start_end_and_nonempty_title_for_confirm(self):
+        self.assert_no_confirm(await self.message("看牙醫"))
+        self.assert_no_confirm(await self.post("capture.kind", {"k": "calendar"}))
+        self.assert_no_confirm(await self.post(
+            "capture.start_at", params={"datetime": "2026-11-02T15:00"}))
+        self.assert_no_confirm(await self.post(
+            "capture.end_at", params={"datetime": "2026-11-02T14:00"}))
+        self.assert_one_colored_confirm_first(await self.post(
+            "capture.end_at", params={"datetime": "2026-11-02T16:00"}))
+        session = await self.session()
+        session.fields = {"summary": "看牙醫", "start": "2026-11-02T15:00+08:00"}
+        await self.db.commit()
+        with patch.object(capture.inbox, "commit", new=AsyncMock()) as write:
+            out = await self.post("capture.confirm")
+        self.assertIn("開始與結束", str(out))
+        write.assert_not_awaited()
+
+    async def test_confirm_button_absent_after_cancel(self):
+        await self.message("寫筆記")
+        self.assert_one_colored_confirm_first(await self.post("capture.kind", {"k": "note"}))
+        cancelled = await self.post("capture.cancel")
+        self.assert_no_confirm(cancelled)
 
     async def test_cancel_never_creates_formal_data(self):
         await self.message("牛奶")

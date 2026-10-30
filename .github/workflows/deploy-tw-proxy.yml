@@ -1,70 +1,24 @@
-name: Deploy Taiwan Activity Proxy (Cloud Run)
-
+name: Taiwan proxy safe CI
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'services/tw_activity_proxy/**'
+      - 'backend/app/services/tw_request_router.py'
+      - 'backend/tests/test_tw_request_router.py'
       - '.github/workflows/deploy-tw-proxy.yml'
-
 permissions:
   contents: read
-  id-token: write
-
 jobs:
-  deploy-proxy:
+  test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: dev-test
-    env:
-      GCP_PROJECT_ID: gen-lang-client-0593591102
-      GCP_REGION: asia-east1
-      SERVICE_NAME: tw-activity-proxy
-      INVOKER_SA: postgres-vm@gen-lang-client-0593591102.iam.gserviceaccount.com
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Set up gcloud
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Deploy Cloud Run service to asia-east1
-        run: |
-          echo "Deploying ${{ env.SERVICE_NAME }} to ${{ env.GCP_REGION }} in ${{ env.GCP_PROJECT_ID }}..."
-          gcloud run deploy "${{ env.SERVICE_NAME }}" \
-            --project="${{ env.GCP_PROJECT_ID }}" \
-            --region="${{ env.GCP_REGION }}" \
-            --source=services/tw_activity_proxy \
-            --allow-unauthenticated \
-            --set-env-vars "TW_PROXY_SECRET=tw-life-assistant-proxy-20261028-secret" \
-            --timeout=120s \
-            --memory=512Mi \
-            --min-instances=0 \
-            --max-instances=5 \
-            --quiet
-
-      - name: Set invoker policy binding for VM service account
-        run: |
-          echo "Binding run.invoker role for ${{ env.INVOKER_SA }}..."
-          gcloud run services add-iam-policy-binding "${{ env.SERVICE_NAME }}" \
-            --project="${{ env.GCP_PROJECT_ID }}" \
-            --region="${{ env.GCP_REGION }}" \
-            --member="serviceAccount:${{ env.INVOKER_SA }}" \
-            --role="roles/run.invoker" \
-            --quiet || true
-
-      - name: Output Service URL
-        run: |
-          URL="$(gcloud run services describe "${{ env.SERVICE_NAME }}" --project="${{ env.GCP_PROJECT_ID }}" --region="${{ env.GCP_REGION }}" --format='value(status.url)')"
-          echo "PROXY_URL=${URL}" >> $GITHUB_ENV
-          echo "Service deployed successfully at ${URL}"
+          python-version: '3.12'
+      - run: python -m pip install -r services/tw_activity_proxy/requirements.txt pytest requests
+      - run: python -m pytest -q services/tw_activity_proxy/test_proxy.py backend/tests/test_tw_request_router.py
+        env:
+          PYTHONPATH: backend

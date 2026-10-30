@@ -1,3 +1,5 @@
+> **2026-10-30 最新狀態補充：** 原先「前六格 deferred」說明是 10/29 上架前的歷史版本。Owner 已回報八格 API 上架 PASS，Rich Menu ID `richmenu-0ba0109d112dca29bbf231b0ac7a687d`；前六格 Staging 功能已由 Owner 回報可用。V2-03B 新增智慧聊天即時記錄及 Life 直接深連結，最新 CI/部署/手機驗收詳見 `doc/todo.md` 與 `doc/line_integration_b_wi.md#wi-05j`。不可沿用本文件 10/29 的「未上架」說明做目前狀態結論。
+
 # Life Omni｜LINE V2-02 八格 Rich Menu 正式素材與上架工作指示
 
 2026-10-29｜**圖面／程式 SOURCE PASS；OA 實際套用與手機驗收 NOT VERIFIED**。

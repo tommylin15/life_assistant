@@ -233,6 +233,8 @@ async def handle_capture_postback(event, command, identity, cfg, user, db: Async
                       "，下一則訊息會更新目前卡片，不會立即新增 Life 資料。",
                       [postback_action("取消", make_token(cfg, user, identity, "capture.cancel",
                                                        i=session.id, r=session.revision))], quick_reply)
+    elif cmd == "capture.back":
+        return _preview(session, cfg, user, identity, make_token, postback_action, quick_reply)
     elif cmd == "capture.list" and session.target == "shopping":
         await feature_gate("shopping")(user=user, db=db)
         lists = (await db.scalars(select(ShoppingList).where(
@@ -243,7 +245,7 @@ async def handle_capture_postback(event, command, identity, cfg, user, db: Async
                 _direct(cfg, "/more/shopping", "建立購物清單")], quick_reply)
         return _reply("選擇要加入的購物清單：", [
             button(v.name[:20], "capture.pick_list", k=v.id) for v in lists] +
-            [button("返回卡片", "capture.list")], quick_reply)
+            [button("返回卡片", "capture.back")], quick_reply)
     elif cmd == "capture.pick_list" and session.target == "shopping":
         await feature_gate("shopping")(user=user, db=db)
         list_id = command.get("k")

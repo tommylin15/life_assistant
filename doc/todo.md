@@ -1,3 +1,11 @@
+## 2026-10-30｜LINE 統一四卡：智慧即時記錄／Life 深連結／整合測試／正式發布（ACTIVE）
+
+- **Owner 最新決策：** 四張工程卡一次完成、集中驗收；普通 LINE 聊天內輸入短語（如「牛奶」）選擇購物／待辦／行程／筆記，補選本人清單、標題、日期與分類；明確確認後才寫入 Life。所有「完整／更多」直接連向同一環境 Flutter Life 路由，不再經過 LIFF。保留 LIFF 綁定與必要 legacy fallback，不強制刪除資料。
+- **Source 實作：** 新增 `line_capture_sessions` 及 additive migration `20261030_0025`（暫存 TTL 24 小時，僅本人/namespace 可用）；`line_capture.py` 使用 Life 既有 `rule_candidates` 提示、signed postback、LINE datetimepicker、真購物清單、編輯／取消、`inbox.commit` action_id 收據和 UNKNOWN 防重，不在 Webhook 做無界 AI 呼叫。既有 LINE Event 與 LIFF 功能保留，UI「查看完整」改為 Life Hosting 直接頁面。
+- **CI／驗收：** `backend/tests/test_line_capture.py`、`backend/tests/test_line_v2_daily.py`、舊 LINE 回歸及 Postgres migration head 測試；以最新 SHA 五項 CI PASS 才能執行新候選。真 LINE／Google／iOS Android／Life 資料讀回尚需 LINE-enabled Staging + Production 自動驗收及 Owner 手機整合驗收。**目前不是 DONE**。
+- **發布方式：** 主 workflow `V3 Release - GHCR to Cloud Run` 必須同 SHA CI PASS；先 `promote=false,publish_staging=true,enable_line=true,auto_staging=false`，確認 candidate/Preview/staging/live 及 Webhook；再依正式同 SHA stage proof 與 Production gates 受控 promote。單一 LINE OA 要核對 Console Webhook/LIFF 來源一致，不能將 staging OA 測試當 production；不要重套八格 Rich Menu（原 ID `richmenu-0ba0109d112dca29bbf231b0ac7a687d`）。
+- **剩餘高風險驗收：** LINE Reply timeout / UNKNOWN、重送後固定 action_id、真 DB 新增與讀回、Google 授權失效、跨 namespace / user、Rich Menu 8格 iOS/Android、Production OAuth 與 OA 切換；失敗保留舊 production，禁止覆蓋造成中斷。歷史 LINE TODO 保留稽核但不當現行完成狀態。
+
 ## 2026-10-30｜Life 官方觀光署可信 TLS 連線｜CLOSED／LIVE PASS
 
 - **根因確認**：[TLS 比對 #41014131479](https://github.com/tommylin15/life_assistant/actions/runs/41014131479) Python CA/Certifi 嚴格檢查報 X.509 code 86（Missing Subject Key Identifier）；[相容性測試 #41014255690](https://github.com/tommylin15/life_assistant/actions/runs/41014255690) 只移除 X509_STRICT 可驗證官方 TWCA 鏈且 CA／hostname 驗證仍啟用。

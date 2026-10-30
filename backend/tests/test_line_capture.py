@@ -124,6 +124,14 @@ class CaptureFlow(IsolatedAsyncioTestCase):
         self.assertTrue(s.fields["start"].endswith("+08:00"))
         self.assertTrue(s.fields["end"].endswith("+08:00"))
 
+    async def test_list_back_returns_summary_instead_of_loop(self):
+        await self.message("牛奶")
+        await self.post("capture.kind", {"k": "shopping"})
+        listing = await self.post("capture.list")
+        self.assertIn("尚無購物清單",str(listing))
+        back = await self.post("capture.back")
+        self.assertIn("購物品項",str(back))
+
     async def test_cancel_never_creates_formal_data(self):
         await self.message("牛奶")
         with patch.object(capture.inbox, "commit", new=AsyncMock()) as write:

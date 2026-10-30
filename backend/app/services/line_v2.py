@@ -35,7 +35,7 @@ ALLOWED_COMMANDS = frozenset((
     "events.tag", "events.tags_page", "events.save", "events.recent",
     "tasks.list", "tasks.complete", "shopping.list", "shopping.set",
     "search.kind",
-    "capture.kind", "capture.preview", "capture.list", "capture.pick_list",
+    "capture.kind", "capture.preview", "capture.back", "capture.list", "capture.pick_list",
     "capture.edit", "capture.due", "capture.start_at", "capture.end_at",
     "capture.confirm", "capture.cancel", "capture.receipt",
 ))

@@ -1,3 +1,12 @@
+## WI-05J｜2026-10-30 智慧即時記錄＋Life 直接導覽一輪驗收（ACTIVE）
+
+1. 核對 GitHub main 同 SHA 五項 CI PASS，backend migration head 為 0025；確認無其他 V3 部署競逐。
+2. 同 SHA 手動 V3 Staging：`promote=false,publish_staging=true,enable_line=true,auto_staging=false`，保留既有 Gmail ONNX；核對 `line_candidate_config=PASS`、`preview=PASS`、`staging_live=PASS` 與 Stage /api/v1/line/config 200。
+3. 手機 LINE 測試：八格原選單不重建；「牛奶」→ 四類分類 → 購物 → 選真實本人購物清單 → 確認 → Life PG 購物清單讀回；另測待辦標題及截止、筆記標題/內容、行程開始/結束時間與 Google 授權；所有新增須有明確確認。點「完整」應直達同環境 Flutter Life，不進 LIFF。
+4. 測試跨帳號、取消、不完整日曆、過期舊卡片、Webhook 重送、同操作重點、Reply 異常與 UNKNOWN 收據。UNKNOWN 不換 action ID 自動重建。活動「最近三天／七大類／已收錄／已收藏」按收錄時間排序仍須回歸。
+5. Staging 真實讀寫與手機皆符合才進入同 SHA Production promotion；確認 Production Domain、Google OAuth、LINE Console Webhook / LIFF id 與 OA 八格，並再次實測正式資料。正式版成功前不得將本 WI 標 DONE。
+6. 每項登錄 PASS/FAIL/NOT VERIFIED，遮蔽 token/私人內容與綁定碼。出現 FAIL 即停止 Production 切流，保留舊線上版本。
+
 # LINE 方案 B｜設定與人工驗收 WI
 
 本版使用 `/line/index.html`，API 為 `app.api.line`。舊 `LINE_BRIDGE_*` 設定不適用。先完成 GitHub CI；真實 LINE 驗收由 Owner 執行，各案例初始皆 NOT VERIFIED。

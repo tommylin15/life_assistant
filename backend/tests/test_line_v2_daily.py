@@ -22,6 +22,13 @@ class DailyMenuContract(IsolatedAsyncioTestCase):
         self.assertIn("確認才會真正寫入", messages[0]["text"])
         self.assertEqual(messages[0]["quickReply"]["items"][0]["action"]["uri"], "https://life.example.test/capture")
 
+    async def test_full_links_open_environment_life_not_liff(self):
+        for name, path in daily.LIFE_PATHS.items():
+            with self.subTest(page=name):
+                uri=daily._link(CFG, name)["uri"]
+                self.assertEqual(uri, CFG["origin"]+path)
+                self.assertNotIn("liff.line.me", uri)
+
     async def test_search_choices_are_signed_owner_scoped(self):
         messages = await handle("search.start")
         actions = [x["action"] for x in messages[0]["quickReply"]["items"]]

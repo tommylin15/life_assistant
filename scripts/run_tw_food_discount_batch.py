@@ -12,6 +12,7 @@ Implements V0.5.2 / Runbook V1.3.2 + Handoff Pool (`美食優惠｜交接資料.
 """
 import argparse
 import asyncio
+import ctypes
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import hashlib
@@ -23,6 +24,11 @@ import sys
 from xml.sax.saxutils import escape as xml_escape
 import xml.etree.ElementTree as ET
 import zipfile
+
+try:
+    ctypes.cdll.LoadLibrary("/mnt/stateful_partition/antigravity/.local/lib/libstdc++.so.6")
+except Exception:
+    pass
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "backend") not in sys.path:
@@ -236,7 +242,8 @@ def read_xlsx_sheets(xlsx_path: Path) -> dict[str, list[dict[str, str]]]:
         for sh in wb.findall(".//s:sheet", ns):
             name = sh.attrib["name"]
             rid = sh.attrib["{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"]
-            target = "xl/" + rel_map[rid].lstrip("/")
+            raw_target = rel_map[rid].lstrip("/")
+            target = raw_target if raw_target.startswith("xl/") else f"xl/{raw_target}"
             ws = ET.fromstring(z.read(target))
             rows_list: list[dict[str, str]] = []
             for r in ws.findall(".//s:row", ns):

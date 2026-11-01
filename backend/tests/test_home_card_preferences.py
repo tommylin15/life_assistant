@@ -15,7 +15,7 @@ class HomeCardPreferenceTests(unittest.TestCase):
     def test_every_home_card_including_opportunities_and_explore_can_be_saved(self):
         all_cards = [
             "tasks", "calendar", "attention", "habits", "events", "opportunities",
-            "explore", "projects", "notes", "shopping", "drive",
+            "explore", "food_discounts", "projects", "notes", "shopping", "drive",
         ]
         assert set(all_cards) == HOME_KEYS
         assert set(DEFAULT_HOME).issubset(HOME_KEYS)

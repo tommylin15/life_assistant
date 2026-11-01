@@ -1,11 +1,17 @@
-"""Unit and SQLite contract tests for the independent food_discounts feature."""
+"""Unit, handoff contract, and SQLite/PostgreSQL query tests for food_discounts."""
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
+import unittest
 from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, MagicMock
 
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from fastapi import Response
+from sqlalchemy import select
+from sqlalchemy.dialects import postgresql
 
 from app.api.food_discounts import (
     FoodDiscountIn,
+    _active_discount_predicate,
     food_discount_filters,
     list_food_discounts,
     upsert_food_discounts_batch,
@@ -13,7 +19,7 @@ from app.api.food_discounts import (
 from app.db.session import Base
 from app.models.curated import FeatureRollout
 from app.models.execution_log import ExecutionLog  # noqa: F401
-from app.models.food_discount import FoodDiscount  # noqa: F401
+from app.models.food_discount import FoodDiscount
 from app.services.food_discount_handoff import (
     HEADERS,
     canonical_food_hash,
@@ -21,13 +27,104 @@ from app.services.food_discount_handoff import (
     upsert_food_handoff,
     validate_food_handoff_record,
 )
-from fastapi import Response
 
 TAIPEI = timezone(timedelta(hours=8))
 
+try:
+    import aiosqlite  # noqa: F401
+    import sqlite3  # noqa: F401
 
-class FoodDiscountsContractTests(IsolatedAsyncioTestCase):
+    HAS_AIOSQLITE = True
+except ImportError:
+    HAS_AIOSQLITE = False
+
+
+class FoodDiscountsPureContractTests(IsolatedAsyncioTestCase):
+    def test_active_predicate_compiles_for_postgres(self):
+        stmt = select(FoodDiscount).where(_active_discount_predicate(date(2026, 11, 1)))
+        sql = str(stmt.compile(dialect=postgresql.dialect()))
+        self.assertIn("visibility_status", sql)
+        self.assertIn("claim_status", sql)
+        self.assertIn("offer_ends_on", sql)
+        self.assertIn("claim_deadline_on", sql)
+
+    async def test_handoff_contract_and_mocked_upsert_lifecycle(self):
+        today = date(2026, 11, 1)
+        base_rec = {
+            "candidate_key": "TPE-DA-001",
+            "city": "台北市",
+            "district": "台北市大安區",
+            "merchant": "50嵐",
+            "category": "手搖飲",
+            "offer_summary": "大杯純茶買一送一",
+            "offer_type": "買一送一",
+            "nominal_discount": "50%",
+            "fixed_discount_ntd": "",
+            "original_price_ntd": "40.00",
+            "offer_price_ntd": "20.00",
+            "period_text": "即日起",
+            "address": "台北市大安區復興南路",
+            "source_url": "https://example.com/50lan",
+            "notes": "",
+            "claim_status": "COLLECTED_SOURCE_CLAIM",
+            "visibility_status": "VISIBLE_SOURCE_ONLY",
+            "first_seen_on": today.isoformat(),
+            "claim_deadline_on": "",
+            "redemption_ends_on": "",
+            "offer_ends_on": "",
+            "last_positive_on": today.isoformat(),
+            "next_refresh_on": (today + timedelta(days=7)).isoformat(),
+            "date_basis": "NO_END_DATE_7D_REFRESH",
+            "disclosure": "公開來源宣稱，未逐項核實，不保證到店可使用",
+            "handoff_status": "READY",
+            "handoff_updated_at_tpe": datetime(2026, 11, 1, 4, 45, tzinfo=TAIPEI).isoformat(),
+            "life_ack_at_tpe": "",
+            "life_import_result": "",
+            "life_error": "",
+        }
+        base_rec["content_hash"] = canonical_food_hash(base_rec)
+        matrix = [list(HEADERS), [base_rec[k] for k in HEADERS]]
+        parsed = parse_food_handoff_rows(matrix)
+        self.assertEqual(len(parsed), 1)
+        item = validate_food_handoff_record(parsed[0])
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.get_bind = lambda: SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+        db.scalar.return_value = None
+
+        r1 = await upsert_food_handoff(db, item, parsed[0]["content_hash"])
+        self.assertEqual(r1, "CREATED")
+
+        existing = FoodDiscount(
+            candidate_key="TPE-DA-001",
+            content_hash=parsed[0]["content_hash"],
+            merchant="50嵐",
+            offer_summary="大杯純茶買一送一",
+            source_url="https://example.com/50lan",
+            details={"handoff_updated_at_tpe": base_rec["handoff_updated_at_tpe"]},
+        )
+        db.scalar.return_value = existing
+        r2 = await upsert_food_handoff(db, item, parsed[0]["content_hash"])
+        self.assertEqual(r2, "UNCHANGED")
+
+        updated_rec = {
+            **base_rec,
+            "visibility_status": "HIDDEN_REFRESH_DUE",
+            "handoff_updated_at_tpe": datetime(2026, 11, 8, 4, 45, tzinfo=TAIPEI).isoformat(),
+        }
+        updated_rec["content_hash"] = canonical_food_hash(updated_rec)
+        item_updated = validate_food_handoff_record(updated_rec)
+        r3 = await upsert_food_handoff(db, item_updated, updated_rec["content_hash"])
+        self.assertEqual(r3, "UPDATED")
+        self.assertEqual(existing.visibility_status, "HIDDEN_REFRESH_DUE")
+
+
+@unittest.skipUnless(HAS_AIOSQLITE, "aiosqlite + sqlite3 required")
+class FoodDiscountsSqliteIntegrationTests(IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
         self.engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -130,61 +227,3 @@ class FoodDiscountsContractTests(IsolatedAsyncioTestCase):
             )
             self.assertIn("手搖飲", opts["categories"])
             self.assertIn("國民美食", opts["categories"])
-
-    async def test_handoff_pool_lifecycle_created_unchanged_updated(self):
-        today = date.today()
-        base_rec = {
-            "candidate_key": "TPE-DA-001",
-            "city": "台北市",
-            "district": "台北市大安區",
-            "merchant": "50嵐",
-            "category": "手搖飲",
-            "offer_summary": "大杯純茶買一送一",
-            "offer_type": "買一送一",
-            "nominal_discount": "50%",
-            "fixed_discount_ntd": "",
-            "original_price_ntd": "40.00",
-            "offer_price_ntd": "20.00",
-            "period_text": "即日起",
-            "address": "台北市大安區復興南路",
-            "source_url": "https://example.com/50lan",
-            "notes": "",
-            "claim_status": "COLLECTED_SOURCE_CLAIM",
-            "visibility_status": "VISIBLE_SOURCE_ONLY",
-            "first_seen_on": today.isoformat(),
-            "claim_deadline_on": "",
-            "redemption_ends_on": "",
-            "offer_ends_on": "",
-            "last_positive_on": today.isoformat(),
-            "next_refresh_on": (today + timedelta(days=7)).isoformat(),
-            "date_basis": "NO_END_DATE_7D_REFRESH",
-            "disclosure": "公開來源宣稱，未逐項核實，不保證到店可使用",
-            "handoff_status": "READY",
-            "handoff_updated_at_tpe": datetime(2026, 11, 1, 4, 45, tzinfo=TAIPEI).isoformat(),
-            "life_ack_at_tpe": "",
-            "life_import_result": "",
-            "life_error": "",
-        }
-        base_rec["content_hash"] = canonical_food_hash(base_rec)
-        matrix = [list(HEADERS), [base_rec[k] for k in HEADERS]]
-        parsed = parse_food_handoff_rows(matrix)
-        self.assertEqual(len(parsed), 1)
-        item = validate_food_handoff_record(parsed[0])
-
-        async with self.Session() as db:
-            r1 = await upsert_food_handoff(db, item, parsed[0]["content_hash"])
-            self.assertEqual(r1, "CREATED")
-
-            r2 = await upsert_food_handoff(db, item, parsed[0]["content_hash"])
-            self.assertEqual(r2, "UNCHANGED")
-
-            updated_rec = {
-                **base_rec,
-                "visibility_status": "HIDDEN_REFRESH_DUE",
-                "handoff_updated_at_tpe": datetime(2026, 11, 8, 4, 45, tzinfo=TAIPEI).isoformat(),
-            }
-            updated_rec["content_hash"] = canonical_food_hash(updated_rec)
-            item_updated = validate_food_handoff_record(updated_rec)
-            r3 = await upsert_food_handoff(db, item_updated, updated_rec["content_hash"])
-            self.assertEqual(r3, "UPDATED")
-

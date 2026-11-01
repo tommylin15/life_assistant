@@ -11,6 +11,7 @@ def upgrade():
     op.create_table(
         "food_discounts",
         sa.Column("candidate_key", sa.String(200), primary_key=True),
+        sa.Column("content_hash", sa.String(64)),
         sa.Column("city", sa.String(50)),
         sa.Column("district", sa.String(100)),
         sa.Column("merchant", sa.String(300), nullable=False),

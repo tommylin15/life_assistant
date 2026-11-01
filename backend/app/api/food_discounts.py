@@ -1,10 +1,9 @@
 """Independent Taipei/New Taipei 41-district food discounts API and batch upsert."""
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import re
 from typing import Literal
 import uuid
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -21,7 +20,7 @@ from app.models.execution_log import ExecutionLog
 from app.models.food_discount import FoodDiscount
 
 router = APIRouter(prefix="/food-discounts", tags=["food-discounts"])
-TAIPEI = ZoneInfo("Asia/Taipei")
+TAIPEI = timezone(timedelta(hours=8))
 
 FOOD_MACRO_CATEGORIES: dict[str, list[str]] = {
     "手搖飲": ["手搖", "茶飲", "奶茶", "珍奶", "果茶", "純茶", "飲料"],
@@ -34,6 +33,7 @@ FOOD_MACRO_CATEGORIES: dict[str, list[str]] = {
 class FoodDiscountIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     candidate_key: str = Field(min_length=2, max_length=200, pattern=r"^[A-Za-z0-9_:./-]+$")
+    content_hash: str | None = Field(default=None, max_length=64)
     city: str | None = Field(default=None, max_length=50)
     district: str | None = Field(default=None, max_length=100)
     merchant: str = Field(min_length=1, max_length=300)
@@ -134,6 +134,7 @@ def _serialize_discount(row: FoodDiscount) -> dict:
         field: getattr(row, field)
         for field in (
             "candidate_key",
+            "content_hash",
             "city",
             "district",
             "merchant",

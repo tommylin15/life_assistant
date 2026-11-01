@@ -62,12 +62,35 @@
 
 ---
 
-## 5. VM 獨立排程與 Life PostgreSQL 同步管線
+## 5. 交換池（`美食優惠｜交接資料.xlsx`）與雙向 ACK 契約
+
+比照「台灣活動探索（`台灣活動｜交接資料.xlsx`）」架構，於 Google Drive `life_assistantGPT/美食優惠探索｜試行/` 設立獨立交換池 **`美食優惠｜交接資料.xlsx`**（分頁名稱：`交接資料`，共 31 欄 `A:AE`），解耦母表 `ARRAYFORMULA` 運算與 Life PostgreSQL 入庫：
+
+1. **固定 31 欄結構（`A:AE`）**：
+   - `A`：`candidate_key`（唯一識別鍵）
+   - `B`：`content_hash`（依 25 個核心業務欄位以固定順序 Canonical JSON 計算之 SHA-256 雜湊值）
+   - `C:Z`：24 個業務欄位（`city`, `district`, `merchant`, `category`, `offer_summary`, `offer_type`, `nominal_discount`, `fixed_discount_ntd`, `original_price_ntd`, `offer_price_ntd`, `period_text`, `address`, `source_url`, `notes`, `claim_status`, `visibility_status`, `first_seen_on`, `claim_deadline_on`, `redemption_ends_on`, `offer_ends_on`, `last_positive_on`, `next_refresh_on`, `date_basis`, `disclosure`）
+   - `AA:AE`：交換池狀態與回執欄位：
+     - `handoff_status`：`READY` / `ACKED` / `ERROR`
+     - `handoff_updated_at_tpe`：ISO-8601 `+08:00` 時間戳
+     - `life_ack_at_tpe`：Life 匯入器完成入庫回寫之 `+08:00` 時間戳
+     - `life_import_result`：`CREATED` / `UPDATED` / `UNCHANGED` / `FAILED`
+     - `life_error`：驗證或入庫失敗原因摘要（成功時為空白）
+2. **狀態流轉與未變動保護**：
+   - 既有已 `ACKED` 且 `content_hash` 未改變之列，完全保留原有 `life_ack_at_tpe` 與 `life_import_result` 不重寫。
+   - 新增候選或因 7 天到期／30 天歸檔導致 `visibility_status`、`claim_status`、`last_positive_on` 變更時，`content_hash` 自動更新並標記 `READY`，觸發 Life 匯入器更新 `food_discounts` 後回寫 `ACKED`（`UPDATED`）。
+
+---
+
+## 6. VM 獨立排程與 Life PostgreSQL 同步管線
 
 - **排程單元**：
   - `tw-food-discount-discovery.timer`：每日 **04:45 Asia/Taipei（`20:45:00 UTC`）** 觸發。
   - `tw-food-discount-discovery.service`：設定 `After=network-online.target docker.service tw-activity-discovery.service`，確保緊接在台灣活動探索批次（04:00 TPE 啟動）完成之後執行，避免資源與網路競爭。
 - **執行流程**：
-  1. 讀取 Google Drive `life_assistantGPT/美食優惠探索｜試行` 最新試算表與手冊，建立當日唯一批次鍵 `FOOD-UNIFIED-YYYYMMDD`。
-  2. 執行每日效期檢查與 `AG <= today` 無終日優惠來源追查；若為週一／三／五則依輪替計畫執行 14/14/13 區動態網頁搜尋與去重寫入，並完成 Sheet 與試行紀錄 Doc 讀回。
-  3. 執行 `scripts/run_tw_food_discount_batch.py --sync-db`，將試算表「優惠候選」同步 upsert 至 Life PostgreSQL `food_discounts` 資料表，並寫入 `ExecutionLog`（`action_type = "food_discounts.sheet_sync"`）。
+  1. 讀取 Google Drive `life_assistantGPT/美食優惠探索｜試行` 最新母表、交換池 `美食優惠｜交接資料.xlsx` 與手冊，建立當日唯一批次鍵 `FOOD-UNIFIED-YYYYMMDD`。
+  2. 執行每日效期檢查與 `AG <= today` 無終日優惠來源追查；若為週一／三／五則依輪替計畫執行 14/14/13 區動態網頁搜尋與去重寫入，並完成母表（`C10 = 0`）與試行紀錄 Doc 讀回。
+  3. 執行 `.venv/bin/python scripts/run_tw_food_discount_batch.py --stage-handoff --sync-db --upload-gdrive`：
+     - 將母表變更同步至 `美食優惠｜交接資料.xlsx`（新列或異動列標為 `READY`，未變動 `ACKED` 列原地保護）。
+     - 依交換池執行 PostgreSQL `food_discounts` 交易入庫（寫入 `ExecutionLog` `action_type = "food_discounts.handoff"`）。
+     - 將交換池回寫為 `ACKED`（`CREATED` / `UPDATED` / `UNCHANGED`）並上傳回 Google Drive，逐鍵讀回驗證 `READY = 0`、`ERROR = 0`。

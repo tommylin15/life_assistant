@@ -17,6 +17,7 @@ class FoodDiscount(Base):
     )
 
     candidate_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64))
     city: Mapped[str | None] = mapped_column(String(50))
     district: Mapped[str | None] = mapped_column(String(100))
     merchant: Mapped[str] = mapped_column(String(300), nullable=False)

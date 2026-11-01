@@ -36,6 +36,16 @@ class LifeReleaseNote {
 /// Never claim unrelated / unverified candidate fixes are production releases.
 const lifeReleaseNotes = <LifeReleaseNote>[
   LifeReleaseNote(
+    id: 'web-0.7.1-food-home-and-line',
+    version: '0.7.1',
+    title: '首頁自訂美食優惠與 LINE 助手介接',
+    featureKey: 'food_discounts',
+    changes: <String>[
+      '個人化設定「首頁卡片」新增「美食優惠」，支援排序與勾選顯示。',
+      'LINE 助手介接美食優惠，可傳送「美食」、「美食優惠」滑動卡片探索或輸入「查 美食 關鍵字」。',
+    ],
+  ),
+  LifeReleaseNote(
     id: 'web-0.7.0-food-discounts',
     version: '0.7.0',
     title: '新增雙北美食優惠探索',

@@ -13,6 +13,7 @@ const _homeLabels = <String, String>{
   'calendar': '下一個行程',
   'habits': '今日習慣',
   'explore': '活動探索',
+  'food_discounts': '美食優惠',
   'projects': '進行中專案',
   'notes': '筆記',
   'shopping': '購物清單',

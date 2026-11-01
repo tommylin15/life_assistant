@@ -91,5 +91,41 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.lastBody?['home_cards'], ['tasks', 'calendar']);
   });
+  testWidgets('food discounts can be toggled and saved in home cards',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final api = _FakePreferencesApi();
+    await tester.pumpWidget(ProviderScope(overrides: [
+      authProvider.overrideWith(_FakeAuth.new),
+      platformApiProvider.overrideWithValue(api),
+      uiPreferencesProvider.overrideWith((ref) async => {
+        'revision': 0, 'nav_mode': 'auto',
+        'pinned': ['tasks', 'calendar', 'projects'],
+        'more_order': ['notes'],
+        'home_cards': ['tasks'],
+      }),
+      effectiveFeaturesProvider.overrideWith((ref) async =>
+        {'tasks': true, 'food_discounts': true}),
+    ], child: const MaterialApp(home: PersonalizePage())));
+    await tester.pumpAndSettle();
+
+    final food = find.byKey(const ValueKey('home-card-food_discounts'));
+    expect(food, findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(food).value, false);
+
+    await tester.ensureVisible(food);
+    await tester.tap(food);
+    await tester.pumpAndSettle();
+    expect(tester.widget<CheckboxListTile>(food).value, true);
+
+    final save = find.text('儲存偏好');
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(api.lastBody?['home_cards'], ['tasks', 'food_discounts']);
+  });
 
 }

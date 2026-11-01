@@ -27,12 +27,14 @@ MAX_CAROUSEL_BYTES = 48_000  # Leave room below LINE's 50 KB JSON limit.
 TOKEN_TTL = timedelta(days=7)
 SUPPORTED_MENU = frozenset((
     "events.latest", "events.recent", "events.tags", "events.saved",
+    "food.latest",
     "capture.start", "today.view", "search.start", "tasks.list",
     "shopping.list", "calendar.today",
 ))
 ALLOWED_COMMANDS = frozenset((
     "events.latest", "events.tags", "events.saved", "events.page",
     "events.tag", "events.tags_page", "events.save", "events.recent",
+    "food.latest", "food.page",
     "tasks.list", "tasks.complete", "shopping.list", "shopping.set",
     "search.kind",
     "capture.kind", "capture.preview", "capture.back", "capture.list", "capture.pick_list",
@@ -302,7 +304,7 @@ async def handle_postback(event: dict, identity: str, cfg: dict,
                                              db, make_token, postback_action, quick_reply)
     if cmd in ("capture.start", "today.view", "search.start", "search.kind",
                "tasks.list", "tasks.complete", "shopping.list",
-               "shopping.set", "calendar.today"):
+               "shopping.set", "calendar.today", "food.latest", "food.page"):
         from app.services.line_v2_daily import handle_daily
         return await handle_daily(cmd, command, identity, cfg, user, db,
                                   make_token, postback_action, _text_reply, quick_reply)

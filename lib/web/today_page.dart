@@ -57,8 +57,20 @@ final _todayDataProvider = FutureProvider<Map<String, dynamic>>((ref) async {
     try { habits = await ref.read(habitApiProvider).getHabits(); }
     catch (_) { habits = null; }
   }
+  List<Map<String, dynamic>>? foodDiscounts;
+  if (chosen.contains('food_discounts') && flags?['food_discounts'] == true) {
+    try {
+      final res = await ref.read(platformApiProvider)
+          .get('/food-discounts?limit=3&offset=0');
+      if (res['items'] is List) {
+        foodDiscounts = (res['items'] as List).cast<Map<String, dynamic>>();
+      }
+    } catch (_) {
+      foodDiscounts = null;
+    }
+  }
   return {'tasks': tasks, 'projects': projects, 'calendar': calendar,
-          'events': explore, 'habits': habits};
+          'events': explore, 'habits': habits, 'food_discounts': foodDiscounts};
 });
 
 class TodayPage extends ConsumerWidget {
@@ -189,7 +201,11 @@ class TodayPage extends ConsumerWidget {
       case 'drive':
         return _tile(context, 'Google Drive', '查看個人已授權的雲端文件', '/more/drive');
       case 'food_discounts':
-        return _tile(context, '美食優惠', '雙北 41 區日常手搖飲與國民美食優惠情報', '/more/food-discounts');
+        final items = (snapshot['food_discounts'] as List?)?.cast<Map<String, dynamic>>();
+        final preview = (items != null && items.isNotEmpty)
+            ? items.take(2).map((x) => '${x['merchant']} · ${x['offer_summary']}').join('｜')
+            : '雙北 41 區日常手搖飲與國民美食優惠情報';
+        return _tile(context, '美食優惠', preview, '/more/food-discounts');
       default: return const SizedBox.shrink();
     }
   }

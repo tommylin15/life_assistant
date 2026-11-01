@@ -18,7 +18,8 @@ LIMIT = 5
 
 LIFE_PATHS = {"capture": "/capture", "today": "/today", "search": "/more/notes",
               "notes": "/more/notes", "tasks": "/tasks", "shopping": "/more/shopping",
-              "calendar": "/calendar", "activities": "/more/explore"}
+              "calendar": "/calendar", "activities": "/more/explore",
+              "food": "/more/food-discounts"}
 
 
 def _link(cfg, page, label="在 Life 編輯"):
@@ -95,17 +96,43 @@ async def handle_daily(cmd, command, identity, cfg, user, db: AsyncSession,
 
     if cmd == "search.start":
         return text_reply("選擇要查詢的資料類型；也可輸入「查 筆記 關鍵字」、"
-                          "「查 待辦 關鍵字」或「查 購物 關鍵字」。", [
+                          "「查 待辦 關鍵字」、「查 購物 關鍵字」或「查 美食 關鍵字」。", [
             postback_action("筆記", token("search.kind", k="notes")),
             postback_action("待辦", token("search.kind", k="tasks")),
             postback_action("購物", token("search.kind", k="shopping")),
+            postback_action("美食", token("search.kind", k="food")),
             _link(cfg, "notes", "在 Life 搜尋")])
+
+    if cmd in ("food.latest", "food.page"):
+        await feature_gate("food_discounts")(user=user, db=db)
+        offset = int(command.get("o", 0) or 0)
+        result = await line_api.lookup("food", "", user, db, offset=offset)
+        rows = []
+        for item in result["items"][:LIMIT]:
+            action = None
+            url = item.get("source_url")
+            if url and (url.startswith("http://") or url.startswith("https://")):
+                action = {"type": "uri", "label": "查看來源", "uri": url}
+            details = (item.get("detail") or "")[:110]
+            if item.get("date"):
+                details += " · " + str(item["date"])
+            rows.append(_card(item["title"], details, action))
+        controls = [
+            _link(cfg, "food", "在 Life 查看更多"),
+            postback_action("最新優惠", token("food.latest")),
+        ]
+        if result.get("has_more"):
+            controls.append(postback_action("下一頁", token("food.page", o=offset + LIMIT)))
+        return _cards(rows, "Life 美食優惠", controls, quick_reply, empty="目前沒有上架中的美食優惠。")
 
     if cmd in ("search.kind", "tasks.list", "shopping.list"):
         kind = (command.get("k") if cmd == "search.kind" else
                 "tasks" if cmd == "tasks.list" else "shopping")
-        if kind not in ("notes", "tasks", "shopping"):
+        if kind not in ("notes", "tasks", "shopping", "food"):
             return text_reply("資料類型無效，請重新開啟搜尋。")
+        if kind == "food":
+            return await handle_daily("food.latest", command, identity, cfg, user, db,
+                                      make_token, postback_action, text_reply, quick_reply)
         result = await line_api.lookup(kind, "", user, db)
         rows = []
         for item in result["items"][:LIMIT]:

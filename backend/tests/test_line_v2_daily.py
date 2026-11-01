@@ -32,9 +32,65 @@ class DailyMenuContract(IsolatedAsyncioTestCase):
     async def test_search_choices_are_signed_owner_scoped(self):
         messages = await handle("search.start")
         actions = [x["action"] for x in messages[0]["quickReply"]["items"]]
-        self.assertEqual([a["label"] for a in actions], ["筆記", "待辦", "購物", "在 Life 搜尋"])
+        self.assertEqual([a["label"] for a in actions], ["筆記", "待辦", "購物", "美食", "在 Life 搜尋"])
         claims = v2.read_token(actions[0]["data"], CFG, USER, IDENTITY)
         self.assertEqual((claims["a"], claims["k"]), ("search.kind", "notes"))
+        food_claims = v2.read_token(actions[3]["data"], CFG, USER, IDENTITY)
+        self.assertEqual((food_claims["a"], food_claims["k"]), ("search.kind", "food"))
+
+    async def test_food_discounts_renders_flex_and_source_uri(self):
+        fake = {
+            "items": [
+                {
+                    "id": "tw:food:1",
+                    "title": "麥當勞",
+                    "detail": "經典那堤買一送一 · 買一送一 · 大安區",
+                    "date": "2026-11-30",
+                    "source_url": "https://example.com/promo/mcdonalds",
+                    "kind": "food",
+                }
+            ],
+            "has_more": True,
+            "offset": 0,
+        }
+        with patch.object(daily, "feature_gate", return_value=AsyncMock()), patch(
+            "app.api.line.lookup", new=AsyncMock(return_value=fake)
+        ):
+            msg = await handle("food.latest")
+        self.assertEqual(msg[0]["type"], "flex")
+        bubble = msg[0]["contents"]["contents"][0]
+        self.assertEqual(bubble["body"]["contents"][0]["text"], "麥當勞")
+        action = bubble["footer"]["contents"][0]["action"]
+        self.assertEqual(action["type"], "uri")
+        self.assertEqual(action["uri"], "https://example.com/promo/mcdonalds")
+        # Quick reply has Life deep link and signed next page
+        qr_actions = [x["action"] for x in msg[0]["quickReply"]["items"]]
+        self.assertEqual(qr_actions[0]["uri"], "https://life.example.test/more/food-discounts")
+        next_page = v2.read_token(qr_actions[2]["data"], CFG, USER, IDENTITY)
+        self.assertEqual((next_page["a"], next_page["o"]), ("food.page", 5))
+
+    async def test_search_kind_food_delegates_to_food_latest(self):
+        fake = {
+            "items": [
+                {
+                    "id": "tw:food:2",
+                    "title": "星巴克",
+                    "detail": "第二杯半價",
+                    "date": "2026-11-15",
+                    "source_url": "https://example.com/promo/starbucks",
+                    "kind": "food",
+                }
+            ],
+            "has_more": False,
+            "offset": 0,
+        }
+        with patch.object(daily, "feature_gate", return_value=AsyncMock()), patch(
+            "app.api.line.lookup", new=AsyncMock(return_value=fake)
+        ):
+            msg = await handle("search.kind", {"a": "search.kind", "k": "food"})
+        self.assertEqual(msg[0]["type"], "flex")
+        bubble = msg[0]["contents"]["contents"][0]
+        self.assertEqual(bubble["body"]["contents"][0]["text"], "星巴克")
 
     async def test_tasks_render_explicit_complete_action(self):
         fake = {"items":[{"id":"t-1","title":"繳帳單","detail":"","date":None}],"has_more":False}

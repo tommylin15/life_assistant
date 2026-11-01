@@ -172,8 +172,9 @@ async def lookup(kind, keyword, user, db, offset=0):
     """Bounded real rows; no LLM-supplied SQL and no invented personal memories."""
     keyword = keyword[:120].strip()
     rows = []
-    if kind in ("notes", "tasks", "shopping"):
-        await feature_gate(kind)(user=user, db=db)
+    if kind in ("notes", "tasks", "shopping", "food"):
+        gate = "food_discounts" if kind == "food" else kind
+        await feature_gate(gate)(user=user, db=db)
     if kind == "notes":
         query = select(Note).where(visible_clause(Note, user))
         if keyword:
@@ -198,11 +199,36 @@ async def lookup(kind, keyword, user, db, offset=0):
         items = (await db.execute(query.order_by(ShoppingList.id, ShoppingItem.sort_order, ShoppingItem.id)
                                  .offset(offset).limit(21))).all()
         rows = [{"id": i.id, "title": i.name, "detail": name, "kind": "shopping"} for i, name in items]
+    elif kind == "food":
+        from app.models.food_discount import FoodDiscount
+        from app.api.food_discounts import _active_discount_predicate, TAIPEI as FOOD_TAIPEI
+        today = datetime.now(FOOD_TAIPEI).date()
+        query = select(FoodDiscount).where(_active_discount_predicate(today))
+        if keyword:
+            query = query.where(or_(
+                FoodDiscount.merchant.contains(keyword, autoescape=True),
+                FoodDiscount.offer_summary.contains(keyword, autoescape=True),
+                FoodDiscount.district.contains(keyword, autoescape=True),
+                FoodDiscount.category.contains(keyword, autoescape=True),
+            ))
+        items = (await db.scalars(query.order_by(
+            FoodDiscount.offer_ends_on.asc().nullslast(),
+            FoodDiscount.updated_at.desc(),
+            FoodDiscount.candidate_key,
+        ).offset(offset).limit(21))).all()
+        rows = [{
+            "id": f.candidate_key,
+            "title": f.merchant,
+            "detail": " · ".join(filter(None, [f.offer_summary, f.nominal_discount, f.district])),
+            "date": f.offer_ends_on.isoformat() if f.offer_ends_on else (f.period_text or None),
+            "source_url": f.source_url,
+            "kind": "food",
+        } for f in items]
     return {"items": rows[:20], "has_more": len(rows) > 20, "offset": offset}
 
 
 @router.get("/search")
-async def search(response: Response, kind: Literal["notes", "tasks", "shopping"] = "notes",
+async def search(response: Response, kind: Literal["notes", "tasks", "shopping", "food"] = "notes",
                  q: str = Query("", max_length=120), offset: int = Query(0, ge=0, le=10000),
                  user: dict = Depends(line_user), db: AsyncSession = Depends(get_db)):
     no_store(response)
@@ -259,7 +285,7 @@ def message(text, cfg, page="capture", **params):
     # User-supplied params cannot change the approved destination path.
     pages = {"capture": "/capture", "today": "/today", "search": "/more/notes",
              "tasks": "/tasks", "shopping": "/more/shopping", "calendar": "/calendar",
-             "activities": "/more/explore", "home": "/today"}
+             "activities": "/more/explore", "food": "/more/food-discounts", "home": "/today"}
     uri = cfg["origin"] + pages.get(page, "/today")
     return [{"type": "text", "text": text[:4500], "quickReply": {"items": [
         {"type": "action", "action": {"type": "uri", "label": "開啟 Life", "uri": uri}}]}}]
@@ -298,7 +324,9 @@ async def build_reply(event, record, identity, cfg, db):
     # V2-01 can be tested through the existing six-cell OA without replacing
     # Rich Menu. Only exact, reserved chat commands enter the activity flow.
     chat_events = {"活動": "events.latest", "最新活動": "events.latest",
-                   "活動分類": "events.tags", "已收藏活動": "events.saved"}
+                   "活動分類": "events.tags", "已收藏活動": "events.saved",
+                   "美食": "food.latest", "最新美食": "food.latest",
+                   "美食優惠": "food.latest", "優惠": "food.latest"}
     if event.get("type") == "message" and text_value in chat_events:
         from app.services.line_v2 import handle_postback
         return await handle_postback(
@@ -310,13 +338,17 @@ async def build_reply(event, record, identity, cfg, db):
              "待辦・購物": "tasks", "日曆・活動": "calendar", "我的 Life": "home"}
     if text_value in menus:
         return message("開啟「" + text_value + "」。", cfg, menus[text_value])
-    kinds = {"筆記": "notes", "待辦": "tasks", "購物": "shopping"}
-    query = re.fullmatch(r"(?:查|查詢)\s*(筆記|待辦|購物)\s*(.*)", text_value)
-    if query or text_value in ("待辦", "購物"):
+    kinds = {"筆記": "notes", "待辦": "tasks", "購物": "shopping", "美食": "food"}
+    query = re.fullmatch(r"(?:查|查詢)\s*(筆記|待辦|購物|美食)\s*(.*)", text_value)
+    if query or text_value in ("待辦", "購物", "美食"):
         kind = kinds[query[1] if query else text_value]
         result = await lookup(kind, query[2] if query else "", user, db)
-        lines = [f"• {r['title']}" + (f"（{r['date']}）" if r.get("date") else "") for r in result["items"][:5]]
-        return message("\n".join(lines) if lines else "找不到符合條件的記錄。", cfg, "search", kind=kind, q=query[2] if query else "")
+        lines = [f"• {r['title']}：{r['detail']}" if kind == "food"
+                 else f"• {r['title']}" + (f"（{r['date']}）" if r.get("date") else "")
+                 for r in result["items"][:5]]
+        return message("\n".join(lines) if lines else "找不到符合條件的記錄。", cfg,
+                       "food" if kind == "food" else "search",
+                       kind=kind, q=query[2] if query else "")
     if (text_value.endswith(("?", "？")) or text_value.startswith(("查", "找", "搜尋"))
             or re.search(r"什麼|哪些|有沒有|在哪|何時|幾點|嗎$", text_value)):
         return message("請選擇資料類型與關鍵字查詢，例如「查 筆記 水電」。這則詢問沒有存成草稿。", cfg, "search")

@@ -201,7 +201,7 @@ class TodayPage extends ConsumerWidget {
       case 'drive':
         return _tile(context, 'Google Drive', '查看個人已授權的雲端文件', '/more/drive');
       case 'food_discounts':
-        final items = (snapshot['food_discounts'] as List?)?.cast<Map<String, dynamic>>();
+        final items = (data['food_discounts'] as List?)?.cast<Map<String, dynamic>>();
         final preview = (items != null && items.isNotEmpty)
             ? items.take(2).map((x) => '${x['merchant']} · ${x['offer_summary']}').join('｜')
             : '雙北 41 區日常手搖飲與國民美食優惠情報';

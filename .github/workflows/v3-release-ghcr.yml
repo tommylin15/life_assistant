@@ -466,7 +466,7 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --args=-m,scripts.gmail_v2_db_acceptance \
             --task-timeout 5m --wait --quiet
-          echo "life_db_readback=PASS revision=20261030_0025 gmail_and_line_schema (job exit only)" >> "$GITHUB_STEP_SUMMARY"
+          echo "life_db_readback=PASS revision=20261101_0026 gmail_and_line_schema (job exit only)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Flutter for candidate Hosting Preview
         uses: subosito/flutter-action@v2

@@ -13,7 +13,7 @@ void main() {
     expect(normalizeNavigationOrder(
       const ['opportunities', 'explore', 'events'])
         .where((key) => key == 'explore').length, 1);
-    expect(lifeNavigationGroups.last.keys, const ['explore']);
+    expect(lifeNavigationGroups.last.keys, const ['explore', 'food_discounts']);
     expect(lifeNavigationItems.containsKey('opportunities'), false);
     expect(availablePinKeys(const ['opportunities', 'events', 'explore'],
       (_) => true).where((key) => key == 'explore').length, 1);

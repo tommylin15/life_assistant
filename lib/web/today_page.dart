@@ -188,6 +188,8 @@ class TodayPage extends ConsumerWidget {
         return _tile(context, '購物', '查看購物清單', '/more/shopping');
       case 'drive':
         return _tile(context, 'Google Drive', '查看個人已授權的雲端文件', '/more/drive');
+      case 'food_discounts':
+        return _tile(context, '美食優惠', '雙北 41 區日常手搖飲與國民美食優惠情報', '/more/food-discounts');
       default: return const SizedBox.shrink();
     }
   }
@@ -228,6 +230,7 @@ class TodayPage extends ConsumerWidget {
       '/more/habits' => LifeVisualFeature.habits,
       '/more/shopping' => LifeVisualFeature.shopping,
       '/more/drive' => LifeVisualFeature.drive,
+      '/more/food-discounts' => LifeVisualFeature.foodDiscounts,
       '/more/curated' || '/more/explore' => LifeVisualFeature.explore,
       _ => null,
     };

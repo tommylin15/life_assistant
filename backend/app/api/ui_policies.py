@@ -35,25 +35,26 @@ FEATURES = {
     "events": ("/more/curated", "活動精選"),
     "opportunities": ("/more/opportunities", "限時機會"),
     "explore": ("/more/explore", "活動探索"),
+    "food_discounts": ("/more/food-discounts", "美食優惠"),
     "drive": ("/more/drive", "Google Drive"),
     "integrations": ("/integrations", "Google 整合"),
     "life_inbox": ("/capture", "生活收件匣／快速新增"),
     "gmail_radar": ("/more/gmail-radar", "Gmail 智慧事項雷達"),
 }
 DEFAULT_PINNED = ["tasks", "calendar", "projects"]
-DEFAULT_MORE = ["notes", "habits", "events", "opportunities", "explore", "shopping", "drive", "gmail_radar", "integrations"]
+DEFAULT_MORE = ["notes", "habits", "events", "opportunities", "explore", "food_discounts", "shopping", "drive", "gmail_radar", "integrations"]
 DEFAULT_HOME = ["tasks", "calendar", "habits", "explore", "projects"]
 # Keep legacy "attention" valid for old clients and stored layouts; the Web UI
 # merges it into "tasks" without mutating tenant preferences or introducing DDL.
-HOME_KEYS = set(DEFAULT_HOME) | {"notes", "shopping", "drive", "attention", "events", "opportunities"}
+HOME_KEYS = set(DEFAULT_HOME) | {"notes", "shopping", "drive", "attention", "events", "opportunities", "food_discounts"}
 AI_PROVIDERS = ["gemini", "gemini_lite", "groq", "openrouter", "openai", "codex"]
 # Keep public-facing switches consistent with account-level route permissions.
 # Drive and the retired events entry remain Owner-only even if a legacy DB
 # rollout row incorrectly says enabled/all.
 GENERAL_ACCOUNT_FEATURES = frozenset({
     "today", "tasks", "calendar", "integrations", "projects", "notes",
-    "habits", "shopping", "opportunities", "explore", "life_inbox",
-    "gmail_radar", "line",
+    "habits", "shopping", "opportunities", "explore", "food_discounts",
+    "life_inbox", "gmail_radar", "line",
 })
 OWNER_ONLY_FEATURES = frozenset(FEATURES) - GENERAL_ACCOUNT_FEATURES
 
@@ -69,7 +70,7 @@ def _permitted_for_account(key: str, user: dict, status: str, audience: str) -> 
 
 def _default_rollout(key: str) -> tuple[str, str]:
     # New curated feature stays owner-only until actual V3 E2E release.
-    return ("beta", "owner") if key in ("events", "opportunities", "explore", "life_inbox", "line") else ("enabled", "owner" if key in OWNER_ONLY_FEATURES else "all")
+    return ("beta", "owner") if key in ("events", "opportunities", "explore", "food_discounts", "life_inbox", "line") else ("enabled", "owner" if key in OWNER_ONLY_FEATURES else "all")
 
 
 
@@ -139,7 +140,7 @@ async def effective_features(db: AsyncSession, user: dict) -> list[dict]:
         policy = policies.get(key)
         status, audience = (
             (policy.status, policy.audience) if policy else
-            ("hidden", "owner") if (pre_0015 and key in ("events", "opportunities", "explore", "life_inbox", "line")) else
+            ("hidden", "owner") if (pre_0015 and key in ("events", "opportunities", "explore", "food_discounts", "life_inbox", "line")) else
             _default_rollout(key)
         )
         permitted = _permitted_for_account(key, user, status, audience)
@@ -165,7 +166,7 @@ def feature_gate(key: str):
                 raise
             # Existing features retain their pre-rollout behavior while the
             # approved additive migration is pending; no new feature opens.
-            if key in ("events", "opportunities", "explore", "life_inbox", "line"):
+            if key in ("events", "opportunities", "explore", "food_discounts", "life_inbox", "line"):
                 raise HTTPException(503, "Curated feature requires verified migration") from exc
             return
         status, audience = (row.status, row.audience) if row else _default_rollout(key)

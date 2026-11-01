@@ -10,6 +10,9 @@
 
 ## 活動來源與使用者功能
 
+- **2026-11-01 雙北 41 區美食優惠探索正式納管、Life 獨立功能與 VM 獨立排程決策**：
+  使用者明確指示將原位於 Google Drive `life_assistantGPT/美食優惠探索｜試行/` 之雙北 41 區美食優惠探索正式納入 `life_assistant` 主線，並於 Life 建立獨立功能 **「美食優惠」**（feature_key: `food_discounts`、路由 `/more/food-discounts`、PostgreSQL 獨立資料表 `food_discounts`，不與 `curated_activities` 台灣活動探索混用）。於目前 VM 建立獨立的 Linux systemd 系統排程（`tw-food-discount-discovery.timer`，Asia/Taipei 每日 04:45 喚醒，即 UTC 20:45，設定 `After=tw-activity-discovery.service` 緊接在台灣活動探索批次之後執行），每日執行效期維護與 7 日無終日來源追查補正，週一／三／五依《探索輪替計畫》分批搜尋 14/14/13 區 P0 手搖飲與國民美食，寫回試算表（保護 `AG2`/`AI2` 陣列公式錨點且核驗 `C10=0`）後同步匯入 Life PostgreSQL。詳見 [美食優惠探索正式規格](food_discounts_spec.md)。
+
 - **2026-10-30 台灣活動探索納入 Google Search 智慧語意補漏決策**：
   使用者指示為解決 A/B 類固定站點改版、反爬阻擋或特定縣市/主題盲區導致活動遺漏的問題，正式將 Google Search（`search_web`）納入每日探索批次 SOP。由 Agent 自行根據滾動 7 日「五區九主題」與滾動 14 日「22 縣市」最新缺口統計，自適應推導高品質自然語言搜尋語意（涵蓋親子、農遊、展演、市集、地方節慶與特定弱勢縣市），並定位至具名官方公告或報名單頁（如 BeClass 單頁、ACCUPASS、KKTIX 等）。搜尋結果仍須經 03 完整主辦與日期核證、04 穩定鍵去重入池，嚴禁以搜尋摘要直接作為最終證據。
 

@@ -18,6 +18,7 @@ import 'projects_page.dart';
 import 'shopping_page.dart';
 import 'tasks_page.dart';
 import 'curated_events_page.dart';
+import 'food_discounts_page.dart';
 import 'platform_api.dart';
 import 'today_page.dart';
 import 'personalize_page.dart';
@@ -75,6 +76,7 @@ final _router = GoRouter(
         GoRoute(path: '/more/curated', redirect: (_, __) => '/more/explore'),
         GoRoute(path: '/more/opportunities', builder: (_, __) => const FeatureAccess(feature: 'opportunities', child: CuratedEventsPage(entry: 'opportunities'))),
         GoRoute(path: '/more/explore', builder: (_, __) => const FeatureAccess(feature: 'explore', child: CuratedEventsPage(entry: 'explore'))),
+        GoRoute(path: '/more/food-discounts', builder: (_, __) => const FeatureAccess(feature: 'food_discounts', child: FoodDiscountsPage())),
         GoRoute(path: '/more/updates', builder: (_, __) => const ReleaseNotesPage()),
         GoRoute(path: '/more/personalize', builder: (_, state) =>
             PersonalizePage(initialTab: state.uri.queryParameters['tab'] ?? 'home')),

@@ -213,13 +213,14 @@ abstract class LifeVisualTheme {
   }
 }
 
-enum LifeVisualFeature { today, tasks, explore, opportunities, calendar, projects, notes, habits, shopping, drive, personalize }
+enum LifeVisualFeature { today, tasks, explore, opportunities, foodDiscounts, calendar, projects, notes, habits, shopping, drive, personalize }
 
 extension LifeVisualFeatureInfo on LifeVisualFeature {
   String get title => switch (this) {
     LifeVisualFeature.tasks => '待辦',
     LifeVisualFeature.explore => '活動探索',
     LifeVisualFeature.opportunities => '限時機會',
+    LifeVisualFeature.foodDiscounts => '美食優惠',
     LifeVisualFeature.calendar => '日曆',
     LifeVisualFeature.projects => '專案',
     LifeVisualFeature.notes => '筆記',
@@ -234,6 +235,7 @@ extension LifeVisualFeatureInfo on LifeVisualFeature {
     LifeVisualFeature.tasks => '把想做的事，一件一件完成。',
     LifeVisualFeature.explore => '發現生活中更多值得期待的活動。',
     LifeVisualFeature.opportunities => '留意開報時間，把握喜歡的機會。',
+    LifeVisualFeature.foodDiscounts => '雙北 41 區日常手搖飲與國民美食買一送一及 8 折以下情報。',
     LifeVisualFeature.calendar => '每一天，都有自己的節奏。',
     LifeVisualFeature.projects => '有計畫地前進，讓想法逐步實現。',
     LifeVisualFeature.notes => '隨手記下生活中的靈感。',
@@ -248,6 +250,7 @@ extension LifeVisualFeatureInfo on LifeVisualFeature {
     LifeVisualFeature.tasks => Icons.checklist_rounded,
     LifeVisualFeature.explore => Icons.explore_rounded,
     LifeVisualFeature.opportunities => Icons.confirmation_number_outlined,
+    LifeVisualFeature.foodDiscounts => Icons.local_dining_rounded,
     LifeVisualFeature.calendar => Icons.calendar_month_rounded,
     LifeVisualFeature.projects => Icons.folder_copy_outlined,
     LifeVisualFeature.notes => Icons.edit_note_rounded,
@@ -262,6 +265,7 @@ extension LifeVisualFeatureInfo on LifeVisualFeature {
     LifeVisualFeature.tasks => const Color(0xFF538E82),
     LifeVisualFeature.explore => const Color(0xFFE09A4B),
     LifeVisualFeature.opportunities => const Color(0xFFD56D70),
+    LifeVisualFeature.foodDiscounts => const Color(0xFFD96B43),
     LifeVisualFeature.calendar => const Color(0xFF927BB0),
     LifeVisualFeature.projects => const Color(0xFF6586B2),
     LifeVisualFeature.notes => const Color(0xFFBE9468),

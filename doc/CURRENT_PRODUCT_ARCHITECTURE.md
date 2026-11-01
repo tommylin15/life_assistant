@@ -17,6 +17,7 @@ Firebase Hosting → Flutter Web/PWA → Cloud Run FastAPI → PostgreSQL。Life
 - Life admin：精選資料與錯誤、系統健康、內部 Life Drive AI Provider 策略、feature rollout。不可閱讀他人 Google Drive 文件、OAuth secret 或替他人建立私人物件。
 - 個人：Google OAuth / Drive AI consent、手機底部／桌面左側導覽及排序、首頁卡片與提醒偏好；個人記錄依帳號隔離。保持 Material 3 responsive UI。
 - ChatGPT 的活動探索和獨立 Google Drive 優惠研究不屬 Life 內部 Drive AI Provider；互不改動。
+- **2026-11-01 雙北 41 區美食優惠探索正式納管**：在 Life 建立獨立功能「美食優惠」（`food_discounts`，路由 `/more/food-discounts`、PostgreSQL `food_discounts` 資料表），並於 VM 設立獨立排程 `tw-food-discount-discovery.timer`（每日 04:45 Asia/Taipei，緊接於台灣活動探索批次之後），詳見 [美食優惠正式規格](food_discounts_spec.md)。
 
 ## Implementation ≠ release
 

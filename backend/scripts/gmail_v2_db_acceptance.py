@@ -10,10 +10,13 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.config import settings
 
-EXPECTED_HEAD = "20261030_0025"
+EXPECTED_HEAD = "20261101_0026"
 EXPECTED_COLUMNS = {
-    # LINE's additive migration is now the Alembic head. Validate its
-    # owner-scoped pending-session schema without reading private records.
+    "food_discounts": {
+        "candidate_key", "city", "district", "merchant", "category",
+        "offer_summary", "source_url", "claim_status", "visibility_status",
+    },
+    # LINE's additive migration is validated alongside the current head.
     "line_capture_sessions": {
         "namespace", "line_user_id", "user_sub", "source_event_id",
         "source_text", "target", "fields", "awaiting", "status",

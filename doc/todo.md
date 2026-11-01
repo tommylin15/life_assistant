@@ -1,3 +1,13 @@
+## 2026-11-01｜雙北 41 區美食優惠探索：正式納管、Life 獨立功能與 VM 獨立排程（ACTIVE）
+
+- **Owner 最新決策：** 將原 Google Drive `life_assistantGPT/美食優惠探索｜試行`（V0.5.2 規格＋Runbook V1.3.2）正式納入 `life_assistant` 主線，於 Life 建立獨立功能 **「美食優惠」**（`food_discounts`），並於目前 VM 建立獨立的系統排程（`tw-food-discount-discovery.timer`，每日 04:45 Asia/Taipei，緊接於台灣活動探索批次之後），在進入測試驗收前先完成文件與程式開發並同步 GitHub。
+- **規格與程式實作：**
+  - 正式規格：[`doc/food_discounts_spec.md`](food_discounts_spec.md)（涵蓋 P0 手搖飲／國民美食、買一送一或 ≥20% 低驗證門檻、公開來源揭露、AB/AC/AD 日期分離、7 日續期補正與 30 日封存、`AG2`/`AI2` 陣列公式保護契約）。
+  - 後端與資料庫：新增 `backend/app/models/food_discount.py`、Alembic 遷移 `20261101_0026_food_discounts.py`、API `backend/app/api/food_discounts.py`（`/api/v1/food-discounts` 列表／篩選／批次匯入），於 `ui_policies.py` 註冊獨立功能旗標 `food_discounts`。
+  - 前端 UI：新增 `lib/web/food_discounts_page.dart`（路由 `/more/food-discounts`），支援關鍵字、縣市／行政區、P0 品類與優惠型態速查、來源外開與一鍵加入待辦提醒；同步更新導覽目錄、首頁卡片與版本公告（`0.7.0+8`）。
+  - VM 獨立排程与同步腳本：新增 `scripts/run_tw_food_discount_batch.py`、`scripts/run_tw_food_discount_daily.sh` 及 systemd `tw-food-discount-discovery.{service,timer}`（每日 04:45 TPE，`After=tw-activity-discovery.service`）。
+- **驗收狀態：** 文件與程式碼已提交並同步 GitHub（Source = `PASS`）；依 Owner 指示於進入測試驗收前停下待命，單元／整合測試、CI、Staging／Production 部署與排程實跑驗收目前為 **`NOT VERIFIED`**（整體 **`PARTIAL`**）。
+
 ## 2026-10-30｜LINE 統一四卡：智慧即時記錄／Life 深連結／整合測試／正式發布（ACTIVE）
 
 ## 2026-10-30｜LINE V2 單一確認／重新開始／同版 Staging→Production（ACTIVE）

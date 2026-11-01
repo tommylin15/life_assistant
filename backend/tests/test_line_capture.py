@@ -253,10 +253,10 @@ class CaptureFlow(IsolatedAsyncioTestCase):
         acceptance = (root / "scripts/gmail_v2_db_acceptance.py").read_text()
         migration = (root / "alembic/versions/20261030_0025_line_capture.py").read_text()
         release = (root.parent / ".github/workflows/v3-release-ghcr.yml").read_text()
-        self.assertIn('EXPECTED_HEAD = "20261030_0025"', acceptance)
+        self.assertIn('EXPECTED_HEAD = "20261101_0026"', acceptance)
         self.assertIn('"line_capture_sessions": {', acceptance)
         self.assertIn('Verify Gmail V2 and LINE capture PostgreSQL schema readback', release)
-        self.assertIn('life_db_readback=PASS revision=20261030_0025', release)
+        self.assertIn('life_db_readback=PASS revision=20261101_0026', release)
         for name in ("namespace", "line_user_id", "user_sub", "source_event_id",
                      "source_text", "fields", "status", "revision", "expires_at"):
             with self.subTest(column=name):

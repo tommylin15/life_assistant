@@ -36,6 +36,16 @@ class LifeReleaseNote {
 /// Never claim unrelated / unverified candidate fixes are production releases.
 const lifeReleaseNotes = <LifeReleaseNote>[
   LifeReleaseNote(
+    id: 'web-0.7.0-food-discounts',
+    version: '0.7.0',
+    title: '新增雙北美食優惠探索',
+    featureKey: 'food_discounts',
+    changes: <String>[
+      '獨立「美食優惠」頁面，收錄雙北 41 區日常手搖飲與國民美食買一送一及 8 折以下公開來源情報。',
+      '支援品類、優惠型態、縣市與行政區篩選，並可查看來源公告或一鍵加入待辦提醒。',
+    ],
+  ),
+  LifeReleaseNote(
     id: 'web-0.6.1-line-native-capture',
     version: '0.6.1',
     title: 'LINE 記錄操作更快速',

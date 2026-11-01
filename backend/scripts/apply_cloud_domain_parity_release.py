@@ -31,6 +31,7 @@ from scripts.reconcile_projects_status_default import (
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 PREVIOUS_RELEASE_REVISION = "20261012_0018"
 LEGACY_DIRECT_RELEASE_REVISIONS = {
+    "20261030_0025",  # existing LINE capture schema before additive food_discounts
     "20261028_0024",  # existing LINE production schema before additive capture
     "20261028_0023",
     "20261019_0022",
@@ -50,7 +51,7 @@ LEGACY_DIRECT_RELEASE_REVISIONS = {
     "20261009_0012",
     "20261009_0013",
 }
-RELEASE_TARGET_REVISION = "20261030_0025"
+RELEASE_TARGET_REVISION = "20261101_0026"
 EXIT_RELEASE_REVISION = 60
 EXIT_RELEASE_ALEMBIC = 61
 EXIT_RELEASE_MISSING_TABLES = 62
@@ -69,6 +70,7 @@ RELEASE_REVISION_EXIT_CODES = {
     "revision_row_count": EXIT_RELEASE_REVISION_ROW_COUNT,
 }
 RELEASE_REQUIRED_TABLES = {
+    "food_discounts",
     "line_capture_sessions",
     "line_bindings",
     "line_events",

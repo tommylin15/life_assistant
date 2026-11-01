@@ -18,6 +18,7 @@ NOTE_FEATURE = re.compile(r"\bfeatureKey:\s*'([^']+)'")
 USER_SURFACES = {
     "lib/web/gmail_radar_page.dart": "gmail_radar",
     "lib/web/life_capture_page.dart": "life_inbox",
+    "lib/web/food_discounts_page.dart": "food_discounts",
 }
 SHA = re.compile(r"^[a-f0-9]{40}$")
 

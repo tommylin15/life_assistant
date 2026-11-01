@@ -33,6 +33,7 @@ const lifeNavigationItems = <String, LifeNavItem>{
   'drive': LifeNavItem('drive', 'Google Drive 檔案總管', '/more/drive', Icons.cloud_outlined, Icons.cloud),
   'gmail_radar': LifeNavItem('gmail_radar', 'Gmail 智慧事項', '/more/gmail-radar', Icons.mark_email_unread_outlined, Icons.mark_email_read),
   'explore': LifeNavItem('explore', '活動探索', '/more/explore', Icons.explore_outlined, Icons.explore),
+  'food_discounts': LifeNavItem('food_discounts', '美食優惠', '/more/food-discounts', Icons.local_dining_outlined, Icons.local_dining),
 };
 
 const lifeNavigationGroups = <LifeNavGroup>[
@@ -41,7 +42,7 @@ const lifeNavigationGroups = <LifeNavGroup>[
   LifeNavGroup('knowledge', '知識與計畫', Icons.folder_copy_outlined,
       <String>['notes', 'projects', 'drive']),
   LifeNavGroup('activities', '活動與機會', Icons.explore_outlined,
-      <String>['explore']),
+      <String>['explore', 'food_discounts']),
 ];
 
 const lifeDefaultPins = <String>['tasks', 'calendar', 'projects'];

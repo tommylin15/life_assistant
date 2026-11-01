@@ -67,6 +67,11 @@
 - **Not yet complete:** offline semantic checkpoint/dependencies not shipped (rules-only production Docker), Traditional-Chinese semantic quality/perf/RAM, actual Gmail human readback and per-user database receipts, cross-account E2E, direct database 0022 revision readback. Mark overall **PARTIAL**.
 - **Evidence correction:** V3 workflow migration step/summary still labels 0018; release runner code targets 0022. Do not interpret the outdated summary wording as actual DB revision proof.
 
+## 2026-11-01｜雙北 41 區美食優惠探索正式納管、Life 獨立功能與 VM 獨立排程
+- **正式納管與獨立功能開發：** 依使用者指示，將原 Google Drive `life_assistantGPT/美食優惠探索｜試行/` 之 V0.5.2 規格與 V1.3.2 操作手冊正式納入 GitHub 主線（`doc/food_discounts_spec.md`），並於 Life 建立獨立功能「美食優惠」（feature_key: `food_discounts`、路由 `/more/food-discounts`、API `/api/v1/food-discounts`、PostgreSQL 獨立資料表 `food_discounts` 與 Alembic `20261101_0026` 遷移）。
+- **VM 獨立排程設定：** 於本機 VM 建立 `tw-food-discount-discovery.timer`（Asia/Taipei 每日 04:45，即 UTC 20:45，設定 `After=tw-activity-discovery.service` 緊接在台灣活動探索批次之後），執行每日效期維護、7 日無終日來源追查、週一/三/五 14/14/13 區動態網頁搜尋與 PostgreSQL `food_discounts` 同步。
+- **驗證狀態：** 文件、程式碼與 VM 排程設定已完成並同步 GitHub；依使用者指示在進入測試驗收前暫停，CI／Staging／Production 與排程實跑驗收目前標為 **NOT VERIFIED**。
+
 ## 2026-10-30｜台灣活動探索納入 Google Search 智慧語意補漏
 - **補漏能力升級：** 為解決固定 A/B 類網站改版、單站防護或特定偏鄉/專題缺口問題，正式在探索 SOP（`02-discovery.md`）與 runner 腳本中引入 Google Search（`search_web`）智慧語意補漏。由 Agent 根據最新「滾動 7 日五區九主題」與「滾動 14 日 22 縣市」缺口統計，自適應推導自然語言查詢，並穿透至官方或具名報名單頁完成 03 核證與 04 去重入庫。
 

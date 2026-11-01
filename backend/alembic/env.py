@@ -1,6 +1,7 @@
 from app.models.line_bridge import LineAccountLink, LineCaptureDraft  # noqa: F401
 from app.models.line import LineBinding, LineLinkTicket, LineSession, LineEvent  # noqa: F401
 from app.models.line_capture import LineCapture  # noqa: F401
+from app.models.food_discount import FoodDiscount  # noqa: F401
 import asyncio
 from logging.config import fileConfig
 

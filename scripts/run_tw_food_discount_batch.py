@@ -377,6 +377,9 @@ def extract_candidates(xlsx_path: Path) -> tuple[list[dict], dict]:
         if r.get("_row") == "10":
             c10_val = r.get("C")
 
+    now_tpe = datetime.now(TAIPEI)
+    today_tpe = now_tpe.date()
+
     records: list[dict] = []
     for r in candidates_sheet:
         if r.get("_row") == "1":
@@ -392,6 +395,48 @@ def extract_candidates(xlsx_path: Path) -> tuple[list[dict], dict]:
         district = (r.get("B") or "").strip() or None
         city = infer_city(district)
         note_parts = [p.strip() for p in (r.get("P"), r.get("S")) if p and p.strip()]
+
+        claim_status = (r.get("R") or "COLLECTED_SOURCE_CLAIM").strip()
+        first_seen_on = parse_excel_date(r.get("AA")) or parse_excel_date(r.get("Q")) or parse_excel_date(r.get("T"))
+        claim_deadline_on = parse_excel_date(r.get("AB"))
+        redemption_ends_on = parse_excel_date(r.get("AC"))
+        offer_ends_on = parse_excel_date(r.get("AD"))
+        last_positive_on = parse_excel_date(r.get("AE"))
+        next_refresh_on = parse_excel_date(r.get("AG"))
+        date_basis = (r.get("AJ") or "").strip() or None
+
+        # ponytail: Evaluate canonical AI2 formula deterministically under Asia/Taipei today.
+        # Eliminates server export timezone lag between Google Drive (UTC) and Asia/Taipei (UTC+8).
+        if claim_status == "SOURCE_EXPIRED/SOLD_OUT":
+            computed_vis = "ARCHIVED_EXPIRED"
+        elif claim_status != "COLLECTED_SOURCE_CLAIM":
+            computed_vis = "NOT_LISTED"
+        elif offer_ends_on and today_tpe > offer_ends_on:
+            computed_vis = "EXPIRED"
+        elif claim_deadline_on and today_tpe > claim_deadline_on:
+            computed_vis = "CLAIM_CLOSED"
+        elif date_basis == "DATE_UNPARSED":
+            computed_vis = "HIDDEN_DATE_REVIEW"
+        elif offer_ends_on:
+            computed_vis = "VISIBLE_SOURCE_ONLY"
+        elif not first_seen_on:
+            computed_vis = "HIDDEN_DATE_REVIEW"
+        else:
+            anchor = last_positive_on or first_seen_on
+            days_since = (today_tpe - anchor).days
+            if days_since >= 30:
+                computed_vis = "ARCHIVED_STALE"
+            elif days_since >= 7:
+                computed_vis = "HIDDEN_REFRESH_DUE"
+            else:
+                computed_vis = "VISIBLE_SOURCE_ONLY"
+
+        visibility_status = (r.get("AI") or "").strip() or computed_vis
+        if offer_ends_on and today_tpe > offer_ends_on:
+            visibility_status = "EXPIRED"
+        elif claim_deadline_on and today_tpe > claim_deadline_on:
+            visibility_status = "CLAIM_CLOSED"
+
         rec = {
             "candidate_key": key,
             "city": city,
@@ -408,15 +453,15 @@ def extract_candidates(xlsx_path: Path) -> tuple[list[dict], dict]:
             "address": (r.get("M") or "").strip() or None,
             "source_url": source_url,
             "notes": "；".join(note_parts) if note_parts else None,
-            "claim_status": (r.get("R") or "COLLECTED_SOURCE_CLAIM").strip(),
-            "visibility_status": (r.get("AI") or "NOT_LISTED").strip(),
-            "first_seen_on": parse_excel_date(r.get("AA")) or parse_excel_date(r.get("Q")) or parse_excel_date(r.get("T")),
-            "claim_deadline_on": parse_excel_date(r.get("AB")),
-            "redemption_ends_on": parse_excel_date(r.get("AC")),
-            "offer_ends_on": parse_excel_date(r.get("AD")),
-            "last_positive_on": parse_excel_date(r.get("AE")),
-            "next_refresh_on": parse_excel_date(r.get("AG")),
-            "date_basis": (r.get("AJ") or "").strip() or None,
+            "claim_status": claim_status,
+            "visibility_status": visibility_status,
+            "first_seen_on": first_seen_on,
+            "claim_deadline_on": claim_deadline_on,
+            "redemption_ends_on": redemption_ends_on,
+            "offer_ends_on": offer_ends_on,
+            "last_positive_on": last_positive_on,
+            "next_refresh_on": next_refresh_on,
+            "date_basis": date_basis,
             "disclosure": (r.get("U") or "公開來源宣稱，未逐項核實，不保證到店可使用").strip(),
         }
         rec["content_hash"] = canonical_food_hash(rec)

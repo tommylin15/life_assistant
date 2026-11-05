@@ -49,3 +49,30 @@
    - **新竹市政府首頁 (`www.hccg.gov.tw`)**：市府主入口具備全站 WAF 盾（回應 HTTP 520 / Cloudflare 挑戰），正式替代入口切換為城銷處主管之**新竹市官方觀光旅遊網 (`https://tourism.hccg.gov.tw/`)**，經 `TW_PROXY` 成功取得 SPA 頁面並啟用搜尋輔助補漏。
 4. **BeClass 全站 Cloudflare Challenge 防線**：
    - `www.beclass.com/default.php?name=ShowList` 經台灣節點仍遭遇 Cloudflare Challenge（HTTP 403 / Just a moment...）。依 `01-source-quality.md` 規範不得對受限頁暴力輪換工具或繞過，但亦不推論當日無活動；確立改採**「搜尋輔助定位具名主辦單頁（`site:beclass.com rid=*`）」＋「主辦公開活動表單核證」**，直達活動內頁完成 03 核證與入池。
+
+## 2026-11-05｜ACCUPASS 探索深度與政府免費活動補漏優化（穿透首頁盲區、主題語意定向檢索與雙入口連動）
+
+針對 A7 固定入口 ACCUPASS 過去僅掃描首頁推薦前 2 頁、導致錯過政府局處主辦的高品質免費生態微旅行與手作走讀活動（如臺北市工務局「山湖漫遊，莓香好食光」生態微旅行）之問題，正式確立 ACCUPASS 四維優化防線：
+
+1. **Google Search 智慧語意穿透（Search-Assisted Accupass Discovery）**：
+   - 比照 2026-10-30 BeClass 成功應對規範，將 ACCUPASS 全面納入智慧語意定向檢索，避開海外 Cloud IP 403 阻擋與首頁商業大展推薦版位限制。
+   - 每日探索鏈常態注入四組定向搜尋語意：
+     - **政府局處免費活動**：`site:accupass.com/event/ ("市政府" OR "縣政府" OR "工務局" OR "文化局" OR "農業局" OR "公所") ("免費報名" OR "名額有限") (2026 OR 115)`
+     - **高星等生態／食農／走讀微旅行**：`site:accupass.com/event/ ("生態" OR "走讀" OR "食農" OR "手作" OR "導覽" OR "微旅行") ("免費" OR "名額") 2026`
+     - **即將開報／稀缺搶名額**：`site:accupass.com/event/ "免費報名" ("11月" OR "12月") 2026`
+     - **滾動縣市缺口定向穿透**：`site:accupass.com/event/ {city} ("免費" OR "報名") 2026`（針對 7 日缺口縣市動態代入）
+2. **主題頻道（Theme Channels）取代全站首頁**：
+   - 探索若訪問 ACCUPASS 列表，不再依賴首頁大看板，改為輪替訪問具備特定篩選條件的主題頻道：
+     - 戶外走讀：`https://www.accupass.com/theme/outdoor/`
+     - 學習手作：`https://www.accupass.com/theme/learning/`
+     - 藝文展演：`https://www.accupass.com/theme/art/`
+     - 親子體驗：`https://www.accupass.com/theme/family/`
+   - 請求必須帶入 `fee=0`（免費）及 `sort=latest`（最新發布）參數。
+3. **機關官網／粉專外鏈 Accupass 二跳連動（Host-to-Accupass Two-Hop Ingestion）**：
+   - 掃描 B 類機關官網最新消息與官方粉專貼文時，若正文含有 `https://www.accupass.com/event/{id}` 報名網址，自動觸發「二跳解析」：
+     - 將機關官網設為 `official_url`、機關全銜設為 `organizer`。
+     - 將 Accupass 活動頁設為 `registration_url`。
+     - 串接完成具名主辦身分核實與 Accupass 票券規則解析。
+4. **開報時效前瞻預警（Advance Registration Detection）**：
+   - 解析 Accupass 頁面 `ticketStartTime`；若活動尚未開報（如距今 2~7 天開報），自動賦予 `5★ 搶名額` 重要性，並在精選池「限時機會」視圖中建立開報倒數提醒。
+

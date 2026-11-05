@@ -133,6 +133,10 @@ def _enforce_general_user_route(request: Request, user: dict) -> None:
         "/api/v1/free-events/curated",
         "/api/v1/free-events/curated/filters",
         "/api/v1/free-events/curated/actions",
+        # Public food-discount reads also require the DB feature rollout gate.
+        # Keep :batch and all unspecified paths outside this exact allowlist.
+        "/api/v1/food-discounts",
+        "/api/v1/food-discounts/filters",
         "/api/v1/activity",
     }
     safe_prefixes = (

@@ -139,7 +139,12 @@ async def upsert_handoff(db, item: HandoffItem, version: str) -> str:
         # Pre-v2 rows do not have the optional verification status; their
         # absence is equivalent to unknown, not to a verified claim.
         stored.setdefault("verification_status", "unknown")
-        if stored != item.model_dump(mode="json", exclude={"handoff_updated_at_tpe"}):
+        compare_item = item.model_dump(mode="json", exclude={"handoff_updated_at_tpe"})
+        # Allow parent_event_key / record_type to align if reconciled by entity dedup
+        if stored.get("parent_event_key") != compare_item.get("parent_event_key") or stored.get("record_type") != compare_item.get("record_type"):
+            compare_item["parent_event_key"] = stored.get("parent_event_key")
+            compare_item["record_type"] = stored.get("record_type")
+        if stored != compare_item:
             raise ValueError("same_hash_changed_business_payload")
         row.handoff_details = {**row.handoff_details,
                                "verification_status": item.verification_status,

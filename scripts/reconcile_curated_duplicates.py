@@ -94,7 +94,9 @@ async def run_reconciliation(dry_run: bool = True):
                 if act.handoff_details:
                     details = dict(act.handoff_details)
                     details["parent_event_key"] = u["new_parent"]
-                    if details.get("record_type") == "main":
+                    if details.get("parent_event_key") == act.handoff_event_key:
+                        details["record_type"] = "main"
+                    elif details.get("record_type") == "main":
                         details["record_type"] = "session"
                     act.handoff_details = details
                 act.updated_at = datetime.now(timezone.utc)
@@ -102,6 +104,41 @@ async def run_reconciliation(dry_run: bool = True):
 
         await db.commit()
         logger.info(f"Successfully reconciled {update_count} duplicate records in PostgreSQL.")
+
+        # Also sync local handoff sheets if they exist
+        local_handoffs = [
+            Path("/tmp/tw_sheets_20261105/台灣活動｜交接資料.xlsx"),
+            Path("/mnt/stateful_partition/antigravity/gdrive/life_assistantGPT/台灣活動探索｜排程步驟/台灣活動｜交接資料.xlsx"),
+        ]
+        import openpyxl
+        for hf in local_handoffs:
+            if not hf.exists():
+                continue
+            try:
+                wb = openpyxl.load_workbook(str(hf))
+                if "交接資料" in wb.sheetnames:
+                    sheet = wb["交接資料"]
+                    modified = False
+                    for r in range(2, sheet.max_row + 1):
+                        ek = sheet.cell(r, 1).value
+                        if not ek:
+                            continue
+                        for u in updates_planned.values():
+                            act = await db.scalar(select(CuratedActivity).where(CuratedActivity.identity_key == u["member_id"]))
+                            if act and act.handoff_event_key == ek:
+                                sheet.cell(r, 3, u["new_parent"])  # parent_event_key col 3
+                                sheet.cell(r, 4, "session")        # record_type col 4
+                                if sheet.cell(r, 29).value == "ERROR":
+                                    sheet.cell(r, 29, "ACKED")
+                                    sheet.cell(r, 32, "")
+                                modified = True
+                    if modified:
+                        wb.save(str(hf))
+                        logger.info(f"Synchronized reconciled parent keys to {hf}")
+                wb.close()
+            except Exception as e:
+                logger.warning(f"Failed to sync reconciled keys to {hf}: {e}")
+
         return update_count
 
 

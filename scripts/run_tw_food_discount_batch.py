@@ -431,11 +431,7 @@ def extract_candidates(xlsx_path: Path) -> tuple[list[dict], dict]:
             else:
                 computed_vis = "VISIBLE_SOURCE_ONLY"
 
-        visibility_status = (r.get("AI") or "").strip() or computed_vis
-        if offer_ends_on and today_tpe > offer_ends_on:
-            visibility_status = "EXPIRED"
-        elif claim_deadline_on and today_tpe > claim_deadline_on:
-            visibility_status = "CLAIM_CLOSED"
+        visibility_status = computed_vis
 
         rec = {
             "candidate_key": key,

@@ -232,6 +232,36 @@ class StagingAccountTests(unittest.IsolatedAsyncioTestCase):
                 req.scope["path"] = uri
                 self.assertEqual((await auth.current_user(req))["sub"], "tester-sub")
 
+    async def test_general_account_food_discount_reads_only(self):
+        """An enabled/all rollout still needs an audited read-only auth path."""
+        user = {"sub": "regular-user", "email": "regular@example.test"}
+        with patch("app.api.auth._verify_id_token",
+                   new=AsyncMock(return_value=user)):
+            for host, cookie in (
+                (auth.STAGING_HOST, "id:staging:google-token"),
+                ("gen-lang-client-0593591102.web.app", "id:google-token"),
+            ):
+                for path in ("/api/v1/food-discounts",
+                             "/api/v1/food-discounts/filters",
+                             "/api/v1/food-discounts/"):
+                    with self.subTest(host=host, path=path):
+                        req = request(host, cookie)
+                        req.scope["path"] = path
+                        self.assertEqual((await auth.current_user(req))["sub"],
+                                         "regular-user")
+
+                # The connector write route must never be exposed by the
+                # rollout toggle. The public read API remains login-only.
+                for path in ("/api/v1/food-discounts:batch",
+                             "/api/v1/food-discounts/arbitrary",
+                             "/api/v1/admin/feature-rollouts"):
+                    with self.subTest(host=host, path=path):
+                        req = request(host, cookie)
+                        req.scope["path"] = path
+                        with self.assertRaises(HTTPException) as denied:
+                            await auth.current_user(req)
+                        self.assertEqual(denied.exception.status_code, 403)
+
     def test_allowed_activity_urls_are_real_registered_fastapi_routes(self):
         from app.api.curated import router as curated_router
         from app.api.curated_actions import router as actions_router

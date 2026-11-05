@@ -1,0 +1,113 @@
+"""
+Non-destructive Reconciliation of Historical Curated Activity Duplicates in PostgreSQL.
+
+Identifies duplicate physical event entities created across different daily discovery batches
+(e.g., when the same festival was discovered under multiple domains or modified slugs)
+and nests them under a canonical parent_event_key, in compliance with 04-upsert.md.
+
+Does NOT delete any record.
+"""
+import argparse
+import asyncio
+import ctypes
+import logging
+import sys
+from collections import defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, List, Any
+
+# Preload libstdc++ for greenlet/async SQLAlchemy
+try:
+    ctypes.cdll.LoadLibrary("/mnt/stateful_partition/antigravity/.local/lib/libstdc++.so.6")
+except Exception:
+    pass
+
+sys.path.append("backend")
+from app.db.session import SessionLocal
+from app.models.curated import CuratedActivity
+from app.services.curated_dedup import normalize_title, is_entity_match, calculate_date_overlap_ratio
+from sqlalchemy import select, text
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("reconcile_curated")
+
+
+async def run_reconciliation(dry_run: bool = True):
+    logger.info(f"Starting Curated Duplicates Reconciliation (dry_run={dry_run})...")
+
+    async with SessionLocal() as db:
+        stmt = select(CuratedActivity).order_by(CuratedActivity.created_at.asc())
+        activities = (await db.scalars(stmt)).all()
+        logger.info(f"Loaded {len(activities)} total activities from PostgreSQL.")
+
+        by_city = defaultdict(list)
+        for act in activities:
+            city = (act.city or "").strip()
+            by_city[city].append(act)
+
+        updates_planned = {}
+
+        # Scan each city's activities chronologically
+        for city, city_acts in by_city.items():
+            for i, a1 in enumerate(city_acts):
+                for a2 in city_acts[i + 1:]:
+                    # Skip if already assigned to same parent
+                    p1 = a1.parent_event_key or a1.handoff_event_key
+                    p2 = a2.parent_event_key or a2.handoff_event_key
+                    if p1 and p1 == p2:
+                        continue
+
+                    matched, reason = is_entity_match(
+                        a1.title, a1.city, a1.starts_on, a1.ends_on,
+                        a2.title, a2.city, a2.starts_on, a2.ends_on,
+                    )
+                    if matched:
+                        # a1 is earlier (canonical)
+                        canonical_key = a1.parent_event_key or a1.handoff_event_key or a1.identity_key
+                        if a2.identity_key not in updates_planned and a2.parent_event_key != canonical_key:
+                            updates_planned[a2.identity_key] = {
+                                "member_id": a2.identity_key,
+                                "title": a2.title,
+                                "created_at": a2.created_at,
+                                "old_parent": a2.parent_event_key,
+                                "new_parent": canonical_key,
+                                "canonical_title": a1.title,
+                                "canonical_key": canonical_key,
+                            }
+
+        logger.info(f"Planned updates for {len(updates_planned)} records.")
+        for u in updates_planned.values():
+            logger.info(f"  [RECONCILE] '{u['title'][:40]}' -> parent='{u['new_parent']}' (Canonical: '{u['canonical_title'][:40]}')")
+
+        if dry_run:
+            logger.info("DRY RUN completed. No database modifications were made.")
+            return len(updates_planned)
+
+        # Apply updates in transaction
+        logger.info("Applying updates to database...")
+        update_count = 0
+        for u in updates_planned.values():
+            act = await db.scalar(select(CuratedActivity).where(CuratedActivity.identity_key == u["member_id"]))
+            if act:
+                act.parent_event_key = u["new_parent"]
+                if act.handoff_details:
+                    details = dict(act.handoff_details)
+                    details["parent_event_key"] = u["new_parent"]
+                    if details.get("record_type") == "main":
+                        details["record_type"] = "session"
+                    act.handoff_details = details
+                act.updated_at = datetime.now(timezone.utc)
+                update_count += 1
+
+        await db.commit()
+        logger.info(f"Successfully reconciled {update_count} duplicate records in PostgreSQL.")
+        return update_count
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Reconcile duplicate curated activities.")
+    parser.add_argument("--apply", action="store_true", help="Apply updates to database (default is dry-run)")
+    args = parser.parse_args()
+
+    asyncio.run(run_reconciliation(dry_run=not args.apply))

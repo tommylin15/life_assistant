@@ -155,6 +155,44 @@ async def upsert_handoff(db, item: HandoffItem, version: str) -> str:
     row.parent_event_key = item.parent_event_key
     row.content_hash = version
     row.handoff_details = item.model_dump(mode="json")
+
+    # Semantic deduplication: if item is proposed as standalone main,
+    # check if an existing physical event in the same city with overlapping dates and matching title exists.
+    # If so, link it to the existing canonical parent_event_key and set record_type='session'.
+    if item.record_type == "main" and item.parent_event_key == item.event_key and item.city:
+        from app.services.curated_dedup import find_canonical_parent
+        existing_city_rows = (await db.scalars(
+            select(CuratedActivity).where(CuratedActivity.city == item.city)
+        )).all()
+        existing_dicts = [
+            {
+                "event_key": ex.handoff_event_key,
+                "parent_event_key": ex.parent_event_key,
+                "title": ex.title,
+                "city": ex.city,
+                "starts_on": ex.starts_on,
+                "ends_on": ex.ends_on,
+            }
+            for ex in existing_city_rows
+            if ex.handoff_event_key != item.event_key
+        ]
+        canonical = find_canonical_parent(
+            existing_dicts,
+            {
+                "title": item.title,
+                "city": item.city,
+                "starts_on": item.start_at_tpe.date() if isinstance(item.start_at_tpe, datetime) else item.start_at_tpe,
+                "ends_on": item.end_at_tpe.date() if isinstance(item.end_at_tpe, datetime) else item.end_at_tpe,
+            },
+        )
+        if canonical:
+            target_parent = canonical.get("parent_event_key") or canonical.get("event_key") or item.event_key
+            row.parent_event_key = target_parent
+            details = dict(row.handoff_details or {})
+            details["parent_event_key"] = target_parent
+            details["record_type"] = "session"
+            row.handoff_details = details
+
     row.updated_at = datetime.now(timezone.utc)
     db.add(ExecutionLog(id=str(uuid.uuid4()), request_id=current_request_id(), user_sub="job:curated-handoff",
         action_type="curated.handoff", provider="google_sheets", status="success",

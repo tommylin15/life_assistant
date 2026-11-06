@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 export PATH="/mnt/stateful_partition/antigravity/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export LD_LIBRARY_PATH="/mnt/stateful_partition/antigravity/.local/lib:${LD_LIBRARY_PATH:-}"
 export HOME="/home/tommylin15_gmail_com"
 
 PROMPT="執行 @life-project 的 life_assistantGPT 唯一正式「雙北41區美食優惠探索與效期總排程」每日批次（台灣時間每日 04:45，Asia/Taipei，緊接於台灣活動探索批次之後）：

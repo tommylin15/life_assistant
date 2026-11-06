@@ -26,7 +26,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 try:
-    ctypes.cdll.LoadLibrary("/mnt/stateful_partition/antigravity/.local/lib/libstdc++.so.6")
+    ctypes.CDLL("/mnt/stateful_partition/antigravity/.local/lib/libstdc++.so.6", mode=ctypes.RTLD_GLOBAL)
 except Exception:
     pass
 

@@ -24,7 +24,7 @@ except Exception:
     pass
 
 sys.path.append("backend")
-from app.db.session import SessionLocal
+from app.db.session import engine, SessionLocal
 from app.models.curated import CuratedActivity
 from app.services.curated_dedup import normalize_title, is_entity_match, calculate_date_overlap_ratio
 from sqlalchemy import select, text
@@ -147,4 +147,10 @@ if __name__ == "__main__":
     parser.add_argument("--apply", action="store_true", help="Apply updates to database (default is dry-run)")
     args = parser.parse_args()
 
-    asyncio.run(run_reconciliation(dry_run=not args.apply))
+    async def _main():
+        try:
+            await run_reconciliation(dry_run=not args.apply)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(_main())

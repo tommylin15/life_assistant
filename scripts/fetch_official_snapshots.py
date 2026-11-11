@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 TPE_TZ = timezone(timedelta(hours=8))
 
 SNAPSHOTS_DIR = Path(
-    "/mnt/stateful_partition/antigravity/gdrive/life_assistantGPT/台灣活動探索｜排程步驟/官方來源快照"
+    "/mnt/stateful_partition/antigravity/gdrive/agy_workspace/life_assistantGPT/台灣活動探索｜排程步驟/官方來源快照"
 )
 
 CULTURE_URL = "https://cloud.culture.tw/frontsite/trans/SearchShowAction.do?method=doFindTypeJ&category=all"

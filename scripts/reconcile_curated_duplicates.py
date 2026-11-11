@@ -108,7 +108,7 @@ async def run_reconciliation(dry_run: bool = True):
         # Also sync local handoff sheets if they exist
         local_handoffs = [
             Path("/tmp/tw_sheets_20261105/台灣活動｜交接資料.xlsx"),
-            Path("/mnt/stateful_partition/antigravity/gdrive/life_assistantGPT/台灣活動探索｜排程步驟/台灣活動｜交接資料.xlsx"),
+            Path("/mnt/stateful_partition/antigravity/gdrive/agy_workspace/life_assistantGPT/台灣活動探索｜排程步驟/台灣活動｜交接資料.xlsx"),
         ]
         import openpyxl
         for hf in local_handoffs:

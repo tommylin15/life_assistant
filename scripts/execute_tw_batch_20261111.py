@@ -36,12 +36,12 @@ TPE_TZ = timezone(timedelta(hours=8))
 NOW_TPE_STR = "2026-11-11T04:00:00+08:00"
 RUN_ID = "tw-discovery-daily-20261111-040000-agy38f"
 
-DRIVE_DIR = Path("/mnt/stateful_partition/antigravity/gdrive/life_assistantGPT/台灣活動探索｜排程步驟")
+DRIVE_DIR = Path("/mnt/stateful_partition/antigravity/gdrive/agy_workspace/life_assistantGPT/台灣活動探索｜排程步驟")
 HANDOFF_FILE = DRIVE_DIR / "台灣活動｜交接資料.xlsx"
 POOL_FILE = DRIVE_DIR / "台灣活動｜精選池（Excel相容）.xlsx"
 SOURCES_FILE = DRIVE_DIR / "官網來源清單與統計表.xlsx"
 EXEC_LOG_FILE = DRIVE_DIR / "台灣活動｜排程執行紀錄.xlsx"
-LOG_DIR = Path("/mnt/stateful_partition/antigravity/gdrive/life_assistantGPT/台灣活動探索｜每日執行日誌")
+LOG_DIR = Path("/mnt/stateful_partition/antigravity/gdrive/agy_workspace/life_assistantGPT/台灣活動探索｜每日執行日誌")
 DAILY_LOG_FILE = LOG_DIR / "2026-11-11.log"
 
 LOCAL_DIR = Path("/tmp/tw_sheets_20261111")

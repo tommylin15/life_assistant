@@ -38,7 +38,7 @@ TAIPEI = timezone(timedelta(hours=8))
 EXCEL_EPOCH = date(1899, 12, 30)
 RCLONE_BIN = "/mnt/stateful_partition/antigravity/.local/bin/rclone"
 RCLONE_CONF = "/home/tommylin15_gmail_com/.config/rclone/rclone.conf"
-GDRIVE_FOLDER = "gdrive:life_assistantGPT/美食優惠探索｜試行"
+GDRIVE_FOLDER = "gdrive:agy_workspace/life_assistantGPT/美食優惠探索｜試行"
 SHEET_FILENAME = "上班族美食優惠｜台北12區試行池與20%以上精選門檻｜2026-10-30.xlsx"
 HANDOFF_FILENAME = "美食優惠｜交接資料.xlsx"
 HANDOFF_TAB = "交接資料"

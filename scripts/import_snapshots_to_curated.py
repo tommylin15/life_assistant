@@ -31,13 +31,13 @@ TPE_TZ = timezone(timedelta(hours=8))
 NOW_TPE_STR = "2026-10-28T04:00:00+08:00"
 
 HANDOFF_LOCAL = Path("/tmp/tw_sheets/台灣活動｜交接資料.xlsx")
-HANDOFF_DRIVE = Path("/mnt/stateful_partition/antigravity/gdrive/life_assistantGPT/台灣活動探索｜排程步驟/台灣活動｜交接資料.xlsx")
+HANDOFF_DRIVE = Path("/mnt/stateful_partition/antigravity/gdrive/agy_workspace/life_assistantGPT/台灣活動探索｜排程步驟/台灣活動｜交接資料.xlsx")
 
 POOL_LOCAL = Path("/tmp/tw_sheets/台灣活動｜精選池（Excel相容）.xlsx")
-POOL_DRIVE = Path("/mnt/stateful_partition/antigravity/gdrive/life_assistantGPT/台灣活動探索｜排程步驟/台灣活動｜精選池（Excel相容）.xlsx")
+POOL_DRIVE = Path("/mnt/stateful_partition/antigravity/gdrive/agy_workspace/life_assistantGPT/台灣活動探索｜排程步驟/台灣活動｜精選池（Excel相容）.xlsx")
 
-CULTURE_SNAPSHOT = Path("/mnt/stateful_partition/antigravity/gdrive/life_assistantGPT/台灣活動探索｜排程步驟/官方來源快照/culture-2026-10-28.json.gz")
-TOURISM_SNAPSHOT = Path("/mnt/stateful_partition/antigravity/gdrive/life_assistantGPT/台灣活動探索｜排程步驟/官方來源快照/tourism-2026-10-28.zip")
+CULTURE_SNAPSHOT = Path("/mnt/stateful_partition/antigravity/gdrive/agy_workspace/life_assistantGPT/台灣活動探索｜排程步驟/官方來源快照/culture-2026-10-28.json.gz")
+TOURISM_SNAPSHOT = Path("/mnt/stateful_partition/antigravity/gdrive/agy_workspace/life_assistantGPT/台灣活動探索｜排程步驟/官方來源快照/tourism-2026-10-28.zip")
 
 
 def canonical_hash(record_dict: Dict[str, Any]) -> str:

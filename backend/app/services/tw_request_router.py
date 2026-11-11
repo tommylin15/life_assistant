@@ -26,7 +26,7 @@ METADATA_IDENTITY_URL = (
 
 LOCAL_CACHE_PATH = Path("config/source_routing_cache.json")
 DRIVE_CACHE_PATH = Path(
-    "/mnt/stateful_partition/antigravity/gdrive/life_assistantGPT/台灣活動探索｜排程步驟/台灣活動探索｜來源路由控制.json"
+    "/mnt/stateful_partition/antigravity/gdrive/agy_workspace/life_assistantGPT/台灣活動探索｜排程步驟/台灣活動探索｜來源路由控制.json"
 )
 
 DEFAULT_USER_AGENT = (

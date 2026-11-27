@@ -13,7 +13,8 @@ from app.services.curated_handoff import HEADERS, LEGACY_HEADERS, BUSINESS_FIELD
 
 SHEET_ID = "1OZdQPmypZ1zwB65K4oQOr3VBGP2GAFMmBnZsqAW5ob4"
 TAB = "交接資料"
-MAX_SHEET_ROWS = 1000
+# ponytail: raised MAX_SHEET_ROWS from 1000 to 10000 to support cumulative outbox rows without failing on growth.
+MAX_SHEET_ROWS = 10000
 RECEIPT_BATCH_ROWS = 100
 SHEETS_RETRYABLE = {429, 500, 502, 503, 504}
 SHEETS_MAX_ATTEMPTS = 6
